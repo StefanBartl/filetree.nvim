@@ -1,8 +1,19 @@
 {
-  "$schema": "https://raw.githubusercontent.com/sumneko/vscode-lua/master/setting/schema.json",
-  "Lua.runtime.version": "LuaJIT",
-  "Lua.workspace.library": [],
-  "Lua.workspace.checkThirdParty": false,
-  "Lua.diagnostics.globals": ["vim"],
-  "Lua.format.enable": true
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "LuaJIT",
+  "runtime.path": [
+    "lua/?.lua",
+    "lua/?/init.lua"
+  ],
+  "diagnostics.globals": ["vim"],
+  "diagnostics.unusedLocalExclude": ["_*"],
+  "workspace.checkThirdParty": false,
+  "workspace.library": [
+    "${3rd}/luv/library"
+  ],
+  "workspace.ignoreDir": [
+    ".git",
+    "doc",
+    "docs"
+  ]
 }

@@ -75,12 +75,37 @@ function M.check()
 
   local feat_cfg = cfg.features or {}
   local features = {
-    { key = "picker",       name = "Quick Picker"        },
-    { key = "layout_guard", name = "Layout Guard"        },
-    { key = "cwd_sync",     name = "CWD Sync"            },
-    { key = "current_hl",   name = "Current Highlight"   },
-    { key = "safety",       name = "Safety / Backup"     },
+    { key = "picker",             name = "Quick Picker"          },
+    { key = "layout_guard",       name = "Layout Guard"          },
+    { key = "cwd_sync",           name = "CWD Sync"              },
+    { key = "current_hl",         name = "Current Highlight"     },
+    { key = "safety",             name = "Safety / Backup"       },
+    { key = "trash",              name = "Trash + Undo"          },
+    { key = "watcher_quarantine", name = "Watcher Quarantine"    },
+    { key = "marks",              name = "Node Marks"            },
   }
+
+  -- Extra check for trash backend availability
+  local trash_cfg = feat_cfg["trash"]
+  if trash_cfg and trash_cfg.enabled then
+    local ok_tp, tp = pcall(require, "filetree.features.trash.platform")
+    if ok_tp then
+      if tp.available() then
+        vim.health.ok("Trash backend: " .. tp.backend_name())
+      else
+        vim.health.warn("No trash backend found — trash feature may not work")
+      end
+    end
+  end
+
+  -- Watcher quarantine: note Windows-only relevance
+  local wq_cfg = feat_cfg["watcher_quarantine"]
+  if wq_cfg and wq_cfg.enabled then
+    local plat_ok, plat = pcall(require, "filetree.util.platform")
+    if plat_ok and not plat.is_windows() and not plat.is_wsl() then
+      vim.health.info("watcher_quarantine: no-op on non-Windows platforms")
+    end
+  end
 
   for _, f in ipairs(features) do
     local fcfg = feat_cfg[f.key]

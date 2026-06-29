@@ -6,11 +6,14 @@
 ---@field features FiletreeFeaturesConfig
 
 ---@class FiletreeFeaturesConfig
----@field picker       FiletreePickerConfig?
----@field layout_guard FiletreeLayoutGuardConfig?
----@field cwd_sync     FiletreeCwdSyncConfig?
----@field current_hl   FiletreeCurrentHlConfig?
----@field safety       FiletreeSafetyConfig?
+---@field picker              FiletreePickerConfig?
+---@field layout_guard        FiletreeLayoutGuardConfig?
+---@field cwd_sync            FiletreeCwdSyncConfig?
+---@field current_hl          FiletreeCurrentHlConfig?
+---@field safety              FiletreeSafetyConfig?
+---@field trash               FiletreeTrashConfig?
+---@field watcher_quarantine  FiletreeWatcherQuarantineConfig?
+---@field marks               FiletreeMarksConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -53,5 +56,28 @@
 ---@field backup_dir     string?  Absolute path for backups. Defaults to stdpath("data")/filetree/backups.
 ---@field max_backups    integer  Maximum number of backup copies kept per file (default 5).
 ---@field dry_run        boolean  Log operations without executing them (default false).
+
+-- ── trash ─────────────────────────────────────────────────────────────────────
+
+---@class FiletreeTrashConfig
+---@field enabled      boolean
+---@field confirm      boolean  Ask before trashing (default true).
+---@field use_safety   boolean  Create a backup before trashing (default false).
+---@field dry_run      boolean  Log without actually trashing (default false).
+
+-- ── watcher_quarantine ────────────────────────────────────────────────────────
+
+---@class FiletreeWatcherQuarantineConfig
+---@field enabled     boolean
+---@field duration_ms integer  Default quarantine duration in ms (default 500).
+---@field silent      boolean  Suppress quarantine notifications (default true).
+
+-- ── marks ─────────────────────────────────────────────────────────────────────
+
+---@class FiletreeMarksConfig
+---@field enabled    boolean
+---@field indicator  string   Character shown before marked nodes (default "✓").
+---@field hl_group   string   Highlight group for the indicator (default "DiagnosticOk").
+---@field keymap     string?  Normal-mode key inside tree buffer to toggle mark (default "m").
 
 return {}

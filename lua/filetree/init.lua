@@ -17,11 +17,14 @@ local _initialized = false
 
 ---@type table<string, { mod: string, key: string }>
 local FEATURES = {
-  picker       = { mod = "filetree.features.picker",       key = "picker"       },
-  layout_guard = { mod = "filetree.features.layout_guard", key = "layout_guard" },
-  cwd_sync     = { mod = "filetree.features.cwd_sync",     key = "cwd_sync"     },
-  current_hl   = { mod = "filetree.features.current_hl",   key = "current_hl"   },
-  safety       = { mod = "filetree.features.safety",       key = "safety"       },
+  picker              = { mod = "filetree.features.picker",              key = "picker"              },
+  layout_guard        = { mod = "filetree.features.layout_guard",        key = "layout_guard"        },
+  cwd_sync            = { mod = "filetree.features.cwd_sync",            key = "cwd_sync"            },
+  current_hl          = { mod = "filetree.features.current_hl",          key = "current_hl"          },
+  safety              = { mod = "filetree.features.safety",              key = "safety"              },
+  trash               = { mod = "filetree.features.trash",               key = "trash"               },
+  watcher_quarantine  = { mod = "filetree.features.watcher_quarantine",  key = "watcher_quarantine"  },
+  marks               = { mod = "filetree.features.marks",               key = "marks"               },
 }
 
 ---@type table<string, table>  name → loaded feature module
