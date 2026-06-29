@@ -1,0 +1,112 @@
+---@module 'filetree.health'
+---@brief :checkhealth filetree — validates adapter availability and feature config.
+
+local M = {}
+
+function M.check()
+  vim.health.start("filetree.nvim")
+
+  -- ── Neovim version ────────────────────────────────────────────────────────
+  local version = vim.version()
+  if version.major == 0 and version.minor < 8 then
+    vim.health.error("Neovim >= 0.8 is required (found " .. tostring(version) .. ")")
+  else
+    vim.health.ok("Neovim " .. tostring(version))
+  end
+
+  -- ── Configuration ─────────────────────────────────────────────────────────
+  local ok_cfg, config_mod = pcall(require, "filetree.config")
+  if not ok_cfg then
+    vim.health.error("filetree.config could not be loaded: " .. tostring(config_mod))
+    return
+  end
+
+  local cfg = config_mod.get()
+  if vim.tbl_isempty(cfg) then
+    vim.health.warn("filetree.setup() has not been called yet")
+    return
+  end
+  vim.health.ok("Configuration loaded (adapter = " .. tostring(cfg.adapter) .. ")")
+
+  local valid, err = config_mod.validate()
+  if not valid then
+    vim.health.error("Config validation failed: " .. (err or "unknown"))
+  else
+    vim.health.ok("Config validated")
+  end
+
+  -- ── Adapters ──────────────────────────────────────────────────────────────
+  vim.health.start("filetree.nvim — adapters")
+
+  local adapters = {
+    { name = "neotree",  plugin = "neo-tree" },
+    { name = "nvimtree", plugin = "nvim-tree" },
+  }
+
+  local found_any = false
+  for _, a in ipairs(adapters) do
+    local avail = pcall(require, a.plugin)
+    if avail then
+      vim.health.ok(a.name .. " (" .. a.plugin .. ") — available")
+      found_any = true
+    else
+      vim.health.warn(a.name .. " (" .. a.plugin .. ") — not installed")
+    end
+  end
+
+  if not found_any then
+    vim.health.error("No supported filetree plugin found. Install neo-tree.nvim or nvim-tree.lua.")
+  end
+
+  -- ── Active adapter ────────────────────────────────────────────────────────
+  local ok_reg, adapter_mod = pcall(require, "filetree.adapter")
+  if ok_reg then
+    local active = adapter_mod.get()
+    if active then
+      local is_open = active.is_open()
+      vim.health.ok("Active adapter: " .. active.name .. (is_open and " (open)" or " (closed)"))
+    else
+      vim.health.info("No adapter resolved yet (call setup() first)")
+    end
+  end
+
+  -- ── Features ──────────────────────────────────────────────────────────────
+  vim.health.start("filetree.nvim — features")
+
+  local feat_cfg = cfg.features or {}
+  local features = {
+    { key = "picker",       name = "Quick Picker"        },
+    { key = "layout_guard", name = "Layout Guard"        },
+    { key = "cwd_sync",     name = "CWD Sync"            },
+    { key = "current_hl",   name = "Current Highlight"   },
+    { key = "safety",       name = "Safety / Backup"     },
+  }
+
+  for _, f in ipairs(features) do
+    local fcfg = feat_cfg[f.key]
+    if fcfg and fcfg.enabled then
+      vim.health.ok(f.name .. " — enabled")
+    elseif fcfg then
+      vim.health.info(f.name .. " — disabled")
+    else
+      vim.health.info(f.name .. " — not configured (using defaults)")
+    end
+  end
+
+  -- ── Optional dependencies ─────────────────────────────────────────────────
+  vim.health.start("filetree.nvim — optional dependencies")
+
+  local optionals = {
+    { mod = "telescope",    label = "Telescope (for future telescope integration)" },
+    { mod = "fzf-lua",      label = "fzf-lua (for future fzf integration)"        },
+  }
+  for _, o in ipairs(optionals) do
+    if pcall(require, o.mod) then
+      vim.health.ok(o.label .. " — found")
+    else
+      vim.health.info(o.label .. " — not installed (optional)")
+    end
+  end
+end
+
+return M

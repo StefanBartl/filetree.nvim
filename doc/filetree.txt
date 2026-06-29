@@ -1,0 +1,248 @@
+*filetree.txt*   Adapter-agnostic filetree features for Neovim
+
+Author:  Stefan Bartl
+License: MIT
+Version: 0.1.0
+
+==============================================================================
+CONTENTS                                                    *filetree-contents*
+
+  1. Introduction ........................... |filetree-intro|
+  2. Requirements ........................... |filetree-requirements|
+  3. Quick start ............................ |filetree-quickstart|
+  4. Configuration .......................... |filetree-config|
+  5. Features ............................... |filetree-features|
+     5.1 Picker ............................ |filetree-picker|
+     5.2 Layout Guard ...................... |filetree-layout-guard|
+     5.3 CWD Sync ......................... |filetree-cwd-sync|
+     5.4 Current Highlight ................ |filetree-current-hl|
+     5.5 Safety / Backup .................. |filetree-safety|
+  6. Adapters ............................... |filetree-adapters|
+  7. Public API ............................. |filetree-api|
+  8. Health check ........................... |filetree-health|
+  9. Custom adapters ........................ |filetree-custom-adapters|
+
+==============================================================================
+1. INTRODUCTION                                               *filetree-intro*
+
+filetree.nvim provides powerful file-tree features that work with any
+supported filetree plugin via an adapter pattern:
+
+  • Two-digit quick-pick mode (picker)
+  • Layout guard (prevent tree-only windows)
+  • Auto-reveal current file (cwd_sync)
+  • Current-file highlighting (current_hl)
+  • Backup before destructive operations (safety)
+
+Supported backends: neo-tree.nvim, nvim-tree.lua
+
+==============================================================================
+2. REQUIREMENTS                                        *filetree-requirements*
+
+  • Neovim >= 0.8
+  • One of: neo-tree.nvim, nvim-tree.lua
+
+==============================================================================
+3. QUICK START                                          *filetree-quickstart*
+
+Minimal setup with neo-tree: >lua
+  require("filetree").setup({
+    adapter = "neotree",
+    features = {
+      picker       = { enabled = true },
+      layout_guard = { enabled = true },
+    },
+  })
+<
+
+For nvim-tree: >lua
+  require("filetree").setup({
+    adapter  = "nvimtree",
+    features = { picker = { enabled = true } },
+  })
+<
+
+==============================================================================
+4. CONFIGURATION                                           *filetree-config*
+
+`setup({})` accepts a |FiletreeConfig| table. All fields are optional; omitted
+keys fall back to the defaults shown below.
+
+>lua
+  require("filetree").setup({
+    -- "auto" picks the first available adapter (neotree → nvimtree)
+    adapter = "auto",
+
+    features = {
+      -- Quick two-digit picker
+      picker = {
+        enabled     = true,
+        index_width = 2,      -- digits per index label
+        timeout_ms  = 3000,   -- auto-exit after inactivity
+        keymaps = {
+          trigger_reveal = "<leader>fp",
+          trigger_cwd    = "<leader>fc",
+        },
+      },
+
+      -- Ensure an editor window always exists
+      layout_guard = {
+        enabled  = true,
+        delay_ms = 50,
+      },
+
+      -- Auto-reveal current file in the tree
+      cwd_sync = {
+        enabled       = false,
+        debounce_ms   = 150,
+        parent_levels = 0,    -- parent dirs to ascend when revealing
+        keep_focus    = true, -- keep focus in editor after reveal
+      },
+
+      -- Highlight the current file and its parent dir
+      current_hl = {
+        enabled     = false,
+        file_hl     = { fg = "#7aa2f7", bold = true },
+        parent_hl   = { fg = "#565f89" },
+        debounce_ms = 100,
+      },
+
+      -- Backup files before delete/move
+      safety = {
+        enabled     = false,
+        backup_dir  = nil,    -- default: stdpath("data")/filetree/backups
+        max_backups = 5,
+        dry_run     = false,
+      },
+    },
+  })
+<
+
+Highlight specs accept:
+  • A table: `{ fg = "#rrggbb", bold = true }`   (passed to nvim_set_hl)
+  • A hex string: `"#7aa2f7"`
+  • A link: `"link:Comment"`
+  • A named color: `"red"`, `"darkblue"` …
+
+==============================================================================
+5. FEATURES                                                *filetree-features*
+
+------------------------------------------------------------------------------
+5.1 PICKER                                                  *filetree-picker*
+
+The picker overlays numbered labels on every visible tree node. Type a
+two-digit number to open/toggle the corresponding node immediately.
+
+Default keymaps (configurable): >
+  <leader>fp   Enter picker — reveal current buffer's file
+  <leader>fc   Enter picker — open at cwd
+<
+Inside picker mode:
+  0-9        Enter digits. Complete index opens/toggles the node.
+  e/s/v/t/p  Set open mode (edit/split/vsplit/tab/preview) before digits.
+  <Tab>       Cycle filter: all → files → folders → all
+  <C-k>/<C-j> Scroll tree up/down
+  <Esc>      Exit picker mode
+
+------------------------------------------------------------------------------
+5.2 LAYOUT GUARD                                      *filetree-layout-guard*
+
+When the user closes all editor windows, this feature opens a new empty
+window automatically so the user is never trapped inside the tree.
+
+Triggers on: BufDelete, BufWipeout, WinClosed
+
+------------------------------------------------------------------------------
+5.3 CWD SYNC                                            *filetree-cwd-sync*
+
+Reveals the current buffer's file in the tree whenever a new buffer is
+entered (BufEnter / WinEnter). Auto-pauses for 2 seconds when the cursor
+moves inside the tree window to avoid interfering with manual navigation.
+
+`cwd_sync.pause(ms)` pauses auto-reveal programmatically: >lua
+  require("filetree").feature("cwd_sync").pause(5000)
+<
+
+------------------------------------------------------------------------------
+5.4 CURRENT HIGHLIGHT                                   *filetree-current-hl*
+
+Highlights the current file's line and its parent directory's line in the
+tree buffer using extmarks (priority 150). Re-applies on BufEnter,
+WinEnter, BufWritePost, and ColorScheme.
+
+Highlight groups created:
+  FiletreeCurrentFile    — current file node
+  FiletreeCurrentParent  — parent directory node
+
+------------------------------------------------------------------------------
+5.5 SAFETY / BACKUP                                        *filetree-safety*
+
+Provides a backup API for use before destructive operations: >lua
+  local safety = require("filetree").feature("safety")
+  local backup_path = safety.before_delete("/path/to/file")
+  -- now safe to delete
+<
+
+Methods:
+  `before_delete(path)` → string?   Create backup, return backup path.
+  `before_move(src, dst)` → string? Create backup of src.
+  `list_backups()` → string[]       List all existing backups.
+  `toggle_dry_run()`                Toggle dry-run mode at runtime.
+
+==============================================================================
+6. ADAPTERS                                               *filetree-adapters*
+
+  "neotree"   neo-tree.nvim (requires: folke/neo-tree.nvim)
+  "nvimtree"  nvim-tree.lua (requires: nvim-tree/nvim-tree.lua)
+  "auto"      Try neotree first, then nvimtree.
+
+==============================================================================
+7. PUBLIC API                                                  *filetree-api*
+
+`require("filetree").setup(config)`                        *filetree.setup()*
+  Initialize the plugin. Must be called once at startup.
+
+`require("filetree").adapter()` → FiletreeAdapter?      *filetree.adapter()*
+  Return the active adapter, or nil.
+
+`require("filetree").config()` → FiletreeConfig          *filetree.config()*
+  Return the current configuration.
+
+`require("filetree").feature(name)` → table?            *filetree.feature()*
+  Return a loaded feature module by name for direct access.
+
+`require("filetree").register_adapter(a)`      *filetree.register_adapter()*
+  Register a custom FiletreeAdapter before setup().
+
+`require("filetree").is_initialized()` → boolean  *filetree.is_initialized()*
+  True when setup() completed without errors.
+
+==============================================================================
+8. HEALTH CHECK                                             *filetree-health*
+
+Run :checkhealth filetree to verify:
+  • Neovim version
+  • Configuration validity
+  • Adapter availability
+  • Feature status
+  • Optional dependencies
+
+==============================================================================
+9. CUSTOM ADAPTERS                                 *filetree-custom-adapters*
+
+Implement the `FiletreeAdapter` interface and register before setup(): >lua
+  local my_adapter = {
+    name         = "my_tree",
+    is_available = function() return true end,
+    is_open      = function() return false, nil end,
+    get_winid    = function() return nil end,
+    -- … all other methods …
+  }
+  require("filetree").register_adapter(my_adapter)
+  require("filetree").setup({ adapter = "my_tree" })
+<
+
+See lua/filetree/@types/adapter.lua for the full interface definition.
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
