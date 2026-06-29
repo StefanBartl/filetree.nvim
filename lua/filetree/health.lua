@@ -83,6 +83,9 @@ function M.check()
     { key = "trash",              name = "Trash + Undo"          },
     { key = "watcher_quarantine", name = "Watcher Quarantine"    },
     { key = "marks",              name = "Node Marks"            },
+    { key = "diff",               name = "File Diff"             },
+    { key = "project_root",       name = "Project Root"          },
+    { key = "path_utils",         name = "Path Utilities"        },
   }
 
   -- Extra check for trash backend availability

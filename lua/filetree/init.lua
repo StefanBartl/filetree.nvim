@@ -25,6 +25,9 @@ local FEATURES = {
   trash               = { mod = "filetree.features.trash",               key = "trash"               },
   watcher_quarantine  = { mod = "filetree.features.watcher_quarantine",  key = "watcher_quarantine"  },
   marks               = { mod = "filetree.features.marks",               key = "marks"               },
+  diff                = { mod = "filetree.features.diff",                key = "diff"                },
+  project_root        = { mod = "filetree.features.project_root",        key = "project_root"        },
+  path_utils          = { mod = "filetree.features.path_utils",          key = "path_utils"          },
 }
 
 ---@type table<string, table>  name → loaded feature module

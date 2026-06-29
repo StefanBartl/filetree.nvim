@@ -14,6 +14,9 @@
 ---@field trash               FiletreeTrashConfig?
 ---@field watcher_quarantine  FiletreeWatcherQuarantineConfig?
 ---@field marks               FiletreeMarksConfig?
+---@field diff                FiletreeDiffConfig?
+---@field project_root        FiletreeProjectRootConfig?
+---@field path_utils          FiletreePathUtilsConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -79,5 +82,34 @@
 ---@field indicator  string   Character shown before marked nodes (default "✓").
 ---@field hl_group   string   Highlight group for the indicator (default "DiagnosticOk").
 ---@field keymap     string?  Normal-mode key inside tree buffer to toggle mark (default "m").
+
+-- ── diff ──────────────────────────────────────────────────────────────────────
+
+---@class FiletreeDiffConfig
+---@field enabled  boolean
+---@field split    "vsplit"|"split"  Layout for diff windows (default "vsplit").
+---@field keymap   string?           Key inside tree to stage/diff current node (default "D").
+
+-- ── project_root ──────────────────────────────────────────────────────────────
+
+---@class FiletreeProjectRootConfig
+---@field enabled   boolean
+---@field markers   string[]          Files/dirs that signal a project root.
+---@field fallback  "cwd"|"parent"    What to use when no root is found (default "parent").
+
+-- ── path_utils ────────────────────────────────────────────────────────────────
+
+---@class FiletreePathUtilsConfig
+---@field enabled   boolean
+---@field lua_root  string?             Lua source root for require() conversion. Auto-detected when nil.
+---@field keymaps   FiletreePathUtilsKeymaps?
+
+---@class FiletreePathUtilsKeymaps
+---@field copy_abs   string?  Copy absolute path       (default "ya")
+---@field copy_rel   string?  Copy relative path       (default "yr")
+---@field copy_name  string?  Copy filename only       (default "yn")
+---@field copy_dir   string?  Copy parent directory    (default "yd")
+---@field to_require string?  Copy as require() string (default "yq")
+---@field md_link    string?  Copy as Markdown link    (default "ym")
 
 return {}
