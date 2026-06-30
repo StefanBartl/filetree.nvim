@@ -39,7 +39,7 @@ local function collect_files(path, relative)
   return results
 end
 
----Recursively collect all directory paths under a path.
+---Recursively collect all directory paths under a path (including root).
 ---@param path string
 ---@param relative boolean
 ---@return string[]
@@ -52,11 +52,9 @@ local function collect_dirs(path, relative)
       local norm = p:gsub("\\", "/")
       if cwd then
         norm = norm:gsub("^" .. vim.pesc(cwd), "")
+        if norm == "" then norm = "." end
       end
-      -- Don't add the root itself, only children
-      if norm ~= path:gsub("\\", "/") then
-        results[#results + 1] = norm
-      end
+      results[#results + 1] = norm
       local entries = vim.fn.readdir(p)
       if entries then
         for _, e in ipairs(entries) do
@@ -122,15 +120,27 @@ end
 function M.copy_dirs_abs()
   local path = current_path()
   if not path then return end
-  local dir = vim.fn.isdirectory(path) == 1 and path or vim.fn.fnamemodify(path, ":h")
-  copy_to_reg(collect_dirs(dir, false))
+  if vim.fn.isdirectory(path) == 1 then
+    copy_to_reg(collect_dirs(path, false))
+  else
+    -- File node: return just the parent directory
+    copy_to_reg({ vim.fn.fnamemodify(path, ":h"):gsub("\\", "/") })
+  end
 end
 
 function M.copy_dirs_rel()
   local path = current_path()
   if not path then return end
-  local dir = vim.fn.isdirectory(path) == 1 and path or vim.fn.fnamemodify(path, ":h")
-  copy_to_reg(collect_dirs(dir, true))
+  if vim.fn.isdirectory(path) == 1 then
+    copy_to_reg(collect_dirs(path, true))
+  else
+    -- File node: return just the parent directory (relative)
+    local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
+    local dir = vim.fn.fnamemodify(path, ":h"):gsub("\\", "/")
+    dir = dir:gsub("^" .. vim.pesc(cwd), "")
+    if dir == "" then dir = "." end
+    copy_to_reg({ dir })
+  end
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
