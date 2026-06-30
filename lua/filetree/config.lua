@@ -5,7 +5,8 @@ local M = {}
 
 ---@type FiletreeConfig
 local _defaults = {
-  adapter = "auto",
+  adapter     = "auto",
+  ignore_list = true,   -- hide .git, node_modules, etc. by default
   features = {
     picker = {
       enabled     = true,
@@ -101,6 +102,28 @@ local function apply_autocmd_overrides(cfg)
   end
 end
 
+---Translate top-level `ignore_list` into `features.ignore_list`.
+---  true / nil → enabled, no override (use built-in / lib.nvim names)
+---  false      → disabled
+---  string[]   → enabled with those exact names
+---@param cfg FiletreeConfig
+local function apply_ignore_list(cfg)
+  local val = cfg.ignore_list
+  cfg.features = cfg.features or {}
+  local fi = cfg.features.ignore_list or {}
+  if val == false then
+    fi.enabled = false
+  elseif type(val) == "table" then
+    fi.enabled = true
+    fi.names   = val
+  else
+    -- true or nil → default on, built-in names
+    fi.enabled = true
+    fi.names   = fi.names  -- preserve user override if they set features.ignore_list.names directly
+  end
+  cfg.features.ignore_list = fi
+end
+
 ---Apply user config on top of defaults.
 ---@param user FiletreeConfig?
 function M.setup(user)
@@ -111,6 +134,7 @@ function M.setup(user)
   end
   apply_keymap_remap(_active)
   apply_autocmd_overrides(_active)
+  apply_ignore_list(_active)
 end
 
 ---Return the active configuration.

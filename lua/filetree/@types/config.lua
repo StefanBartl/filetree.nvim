@@ -1,18 +1,28 @@
 ---@meta
 ---@module 'filetree.@types.config'
 
+---@alias FiletreeBuiltinAlias
+---| "Ft"       Short alias registered by default.
+---| "FT"       Uppercase variant.
+---| "Filetree" Original full name (use as alias when renaming).
+---| "Tree"     Short alternative.
+---| "NT"       "NeoTree" shorthand.
+---| "FTree"    Verbose short form.
+
 ---@class FiletreeCommandConfig
----@field name    string    Name for the user command (default: "Filetree").
----@field aliases string[]? Additional command aliases to also register.
+---@field name    string                             Name for the user command (default: "Filetree").
+---@field aliases (FiletreeBuiltinAlias|string)[]?   Aliases to also register. Omit to keep the default :Ft alias.
 
 ---@class FiletreeConfig
----@field adapter  FiletreeAdapterName|"auto"  Which adapter to use. "auto" picks the first available one.
----@field features FiletreeFeaturesConfig
----@field keymaps  table<string,string|false>?  Global keymap remap: { ["<old>"] = "<new>" } or { ["<key>"] = false } to disable.
----@field command  FiletreeCommandConfig|string|nil  User command name (string) or config table. Default: "Filetree".
----@field autocmds table<string,false>?  Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
+---@field adapter     FiletreeAdapterName|"auto"   Which adapter to use. "auto" picks the first available one.
+---@field features    FiletreeFeaturesConfig
+---@field keymaps     table<string,string|false>?  Global keymap remap: { ["<old>"] = "<new>" } or { ["<key>"] = false } to disable.
+---@field command     FiletreeCommandConfig|string|nil  User command name (string) or config table. Default: "Filetree" + "Ft" alias.
+---@field autocmds    table<string,false>?          Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
+---@field ignore_list boolean|string[]|nil          true (default) = hide common dirs (.git, node_modules…); false = show all; string[] = custom list.
 
 ---@class FiletreeFeaturesConfig
+---@field ignore_list         FiletreeIgnoreListConfig?
 ---@field picker              FiletreePickerConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
@@ -341,7 +351,7 @@
 
 ---@class FiletreePreviewConfig
 ---@field enabled    boolean
----@field keymap     string?  Normal-mode key inside tree buffer (default "<Space>").
+---@field keymap     string?  Normal-mode key inside tree buffer (default "<Tab>").
 ---@field max_lines  integer  Max lines to read for text preview (default 40).
 ---@field max_width  integer  Max floating window width in columns (default 80).
 ---@field max_height integer  Max floating window height in lines (default 25).
@@ -398,6 +408,12 @@
 ---@field auto_add         boolean  Auto-add cwd to workspace on setup (default false).
 ---@field max_roots        integer  Maximum stored roots (default 20).
 ---@field session_restore  boolean  Call session.restore() after switching (default true).
+
+-- ── ignore_list ───────────────────────────────────────────────────────────────
+
+---@class FiletreeIgnoreListConfig
+---@field enabled boolean     Hide the ignore list (default true). Toggle with adapter's native hide-hidden keymap (e.g. `H` in neotree).
+---@field names   string[]?   Basenames to hide. nil = built-in defaults (or lib.nvim list when available).
 
 -- ── ignore_patterns ──────────────────────────────────────────────────────────
 

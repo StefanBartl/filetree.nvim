@@ -109,6 +109,10 @@ require("lazy").setup({
         -- Phase 3c: disable specific feature autocmds (uncomment to test)
         -- autocmds = { auto_reveal = false },
 
+        -- ignore_list: hide .git, node_modules, etc. (true = default, false = show all, {…} = custom list)
+        -- ignore_list = false,                          -- show everything
+        -- ignore_list = { ".git", "node_modules" },    -- custom list (overrides built-in defaults)
+
         features = {
           -- ── Group A: Adapter basics ──────────────────────────────────────
           -- Tests: is_open(), get_current_node(), get_visible_nodes(), refresh()
@@ -167,7 +171,8 @@ require("lazy").setup({
           },
           preview = {
             enabled     = true,
-            keymap      = "P",
+            -- keymap default is now "<Tab>"; override here if <Tab> conflicts
+            keymap      = "<Tab>",
             width_ratio = 0.5,
             max_lines   = 100,
           },

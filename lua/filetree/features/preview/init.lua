@@ -10,7 +10,7 @@
 ---   Images:       metadata summary (size, format).
 ---   Directories:  lists immediate children.
 ---
---- Keymap (default): <Space> in tree buffer.
+--- Keymap (default): <Tab> in tree buffer.
 
 local notify = require("filetree.util.notify").create("[filetree.preview]")
 
@@ -19,7 +19,7 @@ local M = {}
 ---@type FiletreePreviewConfig
 local _cfg = {
   enabled    = false,
-  keymap     = "<Space>",
+  keymap     = "<Tab>",
   max_lines  = 40,
   max_width  = 80,
   max_height = 25,

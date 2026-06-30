@@ -18,6 +18,7 @@ local _initialized = false
 
 ---@type table<string, { mod: string, key: string }>
 local FEATURES = {
+  ignore_list         = { mod = "filetree.features.ignore_list",         key = "ignore_list"         },
   picker              = { mod = "filetree.features.picker",              key = "picker"              },
   layout_guard        = { mod = "filetree.features.layout_guard",        key = "layout_guard"        },
   cwd_sync            = { mod = "filetree.features.cwd_sync",            key = "cwd_sync"            },

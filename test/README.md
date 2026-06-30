@@ -107,11 +107,11 @@ Testet: `nvim_open_win`, Buffer-Keymaps, Close-on-q.
 | D.4 | `I` auf Verzeichnis | Float zeigt Typ `directory`, keine Zeilenanzahl |
 | D.5 | `I` auf sehr große Datei (>5 MB) | Zeilenanzahl steht auf `(skipped — file too large)` |
 
-**preview** (Keymap `P` im Tree):
+**preview** (Keymap `<Tab>` im Tree — Default seit Phase 4):
 
 | # | Test | Erwartung |
 |---|------|-----------|
-| D.6 | Cursor auf Lua-Datei, `P` drücken | Floating Window mit Dateiinhalt (max 100 Zeilen) |
+| D.6 | Cursor auf Lua-Datei, `<Tab>` drücken | Floating Window mit Dateiinhalt (max 100 Zeilen) |
 | D.7 | `q` schließt den Preview | |
 
 ---
@@ -230,6 +230,37 @@ Um diese Tests zu aktivieren, die auskommentierten Blöcke in `minimal_neotree.l
 |---|------|-----------|
 | I.8 | Datei öffnen (`:e lua/filetree/init.lua`) | Tree scrollt NICHT zur Datei (auto_reveal deaktiviert) |
 | I.9 | `<leader>e` | Reveal funktioniert noch (manuell via Command) |
+
+---
+
+### J. ignore_list + :Ft alias
+
+**J.1 — ignore_list Standard (kein Config-Eintrag nötig, ist by default aktiv):**
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| J.1 | Tree öffnen | `.git` Ordner ist NICHT sichtbar (von Anfang an versteckt) |
+| J.2 | `H` im Tree drücken | Alle versteckten Items (inkl. `.git`) werden eingeblendet |
+| J.3 | `H` nochmal | Wieder ausgeblendet |
+
+**J.2 — ignore_list deaktivieren (`ignore_list = false` in minimal_neotree.lua einkommentieren):**
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| J.4 | Tree öffnen | `.git` ist sichtbar |
+
+**J.3 — ignore_list mit custom Liste (`ignore_list = { ".git", "node_modules" }`):**
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| J.5 | Tree öffnen | Nur `.git` und `node_modules` versteckt; andere Ordner (z.B. `build`) sichtbar |
+
+**J.4 — :Ft Alias (immer aktiv, kein Config nötig):**
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| J.6 | `:Ft marks show` | Marks-Float öffnet sich (identisch zu `:Filetree marks show`) |
+| J.7 | `:Ft<Tab>` | Tab-Completion zeigt Sub-Commands |
 
 ---
 
