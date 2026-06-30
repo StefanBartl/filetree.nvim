@@ -39,13 +39,15 @@ function M.check()
   vim.health.start("filetree.nvim — adapters")
 
   local adapters = {
-    { name = "neotree",  plugin = "neo-tree" },
-    { name = "nvimtree", plugin = "nvim-tree" },
+    { name = "neotree",  plugin = "neo-tree"        },
+    { name = "nvimtree", plugin = "nvim-tree"       },
+    { name = "netrw",    plugin = "netrw (builtin)" },
   }
 
   local found_any = false
   for _, a in ipairs(adapters) do
-    local avail = pcall(require, a.plugin)
+    -- netrw is always available as it is built in to Neovim
+    local avail = a.name == "netrw" or pcall(require, a.plugin)
     if avail then
       vim.health.ok(a.name .. " (" .. a.plugin .. ") — available")
       found_any = true
@@ -55,7 +57,7 @@ function M.check()
   end
 
   if not found_any then
-    vim.health.error("No supported filetree plugin found. Install neo-tree.nvim or nvim-tree.lua.")
+    vim.health.error("No supported filetree plugin found. Install neo-tree.nvim, nvim-tree.lua, oil.nvim, or mini.files.")
   end
 
   -- ── Active adapter ────────────────────────────────────────────────────────
