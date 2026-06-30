@@ -26,6 +26,9 @@
 - [Configuration](#configuration)
 - [Adapters](#adapters)
 - [Feature reference](#feature-reference)
+- [Keymaps](#keymaps)
+- [Commands](#commands)
+- [Autocmds](#autocmds)
 - [Public API](#public-api)
 - [Custom adapters](#custom-adapters)
 - [Health check](#health-check)
@@ -248,6 +251,46 @@ require("filetree").setup({ adapter = "my_tree" })
 ```
 
 See [`lua/filetree/@types/adapter.lua`](lua/filetree/@types/adapter.lua) for the full annotated interface.
+
+---
+
+## Keymaps
+
+All tree-buffer keymaps, defaults, and how to remap or disable them:
+→ [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md)
+
+**Quick remap example:**
+
+```lua
+require("filetree").setup({
+  keymaps = {
+    ["gs"] = "<leader>gs",  -- rename live_search key
+    ["<C-m>"] = false,      -- disable marks clear
+  },
+})
+```
+
+---
+
+## Commands
+
+Full sub-command reference for `:Filetree` (configurable name):
+→ [docs/BINDINGS/USERCOMMANDS.md](docs/BINDINGS/USERCOMMANDS.md)
+
+**Rename the command:**
+
+```lua
+require("filetree").setup({
+  command = { name = "Ft", aliases = { "Filetree" } },
+})
+```
+
+---
+
+## Autocmds
+
+Which features create behavioral autocmds and how to disable them:
+→ [docs/BINDINGS/AUTOCMDS.md](docs/BINDINGS/AUTOCMDS.md)
 
 ---
 
