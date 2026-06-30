@@ -32,7 +32,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `a` | smart_create | `keymap` | Smart create file or directory |
 | `/` | filter | `keymap` | Enter tree filter mode |
 | `b` | bookmarks | `keymap` | Toggle bookmark |
-| `<Space>` | preview | `keymap` | Preview current file |
+| `<Tab>` | preview | `keymap` | Preview current file (floating window) |
 | `D` | diff | `keymap` | Diff current node |
 | `gn` | notes | `keymap` | Toggle note on current node |
 | `cl` | color_labels | `keymap` | Open color-label picker |
@@ -95,6 +95,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | Keys | Features | Notes |
 |------|---------|-------|
 | `gs` | `live_search` + `git_actions.keymap_stage` | Both default to `gs`. Enable only one, or remap the other. |
+| `<Tab>` | `preview` + neotree picker (inside picker mode) | neotree's picker uses `<Tab>` to cycle filter. Only conflicts when the picker feature is active simultaneously. |
 | `/` | `filter` + neotree fuzzy finder | neotree uses `/` for its own search. Remap `filter.keymap` if using neotree. |
 | `ya`/`yr`/`yn` | `path_utils` + `path_copy` | Both provide path-copy commands. Enable only one. |
 

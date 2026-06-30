@@ -26,6 +26,7 @@
 - [Configuration](#configuration)
 - [Adapters](#adapters)
 - [Feature reference](#feature-reference)
+- [Ignore list](#ignore-list)
 - [Keymaps](#keymaps)
 - [Commands](#commands)
 - [Autocmds](#autocmds)
@@ -105,6 +106,12 @@ All options with their defaults:
 require("filetree").setup({
   adapter = "auto",   -- "neotree" | "nvimtree" | "auto"
 
+  -- Ignore list: hide common dirs/files from the tree by default.
+  -- true (default) → built-in list (.git, node_modules, …)
+  -- false          → show everything
+  -- string[]       → custom list, overrides the built-in defaults
+  ignore_list = true,
+
   features = {
     picker = {
       enabled     = true,
@@ -140,6 +147,12 @@ require("filetree").setup({
       backup_dir  = nil,      -- default: stdpath("data")/filetree/backups
       max_backups = 5,
       dry_run     = false,
+    },
+
+    preview = {
+      enabled  = false,
+      keymap   = "<Tab>",   -- toggle floating preview window
+      max_lines = 100,
     },
   },
 })
@@ -251,6 +264,40 @@ require("filetree").setup({ adapter = "my_tree" })
 ```
 
 See [`lua/filetree/@types/adapter.lua`](lua/filetree/@types/adapter.lua) for the full annotated interface.
+
+---
+
+## Ignore list
+
+filetree.nvim hides common filesystem clutter from the tree by default — `.git`,
+`node_modules`, build artefacts, caches, and similar. Toggle with the adapter's
+native "show hidden" key (neotree: `H`).
+
+```lua
+require("filetree").setup({
+  -- true (default) — use built-in list; also reads from lib.nvim if available
+  ignore_list = true,
+
+  -- false — disable hiding entirely, show all items
+  ignore_list = false,
+
+  -- string[] — custom list; overrides the built-in defaults completely
+  ignore_list = { ".git", "node_modules", ".venv" },
+})
+```
+
+**Built-in hidden names** (when `ignore_list = true`):
+`.git`, `.github`, `.hg`, `.svn`, `node_modules`, `.pnpm-store`, `.yarn`,
+`.venv`, `.direnv`, `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.cache`,
+`.sass-cache`, `build`, `dist`, `out`, `target`, `bin`, `obj`, `zig-cache`,
+`zig-out`, `.DS_Store`, `thumbs.db`, `.vscode`, `.idea`
+
+**Toggle at runtime** — use your adapter's built-in toggle:
+
+| Adapter | Key | Action |
+|---------|-----|--------|
+| neo-tree | `H` | `toggle_hidden` — shows/hides all filtered items |
+| nvim-tree | `H` | `toggle_dotfiles` |
 
 ---
 

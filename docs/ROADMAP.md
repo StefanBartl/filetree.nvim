@@ -6,6 +6,12 @@ Features sorted roughly by priority and estimated complexity.
 
 ## Near-term
 
+### UI folder reorganization
+Move all UI-rendering features (floats, pickers, extmarks, prompt buffers) into
+`lua/filetree/features/ui/` for discoverability. Affected modules: `preview`,
+`node_info`, `filter`, `live_search`, `marks`, `git_status`, `bookmarks`,
+`color_labels`. Purely internal — no public API change.
+
 ### Additional Adapters
 - **netrw** — Neovim's built-in file explorer. Minimal public API; would require buffer-parsing heuristics.
 - **oil.nvim** — Buffer-as-directory paradigm; node concept differs fundamentally. Needs dedicated abstraction.
@@ -46,8 +52,27 @@ Features sorted roughly by priority and estimated complexity.
 - Generate Markdown links for selected nodes (single, directory-recursive, marked).
 - Copy relative path to clipboard, path-to-require conversion.
 
-### Image / PDF Preview
-- `<Tab>` preview in a floating window for images (requires external tool) and PDFs.
+### Preview — granular per-type config
+`<Tab>` → floating preview is implemented for **text files** and directories.
+Still pending:
+- **Images**: default open via system app; optional inline render via `Snacks.image` / `image.nvim` if installed.
+- **PDFs**: integration with `pdfport.nvim` (toolchain-free fallback chain: pdftotext → pdfplumber → marker → docling → ollama → claude); if pdfport disabled, both `<Tab>` and `<CR>` fall back to system app open.
+
+Config shape (planned):
+```lua
+features = {
+  preview = {
+    enabled = true,
+    keymap  = "<Tab>",
+    image = {
+      backend = "auto",   -- "snacks" | "image.nvim" | "system" | false
+    },
+    pdf = {
+      backend = "pdfport",  -- "pdfport" | "system" | false
+    },
+  },
+}
+```
 
 ---
 
