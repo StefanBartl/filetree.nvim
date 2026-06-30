@@ -38,6 +38,9 @@
 ---@field archive              FiletreeArchiveConfig?
 ---@field git_actions          FiletreeGitActionsConfig?
 ---@field auto_resize          FiletreeAutoResizeConfig?
+---@field ignore_patterns      FiletreeIgnorePatternsConfig?
+---@field file_watcher         FiletreeFileWatcherConfig?
+---@field hooks_api            FiletreeHooksApiConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -308,6 +311,28 @@
 ---@field max_width  integer  Max floating window width in columns (default 80).
 ---@field max_height integer  Max floating window height in lines (default 25).
 ---@field wrap       boolean  Enable line wrapping in the preview window (default false).
+
+-- ── ignore_patterns ──────────────────────────────────────────────────────────
+
+---@class FiletreeIgnorePatternsConfig
+---@field enabled   boolean
+---@field patterns  string[]             Lua patterns or globs to hide/dim.
+---@field mode      "dim"|"hide"         How to apply (default "dim").
+---@field keymap    string?              Toggle key inside tree (default "gi").
+---@field hl_group  string               Highlight for dimmed lines (default "Comment").
+
+-- ── file_watcher ─────────────────────────────────────────────────────────────
+
+---@class FiletreeFileWatcherConfig
+---@field enabled          boolean
+---@field debounce_ms      integer   Event debounce before refresh (default 500ms).
+---@field watch_recursive  boolean   Watch subdirectories (default true).
+---@field ignore_events    string[]  uv event types to ignore.
+
+-- ── hooks_api ─────────────────────────────────────────────────────────────────
+
+---@class FiletreeHooksApiConfig
+---@field enabled boolean
 
 -- ── archive ───────────────────────────────────────────────────────────────────
 

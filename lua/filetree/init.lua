@@ -50,6 +50,9 @@ local FEATURES = {
   archive             = { mod = "filetree.features.archive",             key = "archive"             },
   git_actions         = { mod = "filetree.features.git_actions",         key = "git_actions"         },
   auto_resize         = { mod = "filetree.features.auto_resize",         key = "auto_resize"         },
+  ignore_patterns     = { mod = "filetree.features.ignore_patterns",     key = "ignore_patterns"     },
+  file_watcher        = { mod = "filetree.features.file_watcher",        key = "file_watcher"        },
+  hooks_api           = { mod = "filetree.features.hooks_api",           key = "hooks_api"           },
 }
 
 ---@type table<string, table>  name → loaded feature module

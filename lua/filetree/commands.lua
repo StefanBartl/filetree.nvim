@@ -191,6 +191,38 @@ local TREE = {
     end end,
   },
 
+  -- ── ignore_patterns ──────────────────────────────────────────────────────────
+  ignore = {
+    toggle = function(_)  local f = ft("ignore_patterns"); if f then f.toggle()      end end,
+    clear  = function(_)  local f = ft("ignore_patterns"); if f then f.clear_all()   end end,
+    add    = function(a)  local f = ft("ignore_patterns"); if f then f.add(table.concat(a, " ")) end end,
+    list   = function(_)
+      local f = ft("ignore_patterns"); if not f then return end
+      local pats = f.get_patterns()
+      if #pats == 0 then vim.notify("[filetree] No ignore patterns", vim.log.levels.INFO)
+      else vim.notify("[filetree] Patterns:\n  " .. table.concat(pats, "\n  "), vim.log.levels.INFO) end
+    end,
+  },
+
+  -- ── hooks_api ─────────────────────────────────────────────────────────────
+  hooks = {
+    events = function(_)
+      local f = ft("hooks_api"); if not f then return end
+      local evs = f.events()
+      if #evs == 0 then vim.notify("[filetree] No hooks registered", vim.log.levels.INFO)
+      else
+        local lines = {}
+        for _, ev in ipairs(evs) do lines[#lines+1] = string.format("  %s (%d)", ev, f.count(ev)) end
+        vim.notify("[filetree] Hooks:\n" .. table.concat(lines, "\n"), vim.log.levels.INFO)
+      end
+    end,
+    clear = function(a)
+      local f = ft("hooks_api"); if not f then return end
+      f.clear(a[1])
+      vim.notify("[filetree] Hooks cleared" .. (a[1] and (" for: " .. a[1]) or ""), vim.log.levels.INFO)
+    end,
+  },
+
   -- ── health ───────────────────────────────────────────────────────────────────
   health = function(_) vim.cmd("checkhealth filetree") end,
 }

@@ -107,6 +107,9 @@ function M.check()
     { key = "archive",            name = "Archive (zip/tar)"     },
     { key = "git_actions",        name = "Git Actions"           },
     { key = "auto_resize",        name = "Auto Resize"           },
+    { key = "ignore_patterns",    name = "Ignore Patterns"       },
+    { key = "file_watcher",       name = "File Watcher"          },
+    { key = "hooks_api",          name = "Hooks API"             },
   }
 
   -- Extra check for trash backend availability
