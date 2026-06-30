@@ -40,6 +40,9 @@ local FEATURES = {
   grep_in_dir         = { mod = "filetree.features.grep_in_dir",         key = "grep_in_dir"         },
   recent_files        = { mod = "filetree.features.recent_files",        key = "recent_files"        },
   breadcrumbs         = { mod = "filetree.features.breadcrumbs",         key = "breadcrumbs"         },
+  lsp_diagnostics     = { mod = "filetree.features.lsp_diagnostics",     key = "lsp_diagnostics"     },
+  size_info           = { mod = "filetree.features.size_info",           key = "size_info"           },
+  notes               = { mod = "filetree.features.notes",               key = "notes"               },
 }
 
 ---@type table<string, table>  name → loaded feature module

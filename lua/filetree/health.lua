@@ -98,6 +98,9 @@ function M.check()
     { key = "grep_in_dir",        name = "Grep In Dir"           },
     { key = "recent_files",       name = "Recent Files"          },
     { key = "breadcrumbs",        name = "Breadcrumbs"           },
+    { key = "lsp_diagnostics",    name = "LSP Diagnostics"       },
+    { key = "size_info",          name = "Size Info"             },
+    { key = "notes",              name = "Notes"                 },
   }
 
   -- Extra check for trash backend availability

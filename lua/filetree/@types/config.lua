@@ -29,6 +29,9 @@
 ---@field grep_in_dir         FiletreeGrepInDirConfig?
 ---@field recent_files        FiletreeRecentFilesConfig?
 ---@field breadcrumbs         FiletreeBreadcrumbsConfig?
+---@field lsp_diagnostics     FiletreeLspDiagnosticsConfig?
+---@field size_info           FiletreeSizeInfoConfig?
+---@field notes               FiletreeNotesConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -123,6 +126,34 @@
 ---@field copy_dir   string?  Copy parent directory    (default "yd")
 ---@field to_require string?  Copy as require() string (default "yq")
 ---@field md_link    string?  Copy as Markdown link    (default "ym")
+
+-- ── lsp_diagnostics ──────────────────────────────────────────────────────────
+
+---@class FiletreeLspDiagnosticsConfig
+---@field enabled        boolean
+---@field show_errors    boolean   Show error count (default true).
+---@field show_warnings  boolean   Show warning count (default true).
+---@field show_hints     boolean   Show hint count (default false).
+---@field show_info      boolean   Show info count (default false).
+---@field format         fun(counts: table): string?  Custom formatter. Return nil to hide.
+---@field debounce_ms    integer   Delay after DiagnosticChanged (default 300ms).
+
+-- ── size_info ─────────────────────────────────────────────────────────────────
+
+---@class FiletreeSizeInfoConfig
+---@field enabled     boolean
+---@field show_files  boolean  Show file sizes (default true).
+---@field show_dirs   boolean  Show directory sizes (default true).
+---@field hl_group    string   Highlight group for size text (default "Comment").
+---@field dir_async   boolean  Use `du`/PowerShell for dir sizes (default true).
+
+-- ── notes ─────────────────────────────────────────────────────────────────────
+
+---@class FiletreeNotesConfig
+---@field enabled    boolean
+---@field keymap     string?  Normal-mode key inside tree (default "gn").
+---@field indicator  string   Extmark indicator character (default "📝").
+---@field hl_group   string   Highlight group for the indicator (default "DiagnosticHint").
 
 -- ── grep_in_dir ───────────────────────────────────────────────────────────────
 
