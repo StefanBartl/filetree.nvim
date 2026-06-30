@@ -264,6 +264,85 @@ Um diese Tests zu aktivieren, die auskommentierten Blöcke in `minimal_neotree.l
 
 ---
 
+### K. Cursor / Reset / Buffer-Save
+
+**cursor_hide** (automatisch beim Tree-Öffnen):
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| K.1 | `<C-e>` → Tree öffnen | Block-Cursor im Tree-Fenster unsichtbar (blend=100) |
+| K.2 | Zum Editor wechseln (`<C-w>w`) | Cursor dort wieder sichtbar |
+| K.3 | Zurück in Tree wechseln | Cursor wieder versteckt |
+
+**tree_reset** (Keymap `<Esc>` im Tree):
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| K.4 | Filter aktiv (z.B. `init` via `/`), dann `<Esc>` | Filter gelöscht, alle Nodes wieder sichtbar |
+| K.5 | Preview offen (`<Tab>`), dann `<Esc>` | Preview geschlossen |
+| K.6 | Nichts aktiv, `<Esc>` | Kein Fehler / kein Stack-Trace |
+
+**buffer_save** (`<C-s>` / `<M-s>` im Tree):
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| K.7 | Editor-Buffer modifiziert (aber nicht gespeichert), dann in Tree wechseln und `<C-s>` drücken | Notification: `"Saved: lua/filetree/..."`, Buffer-Status `[+]` weg |
+| K.8 | `<C-s>` wenn kein benachbartes Editor-Fenster offen | Notification: `"No editor window found"` |
+| K.9 | Cursor auf `lua/filetree/init.lua` im Tree (Buffer im Hintergrund offen), `<M-s>` | Speichert genau diesen Buffer |
+| K.10 | `<M-s>` auf Datei die nicht als Buffer geöffnet ist | Notification: `"File not loaded: ..."` |
+
+---
+
+### L. Preview — Image/PDF dispatch
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| L.1 | Cursor auf `.png`/`.jpg` im Tree, `<Tab>` | System-App öffnet das Bild (Explorer/Preview/eog); Preview-Float erscheint NICHT |
+| L.2 | Cursor auf `.pdf` im Tree, `<Tab>` | pdfport.nvim öffnet (oder system App falls nicht installiert) |
+| L.3 | Cursor auf `.lua` im Tree, `<Tab>` | Floating Text-Preview wie gehabt |
+| L.4 | Cursor auf `.png`, `<CR>` | System-App öffnet das Bild |
+| L.5 | Cursor auf `.lua`, `<CR>` | Adapter's Standard-`<CR>` (expand/open) greift |
+
+---
+
+### M. Window / System FM / Shell
+
+**window_size_cycler** (Keymap `w` im Tree):
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| M.1 | `w` im Tree drücken | Breite wechselt auf 55 (large) |
+| M.2 | `w` nochmal | Breite wechselt auf 18 (small) |
+| M.3 | `w` nochmal | Breite wechselt zurück auf 35 (normal) |
+
+**open_in_fm** (Keymap `<leader>fm` im Tree):
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| M.4 | Cursor auf Datei, `<leader>fm` | System-Dateimanager öffnet sich im Ordner der Datei (Explorer/Finder/Nautilus) |
+| M.5 | Cursor auf Verzeichnis, `<leader>fm` | Dateimanager öffnet dieses Verzeichnis |
+
+**shell_run** (Keymap `i` im Tree — neotrees `i` via `adapter_keymaps` genoppt):
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| M.6 | `i` im Tree drücken | Prompt erscheint: `$ (~path/to/node/dir) ` |
+| M.7 | `echo hello` eingeben + Enter | Horizontal-Split Terminal öffnet sich, zeigt `hello`, schließt sich danach (close_on_ok=true) |
+| M.8 | `ls -la` eingeben | Terminal zeigt ls-Ausgabe, schließt sich nach Abschluss |
+| M.9 | Fehlendes Kommando eingeben (z.B. `doesnotexist`) | Terminal bleibt offen (exit ≠ 0) |
+| M.10 | `<Esc>` im Prompt (kein Command) | Nichts passiert, kein Fehler |
+
+---
+
+### N. adapter_keymaps — Neotree-Keymaps überschreiben
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| N.1 | In Tree: `i` drücken | shell_run-Prompt öffnet sich (NICHT neotrees run_command) |
+| N.2 | In Tree: neotrees altes `i`-Verhalten | komplett weg / noop (adapter_keymaps noop ist aktiv) |
+
+---
+
 ## Bekannte Einschränkungen dieser Test-Umgebung
 
 - **Kein git-Blame**: braucht `git log`, funktioniert nur in echtem Git-Repo (das ist hier gegeben, solange der Test im Repo-Root gestartet wird)

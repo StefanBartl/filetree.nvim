@@ -113,6 +113,9 @@ require("lazy").setup({
         -- ignore_list = false,                          -- show everything
         -- ignore_list = { ".git", "node_modules" },    -- custom list (overrides built-in defaults)
 
+        -- Noop neotree's built-in `i` (run_command) so shell_run can use it
+        adapter_keymaps = { ["i"] = false },
+
         features = {
           -- ── Group A: Adapter basics ──────────────────────────────────────
           -- Tests: is_open(), get_current_node(), get_visible_nodes(), refresh()
@@ -171,10 +174,52 @@ require("lazy").setup({
           },
           preview = {
             enabled     = true,
-            -- keymap default is now "<Tab>"; override here if <Tab> conflicts
             keymap      = "<Tab>",
-            width_ratio = 0.5,
-            max_lines   = 100,
+            keymap_open = "<CR>",
+            max_lines   = 40,
+            image = { backend = "auto" },     -- images: snacks → image.nvim → system
+            pdf   = { backend = "pdfport" },  -- PDFs: pdfport.nvim → system
+          },
+
+          -- ── Group K: Cursor / reset / save ───────────────────────────────
+          cursor_hide = {
+            enabled = true,
+          },
+          tree_reset = {
+            enabled = true,
+            keymap  = "<Esc>",
+          },
+          buffer_save = {
+            enabled         = true,
+            keymap_adjacent = "<C-s>",
+            keymap_node     = "<M-s>",
+            force           = true,
+          },
+          open_replace = {
+            enabled = true,
+            keymap  = "O",
+          },
+          reveal_alt = {
+            enabled = true,
+            keymap  = "B",
+          },
+
+          -- ── Group L: Window / system / shell ─────────────────────────────
+          window_size_cycler = {
+            enabled = true,
+            keymap  = "w",
+            sizes   = { 35, 55, 18 },
+          },
+          open_in_fm = {
+            enabled = true,
+            keymap  = "<leader>fm",
+          },
+          shell_run = {
+            enabled     = true,
+            keymap      = "i",    -- neotree's `i` nooped via adapter_keymaps above
+            close_on_ok = true,
+            split       = "split",
+            height      = 12,
           },
 
           -- ── Group E: Input / search ───────────────────────────────────────
