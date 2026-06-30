@@ -26,6 +26,9 @@
 ---@field copy_move           FiletreeCopyMoveConfig?
 ---@field find_files          FiletreeFindFilesConfig?
 ---@field filter              FiletreeFilterConfig?
+---@field grep_in_dir         FiletreeGrepInDirConfig?
+---@field recent_files        FiletreeRecentFilesConfig?
+---@field breadcrumbs         FiletreeBreadcrumbsConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -120,6 +123,38 @@
 ---@field copy_dir   string?  Copy parent directory    (default "yd")
 ---@field to_require string?  Copy as require() string (default "yq")
 ---@field md_link    string?  Copy as Markdown link    (default "ym")
+
+-- ── grep_in_dir ───────────────────────────────────────────────────────────────
+
+---@class FiletreeGrepInDirConfig
+---@field enabled       boolean
+---@field keymap        string?    Key in tree for grep with prompt (default "gr").
+---@field keymap_cword  string?    Key in tree for grep cword (default "gR").
+---@field prefer        "auto"|"telescope"|"fzf-lua"|"builtin"
+---@field hidden        boolean    Include hidden files (default false).
+---@field extra_args    string[]   Additional args passed to rg/grep.
+
+-- ── recent_files ──────────────────────────────────────────────────────────────
+
+---@class FiletreeRecentFilesConfig
+---@field enabled          boolean
+---@field max_files        integer   Max entries to keep (default 100).
+---@field keymap_tree      string?   Key inside tree (default "r").
+---@field keymap_global    string?   Global normal-mode key (default nil).
+---@field reveal_on_open   boolean   Reveal in tree on open (default true).
+---@field exclude          string[]  Lua patterns for paths to never record.
+
+-- ── breadcrumbs ───────────────────────────────────────────────────────────────
+
+---@class FiletreeBreadcrumbsConfig
+---@field enabled    boolean
+---@field mode       "winbar"|"float"|"statusline"  Display mode (default "winbar").
+---@field separator  string   Part separator (default "  ").
+---@field max_depth  integer  Max number of path segments (default 5).
+---@field hl_dir     string   Highlight group for directory parts (default "Comment").
+---@field hl_file    string   Highlight group for the file/leaf part (default "Normal").
+---@field hl_sep     string   Highlight group for separators (default "NonText").
+---@field winbar_hl  string   Background group for the whole winbar (default "WinBar").
 
 -- ── copy_move ─────────────────────────────────────────────────────────────────
 

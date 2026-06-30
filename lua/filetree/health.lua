@@ -95,6 +95,9 @@ function M.check()
     { key = "copy_move",          name = "Copy / Move"           },
     { key = "find_files",         name = "Find Files"            },
     { key = "filter",             name = "Filter"                },
+    { key = "grep_in_dir",        name = "Grep In Dir"           },
+    { key = "recent_files",       name = "Recent Files"          },
+    { key = "breadcrumbs",        name = "Breadcrumbs"           },
   }
 
   -- Extra check for trash backend availability

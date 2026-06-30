@@ -37,6 +37,9 @@ local FEATURES = {
   copy_move           = { mod = "filetree.features.copy_move",           key = "copy_move"           },
   find_files          = { mod = "filetree.features.find_files",          key = "find_files"          },
   filter              = { mod = "filetree.features.filter",              key = "filter"              },
+  grep_in_dir         = { mod = "filetree.features.grep_in_dir",         key = "grep_in_dir"         },
+  recent_files        = { mod = "filetree.features.recent_files",        key = "recent_files"        },
+  breadcrumbs         = { mod = "filetree.features.breadcrumbs",         key = "breadcrumbs"         },
 }
 
 ---@type table<string, table>  name → loaded feature module
