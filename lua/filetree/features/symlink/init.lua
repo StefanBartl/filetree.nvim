@@ -205,15 +205,18 @@ function M.setup(config, adapter)
     group   = _augroup,
     pattern = "neo-tree,NvimTree",
     callback = function(ev)
-      local buf = ev.buf
-      local function map(key, fn, desc)
-        if key then
-          vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-        end
-      end
-      map(_cfg.keymap_follow, M.follow,         "follow symlink")
-      map(_cfg.keymap_create, M.create_current, "create symlink")
       M._render()
+      local buf = ev.buf
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        local function map(key, fn, desc)
+          if key then
+            vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+          end
+        end
+        map(_cfg.keymap_follow, M.follow,         "follow symlink")
+        map(_cfg.keymap_create, M.create_current, "create symlink")
+      end)
     end,
   })
 

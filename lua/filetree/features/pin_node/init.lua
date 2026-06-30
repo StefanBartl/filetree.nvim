@@ -211,12 +211,16 @@ function M.setup(config, adapter)
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
-      if _cfg.keymap then
-        vim.keymap.set("n", _cfg.keymap, M.toggle_current, {
-          buffer = ev.buf, silent = true, desc = "Filetree: toggle pin",
-        })
-      end
       render(ev.buf)
+      if _cfg.keymap then
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.keymap.set("n", _cfg.keymap, M.toggle_current, {
+            buffer = buf, silent = true, desc = "Filetree: toggle pin",
+          })
+        end)
+      end
     end,
   })
 

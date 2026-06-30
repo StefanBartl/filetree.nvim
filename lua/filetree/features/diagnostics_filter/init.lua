@@ -195,10 +195,14 @@ function M.setup(config, adapter)
     callback = function(ev)
       render(ev.buf)
       if _cfg.keymap then
-        vim.keymap.set("n", _cfg.keymap, M.toggle_filter, {
-          buffer = ev.buf, silent = true,
-          desc   = "Filetree: toggle diagnostic filter",
-        })
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.keymap.set("n", _cfg.keymap, M.toggle_filter, {
+            buffer = buf, silent = true,
+            desc   = "Filetree: toggle diagnostic filter",
+          })
+        end)
       end
     end,
   })

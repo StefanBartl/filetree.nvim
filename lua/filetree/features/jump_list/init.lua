@@ -191,16 +191,19 @@ function M.setup(config, adapter)
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
       local buf = ev.buf
-      if _cfg.keymap_back then
-        vim.keymap.set("n", _cfg.keymap_back, M.back, {
-          buffer = buf, silent = true, desc = "Filetree: jump back",
-        })
-      end
-      if _cfg.keymap_fwd then
-        vim.keymap.set("n", _cfg.keymap_fwd, M.forward, {
-          buffer = buf, silent = true, desc = "Filetree: jump forward",
-        })
-      end
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        if _cfg.keymap_back then
+          vim.keymap.set("n", _cfg.keymap_back, M.back, {
+            buffer = buf, silent = true, desc = "Filetree: jump back",
+          })
+        end
+        if _cfg.keymap_fwd then
+          vim.keymap.set("n", _cfg.keymap_fwd, M.forward, {
+            buffer = buf, silent = true, desc = "Filetree: jump forward",
+          })
+        end
+      end)
     end,
   })
 

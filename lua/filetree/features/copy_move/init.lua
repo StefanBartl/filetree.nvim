@@ -270,17 +270,20 @@ function M.setup(config, adapter)
     group   = _augroup,
     pattern = "neo-tree,NvimTree",
     callback = function(ev)
-      local buf = ev.buf
-      local function map(key, fn, desc)
-        if key then
-          vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-        end
-      end
-      map(km.copy,  M.stage_copy, "stage copy")
-      map(km.cut,   M.stage_cut,  "stage cut")
-      map(km.paste, M.paste,      "paste clipboard")
-      map(km.show,  M.show,       "show clipboard")
       render_clipboard()
+      local buf = ev.buf
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        local function map(key, fn, desc)
+          if key then
+            vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+          end
+        end
+        map(km.copy,  M.stage_copy, "stage copy")
+        map(km.cut,   M.stage_cut,  "stage cut")
+        map(km.paste, M.paste,      "paste clipboard")
+        map(km.show,  M.show,       "show clipboard")
+      end)
     end,
   })
 

@@ -194,9 +194,13 @@ function M.setup(config, adapter)
       group   = _augroup,
       pattern = { "neo-tree", "NvimTree" },
       callback = function(ev)
-        vim.keymap.set("n", _cfg.keymap, M.rename_current, {
-          buffer = ev.buf, silent = true, desc = "Filetree: LSP-aware rename",
-        })
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.keymap.set("n", _cfg.keymap, M.rename_current, {
+            buffer = buf, silent = true, desc = "Filetree: LSP-aware rename",
+          })
+        end)
       end,
     })
   end

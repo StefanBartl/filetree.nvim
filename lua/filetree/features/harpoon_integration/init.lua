@@ -222,13 +222,16 @@ function M.setup(config, adapter)
     callback = function(ev)
       render(ev.buf)
       local buf = ev.buf
-      local function km(key, fn, desc)
-        if key then
-          vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = desc })
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        local function km(key, fn, desc)
+          if key then
+            vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = desc })
+          end
         end
-      end
-      km(_cfg.keymap_add,  M.add_current, "Filetree: add to harpoon")
-      km(_cfg.keymap_menu, M.menu,        "Filetree: open harpoon menu")
+        km(_cfg.keymap_add,  M.add_current, "Filetree: add to harpoon")
+        km(_cfg.keymap_menu, M.menu,        "Filetree: open harpoon menu")
+      end)
     end,
   })
 

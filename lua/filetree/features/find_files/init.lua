@@ -192,11 +192,15 @@ function M.setup(config, adapter)
       group   = _augroup,
       pattern = "neo-tree,NvimTree",
       callback = function(ev)
-        vim.keymap.set("n", _cfg.keymap_tree, M.find, {
-          buffer = ev.buf,
-          silent = true,
-          desc   = "Filetree: find files from current node",
-        })
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.keymap.set("n", _cfg.keymap_tree, M.find, {
+            buffer = buf,
+            silent = true,
+            desc   = "Filetree: find files from current node",
+          })
+        end)
       end,
     })
   end

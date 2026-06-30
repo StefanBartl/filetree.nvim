@@ -257,9 +257,13 @@ function M.setup(config, adapter)
     callback = function(ev)
       render(ev.buf)
       if _cfg.keymap then
-        vim.keymap.set("n", _cfg.keymap, M.edit_current, {
-          buffer = ev.buf, silent = true, desc = "Filetree: edit tags",
-        })
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.keymap.set("n", _cfg.keymap, M.edit_current, {
+            buffer = buf, silent = true, desc = "Filetree: edit tags",
+          })
+        end)
       end
     end,
   })

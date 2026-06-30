@@ -170,12 +170,16 @@ function M.setup(config, adapter)
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
-      if _cfg.keymap then
-        vim.keymap.set("n", _cfg.keymap, M.toggle, {
-          buffer = ev.buf, silent = true, desc = "Filetree: toggle ignore patterns",
-        })
-      end
       render_dim(ev.buf)
+      if _cfg.keymap then
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.keymap.set("n", _cfg.keymap, M.toggle, {
+            buffer = buf, silent = true, desc = "Filetree: toggle ignore patterns",
+          })
+        end)
+      end
     end,
   })
 end

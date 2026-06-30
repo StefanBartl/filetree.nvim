@@ -174,21 +174,24 @@ function M.setup(config, adapter)
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
       local buf = ev.buf
-      if _cfg.keymap_stage then
-        vim.keymap.set("n", _cfg.keymap_stage, M.stage_current, {
-          buffer = buf, silent = true, desc = "Filetree: git stage current node",
-        })
-      end
-      if _cfg.keymap_unstage then
-        vim.keymap.set("n", _cfg.keymap_unstage, M.unstage_current, {
-          buffer = buf, silent = true, desc = "Filetree: git unstage current node",
-        })
-      end
-      if _cfg.keymap_log then
-        vim.keymap.set("n", _cfg.keymap_log, M.log_current, {
-          buffer = buf, silent = true, desc = "Filetree: git log for current node",
-        })
-      end
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        if _cfg.keymap_stage then
+          vim.keymap.set("n", _cfg.keymap_stage, M.stage_current, {
+            buffer = buf, silent = true, desc = "Filetree: git stage current node",
+          })
+        end
+        if _cfg.keymap_unstage then
+          vim.keymap.set("n", _cfg.keymap_unstage, M.unstage_current, {
+            buffer = buf, silent = true, desc = "Filetree: git unstage current node",
+          })
+        end
+        if _cfg.keymap_log then
+          vim.keymap.set("n", _cfg.keymap_log, M.log_current, {
+            buffer = buf, silent = true, desc = "Filetree: git log for current node",
+          })
+        end
+      end)
     end,
   })
 end

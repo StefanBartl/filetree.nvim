@@ -211,16 +211,19 @@ function M.setup(config, adapter)
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
       local buf = ev.buf
-      if _cfg.keymap_zip then
-        vim.keymap.set("n", _cfg.keymap_zip, M.zip_current, {
-          buffer = buf, silent = true, desc = "Filetree: zip current/marked",
-        })
-      end
-      if _cfg.keymap_tar then
-        vim.keymap.set("n", _cfg.keymap_tar, M.tar_current, {
-          buffer = buf, silent = true, desc = "Filetree: tar.gz current/marked",
-        })
-      end
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        if _cfg.keymap_zip then
+          vim.keymap.set("n", _cfg.keymap_zip, M.zip_current, {
+            buffer = buf, silent = true, desc = "Filetree: zip current/marked",
+          })
+        end
+        if _cfg.keymap_tar then
+          vim.keymap.set("n", _cfg.keymap_tar, M.tar_current, {
+            buffer = buf, silent = true, desc = "Filetree: tar.gz current/marked",
+          })
+        end
+      end)
     end,
   })
 end

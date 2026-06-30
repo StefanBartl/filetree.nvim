@@ -188,8 +188,12 @@ function M.setup(cfg, adapter)
       vim.api.nvim_create_autocmd("FileType", {
         pattern  = { "neo-tree", "NvimTree" },
         callback = function(ev)
-          vim.keymap.set("n", cfg.keymap, function() M.show_current() end,
-            { buffer = ev.buf, desc = "filetree: node info", silent = true })
+          local buf = ev.buf
+          vim.schedule(function()
+            if not vim.api.nvim_buf_is_valid(buf) then return end
+            vim.keymap.set("n", cfg.keymap, function() M.show_current() end,
+              { buffer = buf, desc = "filetree: node info", silent = true })
+          end)
         end,
       })
     end

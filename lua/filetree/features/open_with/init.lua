@@ -156,21 +156,24 @@ function M.setup(config, adapter)
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
       local buf = ev.buf
-      if _cfg.keymap then
-        vim.keymap.set("n", _cfg.keymap, M.open_system, {
-          buffer = buf, silent = true, desc = "Filetree: open with system default",
-        })
-      end
-      -- Register per-app keymaps
-      for _, app in ipairs(_cfg.apps) do
-        if app.keymap then
-          local app_copy = app
-          vim.keymap.set("n", app.keymap, function() M.open_app(app_copy.name) end, {
-            buffer = buf, silent = true,
-            desc   = "Filetree: open with " .. app.name,
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        if _cfg.keymap then
+          vim.keymap.set("n", _cfg.keymap, M.open_system, {
+            buffer = buf, silent = true, desc = "Filetree: open with system default",
           })
         end
-      end
+        -- Register per-app keymaps
+        for _, app in ipairs(_cfg.apps) do
+          if app.keymap then
+            local app_copy = app
+            vim.keymap.set("n", app.keymap, function() M.open_app(app_copy.name) end, {
+              buffer = buf, silent = true,
+              desc   = "Filetree: open with " .. app.name,
+            })
+          end
+        end
+      end)
     end,
   })
 end

@@ -162,7 +162,13 @@ function M.setup(cfg, adapter)
   else
     vim.api.nvim_create_autocmd("FileType", {
       pattern  = { "neo-tree", "NvimTree" },
-      callback = function(ev) set_keymaps(ev.buf) end,
+      callback = function(ev)
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          set_keymaps(buf)
+        end)
+      end,
     })
   end
 end
