@@ -103,6 +103,30 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `<Tab>` | `preview` + neotree picker (inside picker mode) | neotree's picker uses `<Tab>` to cycle filter. Only conflicts when the picker feature is active simultaneously. |
 | `/` | `filter` + neotree fuzzy finder | neotree uses `/` for its own search. Remap `filter.keymap` if using neotree. |
 | `ya`/`yr`/`yn` | `path_utils` + `path_copy` | Both provide path-copy commands. Enable only one. |
+| `i` | `shell_run` + neotree built-in `i` (toggle node info) | filetree's `node_info` provides a better `I`; noop neotree's `i` via `adapter_keymaps`. |
+
+---
+
+## Overriding adapter (neotree) native keymaps
+
+Use `adapter_keymaps` to noop or remap any key that the adapter (neotree) sets
+natively — filetree.nvim applies these overrides after the adapter's own
+buffer-local keymaps are in place.
+
+```lua
+require("filetree").setup({
+  -- noop neotree's built-in `i` (toggle node info); our `node_info` uses `I`
+  adapter_keymaps = {
+    ["i"] = false,   -- false → <Nop>
+  },
+  features = {
+    shell_run  = { enabled = true, keymap = "i" },
+    node_info  = { enabled = true, keymap = "I" },
+  },
+})
+```
+
+`false` maps the key to `<Nop>`.  A string value remaps to that target key.
 
 ---
 

@@ -14,12 +14,13 @@
 ---@field aliases (FiletreeBuiltinAlias|string)[]?   Aliases to also register. Omit to keep the default :Ft alias.
 
 ---@class FiletreeConfig
----@field adapter     FiletreeAdapterName|"auto"   Which adapter to use. "auto" picks the first available one.
----@field features    FiletreeFeaturesConfig
----@field keymaps     table<string,string|false>?  Global keymap remap: { ["<old>"] = "<new>" } or { ["<key>"] = false } to disable.
----@field command     FiletreeCommandConfig|string|nil  User command name (string) or config table. Default: "Filetree" + "Ft" alias.
----@field autocmds    table<string,false>?          Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
----@field ignore_list boolean|string[]|nil          true (default) = hide common dirs (.git, node_modules…); false = show all; string[] = custom list.
+---@field adapter          FiletreeAdapterName|"auto"       Which adapter to use. "auto" picks the first available one.
+---@field features         FiletreeFeaturesConfig
+---@field keymaps          table<string,string|false>?      Global keymap remap: { ["<old>"] = "<new>" } or { ["<key>"] = false } to disable.
+---@field adapter_keymaps  table<string,string|false>?      Override the adapter's own native keymaps: false → <Nop>, string → remap target. Applied after the adapter sets its keymaps. Example: { ["i"] = false } noops neotree's built-in `i` (toggle-info).
+---@field command          FiletreeCommandConfig|string|nil User command name (string) or config table. Default: "Filetree" + "Ft" alias.
+---@field autocmds         table<string,false>?             Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
+---@field ignore_list      boolean|string[]|nil             true (default) = hide common dirs (.git, node_modules…); false = show all; string[] = custom list.
 
 ---@class FiletreeFeaturesConfig
 ---@field ignore_list         FiletreeIgnoreListConfig?

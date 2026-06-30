@@ -91,6 +91,9 @@ local FEATURES = {
 ---@type table<string, table>  name → loaded feature module
 local _active_features = {}
 
+---@type integer?
+local _adapter_keymaps_augroup = nil
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---Initialize filetree.nvim.
@@ -141,6 +144,45 @@ function M.setup(user_config)
   end
 
   commands.setup(cfg.command)
+
+  -- Apply adapter_keymaps: override / noop the adapter's own native keymaps.
+  -- false → <Nop>, string → remap target.
+  -- Runs in vim.schedule inside a FileType autocmd to fire AFTER the adapter
+  -- has set its own buffer-local keymaps.
+  if type(cfg.adapter_keymaps) == "table" then
+    if _adapter_keymaps_augroup then
+      pcall(vim.api.nvim_del_augroup_by_id, _adapter_keymaps_augroup)
+    end
+    _adapter_keymaps_augroup = vim.api.nvim_create_augroup(
+      "filetree_adapter_keymaps", { clear = true })
+
+    local overrides = cfg.adapter_keymaps
+    vim.api.nvim_create_autocmd("FileType", {
+      group   = _adapter_keymaps_augroup,
+      pattern = { "neo-tree", "NvimTree" },
+      callback = function(ev)
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          for key, target in pairs(overrides) do
+            if target == false then
+              vim.keymap.set("n", key, "<Nop>", {
+                buffer = buf, silent = true,
+                desc   = "Filetree: adapter keymap disabled",
+              })
+            elseif type(target) == "string" then
+              -- remap: forward to the target key
+              vim.keymap.set("n", key, target, {
+                buffer = buf, silent = true,
+                desc   = "Filetree: adapter keymap remapped",
+              })
+            end
+          end
+        end)
+      end,
+    })
+  end
+
   _initialized = true
 end
 
