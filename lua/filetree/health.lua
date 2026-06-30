@@ -129,6 +129,7 @@ function M.check()
     { key = "harpoon_integration",    name = "Harpoon Integration"     },
     { key = "file_permissions",       name = "File Permissions"        },
     { key = "node_info",              name = "Node Info"               },
+    { key = "tree_traverse",          name = "Tree Traverse"           },
   }
 
   -- Extra check for trash backend availability

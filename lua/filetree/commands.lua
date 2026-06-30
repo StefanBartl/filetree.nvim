@@ -354,6 +354,12 @@ local TREE = {
     exec = function(_) local f = ft("file_permissions"); if f then f.toggle_exec()  end end,
   },
 
+  -- ── tree_traverse ─────────────────────────────────────────────────────────────
+  traverse = {
+    up   = function(_) local f = ft("tree_traverse"); if f then f.up()   end end,
+    down = function(_) local f = ft("tree_traverse"); if f then f.down() end end,
+  },
+
   -- ── node_info ────────────────────────────────────────────────────────────────
   info = {
     [""] = function(_) local f = ft("node_info"); if f then f.show_current() end end,

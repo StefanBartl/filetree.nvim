@@ -72,6 +72,7 @@ local FEATURES = {
   harpoon_integration = { mod = "filetree.features.harpoon_integration", key = "harpoon_integration" },
   file_permissions    = { mod = "filetree.features.file_permissions",    key = "file_permissions"    },
   node_info           = { mod = "filetree.features.node_info",           key = "node_info"           },
+  tree_traverse       = { mod = "filetree.features.tree_traverse",       key = "tree_traverse"       },
 }
 
 ---@type table<string, table>  name → loaded feature module

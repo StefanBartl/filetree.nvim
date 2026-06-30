@@ -60,6 +60,7 @@
 ---@field harpoon_integration     FiletreeHarpoonConfig?
 ---@field file_permissions        FiletreeFilePermissionsConfig?
 ---@field node_info               FiletreeNodeInfoConfig?
+---@field tree_traverse           FiletreeTreeTraverseConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -558,5 +559,13 @@
 ---@field keymap           string?   Key inside tree (default "I").
 ---@field show_lines       boolean   Show line count for files (default true).
 ---@field max_lines_size   integer   Skip line count for files larger than this in bytes (default 5MB).
+
+-- ── tree_traverse ─────────────────────────────────────────────────────────────
+
+---@class FiletreeTreeTraverseConfig
+---@field enabled       boolean
+---@field keymap_up     string?   Navigate to parent directory (default "<BS>").
+---@field keymap_down   string?   Set current dir as root (default "]r").
+---@field sync_cwd      boolean   Also change Vim's cwd (default true).
 
 return {}
