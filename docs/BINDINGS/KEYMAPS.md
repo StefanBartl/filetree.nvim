@@ -32,7 +32,8 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `a` | smart_create | `keymap` | Smart create file or directory |
 | `/` | filter | `keymap` | Enter tree filter mode |
 | `b` | bookmarks | `keymap` | Toggle bookmark |
-| `<Tab>` | preview | `keymap` | Preview current file (floating window) |
+| `<Tab>` | preview | `keymap` | Text/dir: toggle floating preview; image: open via backend; PDF: pdfport/system |
+| `<CR>` | preview | `keymap_open` | Image/PDF: open via backend; other nodes: adapter's default `<CR>` |
 | `D` | diff | `keymap` | Diff current node |
 | `gn` | notes | `keymap` | Toggle note on current node |
 | `cl` | color_labels | `keymap` | Open color-label picker |

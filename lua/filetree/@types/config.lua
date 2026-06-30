@@ -358,17 +358,29 @@
 
 -- ── preview ───────────────────────────────────────────────────────────────────
 
+---@alias FiletreeImageBackend "auto"|"snacks"|"image.nvim"|"system"|false
+---@alias FiletreePdfBackend   "pdfport"|"system"|false
+
+---@class FiletreePreviewImageConfig
+---@field backend FiletreeImageBackend  "auto" tries snacks → image.nvim → system (default "auto").
+
+---@class FiletreePreviewPdfConfig
+---@field backend FiletreePdfBackend  "pdfport" tries pdfport.nvim, falls back to system (default "pdfport").
+
 ---@class FiletreePreviewConfig
 ---@field enabled              boolean
----@field keymap               string?  Normal-mode key to toggle preview (default "<Tab>").
----@field max_lines            integer  Max lines to read for text preview (default 40).
----@field max_width            integer  Max floating window width in columns (default 80).
----@field max_height           integer  Max floating window height in lines (default 25).
----@field wrap                 boolean  Enable line wrapping in the preview window (default false).
----@field keymap_scroll_up     string?  Scroll preview up 1 line (default "<C-b>").
----@field keymap_scroll_down   string?  Scroll preview down 1 line (default "<C-f>").
----@field keymap_scroll_up10   string?  Scroll preview up 10 lines (default "<PageUp>").
----@field keymap_scroll_down10 string?  Scroll preview down 10 lines (default "<PageDown>").
+---@field keymap               string?                  Normal-mode key: toggle text preview; dispatch image/PDF (default "<Tab>").
+---@field keymap_open          string?                  Normal-mode key: dispatch image/PDF; adapter default for other nodes (default "<CR>").
+---@field max_lines            integer                  Max lines to read for text preview (default 40).
+---@field max_width            integer                  Max floating window width in columns (default 80).
+---@field max_height           integer                  Max floating window height in lines (default 25).
+---@field wrap                 boolean                  Enable line wrapping in the preview window (default false).
+---@field keymap_scroll_up     string?                  Scroll preview up 1 line (default "<C-b>").
+---@field keymap_scroll_down   string?                  Scroll preview down 1 line (default "<C-f>").
+---@field keymap_scroll_up10   string?                  Scroll preview up 10 lines (default "<PageUp>").
+---@field keymap_scroll_down10 string?                  Scroll preview down 10 lines (default "<PageDown>").
+---@field image                FiletreePreviewImageConfig?  Image-open config.
+---@field pdf                  FiletreePreviewPdfConfig?    PDF-open config.
 
 -- ── color_labels ─────────────────────────────────────────────────────────────
 

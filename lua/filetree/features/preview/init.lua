@@ -1,5 +1,5 @@
 ---@module 'filetree.features.preview'
----@brief Floating file content preview triggered from the tree.
+---@brief Floating file content preview + image/PDF dispatch triggered from the tree.
 ---@description
 --- Opens a floating window showing the content of the file under the cursor.
 --- Auto-closes when the cursor leaves the tree buffer or the preview window.
@@ -7,10 +7,13 @@
 --- Supported content:
 ---   Text files:   first N lines with syntax highlight via filetype detection.
 ---   Binary files: hex dump of the first 256 bytes.
----   Images:       metadata summary (size, format).
 ---   Directories:  lists immediate children.
+---   Images:       opens via system app, or inline via snacks.image / image.nvim.
+---   PDFs:         opens via pdfport.nvim, falls back to system app.
 ---
---- Keymap (default): <Tab> in tree buffer.
+--- Keymaps (defaults):
+---   <Tab>  — toggle text preview; image/PDF dispatch for those file types.
+---   <CR>   — image/PDF dispatch only; other nodes pass through to adapter's <CR>.
 
 local notify = require("filetree.util.notify").create("[filetree.preview]")
 
@@ -20,6 +23,7 @@ local M = {}
 local _cfg = {
   enabled              = false,
   keymap               = "<Tab>",
+  keymap_open          = "<CR>",
   max_lines            = 40,
   max_width            = 80,
   max_height           = 25,
@@ -28,6 +32,12 @@ local _cfg = {
   keymap_scroll_down   = "<C-f>",
   keymap_scroll_up10   = "<PageUp>",
   keymap_scroll_down10 = "<PageDown>",
+  image = {
+    backend = "auto",   -- "auto" | "snacks" | "image.nvim" | "system" | false
+  },
+  pdf = {
+    backend = "pdfport",  -- "pdfport" | "system" | false
+  },
 }
 
 ---@type FiletreeAdapter?
@@ -38,15 +48,110 @@ local _win  = nil
 ---@type integer?  current preview buffer
 local _bufnr = nil
 
--- ── Helpers ───────────────────────────────────────────────────────────────────
+-- ── File-type detection ───────────────────────────────────────────────────────
+
+local _IMAGE_EXTS = {
+  png=1, jpg=1, jpeg=1, gif=1, bmp=1, svg=1, webp=1,
+  ico=1, tiff=1, tif=1, avif=1, heic=1,
+}
+
+local _PDF_EXTS = { pdf=1 }
+
+local function ext(path)
+  return (path:match("%.([^.]+)$") or ""):lower()
+end
+
+local function is_image(path) return _IMAGE_EXTS[ext(path)] == 1 end
+local function is_pdf(path)   return _PDF_EXTS[ext(path)]   == 1 end
+
+-- ── Cross-platform system-open ────────────────────────────────────────────────
+
+local function system_open(path)
+  local uname = vim.loop and vim.loop.os_uname and vim.loop.os_uname()
+  local sys   = uname and (uname.sysname or "") or ""
+  local args
+  if sys:find("Windows") or sys:find("MINGW") or sys:find("CYGWIN") then
+    args = { "cmd", "/c", "start", "", path:gsub("/", "\\") }
+  elseif sys == "Darwin" then
+    args = { "open", path }
+  else
+    -- Linux / WSL: prefer wslview if available (WSL → Windows app)
+    local has_wslview = vim.fn.executable("wslview") == 1
+    args = has_wslview and { "wslview", path } or { "xdg-open", path }
+  end
+  local ok = vim.fn.jobstart(args, { detach = true })
+  if not ok or ok <= 0 then
+    notify.warn("Could not open in system app: " .. path)
+  end
+end
+
+-- ── Image backend dispatch ────────────────────────────────────────────────────
+
+local function open_image(path)
+  local backend = (_cfg.image or {}).backend or "auto"
+  if backend == false then return false end   -- caller falls through to text preview
+
+  if backend == "snacks" or backend == "auto" then
+    local ok, snacks = pcall(require, "snacks")
+    if ok and snacks.image then
+      local opened, _ = pcall(snacks.image.open, path)
+      if opened then return true end
+    end
+    if backend == "snacks" then
+      notify.warn("snacks.image not available — install folke/snacks.nvim")
+      return true   -- don't fall through
+    end
+  end
+
+  if backend == "image.nvim" or backend == "auto" then
+    local ok2, img = pcall(require, "image")
+    if ok2 and img.open then
+      local opened2, _ = pcall(img.open, path)
+      if opened2 then return true end
+    end
+    if backend == "image.nvim" then
+      notify.warn("image.nvim not available — install 3rd/image.nvim")
+      return true
+    end
+  end
+
+  -- "system" or "auto" fallback
+  system_open(path)
+  return true
+end
+
+-- ── PDF backend dispatch ──────────────────────────────────────────────────────
+
+local function open_pdf(path)
+  local backend = (_cfg.pdf or {}).backend or "pdfport"
+  if backend == false then return false end
+
+  if backend == "pdfport" then
+    local ok, pp = pcall(require, "pdfport")
+    if ok and pp.open then
+      local opened, err = pcall(pp.open, path)
+      if opened then return true end
+      notify.warn("pdfport.open failed: " .. tostring(err) .. " — falling back to system app")
+    else
+      notify.warn("pdfport.nvim not installed — opening PDF in system app")
+    end
+    system_open(path)
+    return true
+  end
+
+  -- "system"
+  system_open(path)
+  return true
+end
+
+-- ── Text preview helpers ──────────────────────────────────────────────────────
 
 local function is_binary(path)
   local ok, data = pcall(vim.fn.readfile, path, "b", 1)
   if not ok or not data or #data == 0 then return false end
   local line = data[1]
   for i = 1, math.min(#line, 512) do
-    local b = line:byte(i)
-    if b == 0 then return true end
+    if line:byte(i) == 0 then return true end
   end
   return false
 end
@@ -56,7 +161,7 @@ local function hex_dump(path)
   if not ok then return { "(cannot read file)" } end
   local out = {}
   for i, l in ipairs(data) do
-    local hex  = {}
+    local hex = {}
     for j = 1, #l do hex[#hex + 1] = string.format("%02x", l:byte(j)) end
     out[i] = table.concat(hex, " ")
   end
@@ -76,7 +181,7 @@ local function list_dir(path)
   table.sort(entries)
   local out = { "Directory: " .. path, "" }
   for _, e in ipairs(entries) do
-    local full = path .. "/" .. e
+    local full   = path .. "/" .. e
     local prefix = vim.fn.isdirectory(full) == 1 and "  /" or "   "
     out[#out + 1] = prefix .. e
   end
@@ -114,14 +219,12 @@ local function open_preview(node)
     ft    = vim.filetype.match({ filename = path }) or ""
   end
 
-  -- Clamp dimensions
-  local max_w = _cfg.max_width
+  local max_w     = _cfg.max_width
   local content_w = 0
   for _, l in ipairs(lines) do content_w = math.max(content_w, #l) end
   local width  = math.max(math.min(content_w + 2, max_w), 20)
   local height = math.min(#lines + 1, _cfg.max_height)
 
-  -- Position: to the right of the cursor column if space allows, else left
   local cur_win = vim.api.nvim_get_current_win()
   local win_pos = vim.api.nvim_win_get_position(cur_win)
   local win_w   = vim.api.nvim_win_get_width(cur_win)
@@ -158,15 +261,12 @@ local function open_preview(node)
 
   vim.api.nvim_set_option_value("winhl",
     "Normal:NormalFloat,FloatBorder:FloatBorder", { win = _win })
-
-  -- Always start at the top of the file (no stale scroll from previous preview)
   pcall(vim.api.nvim_win_set_cursor, _win, { 1, 0 })
 end
 
 -- ── Scroll helper ─────────────────────────────────────────────────────────────
 
----Scroll the preview window by `delta` lines (positive = up, negative = down).
----@param delta integer
+---@param delta integer  positive = up (lower line numbers)
 local function scroll_preview(delta)
   if not (_win and vim.api.nvim_win_is_valid(_win)) then return end
   local buf   = vim.api.nvim_win_get_buf(_win)
@@ -176,7 +276,7 @@ local function scroll_preview(delta)
   pcall(vim.api.nvim_win_set_cursor, _win, { next, 0 })
 end
 
--- ── Toggle action ─────────────────────────────────────────────────────────────
+-- ── Public API ────────────────────────────────────────────────────────────────
 
 function M.toggle()
   if _win and vim.api.nvim_win_is_valid(_win) then
@@ -185,11 +285,62 @@ function M.toggle()
   end
   if not _adapter then return end
   local node = _adapter.get_current_node()
-  if not node then
+  if not node then notify.warn("no node under cursor"); return end
+  open_preview(node)
+end
+
+---Dispatch for <Tab>: image/PDF open, text preview toggle for everything else.
+function M.toggle_or_open()
+  if not _adapter then return end
+  local node = _adapter.get_current_node()
+  if not node or not node.path or node.path == "" then
     notify.warn("no node under cursor")
     return
   end
-  open_preview(node)
+
+  local cfg_img = _cfg.image or {}
+  local cfg_pdf = _cfg.pdf   or {}
+
+  if cfg_img.backend ~= false and is_image(node.path) then
+    close_preview()   -- close any open text preview first
+    open_image(node.path)
+    return
+  end
+
+  if cfg_pdf.backend ~= false and is_pdf(node.path) then
+    close_preview()
+    open_pdf(node.path)
+    return
+  end
+
+  -- Text / directory preview (toggle)
+  M.toggle()
+end
+
+---Dispatch for <CR>: image/PDF open; calls `fallback` for other nodes.
+---@param fallback function?
+function M.open_or_fallback(fallback)
+  if not _adapter then return end
+  local node = _adapter.get_current_node()
+  if not node or not node.path or node.path == "" then
+    if fallback then fallback() end
+    return
+  end
+
+  local cfg_img = _cfg.image or {}
+  local cfg_pdf = _cfg.pdf   or {}
+
+  if cfg_img.backend ~= false and is_image(node.path) then
+    open_image(node.path)
+    return
+  end
+
+  if cfg_pdf.backend ~= false and is_pdf(node.path) then
+    open_pdf(node.path)
+    return
+  end
+
+  if fallback then fallback() end
 end
 
 function M.close()
@@ -219,12 +370,32 @@ function M.setup(config, adapter)
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
 
+        -- <Tab>: toggle text preview, or dispatch image/PDF
         if _cfg.keymap then
-          vim.keymap.set("n", _cfg.keymap, M.toggle, {
-            buffer = buf, silent = true, desc = "Filetree: toggle file preview",
+          vim.keymap.set("n", _cfg.keymap, M.toggle_or_open, {
+            buffer = buf, silent = true, desc = "Filetree: preview / open image or PDF",
           })
         end
 
+        -- <CR>: image/PDF dispatch; save and call neotree's original <CR> for other nodes
+        if _cfg.keymap_open then
+          local original_cr_cb = nil
+          for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+            if m.lhs == _cfg.keymap_open then
+              original_cr_cb = m.callback
+              break
+            end
+          end
+
+          vim.keymap.set("n", _cfg.keymap_open, function()
+            M.open_or_fallback(original_cr_cb)
+          end, {
+            buffer = buf, silent = true,
+            desc   = "Filetree: open image/PDF, or adapter default",
+          })
+        end
+
+        -- Scroll keymaps
         local scroll_keys = {
           { _cfg.keymap_scroll_up,     1  },
           { _cfg.keymap_scroll_down,   -1 },
@@ -256,7 +427,7 @@ function M.setup(config, adapter)
     end,
   })
 
-  -- Update preview when cursor moves in tree
+  -- Update preview when cursor moves in tree (text preview only)
   vim.api.nvim_create_autocmd("CursorMoved", {
     group   = _augroup,
     pattern = "*",

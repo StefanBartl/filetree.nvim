@@ -52,24 +52,21 @@ Move all UI-rendering features (floats, pickers, extmarks, prompt buffers) into
 - Generate Markdown links for selected nodes (single, directory-recursive, marked).
 - Copy relative path to clipboard, path-to-require conversion.
 
-### Preview — granular per-type config
-`<Tab>` → floating preview is implemented for **text files** and directories.
-Still pending:
-- **Images**: default open via system app; optional inline render via `Snacks.image` / `image.nvim` if installed.
-- **PDFs**: integration with `pdfport.nvim` (toolchain-free fallback chain: pdftotext → pdfplumber → marker → docling → ollama → claude); if pdfport disabled, both `<Tab>` and `<CR>` fall back to system app open.
+### Preview — granular per-type config ✓
+`<Tab>` dispatches by file type:
+- **Text / dirs**: floating preview window (implemented).
+- **Images**: `image.backend = "auto"` → tries snacks.image → image.nvim → system app.
+- **PDFs**: `pdf.backend = "pdfport"` → tries pdfport.nvim → system app.
+- **`<CR>`**: image/PDF dispatch; calls adapter's original `<CR>` for other nodes.
 
-Config shape (planned):
 ```lua
 features = {
   preview = {
-    enabled = true,
-    keymap  = "<Tab>",
-    image = {
-      backend = "auto",   -- "snacks" | "image.nvim" | "system" | false
-    },
-    pdf = {
-      backend = "pdfport",  -- "pdfport" | "system" | false
-    },
+    enabled    = true,
+    keymap     = "<Tab>",
+    keymap_open = "<CR>",
+    image = { backend = "auto" },     -- "snacks" | "image.nvim" | "system" | false
+    pdf   = { backend = "pdfport" },  -- "pdfport" | "system" | false
   },
 }
 ```
