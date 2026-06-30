@@ -61,6 +61,10 @@ local function deep_merge(dst, src)
 end
 
 ---Scan all feature keymap fields and apply the global `keymaps` remap table.
+---Covers two patterns:
+---  1. Fields whose key starts with "keymap"  (e.g. keymap, keymap_open, keymap_scroll_up)
+---  2. All string values inside a sub-table whose key is "keymaps"
+---     (e.g. copy_move.keymaps.copy, path_utils.keymaps.copy_abs)
 ---A remap value of `false` disables the key; a string replaces it.
 ---@param cfg FiletreeConfig
 local function apply_keymap_remap(cfg)
@@ -70,12 +74,21 @@ local function apply_keymap_remap(cfg)
   local function patch(t)
     if type(t) ~= "table" then return end
     for k, v in pairs(t) do
-      if type(k) == "string" and k:match("^keymap") and type(v) == "string" then
-        if remap[v] ~= nil then
-          t[k] = remap[v]   -- false → disabled, string → renamed
+      if type(v) == "string" then
+        if type(k) == "string" and k:match("^keymap") and remap[v] ~= nil then
+          t[k] = remap[v]
         end
       elseif type(v) == "table" then
-        patch(v)
+        if k == "keymaps" then
+          -- patch all string values inside a keymaps sub-table
+          for ik, iv in pairs(v) do
+            if type(iv) == "string" and remap[iv] ~= nil then
+              v[ik] = remap[iv]
+            end
+          end
+        else
+          patch(v)
+        end
       end
     end
   end
