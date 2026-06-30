@@ -97,6 +97,18 @@ require("lazy").setup({
       require("filetree").setup({
         adapter = "neotree",
 
+        -- Phase 3a: global keymap remap (uncomment to test)
+        -- keymaps = {
+        --   ["gs"] = "<leader>gs",  -- rename live_search key
+        --   ["I"]  = false,          -- disable node_info keymap
+        -- },
+
+        -- Phase 3b: rename :Filetree command (uncomment to test)
+        -- command = { name = "Ft", aliases = { "Filetree" } },
+
+        -- Phase 3c: disable specific feature autocmds (uncomment to test)
+        -- autocmds = { auto_reveal = false },
+
         features = {
           -- ── Group A: Adapter basics ──────────────────────────────────────
           -- Tests: is_open(), get_current_node(), get_visible_nodes(), refresh()

@@ -128,11 +128,11 @@ Testet: `vim.ui.input`, Floating-Prompt-Buffer, Dimming.
 | E.2 | `init` eintippen + Enter | Nicht-passende Nodes erscheinen gedimmt (Comment-Highlight) |
 | E.3 | `:Filetree filter clear` | Dimming aufgehoben, alle Nodes normal |
 
-**live_search** (Keymap `?` im Tree):
+**live_search** (Keymap `gs` im Tree):
 
 | # | Test | Erwartung |
 |---|------|-----------|
-| E.4 | `?` im Tree drücken | Floating Prompt-Buffer am unteren Rand des Trees |
+| E.4 | `gs` im Tree drücken | Floating Prompt-Buffer am unteren Rand des Trees |
 | E.5 | Tippen | Nicht-passende Nodes werden live gedimmt (Debounce ~80 ms) |
 | E.6 | `<Esc>` | Prompt schließt sich, Dimming aufgehoben |
 | E.7 | Enter | Filter bleibt (commit_to_filter = true) |
@@ -143,14 +143,14 @@ Testet: `vim.ui.input`, Floating-Prompt-Buffer, Dimming.
 
 Testet: `vim.fn.setreg`, Notifications.
 
-**path_copy** (Keymaps `yp`/`ya`/`yr`/`yn` im Tree):
+**path_copy** (Keymaps `<leader>yp`/`[a`/`]a`/`<leader>yn` im Tree):
 
 | # | Test | Erwartung |
 |---|------|-----------|
-| F.1 | `yp` | Floating Picker mit 7 Format-Optionen |
-| F.2 | `ya` | Notification: `"Copied: /absolute/path"`, im Editor `<C-r>+` einfügen bestätigt es |
-| F.3 | `yr` | Relativer Pfad zum cwd |
-| F.4 | `yn` | Nur Dateiname |
+| F.1 | `<leader>yp` | Floating Picker mit 7 Format-Optionen |
+| F.2 | `[a` | Notification: `"Copied: /absolute/path"`, im Editor `<C-r>+` einfügen bestätigt es |
+| F.3 | `]a` | Relativer Pfad zum cwd |
+| F.4 | `<leader>yn` | Nur Dateiname |
 
 **copy_file_list** (Keymaps `[f`/`]f`/`[F`/`]F` im Tree):
 
@@ -177,10 +177,10 @@ Testet: `adapter.open_reveal()`, CWD-Sync.
 
 | # | Test | Erwartung |
 |---|------|-----------|
-| G.1 | Tree-Cursor auf Datei/Ordner, `<BS>` | Tree-Root wechselt zum übergeordneten Verzeichnis; Notification `"cwd → /parent"` |
-| G.2 | Tree-Cursor auf Verzeichnis, `]r` | Verzeichnis wird neuer Root |
+| G.1 | Tree-Cursor auf Datei/Ordner, `-` | Tree-Root wechselt zum übergeordneten Verzeichnis; Notification `"cwd → /parent"` |
+| G.2 | Tree-Cursor auf Verzeichnis, `+` | Verzeichnis wird neuer Root |
 | G.3 | `:pwd` nach G.1/G.2 | CWD stimmt mit dem neuen Tree-Root überein |
-| G.4 | `<BS>` aus dem Repo-Root heraus | Wechselt zum Parent des Repos (kein Fehler) |
+| G.4 | `-` aus dem Repo-Root heraus | Wechselt zum Parent des Repos (kein Fehler) |
 
 ---
 
@@ -194,6 +194,42 @@ Testet: `vim.ui.select`-Fallback, telescope/fzf-Cascade.
 | H.2 | Option `find_files` auswählen | Telescope (oder fzf-lua, oder vim.ui.select) öffnet sich mit cwd = das Verzeichnis |
 | H.3 | Option `live_grep` | Grepper öffnet sich mit cwd = das Verzeichnis |
 | H.4 | `<M-p>` auf Datei (nicht Verzeichnis) | Verwendet den Parent-Ordner der Datei als cwd |
+| H.5 | Option `find_files` → kein Picker installiert | Input-Prompt erscheint: `"Filename pattern: "`, nach Eingabe zeigt `vim.ui.select` die Treffer |
+
+---
+
+### I. Phase 3 — Remapping-System
+
+Um diese Tests zu aktivieren, die auskommentierten Blöcke in `minimal_neotree.lua` einkommentieren.
+
+**I.1 — Keymap remap (`keymaps = { ["gs"] = "<leader>gs" }`):**
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| I.1 | `gs` im Tree drücken | Kein Live-Search (Key wurde umgemappt) |
+| I.2 | `<leader>gs` im Tree drücken | Live-Search öffnet sich |
+
+**I.2 — Keymap disable (`keymaps = { ["I"] = false }`):**
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| I.3 | `I` im Tree drücken | Nichts passiert (kein node_info Float) |
+| I.4 | `:Filetree info` | Float öffnet sich (Command funktioniert weiterhin) |
+
+**I.3 — Command rename (`command = { name = "Ft", aliases = { "Filetree" } }`):**
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| I.5 | `:Ft marks show` | Marks-Float öffnet sich |
+| I.6 | `:Filetree marks show` | Funktioniert auch (Alias) |
+| I.7 | Tab-Completion auf `:Ft<Tab>` | Sub-Commands werden angezeigt |
+
+**I.4 — Autocmd disable (`autocmds = { auto_reveal = false }`):**
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| I.8 | Datei öffnen (`:e lua/filetree/init.lua`) | Tree scrollt NICHT zur Datei (auto_reveal deaktiviert) |
+| I.9 | `<leader>e` | Reveal funktioniert noch (manuell via Command) |
 
 ---
 
