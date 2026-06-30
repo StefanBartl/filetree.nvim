@@ -64,6 +64,7 @@
 ---@field lua_require_copy        FiletreeLuaRequireCopyConfig?
 ---@field find_or_grep_menu       FiletreeFindOrGrepMenuConfig?
 ---@field copy_file_list          FiletreeCopyFileListConfig?
+---@field smart_create            FiletreeSmartCreateConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -594,5 +595,15 @@
 ---@field keymap_dirs_rel  string?   Copy relative dir paths  (default "]F").
 ---@field preview_limit    integer   Max lines shown in notification (default 5).
 ---@field separator        string    Separator between paths (default "\\n").
+
+-- ── smart_create ──────────────────────────────────────────────────────────────
+
+---@class FiletreeSmartCreateConfig
+---@field enabled              boolean
+---@field keymap               string?   Key inside tree (default "a").
+---@field auto_init_lua        boolean   Dirs → create init.lua (default true).
+---@field auto_types_template  boolean   @types dirs → ---@meta template (default true).
+---@field auto_module_annot    boolean   .lua files → ---@module annotation (default true).
+---@field ask_clipboard        boolean   Ask whether to paste clipboard content (default true).
 
 return {}

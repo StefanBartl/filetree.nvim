@@ -76,6 +76,7 @@ local FEATURES = {
   lua_require_copy    = { mod = "filetree.features.lua_require_copy",    key = "lua_require_copy"    },
   find_or_grep_menu   = { mod = "filetree.features.find_or_grep_menu",   key = "find_or_grep_menu"   },
   copy_file_list      = { mod = "filetree.features.copy_file_list",      key = "copy_file_list"      },
+  smart_create        = { mod = "filetree.features.smart_create",        key = "smart_create"        },
 }
 
 ---@type table<string, table>  name → loaded feature module

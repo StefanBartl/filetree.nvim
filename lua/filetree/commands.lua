@@ -354,6 +354,9 @@ local TREE = {
     exec = function(_) local f = ft("file_permissions"); if f then f.toggle_exec()  end end,
   },
 
+  -- ── smart_create ──────────────────────────────────────────────────────────────
+  create = function(_) local f = ft("smart_create"); if f then f.create() end end,
+
   -- ── copy_file_list ────────────────────────────────────────────────────────────
   filelist = {
     files = {

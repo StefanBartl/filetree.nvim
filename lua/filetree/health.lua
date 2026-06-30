@@ -133,6 +133,7 @@ function M.check()
     { key = "lua_require_copy",       name = "Lua Require Copy"        },
     { key = "find_or_grep_menu",      name = "Find or Grep Menu"       },
     { key = "copy_file_list",         name = "Copy File List"          },
+    { key = "smart_create",           name = "Smart Create"            },
   }
 
   -- Extra check for trash backend availability
