@@ -131,7 +131,7 @@ function M.setup(user_config)
     end
   end
 
-  commands.setup()
+  commands.setup(cfg.command)
   _initialized = true
 end
 

@@ -507,18 +507,43 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
-function M.setup()
-  vim.api.nvim_create_user_command("Filetree", function(opts)
-    dispatch(opts.args)
-  end, {
-    nargs    = "*",
-    complete = complete,
-    desc     = "filetree.nvim — unified command interface",
-  })
+---@type string[]
+local _registered_commands = {}
+
+---@param cfg FiletreeCommandConfig?
+function M.setup(cfg)
+  -- Determine name(s) to register.
+  -- cfg.command = "Ft"                  → just :Ft
+  -- cfg.command = { name="Ft", aliases={"Filetree"} } → :Ft and :Filetree
+  local names = {}
+  if type(cfg) == "string" then
+    names[1] = cfg
+  elseif type(cfg) == "table" then
+    names[1] = cfg.name or "Filetree"
+    for _, a in ipairs(cfg.aliases or {}) do
+      names[#names + 1] = a
+    end
+  else
+    names[1] = "Filetree"
+  end
+
+  for _, cmd_name in ipairs(names) do
+    vim.api.nvim_create_user_command(cmd_name, function(opts)
+      dispatch(opts.args)
+    end, {
+      nargs    = "*",
+      complete = complete,
+      desc     = "filetree.nvim — unified command interface",
+    })
+    _registered_commands[#_registered_commands + 1] = cmd_name
+  end
 end
 
 function M.teardown()
-  pcall(vim.api.nvim_del_user_command, "Filetree")
+  for _, cmd_name in ipairs(_registered_commands) do
+    pcall(vim.api.nvim_del_user_command, cmd_name)
+  end
+  _registered_commands = {}
 end
 
 return M
