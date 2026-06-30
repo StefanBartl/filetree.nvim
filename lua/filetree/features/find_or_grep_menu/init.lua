@@ -56,24 +56,30 @@ local function run_find(dir)
     if ok then pcall(fzf.files, { cwd = dir }); return end
   end
 
-  -- prompt fallback: glob all files, pick with vim.ui.select
-  local files = vim.fn.globpath(dir, "**/*", false, true)
-  files = vim.tbl_filter(function(f)
-    return vim.fn.isdirectory(f) == 0
-  end, files)
-  if #files == 0 then
-    notify.warn("No files found in " .. dir)
-    return
-  end
-  local display = vim.tbl_map(function(f)
-    return f:gsub("^" .. vim.pesc(dir:gsub("\\", "/"):gsub("/?$", "/")) , "")
-  end, files)
-  vim.ui.select(display, {
-    prompt = "Find files in " .. vim.fn.fnamemodify(dir, ":~") .. ": ",
-  }, function(choice, idx)
-    if choice and idx then
-      vim.cmd("edit " .. vim.fn.fnameescape(files[idx]))
+  -- prompt fallback: ask for pattern, show matching files
+  vim.ui.input({
+    prompt = "Filename pattern (in " .. vim.fn.fnamemodify(dir, ":~") .. "): ",
+  }, function(pattern)
+    if not pattern or pattern == "" then return end
+    local all = vim.fn.globpath(dir, "**/*" .. pattern .. "*", false, true)
+    local files = vim.tbl_filter(function(f)
+      return vim.fn.isdirectory(f) == 0
+    end, all)
+    if #files == 0 then
+      notify.warn("No files matching: " .. pattern)
+      return
     end
+    local cwd_prefix = dir:gsub("\\", "/"):gsub("/?$", "/")
+    local display = vim.tbl_map(function(f)
+      return f:gsub("\\", "/"):gsub("^" .. vim.pesc(cwd_prefix), "")
+    end, files)
+    vim.ui.select(display, {
+      prompt = "Open: ",
+    }, function(_, idx)
+      if idx then
+        vim.cmd("edit " .. vim.fn.fnameescape(files[idx]))
+      end
+    end)
   end)
 end
 
