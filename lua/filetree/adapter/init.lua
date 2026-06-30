@@ -46,7 +46,7 @@ function M.resolve(name)
   end
 
   -- auto: try known built-ins in priority order
-  local candidates = { "neotree", "nvimtree", "netrw" }
+  local candidates = { "neotree", "nvimtree", "netrw", "oil" }
   for _, candidate in ipairs(candidates) do
     if not _registry[candidate] then
       pcall(require, "filetree.adapter." .. candidate)
