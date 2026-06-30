@@ -92,6 +92,9 @@ function M.check()
     { key = "rename_batch",       name = "Rename Batch"          },
     { key = "session",            name = "Session"               },
     { key = "open_terminal",      name = "Open Terminal"         },
+    { key = "copy_move",          name = "Copy / Move"           },
+    { key = "find_files",         name = "Find Files"            },
+    { key = "filter",             name = "Filter"                },
   }
 
   -- Extra check for trash backend availability

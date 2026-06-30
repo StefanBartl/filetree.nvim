@@ -34,6 +34,9 @@ local FEATURES = {
   rename_batch        = { mod = "filetree.features.rename_batch",        key = "rename_batch"        },
   session             = { mod = "filetree.features.session",             key = "session"             },
   open_terminal       = { mod = "filetree.features.open_terminal",       key = "open_terminal"       },
+  copy_move           = { mod = "filetree.features.copy_move",           key = "copy_move"           },
+  find_files          = { mod = "filetree.features.find_files",          key = "find_files"          },
+  filter              = { mod = "filetree.features.filter",              key = "filter"              },
 }
 
 ---@type table<string, table>  name → loaded feature module

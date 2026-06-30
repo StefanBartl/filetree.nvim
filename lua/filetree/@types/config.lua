@@ -23,6 +23,9 @@
 ---@field rename_batch        FiletreeRenameBatchConfig?
 ---@field session             FiletreeSessionConfig?
 ---@field open_terminal       FiletreeOpenTerminalConfig?
+---@field copy_move           FiletreeCopyMoveConfig?
+---@field find_files          FiletreeFindFilesConfig?
+---@field filter              FiletreeFilterConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -117,6 +120,40 @@
 ---@field copy_dir   string?  Copy parent directory    (default "yd")
 ---@field to_require string?  Copy as require() string (default "yq")
 ---@field md_link    string?  Copy as Markdown link    (default "ym")
+
+-- ── copy_move ─────────────────────────────────────────────────────────────────
+
+---@class FiletreeCopyMoveKeymaps
+---@field copy   string?  Stage for copy (default "yy")
+---@field cut    string?  Stage for cut  (default "xx")
+---@field paste  string?  Paste staged   (default "p")
+---@field show   string?  Show clipboard (default "P")
+
+---@class FiletreeCopyMoveConfig
+---@field enabled     boolean
+---@field keymaps     FiletreeCopyMoveKeymaps?
+---@field confirm     boolean  Ask before paste (default true).
+---@field use_safety  boolean  Create backup before move (default true).
+---@field dry_run     boolean  Log without executing (default false).
+
+-- ── find_files ────────────────────────────────────────────────────────────────
+
+---@class FiletreeFindFilesConfig
+---@field enabled         boolean
+---@field keymap_tree     string?  Key inside tree buffer (default "f").
+---@field keymap_global   string?  Global normal-mode key (default nil).
+---@field prefer          "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
+---@field reveal_on_open  boolean  Reveal selected file in tree (default true).
+---@field hidden          boolean  Include hidden files (default false).
+
+-- ── filter ────────────────────────────────────────────────────────────────────
+
+---@class FiletreeFilterConfig
+---@field enabled          boolean
+---@field keymap           string?  Key inside tree to enter filter mode (default "/").
+---@field case_sensitive   boolean  Case-sensitive matching (default false).
+---@field dim_hl_group     string   Highlight group for non-matching lines (default "Comment").
+---@field debounce_ms      integer  Input debounce delay (default 80ms).
 
 -- ── rename_batch ──────────────────────────────────────────────────────────────
 
