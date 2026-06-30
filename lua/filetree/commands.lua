@@ -520,22 +520,28 @@ function M.setup(cfg)
     names[1] = cfg
   elseif type(cfg) == "table" then
     names[1] = cfg.name or "Filetree"
-    for _, a in ipairs(cfg.aliases or {}) do
+    for _, a in ipairs(cfg.aliases or { "Ft" }) do
       names[#names + 1] = a
     end
   else
+    -- Out of the box: both :Filetree and the short :Ft alias work.
     names[1] = "Filetree"
+    names[2] = "Ft"
   end
 
+  local seen = {}
   for _, cmd_name in ipairs(names) do
-    vim.api.nvim_create_user_command(cmd_name, function(opts)
-      dispatch(opts.args)
-    end, {
-      nargs    = "*",
-      complete = complete,
-      desc     = "filetree.nvim — unified command interface",
-    })
-    _registered_commands[#_registered_commands + 1] = cmd_name
+    if not seen[cmd_name] then
+      seen[cmd_name] = true
+      vim.api.nvim_create_user_command(cmd_name, function(opts)
+        dispatch(opts.args)
+      end, {
+        nargs    = "*",
+        complete = complete,
+        desc     = "filetree.nvim — unified command interface",
+      })
+      _registered_commands[#_registered_commands + 1] = cmd_name
+    end
   end
 end
 

@@ -277,6 +277,8 @@ require("filetree").setup({
 Full sub-command reference for `:Filetree` (configurable name):
 → [docs/BINDINGS/USERCOMMANDS.md](docs/BINDINGS/USERCOMMANDS.md)
 
+`:Ft` works out of the box as a short alias for `:Filetree`.
+
 **Rename the command:**
 
 ```lua

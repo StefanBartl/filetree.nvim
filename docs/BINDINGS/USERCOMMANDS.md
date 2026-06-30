@@ -1,25 +1,32 @@
 # filetree.nvim — User Commands
 
 filetree.nvim registers a single unified command (default `:Filetree`) with
-sub-command dispatch and tab-completion at every level.
+sub-command dispatch and tab-completion at every level. Out of the box, the
+short alias `:Ft` also works — `:Ft marks show` is identical to
+`:Filetree marks show`.
 
 ---
 
 ## Command name
 
-The command name is configurable:
+The command name and its aliases are configurable:
 
 ```lua
--- Simple rename
-require("filetree").setup({ command = "Ft" })
+-- Simple rename (replaces both default names, :Ft alias dropped)
+require("filetree").setup({ command = "Foo" })
 
--- Rename + keep original as alias
+-- Rename + explicit aliases
 require("filetree").setup({
   command = { name = "Ft", aliases = { "Filetree" } },
 })
+
+-- Keep :Filetree, drop the default :Ft alias
+require("filetree").setup({
+  command = { name = "Filetree", aliases = {} },
+})
 ```
 
-Default: `Filetree`.
+Default: `Filetree`, with `Ft` registered automatically as an alias.
 
 ---
 
