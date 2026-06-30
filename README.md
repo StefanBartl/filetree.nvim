@@ -150,10 +150,69 @@ require("filetree").setup({
     },
 
     preview = {
-      enabled  = false,
-      keymap   = "<Tab>",   -- toggle floating preview window
-      max_lines = 100,
+      enabled     = false,
+      keymap      = "<Tab>",   -- text/dir: toggle float; image/PDF: dispatch
+      keymap_open = "<CR>",    -- image/PDF: dispatch; other: adapter default
+      max_lines   = 40,
+      image = {
+        backend = "auto",     -- "snacks" | "image.nvim" | "system" | false
+      },
+      pdf = {
+        backend = "pdfport",  -- "pdfport" | "system" | false
+      },
     },
+
+    cursor_hide = {
+      enabled = false,   -- hide block cursor in tree window
+    },
+
+    tree_reset = {
+      enabled = false,   -- <Esc> clears preview + filter + live_search
+      keymap  = "<Esc>",
+    },
+
+    buffer_save = {
+      enabled        = false,
+      keymap_adjacent = "<C-s>",  -- save last adjacent editor buffer
+      keymap_node    = "<M-s>",   -- save buffer matching node under cursor
+      force          = true,      -- use write! (vs update)
+    },
+
+    window_size_cycler = {
+      enabled = false,
+      keymap  = "w",
+      sizes   = { 30, 50, 15 },  -- normal → large → small → normal
+    },
+
+    open_in_fm = {
+      enabled = false,
+      keymap  = "<leader>fm",    -- open node directory in system file manager
+    },
+
+    shell_run = {
+      enabled     = false,
+      keymap      = "i",         -- prompt + run shell command in node directory
+      close_on_ok = true,        -- auto-close terminal when command exits 0
+      split       = "split",     -- "split" | "vsplit"
+      height      = 12,
+    },
+
+    open_replace = {
+      enabled = false,
+      keymap  = "O",   -- open file replacing current editor buffer
+    },
+
+    reveal_alt = {
+      enabled = false,
+      keymap  = "B",   -- reveal alternate buffer (#) in tree
+    },
+  },
+
+  -- Override the adapter's (neotree/nvim-tree) own native keymaps.
+  -- false → <Nop>   string → remap target
+  -- Example: noop neotree's built-in `i` (toggle-info) so shell_run can use it
+  adapter_keymaps = {
+    -- ["i"] = false,
   },
 })
 ```
@@ -306,13 +365,26 @@ require("filetree").setup({
 All tree-buffer keymaps, defaults, and how to remap or disable them:
 → [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md)
 
-**Quick remap example:**
+**Remap filetree feature keys:**
 
 ```lua
 require("filetree").setup({
   keymaps = {
-    ["gs"] = "<leader>gs",  -- rename live_search key
-    ["<C-m>"] = false,      -- disable marks clear
+    ["gs"]    = "<leader>gs",   -- rename live_search key
+    ["<C-m>"] = false,          -- disable marks clear
+    ["<Tab>"] = "<leader>pv",   -- move preview to <leader>pv
+  },
+})
+```
+
+**Noop an adapter (neotree) built-in key:**
+
+```lua
+require("filetree").setup({
+  -- disable neotree's native `i` (toggle node info) so shell_run can use it
+  adapter_keymaps = { ["i"] = false },
+  features = {
+    shell_run = { enabled = true, keymap = "i" },
   },
 })
 ```
