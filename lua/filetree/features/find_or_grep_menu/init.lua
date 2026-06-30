@@ -28,63 +28,87 @@ local function resolve_dir()
 end
 
 ---Detect preferred backend.
----@return "telescope"|"fzf-lua"|"builtin"
+---@return "telescope"|"fzf-lua"|"prompt"
 local function detect_backend()
   local prefer = _cfg.prefer or "auto"
   if prefer == "telescope" then return "telescope" end
   if prefer == "fzf-lua"   then return "fzf-lua"   end
+  if prefer == "prompt"    then return "prompt"     end
 
-  -- auto
+  -- auto: try pickers, fall back to prompt-based
   if pcall(require, "telescope") then return "telescope" end
   if pcall(require, "fzf-lua")   then return "fzf-lua"   end
-  return "builtin"
+  return "prompt"
 end
 
 ---Run find_files in the given directory.
 ---@param dir string
 local function run_find(dir)
   local backend = detect_backend()
+
   if backend == "telescope" then
     local ok, builtin = pcall(require, "telescope.builtin")
     if ok then pcall(builtin.find_files, { cwd = dir }); return end
-  elseif backend == "fzf-lua" then
+  end
+
+  if backend == "fzf-lua" then
     local ok, fzf = pcall(require, "fzf-lua")
     if ok then pcall(fzf.files, { cwd = dir }); return end
   end
-  -- builtin fallback
-  vim.ui.select(
-    vim.fn.systemlist("find " .. vim.fn.shellescape(dir) .. " -type f 2>/dev/null"),
-    { prompt = "Find files in " .. dir },
-    function(choice)
-      if choice then vim.cmd("edit " .. vim.fn.fnameescape(choice)) end
+
+  -- prompt fallback: glob all files, pick with vim.ui.select
+  local files = vim.fn.globpath(dir, "**/*", false, true)
+  files = vim.tbl_filter(function(f)
+    return vim.fn.isdirectory(f) == 0
+  end, files)
+  if #files == 0 then
+    notify.warn("No files found in " .. dir)
+    return
+  end
+  local display = vim.tbl_map(function(f)
+    return f:gsub("^" .. vim.pesc(dir:gsub("\\", "/"):gsub("/?$", "/")) , "")
+  end, files)
+  vim.ui.select(display, {
+    prompt = "Find files in " .. vim.fn.fnamemodify(dir, ":~") .. ": ",
+  }, function(choice, idx)
+    if choice and idx then
+      vim.cmd("edit " .. vim.fn.fnameescape(files[idx]))
     end
-  )
+  end)
 end
 
 ---Run live_grep in the given directory.
 ---@param dir string
 local function run_grep(dir)
   local backend = detect_backend()
+
   if backend == "telescope" then
     local ok, builtin = pcall(require, "telescope.builtin")
     if ok then pcall(builtin.live_grep, { cwd = dir }); return end
-  elseif backend == "fzf-lua" then
+  end
+
+  if backend == "fzf-lua" then
     local ok, fzf = pcall(require, "fzf-lua")
     if ok then pcall(fzf.live_grep, { cwd = dir }); return end
   end
-  -- builtin fallback: grep prompt
-  vim.ui.input({ prompt = "Grep pattern in " .. dir .. ": " }, function(pattern)
+
+  -- prompt fallback: ask for pattern, use :vimgrep (cross-platform)
+  vim.ui.input({
+    prompt = "Grep in " .. vim.fn.fnamemodify(dir, ":~") .. ": ",
+  }, function(pattern)
     if not pattern or pattern == "" then return end
-    local results = vim.fn.systemlist("grep -r --include='*.lua' -l " .. vim.fn.shellescape(pattern) .. " " .. vim.fn.shellescape(dir))
-    if #results == 0 then
-      notify.info("No matches found")
-      return
+    local glob = vim.fn.fnameescape(dir) .. "/**"
+    local ok, err = pcall(vim.cmd, "silent! vimgrep /" .. vim.fn.escape(pattern, "/") .. "/gj " .. glob)
+    local qf = vim.fn.getqflist()
+    if #qf == 0 then
+      notify.info("No matches for: " .. pattern)
+    else
+      vim.cmd("copen")
     end
-    vim.fn.setqflist({}, "r", {
-      title = "grep: " .. pattern,
-      lines = results,
-    })
-    vim.cmd("copen")
+    if not ok and err then
+      -- vimgrep may error on "no matches" — that's handled above
+      _ = err
+    end
   end)
 end
 

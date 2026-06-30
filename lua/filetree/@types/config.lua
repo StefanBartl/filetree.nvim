@@ -587,7 +587,7 @@
 ---@class FiletreeFindOrGrepMenuConfig
 ---@field enabled   boolean
 ---@field keymap    string?                               Key inside tree (default "<M-p>").
----@field prefer    "auto"|"telescope"|"fzf-lua"          Backend preference (default "auto").
+---@field prefer    "auto"|"telescope"|"fzf-lua"|"prompt"  Backend preference (default "auto"). "prompt" uses vimgrep/globpath fallback.
 
 -- ── copy_file_list ────────────────────────────────────────────────────────────
 
