@@ -125,6 +125,9 @@ function M.check()
     { key = "path_copy",              name = "Path Copy"               },
     { key = "diagnostics_filter",     name = "Diagnostics Filter"      },
     { key = "live_search",            name = "Live Search"             },
+    { key = "quick_open",             name = "Quick Open (Frecency)"   },
+    { key = "harpoon_integration",    name = "Harpoon Integration"     },
+    { key = "file_permissions",       name = "File Permissions"        },
   }
 
   -- Extra check for trash backend availability

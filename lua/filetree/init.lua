@@ -68,6 +68,9 @@ local FEATURES = {
   path_copy           = { mod = "filetree.features.path_copy",           key = "path_copy"           },
   diagnostics_filter  = { mod = "filetree.features.diagnostics_filter",  key = "diagnostics_filter"  },
   live_search         = { mod = "filetree.features.live_search",         key = "live_search"         },
+  quick_open          = { mod = "filetree.features.quick_open",          key = "quick_open"          },
+  harpoon_integration = { mod = "filetree.features.harpoon_integration", key = "harpoon_integration" },
+  file_permissions    = { mod = "filetree.features.file_permissions",    key = "file_permissions"    },
 }
 
 ---@type table<string, table>  name → loaded feature module

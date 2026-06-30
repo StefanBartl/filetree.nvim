@@ -335,6 +335,25 @@ local TREE = {
     clear   = function(_) local f = ft("live_search"); if f then f.clear() end end,
   },
 
+  -- ── quick_open ───────────────────────────────────────────────────────────────
+  quickopen = function(_) local f = ft("quick_open"); if f then f.open() end end,
+
+  -- ── harpoon_integration ──────────────────────────────────────────────────────
+  harpoon = {
+    add    = function(_) local f = ft("harpoon_integration"); if f then f.add_current()    end end,
+    remove = function(_) local f = ft("harpoon_integration"); if f then f.remove_current() end end,
+    menu   = function(_) local f = ft("harpoon_integration"); if f then f.menu()           end end,
+  },
+
+  -- ── file_permissions ─────────────────────────────────────────────────────────
+  chmod       = function(a)
+    local f = ft("file_permissions"); if f then f.chmod(a[1]) end
+  end,
+  permissions = {
+    show = function(_) local f = ft("file_permissions"); if f then f.show_current() end end,
+    exec = function(_) local f = ft("file_permissions"); if f then f.toggle_exec()  end end,
+  },
+
   -- ── health ───────────────────────────────────────────────────────────────────
   health = function(_) vim.cmd("checkhealth filetree") end,
 }

@@ -56,6 +56,9 @@
 ---@field path_copy               FiletreePathCopyConfig?
 ---@field diagnostics_filter      FiletreeDiagnosticsFilterConfig?
 ---@field live_search             FiletreeLiveSearchConfig?
+---@field quick_open              FiletreeQuickOpenConfig?
+---@field harpoon_integration     FiletreeHarpoonConfig?
+---@field file_permissions        FiletreeFilePermissionsConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -516,5 +519,35 @@
 ---@field hl_dim            string   Highlight for non-matched nodes (default "Comment").
 ---@field commit_to_filter  boolean  Enter pushes query to filter feature (default true).
 ---@field debounce_ms       integer  TextChanged debounce (default 80ms).
+
+-- ── quick_open ────────────────────────────────────────────────────────────────
+
+---@class FiletreeQuickOpenConfig
+---@field enabled     boolean
+---@field keymap      string?    Key inside tree to open picker (default "<C-p>").
+---@field max_items   integer    Max items shown in picker (default 50).
+---@field decay_rate  number     Frecency decay per hour (default 0.5).
+---@field sources     string[]   Collections to include: "recent","bookmarks","pins".
+---@field split       "edit"|"vsplit"|"split"  How to open selected file.
+
+-- ── harpoon_integration ──────────────────────────────────────────────────────
+
+---@class FiletreeHarpoonConfig
+---@field enabled       boolean
+---@field keymap_add    string?  Key to add node to harpoon (default "gh").
+---@field keymap_menu   string?  Key to open harpoon quick-menu (default "gH").
+---@field indicator_hl  string   Highlight for slot indicator (default "DiagnosticHint").
+---@field debounce_ms   integer  Mark refresh debounce (default 250ms).
+
+-- ── file_permissions ─────────────────────────────────────────────────────────
+
+---@class FiletreeFilePermissionsConfig
+---@field enabled       boolean
+---@field show_inline   boolean  Render permission string as EOL virt_text (default false).
+---@field hl_exec       string   Highlight for executable files (default "DiagnosticOk").
+---@field hl_default    string   Highlight for non-executable files (default "Comment").
+---@field keymap_exec   string?  Toggle execute bit (default "gx").
+---@field keymap_chmod  string?  Interactive chmod prompt (default "gX").
+---@field keymap_show   string?  Show stat details (default "gP").
 
 return {}
