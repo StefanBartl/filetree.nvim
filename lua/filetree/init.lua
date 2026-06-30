@@ -31,6 +31,9 @@ local FEATURES = {
   git_status          = { mod = "filetree.features.git_status",          key = "git_status"          },
   bookmarks           = { mod = "filetree.features.bookmarks",           key = "bookmarks"           },
   preview             = { mod = "filetree.features.preview",             key = "preview"             },
+  rename_batch        = { mod = "filetree.features.rename_batch",        key = "rename_batch"        },
+  session             = { mod = "filetree.features.session",             key = "session"             },
+  open_terminal       = { mod = "filetree.features.open_terminal",       key = "open_terminal"       },
 }
 
 ---@type table<string, table>  name → loaded feature module

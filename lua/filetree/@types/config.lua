@@ -20,6 +20,9 @@
 ---@field git_status          FiletreeGitStatusConfig?
 ---@field bookmarks           FiletreeBookmarksConfig?
 ---@field preview             FiletreePreviewConfig?
+---@field rename_batch        FiletreeRenameBatchConfig?
+---@field session             FiletreeSessionConfig?
+---@field open_terminal       FiletreeOpenTerminalConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -114,6 +117,31 @@
 ---@field copy_dir   string?  Copy parent directory    (default "yd")
 ---@field to_require string?  Copy as require() string (default "yq")
 ---@field md_link    string?  Copy as Markdown link    (default "ym")
+
+-- ── rename_batch ──────────────────────────────────────────────────────────────
+
+---@class FiletreeRenameBatchConfig
+---@field enabled     boolean
+---@field keymap      string?  Normal-mode key inside tree (default "R").
+---@field confirm     boolean  Ask for confirmation before renaming (default true).
+---@field use_safety  boolean  Create safety backup before renaming (default true).
+---@field dry_run     boolean  Log plan without executing (default false).
+
+-- ── session ───────────────────────────────────────────────────────────────────
+
+---@class FiletreeSessionConfig
+---@field enabled        boolean
+---@field auto_save      boolean  Save on VimLeavePre and tree BufHidden (default true).
+---@field auto_restore   boolean  Restore on first FileType neo-tree/NvimTree (default true).
+---@field max_sessions   integer  Maximum stored project sessions (default 50).
+
+-- ── open_terminal ─────────────────────────────────────────────────────────────
+
+---@class FiletreeOpenTerminalConfig
+---@field enabled  boolean
+---@field keymap   string?                          Key inside tree (default "T").
+---@field prefer   "auto"|"snacks"|"toggleterm"|"builtin"  Terminal backend (default "auto").
+---@field split    "horizontal"|"vertical"|"float"  Builtin split direction (default "horizontal").
 
 -- ── git_status ────────────────────────────────────────────────────────────────
 

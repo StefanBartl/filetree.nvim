@@ -89,6 +89,9 @@ function M.check()
     { key = "git_status",         name = "Git Status"            },
     { key = "bookmarks",          name = "Bookmarks"             },
     { key = "preview",            name = "File Preview"          },
+    { key = "rename_batch",       name = "Rename Batch"          },
+    { key = "session",            name = "Session"               },
+    { key = "open_terminal",      name = "Open Terminal"         },
   }
 
   -- Extra check for trash backend availability
