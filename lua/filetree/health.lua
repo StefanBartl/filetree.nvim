@@ -42,7 +42,8 @@ function M.check()
     { name = "neotree",  plugin = "neo-tree"        },
     { name = "nvimtree", plugin = "nvim-tree"       },
     { name = "netrw",    plugin = "netrw (builtin)" },
-    { name = "oil",      plugin = "oil.nvim"        },
+    { name = "oil",        plugin = "oil.nvim"   },
+    { name = "mini_files", plugin = "mini.files" },
   }
 
   local found_any = false
