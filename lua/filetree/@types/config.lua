@@ -27,6 +27,7 @@
 ---@field tree_reset          FiletreeTreeResetConfig?
 ---@field open_replace        FiletreeOpenReplaceConfig?
 ---@field reveal_alt          FiletreeRevealAltConfig?
+---@field buffer_save         FiletreeBufferSaveConfig?
 ---@field picker              FiletreePickerConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
@@ -664,5 +665,13 @@
 ---@class FiletreeRevealAltConfig
 ---@field enabled  boolean
 ---@field keymap   string?  Key in tree buffer (default "B"). Reveals the alternate buffer (#) in the tree.
+
+-- ── buffer_save ───────────────────────────────────────────────────────────────
+
+---@class FiletreeBufferSaveConfig
+---@field enabled          boolean
+---@field keymap_adjacent  string?   Save last adjacent editor buffer (default "<C-s>").
+---@field keymap_node      string?   Save buffer matching node under cursor (default "<M-s>").
+---@field force            boolean   Use write! (default true). false → update (no-op when unmodified).
 
 return {}

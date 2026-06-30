@@ -23,6 +23,7 @@ local FEATURES = {
   tree_reset          = { mod = "filetree.features.tree_reset",          key = "tree_reset"          },
   open_replace        = { mod = "filetree.features.open_replace",        key = "open_replace"        },
   reveal_alt          = { mod = "filetree.features.reveal_alt",          key = "reveal_alt"          },
+  buffer_save         = { mod = "filetree.features.buffer_save",         key = "buffer_save"         },
   picker              = { mod = "filetree.features.picker",              key = "picker"              },
   layout_guard        = { mod = "filetree.features.layout_guard",        key = "layout_guard"        },
   cwd_sync            = { mod = "filetree.features.cwd_sync",            key = "cwd_sync"            },
