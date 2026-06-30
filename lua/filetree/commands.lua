@@ -191,6 +191,32 @@ local TREE = {
     end end,
   },
 
+  -- ── compare_dirs ─────────────────────────────────────────────────────────────
+  compare = {
+    marked  = function(_) local f = ft("compare_dirs"); if f then f.compare_marked()  end end,
+    current = function(_) local f = ft("compare_dirs"); if f then f.compare_current() end end,
+  },
+
+  -- ── pin_node ─────────────────────────────────────────────────────────────────
+  pin = {
+    toggle = function(_) local f = ft("pin_node"); if f then f.toggle_current() end end,
+    show   = function(_) local f = ft("pin_node"); if f then f.show()           end end,
+    clear  = function(_) local f = ft("pin_node"); if f then f.clear_all()      end end,
+  },
+
+  -- ── workspace ────────────────────────────────────────────────────────────────
+  workspace = {
+    switch = function(_)  local f = ft("workspace"); if f then f.switch()        end end,
+    add    = function(a)  local f = ft("workspace"); if f then f.add(a[1])       end end,
+    remove = function(a)  local f = ft("workspace"); if f then f.remove(a[1])    end end,
+    list   = function(_)
+      local f = ft("workspace"); if not f then return end
+      local roots = f.list()
+      if #roots == 0 then vim.notify("[filetree] Workspace empty", vim.log.levels.INFO)
+      else vim.notify("[filetree] Workspace:\n  " .. table.concat(roots, "\n  "), vim.log.levels.INFO) end
+    end,
+  },
+
   -- ── ignore_patterns ──────────────────────────────────────────────────────────
   ignore = {
     toggle = function(_)  local f = ft("ignore_patterns"); if f then f.toggle()      end end,

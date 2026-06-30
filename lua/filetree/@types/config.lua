@@ -41,6 +41,9 @@
 ---@field ignore_patterns      FiletreeIgnorePatternsConfig?
 ---@field file_watcher         FiletreeFileWatcherConfig?
 ---@field hooks_api            FiletreeHooksApiConfig?
+---@field compare_dirs         FiletreeCompareDirsConfig?
+---@field pin_node             FiletreePinNodeConfig?
+---@field workspace            FiletreeWorkspaceConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -311,6 +314,32 @@
 ---@field max_width  integer  Max floating window width in columns (default 80).
 ---@field max_height integer  Max floating window height in lines (default 25).
 ---@field wrap       boolean  Enable line wrapping in the preview window (default false).
+
+-- ── compare_dirs ─────────────────────────────────────────────────────────────
+
+---@class FiletreeCompareDirsConfig
+---@field enabled       boolean
+---@field prefer        "auto"|"meld"|"bc"|"delta"|"builtin"  Visual diff tool preference.
+---@field keymap        string?   Key inside tree (default "cd").
+---@field open_quickfix boolean   Auto-open quickfix after builtin diff (default true).
+
+-- ── pin_node ─────────────────────────────────────────────────────────────────
+
+---@class FiletreePinNodeConfig
+---@field enabled    boolean
+---@field indicator  string   EOL indicator (default "📌").
+---@field hl_group   string   Highlight group (default "DiagnosticWarn").
+---@field keymap     string?  Key inside tree (default "gp").
+---@field global     boolean  Store globally across projects (default true).
+
+-- ── workspace ────────────────────────────────────────────────────────────────
+
+---@class FiletreeWorkspaceConfig
+---@field enabled          boolean
+---@field keymap_switch    string?  Key inside tree for picker (default "gw").
+---@field auto_add         boolean  Auto-add cwd to workspace on setup (default false).
+---@field max_roots        integer  Maximum stored roots (default 20).
+---@field session_restore  boolean  Call session.restore() after switching (default true).
 
 -- ── ignore_patterns ──────────────────────────────────────────────────────────
 

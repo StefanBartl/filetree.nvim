@@ -110,6 +110,9 @@ function M.check()
     { key = "ignore_patterns",    name = "Ignore Patterns"       },
     { key = "file_watcher",       name = "File Watcher"          },
     { key = "hooks_api",          name = "Hooks API"             },
+    { key = "compare_dirs",       name = "Compare Dirs"          },
+    { key = "pin_node",           name = "Pin Node"              },
+    { key = "workspace",          name = "Workspace"             },
   }
 
   -- Extra check for trash backend availability

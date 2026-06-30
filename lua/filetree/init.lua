@@ -53,6 +53,9 @@ local FEATURES = {
   ignore_patterns     = { mod = "filetree.features.ignore_patterns",     key = "ignore_patterns"     },
   file_watcher        = { mod = "filetree.features.file_watcher",        key = "file_watcher"        },
   hooks_api           = { mod = "filetree.features.hooks_api",           key = "hooks_api"           },
+  compare_dirs        = { mod = "filetree.features.compare_dirs",        key = "compare_dirs"        },
+  pin_node            = { mod = "filetree.features.pin_node",            key = "pin_node"            },
+  workspace           = { mod = "filetree.features.workspace",           key = "workspace"           },
 }
 
 ---@type table<string, table>  name → loaded feature module
