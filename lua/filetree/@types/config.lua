@@ -1,9 +1,16 @@
 ---@meta
 ---@module 'filetree.@types.config'
 
+---@class FiletreeCommandConfig
+---@field name    string    Name for the user command (default: "Filetree").
+---@field aliases string[]? Additional command aliases to also register.
+
 ---@class FiletreeConfig
 ---@field adapter  FiletreeAdapterName|"auto"  Which adapter to use. "auto" picks the first available one.
 ---@field features FiletreeFeaturesConfig
+---@field keymaps  table<string,string|false>?  Global keymap remap: { ["<old>"] = "<new>" } or { ["<key>"] = false } to disable.
+---@field command  FiletreeCommandConfig|string|nil  User command name (string) or config table. Default: "Filetree".
+---@field autocmds table<string,false>?  Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
 
 ---@class FiletreeFeaturesConfig
 ---@field picker              FiletreePickerConfig?

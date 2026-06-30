@@ -59,6 +59,48 @@ local function deep_merge(dst, src)
   return dst
 end
 
+---Scan all feature keymap fields and apply the global `keymaps` remap table.
+---A remap value of `false` disables the key; a string replaces it.
+---@param cfg FiletreeConfig
+local function apply_keymap_remap(cfg)
+  local remap = cfg.keymaps
+  if type(remap) ~= "table" then return end
+
+  local function patch(t)
+    if type(t) ~= "table" then return end
+    for k, v in pairs(t) do
+      if type(k) == "string" and k:match("^keymap") and type(v) == "string" then
+        if remap[v] ~= nil then
+          t[k] = remap[v]   -- false → disabled, string → renamed
+        end
+      elseif type(v) == "table" then
+        patch(v)
+      end
+    end
+  end
+
+  if type(cfg.features) == "table" then
+    for _, fcfg in pairs(cfg.features) do
+      patch(fcfg)
+    end
+  end
+end
+
+---Propagate top-level `autocmds` disables into per-feature configs.
+---`autocmds = { auto_reveal = false }` sets `fcfg.autocmds_enabled = false`.
+---@param cfg FiletreeConfig
+local function apply_autocmd_overrides(cfg)
+  local overrides = cfg.autocmds
+  if type(overrides) ~= "table" then return end
+  if type(cfg.features) ~= "table" then return end
+  for name, val in pairs(overrides) do
+    local fcfg = cfg.features[name]
+    if type(fcfg) == "table" and val == false then
+      fcfg.autocmds_enabled = false
+    end
+  end
+end
+
 ---Apply user config on top of defaults.
 ---@param user FiletreeConfig?
 function M.setup(user)
@@ -67,6 +109,8 @@ function M.setup(user)
   if user then
     deep_merge(_active, user)
   end
+  apply_keymap_remap(_active)
+  apply_autocmd_overrides(_active)
 end
 
 ---Return the active configuration.
