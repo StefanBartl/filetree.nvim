@@ -31,10 +31,10 @@ local M = {}
 ---@type FiletreePathCopyConfig
 local _cfg = {
   enabled      = false,
-  keymap_pick  = "yp",
-  keymap_abs   = "ya",
-  keymap_rel   = "yr",
-  keymap_name  = "yn",
+  keymap_pick  = "<leader>yp",
+  keymap_abs   = "[a",
+  keymap_rel   = "]a",
+  keymap_name  = "<leader>yn",
   notify       = true,
 }
 
@@ -162,14 +162,19 @@ function M.setup(config, adapter)
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
-      local buf  = ev.buf
-      local kmap = function(key, fn, desc)
-        if key then vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = desc }) end
-      end
-      kmap(_cfg.keymap_pick, M.pick,          "Filetree: copy path (pick format)")
-      kmap(_cfg.keymap_abs,  M.copy_absolute, "Filetree: copy absolute path")
-      kmap(_cfg.keymap_rel,  M.copy_relative, "Filetree: copy relative path")
-      kmap(_cfg.keymap_name, M.copy_name,     "Filetree: copy filename")
+      local buf = ev.buf
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        local function kmap(key, fn, desc)
+          if key and key ~= "" then
+            vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = desc })
+          end
+        end
+        kmap(_cfg.keymap_pick, M.pick,          "Filetree: copy path (pick format)")
+        kmap(_cfg.keymap_abs,  M.copy_absolute, "Filetree: copy absolute path")
+        kmap(_cfg.keymap_rel,  M.copy_relative, "Filetree: copy relative path")
+        kmap(_cfg.keymap_name, M.copy_name,     "Filetree: copy filename")
+      end)
     end,
   })
 end

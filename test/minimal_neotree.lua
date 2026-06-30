@@ -124,10 +124,14 @@ require("lazy").setup({
           -- ── Group C: Virtual text / extmarks ─────────────────────────────
           -- Tests: nvim_buf_set_extmark, EOL virt_text
           marks = {
-            enabled   = true,
-            indicator = "✓",
-            hl_group  = "DiagnosticOk",
-            keymap    = "m",
+            enabled           = true,
+            indicator         = "✓",
+            hl_group          = "DiagnosticOk",
+            keymap            = "m",
+            keymap_all        = "]m",
+            keymap_unmark_all = "[m",
+            keymap_clear      = "<C-m>",
+            keymap_show       = "<leader>ms",
           },
           git_status = {
             enabled    = true,
@@ -165,7 +169,7 @@ require("lazy").setup({
           },
           live_search = {
             enabled          = true,
-            keymap           = "?",
+            keymap           = "gs",  -- "?" conflicts with neotree cheatsheet
             debounce_ms      = 80,
             hl_dim           = "Comment",
             commit_to_filter = true,
@@ -174,11 +178,11 @@ require("lazy").setup({
           -- ── Group F: Clipboard / copy ─────────────────────────────────────
           -- Tests: vim.fn.setreg, notify
           path_copy = {
-            enabled        = true,
-            keymap_menu    = "yp",
-            keymap_abs     = "ya",
-            keymap_rel     = "yr",
-            keymap_name    = "yn",
+            enabled      = true,
+            keymap_abs   = "[a",          -- copy absolute path (original: [a)
+            keymap_rel   = "]a",          -- copy base/dir path  (original: ]a)
+            keymap_pick  = "<leader>yp",  -- format picker
+            keymap_name  = "<leader>yn",  -- filename only
           },
           copy_file_list = {
             enabled          = true,
@@ -197,8 +201,8 @@ require("lazy").setup({
           -- Tests: adapter.open_reveal(), cwd changes
           tree_traverse = {
             enabled      = true,
-            keymap_up    = "<BS>",
-            keymap_down  = "]r",
+            keymap_up    = "-",   -- navigate to parent (original: -)
+            keymap_down  = "+",   -- set dir as root    (original: +)
             sync_cwd     = true,
           },
 

@@ -31,7 +31,7 @@ local _cfg = {
   enabled     = false,
   mode        = "inline",
   debounce_ms = 300,
-  keymap      = "gb",
+  keymap      = "gB",
   hl_group    = "Comment",
   format      = " {hash} {author} · {date}",
 }
@@ -207,9 +207,13 @@ function M.setup(config, adapter)
       group   = _augroup,
       pattern = { "neo-tree", "NvimTree" },
       callback = function(ev)
-        vim.keymap.set("n", _cfg.keymap, M.show_float_current, {
-          buffer = ev.buf, silent = true, desc = "Filetree: git blame / last commit",
-        })
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.keymap.set("n", _cfg.keymap, M.show_float_current, {
+            buffer = buf, silent = true, desc = "Filetree: git blame / last commit",
+          })
+        end)
       end,
     })
   end

@@ -29,7 +29,7 @@ local M = {}
 ---@type FiletreeLiveSearchConfig
 local _cfg = {
   enabled          = false,
-  keymap           = "/",
+  keymap           = "gs",
   match            = "name",
   hl_match         = "Search",
   hl_dim           = "Comment",
@@ -230,10 +230,14 @@ function M.setup(config, adapter)
       group   = _augroup,
       pattern = { "neo-tree", "NvimTree" },
       callback = function(ev)
-        vim.keymap.set("n", _cfg.keymap, M.open, {
-          buffer = ev.buf, silent = true,
-          desc   = "Filetree: live search",
-        })
+        local buf = ev.buf
+        vim.schedule(function()
+          if not vim.api.nvim_buf_is_valid(buf) then return end
+          vim.keymap.set("n", _cfg.keymap, M.open, {
+            buffer = buf, silent = true,
+            desc   = "Filetree: live search",
+          })
+        end)
       end,
     })
   end

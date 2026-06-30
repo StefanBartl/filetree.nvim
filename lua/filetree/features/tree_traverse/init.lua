@@ -73,28 +73,23 @@ function M.setup(cfg, adapter)
   _cfg     = cfg
   _adapter = adapter
 
-  local function set_keymaps(buf)
-    if cfg.keymap_up then
-      vim.keymap.set("n", cfg.keymap_up, function() M.up() end,
-        { buffer = buf, desc = "filetree: traverse up", silent = true })
-    end
-    if cfg.keymap_down then
-      vim.keymap.set("n", cfg.keymap_down, function() M.down() end,
-        { buffer = buf, desc = "filetree: traverse down", silent = true })
-    end
-  end
-
-  local winid = adapter.get_winid and adapter.get_winid()
-  if winid then
-    set_keymaps(vim.api.nvim_win_get_buf(winid))
-  else
-    vim.api.nvim_create_autocmd("FileType", {
-      pattern  = { "neo-tree", "NvimTree" },
-      callback = function(ev)
-        set_keymaps(ev.buf)
-      end,
-    })
-  end
+  vim.api.nvim_create_autocmd("FileType", {
+    pattern  = { "neo-tree", "NvimTree" },
+    callback = function(ev)
+      local buf = ev.buf
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        if cfg.keymap_up and cfg.keymap_up ~= "" then
+          vim.keymap.set("n", cfg.keymap_up, function() M.up() end,
+            { buffer = buf, desc = "filetree: traverse up", silent = true })
+        end
+        if cfg.keymap_down and cfg.keymap_down ~= "" then
+          vim.keymap.set("n", cfg.keymap_down, function() M.down() end,
+            { buffer = buf, desc = "filetree: traverse down", silent = true })
+        end
+      end)
+    end,
+  })
 end
 
 function M.teardown()

@@ -126,10 +126,14 @@
 -- ── marks ─────────────────────────────────────────────────────────────────────
 
 ---@class FiletreeMarksConfig
----@field enabled    boolean
----@field indicator  string   Character shown before marked nodes (default "✓").
----@field hl_group   string   Highlight group for the indicator (default "DiagnosticOk").
----@field keymap     string?  Normal-mode key inside tree buffer to toggle mark (default "m").
+---@field enabled          boolean
+---@field indicator        string   Character shown before marked nodes (default "✓").
+---@field hl_group         string   Highlight group for the indicator (default "DiagnosticOk").
+---@field keymap           string?  Toggle mark on current node (default "m").
+---@field keymap_all       string?  Mark all files in current directory (default "]m").
+---@field keymap_unmark_all string? Unmark all files in current directory (default "[m").
+---@field keymap_clear     string?  Clear all marks (default "<C-m>").
+---@field keymap_show      string?  Show floating list of marked nodes (default "<leader>ms").
 
 -- ── diff ──────────────────────────────────────────────────────────────────────
 
@@ -453,7 +457,7 @@
 ---@field enabled      boolean
 ---@field mode         "inline"|"float"|"both"  Default "inline".
 ---@field debounce_ms  integer   CursorMoved debounce (default 300ms).
----@field keymap       string?   Float keymap (default "gb").
+---@field keymap       string?   Float keymap (default "gB").
 ---@field hl_group     string    Inline highlight group (default "Comment").
 ---@field format       string    Inline format string with {hash}/{author}/{date}/{subject}.
 
@@ -497,10 +501,10 @@
 
 ---@class FiletreePathCopyConfig
 ---@field enabled       boolean
----@field keymap_pick   string?  Opens format picker (default "yp").
----@field keymap_abs    string?  Copy absolute path (default "ya").
----@field keymap_rel    string?  Copy relative path (default "yr").
----@field keymap_name   string?  Copy filename only (default "yn").
+---@field keymap_pick   string?  Opens format picker (default "<leader>yp").
+---@field keymap_abs    string?  Copy absolute path (default "[a").
+---@field keymap_rel    string?  Copy base/dir path (default "]a").
+---@field keymap_name   string?  Copy filename only (default "<leader>yn").
 ---@field notify        boolean  Show notification after copy (default true).
 
 -- ── diagnostics_filter ───────────────────────────────────────────────────────
@@ -519,7 +523,7 @@
 
 ---@class FiletreeLiveSearchConfig
 ---@field enabled           boolean
----@field keymap            string?  Key to open live search (default "/").
+---@field keymap            string?  Key to open live search (default "gs").
 ---@field match             "name"|"path"  Match against filename or full path (default "name").
 ---@field hl_match          string   Highlight for matched nodes (default "Search").
 ---@field hl_dim            string   Highlight for non-matched nodes (default "Comment").
@@ -568,8 +572,8 @@
 
 ---@class FiletreeTreeTraverseConfig
 ---@field enabled       boolean
----@field keymap_up     string?   Navigate to parent directory (default "<BS>").
----@field keymap_down   string?   Set current dir as root (default "]r").
+---@field keymap_up     string?   Navigate to parent directory (default "-").
+---@field keymap_down   string?   Set current dir as root (default "+").
 ---@field sync_cwd      boolean   Also change Vim's cwd (default true).
 
 -- ── lua_require_copy ─────────────────────────────────────────────────────────
