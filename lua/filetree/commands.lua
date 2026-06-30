@@ -286,6 +286,30 @@ local TREE = {
     end,
   },
 
+  -- ── smart_rename ─────────────────────────────────────────────────────────────
+  smartrename = function(_) local f = ft("smart_rename"); if f then f.rename_current() end end,
+
+  -- ── tag_system ───────────────────────────────────────────────────────────────
+  tag = {
+    add    = function(a) local f = ft("tag_system"); if f then f.add(a[1] or "")    end end,
+    remove = function(a) local f = ft("tag_system"); if f then f.remove(a[1] or "") end end,
+    filter = function(a) local f = ft("tag_system"); if f then f.filter(a[1])       end end,
+    clear  = function(_) local f = ft("tag_system"); if f then f.clear_current()    end end,
+    list   = function(_) local f = ft("tag_system"); if f then f.list()             end end,
+    edit   = function(_) local f = ft("tag_system"); if f then f.edit_current()     end end,
+  },
+
+  -- ── telescope_integration ────────────────────────────────────────────────────
+  telescope = {
+    bookmarks = function(_) local f = ft("telescope_integration"); if f then f.bookmarks()    end end,
+    marks     = function(_) local f = ft("telescope_integration"); if f then f.marks()        end end,
+    recent    = function(_) local f = ft("telescope_integration"); if f then f.recent_files() end end,
+    notes     = function(_) local f = ft("telescope_integration"); if f then f.notes()        end end,
+    pins      = function(_) local f = ft("telescope_integration"); if f then f.pins()         end end,
+    workspace = function(_) local f = ft("telescope_integration"); if f then f.workspace()    end end,
+    tags      = function(_) local f = ft("telescope_integration"); if f then f.tags()         end end,
+  },
+
   -- ── health ───────────────────────────────────────────────────────────────────
   health = function(_) vim.cmd("checkhealth filetree") end,
 }

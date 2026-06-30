@@ -62,6 +62,9 @@ local FEATURES = {
   duplicate_node      = { mod = "filetree.features.duplicate_node",      key = "duplicate_node"      },
   git_blame           = { mod = "filetree.features.git_blame",           key = "git_blame"           },
   open_with           = { mod = "filetree.features.open_with",           key = "open_with"           },
+  smart_rename        = { mod = "filetree.features.smart_rename",        key = "smart_rename"        },
+  tag_system          = { mod = "filetree.features.tag_system",          key = "tag_system"          },
+  telescope_integration = { mod = "filetree.features.telescope_integration", key = "telescope_integration" },
 }
 
 ---@type table<string, table>  name → loaded feature module
