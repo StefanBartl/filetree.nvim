@@ -354,6 +354,13 @@ local TREE = {
     exec = function(_) local f = ft("file_permissions"); if f then f.toggle_exec()  end end,
   },
 
+  -- ── find_or_grep_menu ─────────────────────────────────────────────────────────
+  findgrep = {
+    [""] = function(_) local f = ft("find_or_grep_menu"); if f then f.open() end end,
+    find  = function(_) local f = ft("find_or_grep_menu"); if f then f.find() end end,
+    grep  = function(_) local f = ft("find_or_grep_menu"); if f then f.grep() end end,
+  },
+
   -- ── lua_require_copy ─────────────────────────────────────────────────────────
   require = {
     [""] = function(_)

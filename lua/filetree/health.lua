@@ -131,6 +131,7 @@ function M.check()
     { key = "node_info",              name = "Node Info"               },
     { key = "tree_traverse",          name = "Tree Traverse"           },
     { key = "lua_require_copy",       name = "Lua Require Copy"        },
+    { key = "find_or_grep_menu",      name = "Find or Grep Menu"       },
   }
 
   -- Extra check for trash backend availability

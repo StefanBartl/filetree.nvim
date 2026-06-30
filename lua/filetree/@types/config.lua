@@ -62,6 +62,7 @@
 ---@field node_info               FiletreeNodeInfoConfig?
 ---@field tree_traverse           FiletreeTreeTraverseConfig?
 ---@field lua_require_copy        FiletreeLuaRequireCopyConfig?
+---@field find_or_grep_menu       FiletreeFindOrGrepMenuConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -574,5 +575,12 @@
 ---@class FiletreeLuaRequireCopyConfig
 ---@field enabled   boolean
 ---@field keymap    string?   Key inside tree (default "rq").
+
+-- ── find_or_grep_menu ─────────────────────────────────────────────────────────
+
+---@class FiletreeFindOrGrepMenuConfig
+---@field enabled   boolean
+---@field keymap    string?                               Key inside tree (default "<M-p>").
+---@field prefer    "auto"|"telescope"|"fzf-lua"          Backend preference (default "auto").
 
 return {}

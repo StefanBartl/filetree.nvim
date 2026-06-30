@@ -74,6 +74,7 @@ local FEATURES = {
   node_info           = { mod = "filetree.features.node_info",           key = "node_info"           },
   tree_traverse       = { mod = "filetree.features.tree_traverse",       key = "tree_traverse"       },
   lua_require_copy    = { mod = "filetree.features.lua_require_copy",    key = "lua_require_copy"    },
+  find_or_grep_menu   = { mod = "filetree.features.find_or_grep_menu",   key = "find_or_grep_menu"   },
 }
 
 ---@type table<string, table>  name → loaded feature module
