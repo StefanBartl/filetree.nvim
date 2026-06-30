@@ -354,6 +354,18 @@ local TREE = {
     exec = function(_) local f = ft("file_permissions"); if f then f.toggle_exec()  end end,
   },
 
+  -- ── copy_file_list ────────────────────────────────────────────────────────────
+  filelist = {
+    files = {
+      abs = function(_) local f = ft("copy_file_list"); if f then f.copy_files_abs() end end,
+      rel = function(_) local f = ft("copy_file_list"); if f then f.copy_files_rel() end end,
+    },
+    dirs = {
+      abs = function(_) local f = ft("copy_file_list"); if f then f.copy_dirs_abs() end end,
+      rel = function(_) local f = ft("copy_file_list"); if f then f.copy_dirs_rel() end end,
+    },
+  },
+
   -- ── find_or_grep_menu ─────────────────────────────────────────────────────────
   findgrep = {
     [""] = function(_) local f = ft("find_or_grep_menu"); if f then f.open() end end,

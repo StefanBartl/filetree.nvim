@@ -132,6 +132,7 @@ function M.check()
     { key = "tree_traverse",          name = "Tree Traverse"           },
     { key = "lua_require_copy",       name = "Lua Require Copy"        },
     { key = "find_or_grep_menu",      name = "Find or Grep Menu"       },
+    { key = "copy_file_list",         name = "Copy File List"          },
   }
 
   -- Extra check for trash backend availability

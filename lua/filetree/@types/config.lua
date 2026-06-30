@@ -63,6 +63,7 @@
 ---@field tree_traverse           FiletreeTreeTraverseConfig?
 ---@field lua_require_copy        FiletreeLuaRequireCopyConfig?
 ---@field find_or_grep_menu       FiletreeFindOrGrepMenuConfig?
+---@field copy_file_list          FiletreeCopyFileListConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -582,5 +583,16 @@
 ---@field enabled   boolean
 ---@field keymap    string?                               Key inside tree (default "<M-p>").
 ---@field prefer    "auto"|"telescope"|"fzf-lua"          Backend preference (default "auto").
+
+-- ── copy_file_list ────────────────────────────────────────────────────────────
+
+---@class FiletreeCopyFileListConfig
+---@field enabled          boolean
+---@field keymap_files_abs string?   Copy absolute file paths (default "[f").
+---@field keymap_files_rel string?   Copy relative file paths (default "]f").
+---@field keymap_dirs_abs  string?   Copy absolute dir paths  (default "[F").
+---@field keymap_dirs_rel  string?   Copy relative dir paths  (default "]F").
+---@field preview_limit    integer   Max lines shown in notification (default 5).
+---@field separator        string    Separator between paths (default "\\n").
 
 return {}
