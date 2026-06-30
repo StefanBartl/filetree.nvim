@@ -191,6 +191,19 @@ local TREE = {
     end end,
   },
 
+  -- ── duplicate_node ───────────────────────────────────────────────────────────
+  duplicate = function(_) local f = ft("duplicate_node"); if f then f.duplicate_current() end end,
+
+  -- ── git_blame ────────────────────────────────────────────────────────────────
+  blame = function(_) local f = ft("git_blame"); if f then f.show_float_current() end end,
+
+  -- ── open_with ────────────────────────────────────────────────────────────────
+  open = {
+    system = function(_)   local f = ft("open_with"); if f then f.open_system()  end end,
+    pick   = function(_)   local f = ft("open_with"); if f then f.pick()         end end,
+    app    = function(a)   local f = ft("open_with"); if f then f.open_app(a[1] or "") end end,
+  },
+
   -- ── color_labels ─────────────────────────────────────────────────────────────
   label = {
     set   = function(a)

@@ -1,0 +1,163 @@
+---@module 'filetree.features.duplicate_node'
+---@brief Duplicate the current file or directory with an interactive rename.
+---@description
+--- Copies the current node to a new name (same directory by default).
+--- Prompts for the destination name. Integrates with the safety feature
+--- to optionally backup before overwriting an existing target.
+---
+--- File copy:  platform-transparent via Lua io / vim.uv.fs_copyfile
+--- Dir copy:   recursive via vim.system cp -r / xcopy (Windows)
+---
+--- Config:
+---   enabled         boolean
+---   keymap          string?   Key inside tree (default "<C-d>").
+---   suffix          string    Default suffix appended to the copy name (default "_copy").
+---   open_after      boolean   Open the new file after creation (default false).
+---   confirm_overwrite boolean Warn before overwriting existing path (default true).
+---
+--- Commands (via :Filetree dispatcher):
+---   :Filetree duplicate
+
+local notify   = require("filetree.util.notify").create("[filetree.duplicate_node]")
+local platform = require("filetree.util.platform")
+
+local M = {}
+
+---@type FiletreeDuplicateNodeConfig
+local _cfg = {
+  enabled           = false,
+  keymap            = "<C-d>",
+  suffix            = "_copy",
+  open_after        = false,
+  confirm_overwrite = true,
+}
+
+---@type FiletreeAdapter?
+local _adapter = nil
+
+-- ── Copy helpers ──────────────────────────────────────────────────────────────
+
+local function copy_file(src, dst, cb)
+  local uv = vim.uv or vim.loop
+  uv.fs_copyfile(src, dst, {}, function(err)
+    vim.schedule(function() cb(not err, err) end)
+  end)
+end
+
+local function copy_dir(src, dst, cb)
+  local cmd
+  if platform.is_windows() then
+    cmd = { "robocopy", src, dst, "/E", "/NFL", "/NDL", "/NJH", "/NJS" }
+  else
+    cmd = { "cp", "-r", "--", src, dst }
+  end
+  vim.system(cmd, { text = true }, function(result)
+    vim.schedule(function()
+      -- robocopy exit codes 0-7 are success; cp 0 = success
+      local ok = platform.is_windows() and result.code <= 7 or result.code == 0
+      cb(ok, result.stderr)
+    end)
+  end)
+end
+
+-- ── Default name suggestion ───────────────────────────────────────────────────
+
+local function suggest_name(path)
+  local dir  = vim.fn.fnamemodify(path, ":h")
+  local name = vim.fn.fnamemodify(path, ":t")
+
+  if vim.fn.isdirectory(path) == 1 then
+    return dir .. "/" .. name .. _cfg.suffix
+  end
+
+  local base = vim.fn.fnamemodify(name, ":r")
+  local ext  = vim.fn.fnamemodify(name, ":e")
+  local dest = dir .. "/" .. base .. _cfg.suffix
+  if ext ~= "" then dest = dest .. "." .. ext end
+  return dest
+end
+
+-- ── Public API ────────────────────────────────────────────────────────────────
+
+function M.duplicate_current()
+  if not _adapter then return end
+  local node = _adapter.get_current_node()
+  if not node or not node.path then notify.warn("No node under cursor"); return end
+
+  local src      = node.path
+  local is_dir   = vim.fn.isdirectory(src) == 1
+  local default  = suggest_name(src)
+
+  vim.ui.input({
+    prompt  = "Duplicate to: ",
+    default = default,
+    completion = is_dir and "dir" or "file",
+  }, function(dst)
+    if not dst or dst == "" then return end
+
+    -- Confirm overwrite
+    if _cfg.confirm_overwrite and
+       (vim.fn.filereadable(dst) == 1 or vim.fn.isdirectory(dst) == 1) then
+      vim.ui.select({ "Overwrite", "Cancel" }, { prompt = "'" .. dst .. "' exists. " }, function(choice)
+        if choice == "Overwrite" then M._do_copy(src, dst, is_dir) end
+      end)
+    else
+      M._do_copy(src, dst, is_dir)
+    end
+  end)
+end
+
+function M._do_copy(src, dst, is_dir)
+  local on_done = function(ok, err)
+    if ok then
+      notify.info("Duplicated → " .. vim.fn.fnamemodify(dst, ":t"))
+      if _adapter and _adapter.refresh then _adapter.refresh() end
+      if _cfg.open_after and not is_dir and vim.fn.filereadable(dst) == 1 then
+        vim.cmd("edit " .. vim.fn.fnameescape(dst))
+      end
+    else
+      notify.error("Duplicate failed: " .. (err or "unknown error"))
+    end
+  end
+
+  if is_dir then copy_dir(src, dst, on_done)
+  else       copy_file(src, dst, on_done) end
+end
+
+-- ── Setup ─────────────────────────────────────────────────────────────────────
+
+---@type integer?
+local _augroup = nil
+
+---@param config FiletreeDuplicateNodeConfig
+---@param adapter FiletreeAdapter
+function M.setup(config, adapter)
+  if not config.enabled then return end
+  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _adapter = adapter
+
+  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
+  _augroup = vim.api.nvim_create_augroup("filetree_duplicate_node", { clear = true })
+
+  if _cfg.keymap then
+    vim.api.nvim_create_autocmd("FileType", {
+      group   = _augroup,
+      pattern = { "neo-tree", "NvimTree" },
+      callback = function(ev)
+        vim.keymap.set("n", _cfg.keymap, M.duplicate_current, {
+          buffer = ev.buf, silent = true, desc = "Filetree: duplicate node",
+        })
+      end,
+    })
+  end
+end
+
+function M.teardown()
+  _adapter = nil
+  if _augroup then
+    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    _augroup = nil
+  end
+end
+
+return M

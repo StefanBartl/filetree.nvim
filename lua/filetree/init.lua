@@ -59,6 +59,9 @@ local FEATURES = {
   color_labels        = { mod = "filetree.features.color_labels",        key = "color_labels"        },
   jump_list           = { mod = "filetree.features.jump_list",           key = "jump_list"           },
   outline             = { mod = "filetree.features.outline",             key = "outline"             },
+  duplicate_node      = { mod = "filetree.features.duplicate_node",      key = "duplicate_node"      },
+  git_blame           = { mod = "filetree.features.git_blame",           key = "git_blame"           },
+  open_with           = { mod = "filetree.features.open_with",           key = "open_with"           },
 }
 
 ---@type table<string, table>  name → loaded feature module

@@ -116,6 +116,9 @@ function M.check()
     { key = "color_labels",       name = "Color Labels"          },
     { key = "jump_list",          name = "Jump List"             },
     { key = "outline",            name = "Outline"               },
+    { key = "duplicate_node",     name = "Duplicate Node"        },
+    { key = "git_blame",          name = "Git Blame"             },
+    { key = "open_with",          name = "Open With"             },
   }
 
   -- Extra check for trash backend availability

@@ -47,6 +47,9 @@
 ---@field color_labels         FiletreeColorLabelsConfig?
 ---@field jump_list            FiletreeJumpListConfig?
 ---@field outline              FiletreeOutlineConfig?
+---@field duplicate_node       FiletreeDuplicateNodeConfig?
+---@field git_blame            FiletreeGitBlameConfig?
+---@field open_with            FiletreeOpenWithConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -317,6 +320,38 @@
 ---@field max_width  integer  Max floating window width in columns (default 80).
 ---@field max_height integer  Max floating window height in lines (default 25).
 ---@field wrap       boolean  Enable line wrapping in the preview window (default false).
+
+-- ── duplicate_node ───────────────────────────────────────────────────────────
+
+---@class FiletreeDuplicateNodeConfig
+---@field enabled            boolean
+---@field keymap             string?   Key inside tree (default "<C-d>").
+---@field suffix             string    Default copy suffix (default "_copy").
+---@field open_after         boolean   Open new file after creation (default false).
+---@field confirm_overwrite  boolean   Warn before overwriting (default true).
+
+-- ── git_blame ─────────────────────────────────────────────────────────────────
+
+---@class FiletreeGitBlameConfig
+---@field enabled      boolean
+---@field mode         "inline"|"float"|"both"  Default "inline".
+---@field debounce_ms  integer   CursorMoved debounce (default 300ms).
+---@field keymap       string?   Float keymap (default "gb").
+---@field hl_group     string    Inline highlight group (default "Comment").
+---@field format       string    Inline format string with {hash}/{author}/{date}/{subject}.
+
+-- ── open_with ─────────────────────────────────────────────────────────────────
+
+---@class FiletreeOpenWithApp
+---@field name    string    Display name.
+---@field cmd     string    Executable.
+---@field args    string[]? Extra args before path.
+---@field keymap  string?   Optional tree keymap.
+
+---@class FiletreeOpenWithConfig
+---@field enabled  boolean
+---@field keymap   string?              System-default open key (default "ox").
+---@field apps     FiletreeOpenWithApp[]  Custom application entries.
 
 -- ── color_labels ─────────────────────────────────────────────────────────────
 
