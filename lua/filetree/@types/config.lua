@@ -28,6 +28,9 @@
 ---@field open_replace        FiletreeOpenReplaceConfig?
 ---@field reveal_alt          FiletreeRevealAltConfig?
 ---@field buffer_save         FiletreeBufferSaveConfig?
+---@field window_size_cycler  FiletreeWindowSizeCyclerConfig?
+---@field open_in_fm          FiletreeOpenInFmConfig?
+---@field shell_run           FiletreeShellRunConfig?
 ---@field picker              FiletreePickerConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
@@ -673,5 +676,28 @@
 ---@field keymap_adjacent  string?   Save last adjacent editor buffer (default "<C-s>").
 ---@field keymap_node      string?   Save buffer matching node under cursor (default "<M-s>").
 ---@field force            boolean   Use write! (default true). false → update (no-op when unmodified).
+
+-- ── window_size_cycler ────────────────────────────────────────────────────────
+
+---@class FiletreeWindowSizeCyclerConfig
+---@field enabled  boolean
+---@field keymap   string?     Key in tree buffer (default "w").
+---@field sizes    integer[]?  Width presets to cycle through (default { 30, 50, 15 }).
+
+-- ── open_in_fm ────────────────────────────────────────────────────────────────
+
+---@class FiletreeOpenInFmConfig
+---@field enabled   boolean
+---@field keymap    string?  Key in tree buffer (default "<leader>fm").
+---@field command   string?  Override launch binary (auto-detected per OS by default).
+
+-- ── shell_run ─────────────────────────────────────────────────────────────────
+
+---@class FiletreeShellRunConfig
+---@field enabled      boolean
+---@field keymap       string?   Key in tree buffer (default "i").
+---@field close_on_ok  boolean   Auto-close terminal when command exits 0 (default true).
+---@field split        string?   "split" | "vsplit" (default "split").
+---@field height       integer?  Terminal height in lines for horizontal split (default 12).
 
 return {}

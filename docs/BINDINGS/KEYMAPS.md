@@ -78,6 +78,11 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `yd` | path_utils | `keymaps.copy_dir` | Copy parent directory |
 | `yq` | path_utils | `keymaps.to_require` | Copy as `require()` string |
 | `ym` | path_utils | `keymaps.md_link` | Copy as Markdown link |
+| `<C-s>` | buffer_save | `keymap_adjacent` | Force-save the adjacent editor buffer |
+| `<M-s>` | buffer_save | `keymap_node` | Force-save buffer matching node under cursor |
+| `w` | window_size_cycler | `keymap` | Cycle tree width through presets (normal → large → small → …) |
+| `<leader>fm` | open_in_fm | `keymap` | Open node directory in system file manager |
+| `i` | shell_run | `keymap` | Prompt for a shell command, run in node directory |
 
 ---
 
