@@ -86,6 +86,9 @@ function M.check()
     { key = "diff",               name = "File Diff"             },
     { key = "project_root",       name = "Project Root"          },
     { key = "path_utils",         name = "Path Utilities"        },
+    { key = "git_status",         name = "Git Status"            },
+    { key = "bookmarks",          name = "Bookmarks"             },
+    { key = "preview",            name = "File Preview"          },
   }
 
   -- Extra check for trash backend availability

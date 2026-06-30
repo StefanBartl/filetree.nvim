@@ -17,6 +17,9 @@
 ---@field diff                FiletreeDiffConfig?
 ---@field project_root        FiletreeProjectRootConfig?
 ---@field path_utils          FiletreePathUtilsConfig?
+---@field git_status          FiletreeGitStatusConfig?
+---@field bookmarks           FiletreeBookmarksConfig?
+---@field preview             FiletreePreviewConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -111,5 +114,36 @@
 ---@field copy_dir   string?  Copy parent directory    (default "yd")
 ---@field to_require string?  Copy as require() string (default "yq")
 ---@field md_link    string?  Copy as Markdown link    (default "ym")
+
+-- ── git_status ────────────────────────────────────────────────────────────────
+
+---@class FiletreeGitStatusSign
+---@field text string
+---@field hl   string
+
+---@class FiletreeGitStatusConfig
+---@field enabled      boolean
+---@field debounce_ms  integer              Delay between write and re-query (default 300ms).
+---@field show_ignored boolean              Also show ignored files (default false).
+---@field signs        table<string, FiletreeGitStatusSign>?
+
+-- ── bookmarks ─────────────────────────────────────────────────────────────────
+
+---@class FiletreeBookmarksConfig
+---@field enabled    boolean
+---@field indicator  string   Character shown at eol for bookmarked nodes (default "★").
+---@field hl_group   string   Highlight group for the indicator (default "DiagnosticHint").
+---@field keymap     string?  Normal-mode key inside tree buffer to toggle (default "b").
+---@field persist    boolean  Save bookmarks to disk across sessions (default true).
+
+-- ── preview ───────────────────────────────────────────────────────────────────
+
+---@class FiletreePreviewConfig
+---@field enabled    boolean
+---@field keymap     string?  Normal-mode key inside tree buffer (default "<Space>").
+---@field max_lines  integer  Max lines to read for text preview (default 40).
+---@field max_width  integer  Max floating window width in columns (default 80).
+---@field max_height integer  Max floating window height in lines (default 25).
+---@field wrap       boolean  Enable line wrapping in the preview window (default false).
 
 return {}
