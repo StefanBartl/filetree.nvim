@@ -189,9 +189,6 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_user_command("FiletreeGrepInDir", function(args)
-    M.grep(nil, args.args ~= "" and args.args or nil)
-  end, { nargs = "?", desc = "Grep in current tree node directory" })
 end
 
 function M.teardown()
@@ -200,7 +197,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeGrepInDir")
 end
 
 return M

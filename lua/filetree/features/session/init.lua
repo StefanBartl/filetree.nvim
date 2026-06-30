@@ -219,9 +219,6 @@ function M.setup(config, adapter)
     })
   end
 
-  vim.api.nvim_create_user_command("FiletreeSessionSave",    M.save,      { desc = "Save tree session"          })
-  vim.api.nvim_create_user_command("FiletreeSessionRestore", M.restore,   { desc = "Restore tree session"       })
-  vim.api.nvim_create_user_command("FiletreeSessionClear",   M.clear,     { desc = "Clear session for this project" })
 end
 
 function M.teardown()
@@ -231,9 +228,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeSessionSave")
-  pcall(vim.api.nvim_del_user_command, "FiletreeSessionRestore")
-  pcall(vim.api.nvim_del_user_command, "FiletreeSessionClear")
 end
 
 return M

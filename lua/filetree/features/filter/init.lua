@@ -264,13 +264,6 @@ function M.setup(config, adapter)
     })
   end
 
-  vim.api.nvim_create_user_command("FiletreeFilter", function(args)
-    if args.args ~= "" then apply(args.args)
-    else M.enter() end
-  end, { nargs = "?", desc = "Filter tree nodes" })
-
-  vim.api.nvim_create_user_command("FiletreeFilterClear", M.clear,
-    { desc = "Clear tree filter" })
 end
 
 function M.teardown()
@@ -282,8 +275,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeFilter")
-  pcall(vim.api.nvim_del_user_command, "FiletreeFilterClear")
 end
 
 return M

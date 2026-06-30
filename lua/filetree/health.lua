@@ -104,6 +104,9 @@ function M.check()
     { key = "create_from_template", name = "Create From Template" },
     { key = "symlink",            name = "Symlink"               },
     { key = "auto_reveal",        name = "Auto Reveal"           },
+    { key = "archive",            name = "Archive (zip/tar)"     },
+    { key = "git_actions",        name = "Git Actions"           },
+    { key = "auto_resize",        name = "Auto Resize"           },
   }
 
   -- Extra check for trash backend availability

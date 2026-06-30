@@ -255,8 +255,6 @@ function M.setup(config, adapter)
     })
   end
 
-  vim.api.nvim_create_user_command("FiletreeRecentFiles",      M.show,  { desc = "Show recent files picker" })
-  vim.api.nvim_create_user_command("FiletreeRecentFilesClear", M.clear, { desc = "Clear recent files list"  })
 end
 
 function M.teardown()
@@ -268,8 +266,6 @@ function M.teardown()
   if _cfg.keymap_global then
     pcall(vim.keymap.del, "n", _cfg.keymap_global)
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeRecentFiles")
-  pcall(vim.api.nvim_del_user_command, "FiletreeRecentFilesClear")
 end
 
 return M

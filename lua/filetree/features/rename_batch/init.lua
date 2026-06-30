@@ -267,8 +267,6 @@ function M.setup(config, adapter)
     })
   end
 
-  vim.api.nvim_create_user_command("FiletreeRenameBatch", M.open,
-    { desc = "Open batch rename scratch buffer" })
 end
 
 function M.teardown()
@@ -277,7 +275,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeRenameBatch")
 end
 
 return M

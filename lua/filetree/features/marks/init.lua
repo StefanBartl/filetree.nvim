@@ -196,10 +196,6 @@ function M.setup(config, adapter)
     })
   end
 
-  -- User commands
-  vim.api.nvim_create_user_command("FiletreeMarksClear",      M.clear_all,       { desc = "Clear all marks" })
-  vim.api.nvim_create_user_command("FiletreeMarksShow",       M.show,            { desc = "Show marked nodes" })
-  vim.api.nvim_create_user_command("FiletreeMarksMarkAll",    M.mark_all_visible,{ desc = "Mark all visible nodes" })
 end
 
 function M.teardown()
@@ -214,9 +210,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeMarksClear")
-  pcall(vim.api.nvim_del_user_command, "FiletreeMarksShow")
-  pcall(vim.api.nvim_del_user_command, "FiletreeMarksMarkAll")
   _adapter = nil
 end
 

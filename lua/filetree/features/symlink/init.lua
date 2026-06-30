@@ -226,10 +226,6 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_user_command("FiletreeSymlinkFollow", M.follow,
-    { desc = "Follow symlink under cursor" })
-  vim.api.nvim_create_user_command("FiletreeSymlinkCreate", M.create_current,
-    { desc = "Create symlink pointing to current node" })
 end
 
 function M.teardown()
@@ -244,8 +240,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeSymlinkFollow")
-  pcall(vim.api.nvim_del_user_command, "FiletreeSymlinkCreate")
 end
 
 return M

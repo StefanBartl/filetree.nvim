@@ -35,6 +35,9 @@
 ---@field create_from_template FiletreeCreateFromTemplateConfig?
 ---@field symlink              FiletreeSymlinkConfig?
 ---@field auto_reveal          FiletreeAutoRevealConfig?
+---@field archive              FiletreeArchiveConfig?
+---@field git_actions          FiletreeGitActionsConfig?
+---@field auto_resize          FiletreeAutoResizeConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -305,5 +308,33 @@
 ---@field max_width  integer  Max floating window width in columns (default 80).
 ---@field max_height integer  Max floating window height in lines (default 25).
 ---@field wrap       boolean  Enable line wrapping in the preview window (default false).
+
+-- ── archive ───────────────────────────────────────────────────────────────────
+
+---@class FiletreeArchiveConfig
+---@field enabled     boolean
+---@field prefer      "auto"|"zip"|"tar"  Default format hint (default "auto").
+---@field keymap_zip  string?             Key inside tree for zip (default "az").
+---@field keymap_tar  string?             Key inside tree for tar.gz (default "at").
+
+-- ── git_actions ───────────────────────────────────────────────────────────────
+
+---@class FiletreeGitActionsConfig
+---@field enabled         boolean
+---@field keymap_stage    string?  Key inside tree to stage current node (default "gs").
+---@field keymap_unstage  string?  Key inside tree to unstage current node (default "gS").
+---@field keymap_log      string?  Key inside tree to show git log (default "gl").
+
+-- ── auto_resize ───────────────────────────────────────────────────────────────
+
+---@class FiletreeAutoResizeBreakpoint
+---@field cols  integer  Minimum editor column count to activate this width.
+---@field width integer  Tree window width to use.
+
+---@class FiletreeAutoResizeConfig
+---@field enabled      boolean
+---@field breakpoints  FiletreeAutoResizeBreakpoint[]
+---@field min_width    integer  Absolute minimum (default 20).
+---@field max_width    integer  Absolute maximum (default 60).
 
 return {}

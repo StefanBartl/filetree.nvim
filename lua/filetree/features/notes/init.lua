@@ -277,12 +277,6 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_user_command("FiletreeNotesShow", function()
-    M.toggle_current()
-  end, { desc = "Show/edit note for current tree node" })
-
-  vim.api.nvim_create_user_command("FiletreeNotesClear", M.clear_all,
-    { desc = "Clear all filetree notes" })
 end
 
 function M.teardown()
@@ -291,8 +285,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeNotesShow")
-  pcall(vim.api.nvim_del_user_command, "FiletreeNotesClear")
 end
 
 return M

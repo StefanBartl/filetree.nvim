@@ -114,24 +114,9 @@ function M.setup(config, adapter)
     return
   end
 
-  -- Register user commands
-  vim.api.nvim_create_user_command("FiletreeTrashUndo", function()
-    M.undo_last()
-  end, { desc = "Restore last trashed file" })
-
-  vim.api.nvim_create_user_command("FiletreeTrashHistory", function()
-    M.show_history()
-  end, { desc = "Show trash history" })
-
-  vim.api.nvim_create_user_command("FiletreeTrashDryRun", function()
-    M.toggle_dry_run()
-  end, { desc = "Toggle trash dry-run mode" })
 end
 
 function M.teardown()
-  pcall(vim.api.nvim_del_user_command, "FiletreeTrashUndo")
-  pcall(vim.api.nvim_del_user_command, "FiletreeTrashHistory")
-  pcall(vim.api.nvim_del_user_command, "FiletreeTrashDryRun")
   _adapter = nil
   _cfg.enabled = false
 end

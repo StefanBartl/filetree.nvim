@@ -181,9 +181,6 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_user_command("FiletreeSizeRefresh", M.refresh,
-    { desc = "Refresh size info in tree" })
-
   M._render()
 end
 
@@ -200,7 +197,7 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeSizeRefresh")
+
 end
 
 return M

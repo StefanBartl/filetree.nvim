@@ -158,13 +158,6 @@ function M.setup(config, adapter)
     })
   end
 
-  vim.api.nvim_create_user_command("FiletreeDiffMarked", function()
-    M.diff_marked()
-  end, { desc = "Diff two marked files" })
-
-  vim.api.nvim_create_user_command("FiletreeDiffClose", function()
-    M.close()
-  end, { desc = "Close diff and clear stage" })
 end
 
 function M.teardown()
@@ -174,8 +167,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeDiffMarked")
-  pcall(vim.api.nvim_del_user_command, "FiletreeDiffClose")
 end
 
 return M

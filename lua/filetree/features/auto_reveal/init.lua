@@ -161,20 +161,6 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_user_command("FiletreeAutoRevealPause", function(args)
-    local ms = tonumber(args.args) or 2000
-    M.pause(ms)
-    notify.info(string.format("Auto-reveal paused for %dms", ms))
-  end, { nargs = "?", desc = "Pause auto-reveal for N ms" })
-
-  vim.api.nvim_create_user_command("FiletreeAutoRevealResume", function()
-    M.resume()
-    notify.info("Auto-reveal resumed")
-  end, { desc = "Resume auto-reveal" })
-
-  vim.api.nvim_create_user_command("FiletreeRevealCurrent", function()
-    M.reveal_current()
-  end, { desc = "Reveal current buffer in tree" })
 end
 
 function M.teardown()
@@ -188,9 +174,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeAutoRevealPause")
-  pcall(vim.api.nvim_del_user_command, "FiletreeAutoRevealResume")
-  pcall(vim.api.nvim_del_user_command, "FiletreeRevealCurrent")
 end
 
 return M

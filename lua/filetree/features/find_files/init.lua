@@ -209,13 +209,6 @@ function M.setup(config, adapter)
     })
   end
 
-  vim.api.nvim_create_user_command("FiletreeFindFiles", function(args)
-    M.find(args.args ~= "" and args.args or nil)
-  end, {
-    nargs = "?",
-    complete = "dir",
-    desc = "Fuzzy-find files within tree root",
-  })
 end
 
 function M.teardown()
@@ -224,7 +217,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeFindFiles")
   if _cfg.keymap_global then
     pcall(vim.keymap.del, "n", _cfg.keymap_global)
   end

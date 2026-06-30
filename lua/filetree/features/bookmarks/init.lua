@@ -250,8 +250,6 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_user_command("FiletreeBookmarksShow",  M.show,      { desc = "Show bookmarks picker" })
-  vim.api.nvim_create_user_command("FiletreeBookmarksClear", M.clear_all, { desc = "Clear all bookmarks"  })
 end
 
 function M.teardown()
@@ -260,8 +258,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeBookmarksShow")
-  pcall(vim.api.nvim_del_user_command, "FiletreeBookmarksClear")
 end
 
 return M

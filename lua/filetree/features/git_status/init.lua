@@ -225,10 +225,6 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_user_command("FiletreeGitRefresh", function()
-    M.refresh()
-  end, { desc = "Refresh git status decorations in tree" })
-
   M.refresh()
 end
 
@@ -243,7 +239,6 @@ function M.teardown()
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  pcall(vim.api.nvim_del_user_command, "FiletreeGitRefresh")
 end
 
 return M

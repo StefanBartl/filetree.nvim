@@ -6,6 +6,7 @@
 
 local config_mod  = require("filetree.config")
 local adapter_mod = require("filetree.adapter")
+local commands    = require("filetree.commands")
 local notify      = require("filetree.util.notify").create("[filetree]")
 
 local M = {}
@@ -46,6 +47,9 @@ local FEATURES = {
   create_from_template = { mod = "filetree.features.create_from_template", key = "create_from_template" },
   symlink             = { mod = "filetree.features.symlink",             key = "symlink"             },
   auto_reveal         = { mod = "filetree.features.auto_reveal",         key = "auto_reveal"         },
+  archive             = { mod = "filetree.features.archive",             key = "archive"             },
+  git_actions         = { mod = "filetree.features.git_actions",         key = "git_actions"         },
+  auto_resize         = { mod = "filetree.features.auto_resize",         key = "auto_resize"         },
 }
 
 ---@type table<string, table>  name → loaded feature module
@@ -100,6 +104,7 @@ function M.setup(user_config)
     end
   end
 
+  commands.setup()
   _initialized = true
 end
 
