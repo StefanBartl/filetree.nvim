@@ -29,9 +29,12 @@
 ---@field grep_in_dir         FiletreeGrepInDirConfig?
 ---@field recent_files        FiletreeRecentFilesConfig?
 ---@field breadcrumbs         FiletreeBreadcrumbsConfig?
----@field lsp_diagnostics     FiletreeLspDiagnosticsConfig?
----@field size_info           FiletreeSizeInfoConfig?
----@field notes               FiletreeNotesConfig?
+---@field lsp_diagnostics      FiletreeLspDiagnosticsConfig?
+---@field size_info            FiletreeSizeInfoConfig?
+---@field notes                FiletreeNotesConfig?
+---@field create_from_template FiletreeCreateFromTemplateConfig?
+---@field symlink              FiletreeSymlinkConfig?
+---@field auto_reveal          FiletreeAutoRevealConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -126,6 +129,32 @@
 ---@field copy_dir   string?  Copy parent directory    (default "yd")
 ---@field to_require string?  Copy as require() string (default "yq")
 ---@field md_link    string?  Copy as Markdown link    (default "ym")
+
+-- ── create_from_template ──────────────────────────────────────────────────────
+
+---@class FiletreeCreateFromTemplateConfig
+---@field enabled       boolean
+---@field keymap        string?   Key inside tree (default "t").
+---@field template_dir  string?   Custom template directory. Defaults to stdpath("data")/filetree/templates/.
+---@field author        string?   Author name for ${author} substitution.
+---@field open_after    boolean   Open created file in editor (default true).
+
+-- ── symlink ───────────────────────────────────────────────────────────────────
+
+---@class FiletreeSymlinkConfig
+---@field enabled          boolean
+---@field keymap_follow    string?  Key to follow symlink (default "sl").
+---@field keymap_create    string?  Key to create symlink (default "sL").
+---@field show_target_eol  boolean  Show target path as eol extmark (default true).
+---@field hl_group         string   Highlight group for target text (default "Comment").
+
+-- ── auto_reveal ───────────────────────────────────────────────────────────────
+
+---@class FiletreeAutoRevealConfig
+---@field enabled      boolean
+---@field debounce_ms  integer   Delay after BufEnter (default 150ms).
+---@field ignore_ft    string[]  Filetypes that never trigger reveal.
+---@field only_if_open boolean   Only reveal when tree window is visible (default true).
 
 -- ── lsp_diagnostics ──────────────────────────────────────────────────────────
 

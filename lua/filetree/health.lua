@@ -101,6 +101,9 @@ function M.check()
     { key = "lsp_diagnostics",    name = "LSP Diagnostics"       },
     { key = "size_info",          name = "Size Info"             },
     { key = "notes",              name = "Notes"                 },
+    { key = "create_from_template", name = "Create From Template" },
+    { key = "symlink",            name = "Symlink"               },
+    { key = "auto_reveal",        name = "Auto Reveal"           },
   }
 
   -- Extra check for trash backend availability

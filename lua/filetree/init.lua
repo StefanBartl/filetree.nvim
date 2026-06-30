@@ -43,6 +43,9 @@ local FEATURES = {
   lsp_diagnostics     = { mod = "filetree.features.lsp_diagnostics",     key = "lsp_diagnostics"     },
   size_info           = { mod = "filetree.features.size_info",           key = "size_info"           },
   notes               = { mod = "filetree.features.notes",               key = "notes"               },
+  create_from_template = { mod = "filetree.features.create_from_template", key = "create_from_template" },
+  symlink             = { mod = "filetree.features.symlink",             key = "symlink"             },
+  auto_reveal         = { mod = "filetree.features.auto_reveal",         key = "auto_reveal"         },
 }
 
 ---@type table<string, table>  name → loaded feature module

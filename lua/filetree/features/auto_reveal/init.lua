@@ -1,0 +1,196 @@
+---@module 'filetree.features.auto_reveal'
+---@brief Automatically reveal the current editor buffer in the tree.
+---@description
+--- Unlike cwd_sync (which changes the working directory), auto_reveal only
+--- calls adapter.reveal(path) to scroll and highlight the current file in
+--- the tree without changing the cwd or the tree's root.
+---
+--- Debounced to avoid spam during rapid buffer switching. Automatically
+--- pauses when the cursor is inside the tree window to prevent feedback
+--- loops. Can also be paused programmatically (e.g. during batch ops).
+---
+--- Config:
+---   enabled        boolean
+---   debounce_ms    integer   Delay after BufEnter (default 150ms).
+---   ignore_ft      string[]  Filetypes to never trigger reveal (e.g. lazy, mason).
+---   only_if_open   boolean   Only reveal when tree window is visible (default true).
+---
+--- User commands:
+---   :FiletreeAutoRevealPause [ms]   Pause for N ms (default 2000).
+---   :FiletreeAutoRevealResume       Resume immediately.
+---   :FiletreeRevealCurrent          Force reveal now.
+
+local notify = require("filetree.util.notify").create("[filetree.auto_reveal]")
+
+local M = {}
+
+---@type FiletreeAutoRevealConfig
+local _cfg = {
+  enabled      = false,
+  debounce_ms  = 150,
+  ignore_ft    = {
+    "neo-tree", "NvimTree", "netrw",
+    "TelescopePrompt", "fzf",
+    "lazy", "mason", "trouble", "qf",
+    "help", "man", "terminal",
+    "nofile", "prompt",
+  },
+  only_if_open = true,
+}
+
+---@type FiletreeAdapter?
+local _adapter = nil
+
+---@type integer  monotonic timestamp (vim.uv.hrtime) after which reveals are active
+local _paused_until = 0
+
+---@type any?
+local _timer = nil
+
+-- ── Helpers ───────────────────────────────────────────────────────────────────
+
+local function is_paused()
+  return (vim.uv or vim.loop).hrtime() < _paused_until
+end
+
+local function tree_is_open()
+  if not _adapter then return false end
+  local winid = _adapter.get_winid and _adapter.get_winid() or -1
+  return winid > 0 and vim.api.nvim_win_is_valid(winid)
+end
+
+local function cursor_in_tree()
+  if not _adapter then return false end
+  local winid = _adapter.get_winid and _adapter.get_winid() or -1
+  return winid > 0 and vim.api.nvim_get_current_win() == winid
+end
+
+local function should_ignore(bufnr)
+  local ft = vim.bo[bufnr].filetype
+  local bt = vim.bo[bufnr].buftype
+  if bt ~= "" and bt ~= "acwrite" then return true end
+  for _, ignored in ipairs(_cfg.ignore_ft) do
+    if ft == ignored then return true end
+  end
+  return false
+end
+
+-- ── Reveal logic ──────────────────────────────────────────────────────────────
+
+local function do_reveal(path)
+  if not _adapter or not _adapter.reveal then return end
+  if is_paused() then return end
+  if cursor_in_tree() then return end
+  if _cfg.only_if_open and not tree_is_open() then return end
+  pcall(_adapter.reveal, path)
+end
+
+local function schedule_reveal(path)
+  local uv = vim.uv or vim.loop
+  if _timer then pcall(function() _timer:stop() end)
+  else _timer = uv.new_timer() end
+  _timer:start(_cfg.debounce_ms, 0, vim.schedule_wrap(function()
+    do_reveal(path)
+  end))
+end
+
+-- ── Public API ────────────────────────────────────────────────────────────────
+
+---Pause auto-reveal for `ms` milliseconds.
+---@param ms? integer  Default 2000ms.
+function M.pause(ms)
+  ms = ms or 2000
+  _paused_until = (vim.uv or vim.loop).hrtime() + (ms * 1e6)
+end
+
+---Resume auto-reveal immediately.
+function M.resume()
+  _paused_until = 0
+end
+
+---Force-reveal the current buffer right now.
+function M.reveal_current()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local path  = vim.api.nvim_buf_get_name(bufnr)
+  if path and path ~= "" and vim.fn.filereadable(path) == 1 then
+    do_reveal(path)
+  end
+end
+
+---@return boolean
+function M.is_paused()
+  return is_paused()
+end
+
+-- ── Setup ─────────────────────────────────────────────────────────────────────
+
+---@type integer?
+local _augroup = nil
+
+---@param config FiletreeAutoRevealConfig
+---@param adapter FiletreeAdapter
+function M.setup(config, adapter)
+  if not config.enabled then return end
+  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _adapter = adapter
+
+  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
+  _augroup = vim.api.nvim_create_augroup("filetree_auto_reveal", { clear = true })
+
+  vim.api.nvim_create_autocmd("BufEnter", {
+    group    = _augroup,
+    callback = function(ev)
+      if should_ignore(ev.buf) then return end
+      local path = vim.api.nvim_buf_get_name(ev.buf)
+      if path and path ~= "" and vim.fn.filereadable(path) == 1 then
+        schedule_reveal(path)
+      end
+    end,
+  })
+
+  -- Auto-pause when user enters the tree window
+  vim.api.nvim_create_autocmd("WinEnter", {
+    group    = _augroup,
+    callback = function()
+      local ft = vim.bo.filetype
+      if ft == "neo-tree" or ft == "NvimTree" then
+        -- Short pause so that the reveal triggered by WinEnter doesn't
+        -- immediately jump again when the user leaves the tree
+        M.pause(500)
+      end
+    end,
+  })
+
+  vim.api.nvim_create_user_command("FiletreeAutoRevealPause", function(args)
+    local ms = tonumber(args.args) or 2000
+    M.pause(ms)
+    notify.info(string.format("Auto-reveal paused for %dms", ms))
+  end, { nargs = "?", desc = "Pause auto-reveal for N ms" })
+
+  vim.api.nvim_create_user_command("FiletreeAutoRevealResume", function()
+    M.resume()
+    notify.info("Auto-reveal resumed")
+  end, { desc = "Resume auto-reveal" })
+
+  vim.api.nvim_create_user_command("FiletreeRevealCurrent", function()
+    M.reveal_current()
+  end, { desc = "Reveal current buffer in tree" })
+end
+
+function M.teardown()
+  _adapter = nil
+  _paused_until = 0
+  if _timer then
+    pcall(function() _timer:stop(); _timer:close() end)
+    _timer = nil
+  end
+  if _augroup then
+    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    _augroup = nil
+  end
+  pcall(vim.api.nvim_del_user_command, "FiletreeAutoRevealPause")
+  pcall(vim.api.nvim_del_user_command, "FiletreeAutoRevealResume")
+  pcall(vim.api.nvim_del_user_command, "FiletreeRevealCurrent")
+end
+
+return M
