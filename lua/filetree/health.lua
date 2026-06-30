@@ -122,6 +122,9 @@ function M.check()
     { key = "smart_rename",           name = "Smart Rename (LSP)"      },
     { key = "tag_system",             name = "Tag System"              },
     { key = "telescope_integration",  name = "Telescope Integration"   },
+    { key = "path_copy",              name = "Path Copy"               },
+    { key = "diagnostics_filter",     name = "Diagnostics Filter"      },
+    { key = "live_search",            name = "Live Search"             },
   }
 
   -- Extra check for trash backend availability

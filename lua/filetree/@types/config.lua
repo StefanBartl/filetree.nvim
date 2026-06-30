@@ -53,6 +53,9 @@
 ---@field smart_rename            FiletreeSmartRenameConfig?
 ---@field tag_system              FiletreeTagSystemConfig?
 ---@field telescope_integration   FiletreeTelescopeConfig?
+---@field path_copy               FiletreePathCopyConfig?
+---@field diagnostics_filter      FiletreeDiagnosticsFilterConfig?
+---@field live_search             FiletreeLiveSearchConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -480,5 +483,38 @@
 ---@field enabled        boolean
 ---@field backend        "auto"|"telescope"|"fzf-lua"|"builtin"  Backend (default "auto").
 ---@field keymap_prefix  string?  Global keymap prefix for all pickers.
+
+-- ── path_copy ────────────────────────────────────────────────────────────────
+
+---@class FiletreePathCopyConfig
+---@field enabled       boolean
+---@field keymap_pick   string?  Opens format picker (default "yp").
+---@field keymap_abs    string?  Copy absolute path (default "ya").
+---@field keymap_rel    string?  Copy relative path (default "yr").
+---@field keymap_name   string?  Copy filename only (default "yn").
+---@field notify        boolean  Show notification after copy (default true).
+
+-- ── diagnostics_filter ───────────────────────────────────────────────────────
+
+---@class FiletreeDiagnosticsFilterConfig
+---@field enabled       boolean
+---@field min_severity  integer  Minimum severity to show in filter (1=ERROR, default).
+---@field show_counts   boolean  Render EOL error/warning counts (default true).
+---@field count_icons   string[] Icons for error/warn/info/hint (default " E"/" W"/" I"/" H").
+---@field hl_groups     string[] Hl groups for each severity (DiagnosticError etc.).
+---@field filter_hl     string   Hl for dimmed non-diagnostic nodes (default "Comment").
+---@field debounce_ms   integer  DiagnosticChanged debounce (default 500ms).
+---@field keymap        string?  Toggle filter key inside tree (default "df").
+
+-- ── live_search ──────────────────────────────────────────────────────────────
+
+---@class FiletreeLiveSearchConfig
+---@field enabled           boolean
+---@field keymap            string?  Key to open live search (default "/").
+---@field match             "name"|"path"  Match against filename or full path (default "name").
+---@field hl_match          string   Highlight for matched nodes (default "Search").
+---@field hl_dim            string   Highlight for non-matched nodes (default "Comment").
+---@field commit_to_filter  boolean  Enter pushes query to filter feature (default true).
+---@field debounce_ms       integer  TextChanged debounce (default 80ms).
 
 return {}

@@ -65,6 +65,9 @@ local FEATURES = {
   smart_rename        = { mod = "filetree.features.smart_rename",        key = "smart_rename"        },
   tag_system          = { mod = "filetree.features.tag_system",          key = "tag_system"          },
   telescope_integration = { mod = "filetree.features.telescope_integration", key = "telescope_integration" },
+  path_copy           = { mod = "filetree.features.path_copy",           key = "path_copy"           },
+  diagnostics_filter  = { mod = "filetree.features.diagnostics_filter",  key = "diagnostics_filter"  },
+  live_search         = { mod = "filetree.features.live_search",         key = "live_search"         },
 }
 
 ---@type table<string, table>  name → loaded feature module

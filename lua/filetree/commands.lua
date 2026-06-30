@@ -310,6 +310,31 @@ local TREE = {
     tags      = function(_) local f = ft("telescope_integration"); if f then f.tags()         end end,
   },
 
+  -- ── path_copy ─────────────────────────────────────────────────────────────────
+  copy = {
+    absolute = function(_) local f = ft("path_copy"); if f then f.copy_absolute() end end,
+    relative = function(_) local f = ft("path_copy"); if f then f.copy_relative() end end,
+    name     = function(_) local f = ft("path_copy"); if f then f.copy_name()     end end,
+    dirname  = function(_) local f = ft("path_copy"); if f then f.copy_dirname()  end end,
+    uri      = function(_) local f = ft("path_copy"); if f then f.copy_uri()      end end,
+    line     = function(_) local f = ft("path_copy"); if f then f.copy_line()     end end,
+    stem     = function(_) local f = ft("path_copy"); if f then f.copy_stem()     end end,
+    pick     = function(_) local f = ft("path_copy"); if f then f.pick()          end end,
+  },
+
+  -- ── diagnostics_filter ───────────────────────────────────────────────────────
+  diag = {
+    filter   = function(_) local f = ft("diagnostics_filter"); if f then f.toggle_filter() end end,
+    refresh  = function(_) local f = ft("diagnostics_filter"); if f then f.refresh()       end end,
+    severity = function(a) local f = ft("diagnostics_filter"); if f then f.set_severity(a[1]) end end,
+  },
+
+  -- ── live_search ──────────────────────────────────────────────────────────────
+  search = {
+    [""]    = function(_) local f = ft("live_search"); if f then f.open()  end end,
+    clear   = function(_) local f = ft("live_search"); if f then f.clear() end end,
+  },
+
   -- ── health ───────────────────────────────────────────────────────────────────
   health = function(_) vim.cmd("checkhealth filetree") end,
 }
