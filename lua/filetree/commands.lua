@@ -354,6 +354,12 @@ local TREE = {
     exec = function(_) local f = ft("file_permissions"); if f then f.toggle_exec()  end end,
   },
 
+  -- ── node_info ────────────────────────────────────────────────────────────────
+  info = {
+    [""] = function(_) local f = ft("node_info"); if f then f.show_current() end end,
+    close = function(_) local f = ft("node_info"); if f then f.close() end end,
+  },
+
   -- ── health ───────────────────────────────────────────────────────────────────
   health = function(_) vim.cmd("checkhealth filetree") end,
 }

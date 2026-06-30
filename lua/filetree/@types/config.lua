@@ -59,6 +59,7 @@
 ---@field quick_open              FiletreeQuickOpenConfig?
 ---@field harpoon_integration     FiletreeHarpoonConfig?
 ---@field file_permissions        FiletreeFilePermissionsConfig?
+---@field node_info               FiletreeNodeInfoConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -549,5 +550,13 @@
 ---@field keymap_exec   string?  Toggle execute bit (default "gx").
 ---@field keymap_chmod  string?  Interactive chmod prompt (default "gX").
 ---@field keymap_show   string?  Show stat details (default "gP").
+
+-- ── node_info ────────────────────────────────────────────────────────────────
+
+---@class FiletreeNodeInfoConfig
+---@field enabled          boolean
+---@field keymap           string?   Key inside tree (default "I").
+---@field show_lines       boolean   Show line count for files (default true).
+---@field max_lines_size   integer   Skip line count for files larger than this in bytes (default 5MB).
 
 return {}

@@ -128,6 +128,7 @@ function M.check()
     { key = "quick_open",             name = "Quick Open (Frecency)"   },
     { key = "harpoon_integration",    name = "Harpoon Integration"     },
     { key = "file_permissions",       name = "File Permissions"        },
+    { key = "node_info",              name = "Node Info"               },
   }
 
   -- Extra check for trash backend availability

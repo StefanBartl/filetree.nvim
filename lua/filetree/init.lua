@@ -71,6 +71,7 @@ local FEATURES = {
   quick_open          = { mod = "filetree.features.quick_open",          key = "quick_open"          },
   harpoon_integration = { mod = "filetree.features.harpoon_integration", key = "harpoon_integration" },
   file_permissions    = { mod = "filetree.features.file_permissions",    key = "file_permissions"    },
+  node_info           = { mod = "filetree.features.node_info",           key = "node_info"           },
 }
 
 ---@type table<string, table>  name → loaded feature module
