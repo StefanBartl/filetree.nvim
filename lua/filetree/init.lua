@@ -19,6 +19,10 @@ local _initialized = false
 ---@type table<string, { mod: string, key: string }>
 local FEATURES = {
   ignore_list         = { mod = "filetree.features.ignore_list",         key = "ignore_list"         },
+  cursor_hide         = { mod = "filetree.features.cursor_hide",         key = "cursor_hide"         },
+  tree_reset          = { mod = "filetree.features.tree_reset",          key = "tree_reset"          },
+  open_replace        = { mod = "filetree.features.open_replace",        key = "open_replace"        },
+  reveal_alt          = { mod = "filetree.features.reveal_alt",          key = "reveal_alt"          },
   picker              = { mod = "filetree.features.picker",              key = "picker"              },
   layout_guard        = { mod = "filetree.features.layout_guard",        key = "layout_guard"        },
   cwd_sync            = { mod = "filetree.features.cwd_sync",            key = "cwd_sync"            },

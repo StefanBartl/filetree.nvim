@@ -18,12 +18,16 @@ local M = {}
 
 ---@type FiletreePreviewConfig
 local _cfg = {
-  enabled    = false,
-  keymap     = "<Tab>",
-  max_lines  = 40,
-  max_width  = 80,
-  max_height = 25,
-  wrap       = false,
+  enabled              = false,
+  keymap               = "<Tab>",
+  max_lines            = 40,
+  max_width            = 80,
+  max_height           = 25,
+  wrap                 = false,
+  keymap_scroll_up     = "<C-b>",
+  keymap_scroll_down   = "<C-f>",
+  keymap_scroll_up10   = "<PageUp>",
+  keymap_scroll_down10 = "<PageDown>",
 }
 
 ---@type FiletreeAdapter?
@@ -154,6 +158,22 @@ local function open_preview(node)
 
   vim.api.nvim_set_option_value("winhl",
     "Normal:NormalFloat,FloatBorder:FloatBorder", { win = _win })
+
+  -- Always start at the top of the file (no stale scroll from previous preview)
+  pcall(vim.api.nvim_win_set_cursor, _win, { 1, 0 })
+end
+
+-- ── Scroll helper ─────────────────────────────────────────────────────────────
+
+---Scroll the preview window by `delta` lines (positive = up, negative = down).
+---@param delta integer
+local function scroll_preview(delta)
+  if not (_win and vim.api.nvim_win_is_valid(_win)) then return end
+  local buf   = vim.api.nvim_win_get_buf(_win)
+  local total = vim.api.nvim_buf_line_count(buf)
+  local cur   = vim.api.nvim_win_get_cursor(_win)[1]
+  local next  = math.max(1, math.min(total, cur - delta))
+  pcall(vim.api.nvim_win_set_cursor, _win, { next, 0 })
 end
 
 -- ── Toggle action ─────────────────────────────────────────────────────────────
@@ -191,23 +211,38 @@ function M.setup(config, adapter)
   if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
   _augroup = vim.api.nvim_create_augroup("filetree_preview", { clear = true })
 
-  if _cfg.keymap then
-    vim.api.nvim_create_autocmd("FileType", {
-      group   = _augroup,
-      pattern = "neo-tree,NvimTree",
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
+  vim.api.nvim_create_autocmd("FileType", {
+    group   = _augroup,
+    pattern = "neo-tree,NvimTree",
+    callback = function(ev)
+      local buf = ev.buf
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+
+        if _cfg.keymap then
           vim.keymap.set("n", _cfg.keymap, M.toggle, {
-            buffer = buf,
-            silent = true,
-            desc   = "Filetree: toggle file preview",
+            buffer = buf, silent = true, desc = "Filetree: toggle file preview",
           })
-        end)
-      end,
-    })
-  end
+        end
+
+        local scroll_keys = {
+          { _cfg.keymap_scroll_up,     1  },
+          { _cfg.keymap_scroll_down,   -1 },
+          { _cfg.keymap_scroll_up10,   10 },
+          { _cfg.keymap_scroll_down10, -10 },
+        }
+        for _, pair in ipairs(scroll_keys) do
+          local key, delta = pair[1], pair[2]
+          if key then
+            vim.keymap.set("n", key, function() scroll_preview(delta) end, {
+              buffer = buf, silent = true,
+              desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down"),
+            })
+          end
+        end
+      end)
+    end,
+  })
 
   -- Auto-close when leaving tree buffer
   vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {

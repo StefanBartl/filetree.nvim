@@ -23,6 +23,10 @@
 
 ---@class FiletreeFeaturesConfig
 ---@field ignore_list         FiletreeIgnoreListConfig?
+---@field cursor_hide         FiletreeCursorHideConfig?
+---@field tree_reset          FiletreeTreeResetConfig?
+---@field open_replace        FiletreeOpenReplaceConfig?
+---@field reveal_alt          FiletreeRevealAltConfig?
 ---@field picker              FiletreePickerConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
@@ -350,12 +354,16 @@
 -- ── preview ───────────────────────────────────────────────────────────────────
 
 ---@class FiletreePreviewConfig
----@field enabled    boolean
----@field keymap     string?  Normal-mode key inside tree buffer (default "<Tab>").
----@field max_lines  integer  Max lines to read for text preview (default 40).
----@field max_width  integer  Max floating window width in columns (default 80).
----@field max_height integer  Max floating window height in lines (default 25).
----@field wrap       boolean  Enable line wrapping in the preview window (default false).
+---@field enabled              boolean
+---@field keymap               string?  Normal-mode key to toggle preview (default "<Tab>").
+---@field max_lines            integer  Max lines to read for text preview (default 40).
+---@field max_width            integer  Max floating window width in columns (default 80).
+---@field max_height           integer  Max floating window height in lines (default 25).
+---@field wrap                 boolean  Enable line wrapping in the preview window (default false).
+---@field keymap_scroll_up     string?  Scroll preview up 1 line (default "<C-b>").
+---@field keymap_scroll_down   string?  Scroll preview down 1 line (default "<C-f>").
+---@field keymap_scroll_up10   string?  Scroll preview up 10 lines (default "<PageUp>").
+---@field keymap_scroll_down10 string?  Scroll preview down 10 lines (default "<PageDown>").
 
 -- ── color_labels ─────────────────────────────────────────────────────────────
 
@@ -632,5 +640,29 @@
 ---@field auto_types_template  boolean   @types dirs → ---@meta template (default true).
 ---@field auto_module_annot    boolean   .lua files → ---@module annotation (default true).
 ---@field ask_clipboard        boolean   Ask whether to paste clipboard content (default true).
+
+-- ── cursor_hide ───────────────────────────────────────────────────────────────
+
+---@class FiletreeCursorHideConfig
+---@field enabled  boolean  Hide block cursor while tree window is focused (uses winhighlight, not global Cursor hl).
+
+-- ── tree_reset ────────────────────────────────────────────────────────────────
+
+---@class FiletreeTreeResetConfig
+---@field enabled  boolean
+---@field keymap   string?  Key in tree buffer (default "<Esc>"). Clears preview, filter, live-search, watcher quarantine, and search highlights.
+
+-- ── open_replace ──────────────────────────────────────────────────────────────
+
+---@class FiletreeOpenReplaceConfig
+---@field enabled     boolean
+---@field keymap      string?   Key in tree buffer (default "O").
+---@field close_tree  boolean   Close the tree after opening the file (default true).
+
+-- ── reveal_alt ────────────────────────────────────────────────────────────────
+
+---@class FiletreeRevealAltConfig
+---@field enabled  boolean
+---@field keymap   string?  Key in tree buffer (default "B"). Reveals the alternate buffer (#) in the tree.
 
 return {}
