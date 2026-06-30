@@ -354,6 +354,16 @@ local TREE = {
     exec = function(_) local f = ft("file_permissions"); if f then f.toggle_exec()  end end,
   },
 
+  -- ── lua_require_copy ─────────────────────────────────────────────────────────
+  require = {
+    [""] = function(_)
+      local f = ft("lua_require_copy"); if f then f.copy_require() end
+    end,
+    relative = function(_)
+      local f = ft("lua_require_copy"); if f then f.copy_require_relative() end
+    end,
+  },
+
   -- ── tree_traverse ─────────────────────────────────────────────────────────────
   traverse = {
     up   = function(_) local f = ft("tree_traverse"); if f then f.up()   end end,

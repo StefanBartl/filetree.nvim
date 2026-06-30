@@ -73,6 +73,7 @@ local FEATURES = {
   file_permissions    = { mod = "filetree.features.file_permissions",    key = "file_permissions"    },
   node_info           = { mod = "filetree.features.node_info",           key = "node_info"           },
   tree_traverse       = { mod = "filetree.features.tree_traverse",       key = "tree_traverse"       },
+  lua_require_copy    = { mod = "filetree.features.lua_require_copy",    key = "lua_require_copy"    },
 }
 
 ---@type table<string, table>  name → loaded feature module

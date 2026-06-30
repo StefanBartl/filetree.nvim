@@ -61,6 +61,7 @@
 ---@field file_permissions        FiletreeFilePermissionsConfig?
 ---@field node_info               FiletreeNodeInfoConfig?
 ---@field tree_traverse           FiletreeTreeTraverseConfig?
+---@field lua_require_copy        FiletreeLuaRequireCopyConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -567,5 +568,11 @@
 ---@field keymap_up     string?   Navigate to parent directory (default "<BS>").
 ---@field keymap_down   string?   Set current dir as root (default "]r").
 ---@field sync_cwd      boolean   Also change Vim's cwd (default true).
+
+-- ── lua_require_copy ─────────────────────────────────────────────────────────
+
+---@class FiletreeLuaRequireCopyConfig
+---@field enabled   boolean
+---@field keymap    string?   Key inside tree (default "rq").
 
 return {}
