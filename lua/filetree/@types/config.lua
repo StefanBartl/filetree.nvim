@@ -44,6 +44,9 @@
 ---@field compare_dirs         FiletreeCompareDirsConfig?
 ---@field pin_node             FiletreePinNodeConfig?
 ---@field workspace            FiletreeWorkspaceConfig?
+---@field color_labels         FiletreeColorLabelsConfig?
+---@field jump_list            FiletreeJumpListConfig?
+---@field outline              FiletreeOutlineConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
@@ -314,6 +317,32 @@
 ---@field max_width  integer  Max floating window width in columns (default 80).
 ---@field max_height integer  Max floating window height in lines (default 25).
 ---@field wrap       boolean  Enable line wrapping in the preview window (default false).
+
+-- ── color_labels ─────────────────────────────────────────────────────────────
+
+---@class FiletreeColorLabelsConfig
+---@field enabled   boolean
+---@field indicator string    Left-column indicator character (default "●").
+---@field keymap    string?   Opens color picker (default "cl").
+---@field labels    FiletreeLabel[]?  Override default label definitions.
+
+-- ── jump_list ─────────────────────────────────────────────────────────────────
+
+---@class FiletreeJumpListConfig
+---@field enabled      boolean
+---@field max_jumps    integer   Ring buffer size (default 50).
+---@field debounce_ms  integer   Dwell time before recording (default 500ms).
+---@field keymap_back  string?   Navigate backwards (default "<C-o>").
+---@field keymap_fwd   string?   Navigate forwards  (default "<C-i>").
+
+-- ── outline ───────────────────────────────────────────────────────────────────
+
+---@class FiletreeOutlineConfig
+---@field enabled    boolean
+---@field keymap     string?   Key inside tree (default "go").
+---@field max_width  integer   Float max width (default 60).
+---@field max_height integer   Float max height (default 25).
+---@field depth      integer   LSP symbol nesting depth (default 3).
 
 -- ── compare_dirs ─────────────────────────────────────────────────────────────
 

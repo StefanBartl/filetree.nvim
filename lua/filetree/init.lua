@@ -56,6 +56,9 @@ local FEATURES = {
   compare_dirs        = { mod = "filetree.features.compare_dirs",        key = "compare_dirs"        },
   pin_node            = { mod = "filetree.features.pin_node",            key = "pin_node"            },
   workspace           = { mod = "filetree.features.workspace",           key = "workspace"           },
+  color_labels        = { mod = "filetree.features.color_labels",        key = "color_labels"        },
+  jump_list           = { mod = "filetree.features.jump_list",           key = "jump_list"           },
+  outline             = { mod = "filetree.features.outline",             key = "outline"             },
 }
 
 ---@type table<string, table>  name → loaded feature module

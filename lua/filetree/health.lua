@@ -113,6 +113,9 @@ function M.check()
     { key = "compare_dirs",       name = "Compare Dirs"          },
     { key = "pin_node",           name = "Pin Node"              },
     { key = "workspace",          name = "Workspace"             },
+    { key = "color_labels",       name = "Color Labels"          },
+    { key = "jump_list",          name = "Jump List"             },
+    { key = "outline",            name = "Outline"               },
   }
 
   -- Extra check for trash backend availability

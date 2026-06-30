@@ -191,6 +191,30 @@ local TREE = {
     end end,
   },
 
+  -- ── color_labels ─────────────────────────────────────────────────────────────
+  label = {
+    set   = function(a)
+      local f = ft("color_labels"); if not f then return end
+      local arg = a[1]
+      if not arg then f.pick_current()
+      elseif tonumber(arg) then f.set_current(tonumber(arg))
+      else f.set_by_name(arg) end
+    end,
+    clear = function(_) local f = ft("color_labels"); if f then f.clear_current() end end,
+    list  = function(_) local f = ft("color_labels"); if f then f.show_list()    end end,
+  },
+
+  -- ── jump_list ────────────────────────────────────────────────────────────────
+  jump = {
+    back    = function(_) local f = ft("jump_list"); if f then f.back()    end end,
+    forward = function(_) local f = ft("jump_list"); if f then f.forward() end end,
+    list    = function(_) local f = ft("jump_list"); if f then f.show()    end end,
+    clear   = function(_) local f = ft("jump_list"); if f then f.clear()   end end,
+  },
+
+  -- ── outline ──────────────────────────────────────────────────────────────────
+  outline = function(_) local f = ft("outline"); if f then f.show_current() end end,
+
   -- ── compare_dirs ─────────────────────────────────────────────────────────────
   compare = {
     marked  = function(_) local f = ft("compare_dirs"); if f then f.compare_marked()  end end,
