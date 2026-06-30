@@ -34,6 +34,11 @@ function M.is_open()
   return false, nil
 end
 
+function M.get_bufnr()
+  local _, bufnr = M.is_open()
+  return bufnr
+end
+
 function M.get_winid()
   local a = api()
   if not a then return nil end

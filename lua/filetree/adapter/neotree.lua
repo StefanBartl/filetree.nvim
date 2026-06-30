@@ -48,6 +48,11 @@ function M.is_open()
   return false, nil
 end
 
+function M.get_bufnr()
+  local _, bufnr = M.is_open()
+  return bufnr
+end
+
 function M.get_winid()
   local state = get_state()
   if not state then return nil end
