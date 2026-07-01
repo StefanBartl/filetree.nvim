@@ -123,6 +123,8 @@ tree-buffer key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYM
 | `shell_run` | Prompt + run a shell command in the node's directory (`i`) |
 | `file_permissions` | Toggle exec bit / chmod / stat (`gx` `gX` `gP`) |
 | `window_size_cycler` | Cycle the tree width through presets (`w`) |
+| `window_style` | Opt-in blank statusline + isolated tree highlights (both off until configured) |
+| `tree_open_keymaps` | Global keys to toggle the tree left/right/float/current _(opt-in)_ |
 | `cursor_hide` | Hide the block cursor inside the tree |
 | `tree_reset` | `<Esc>` clears preview + filter + live search |
 | `diff` / `compare_dirs` | Diff a node (`D`) / compare two directories (`cd`) |
@@ -149,6 +151,7 @@ These stay **off** until you set `{ enabled = true }`, each for a concrete reaso
 | `path_utils` | Redundant with `path_copy` (on by default) — two overlapping path-copy keymap families |
 | `harpoon_integration` | Hard-requires the external [harpoon](https://github.com/ThePrimeagen/harpoon) plugin |
 | `telescope_integration` | Hard-requires telescope; redundant with the builtin-fallback `find_or_grep_menu` / `find_files` |
+| `tree_open_keymaps` | Binds global (not tree-local) normal-mode keys — too opinionated to enable unasked |
 
 ---
 
@@ -308,6 +311,12 @@ require("filetree").setup({
       keymap  = "B",   -- reveal alternate buffer (#) in tree
     },
 
+    window_style = {
+      enabled            = true,   -- default: on, but both effects below default off
+      statusline         = false,  -- true → blank statusline in tree windows
+      highlights_isolate = false,  -- true → link tree HL groups to editor's Normal/NormalNC
+    },
+
     -- ── Off by default (opt-in) ───────────────────────────────────────────
     cwd_sync = {
       enabled       = false,  -- default: off
@@ -332,6 +341,17 @@ require("filetree").setup({
 
     git_actions = {
       enabled = false,        -- default: off (gs collides with live_search)
+    },
+
+    tree_open_keymaps = {
+      enabled          = false,   -- default: off (binds global keys)
+      reveal_force_cwd = false,   -- set tree root to cwd when toggling
+      keymaps = {
+        left    = "<leader>el",
+        right   = "<leader>er",
+        float   = "<leader>ef",
+        current = "<leader>ec",
+      },
     },
 
     -- auto_resize, path_utils, harpoon_integration, telescope_integration are

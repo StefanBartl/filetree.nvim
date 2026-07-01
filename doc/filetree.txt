@@ -155,6 +155,9 @@ reason:
   harpoon_integration    Hard-requires the external harpoon plugin.
   telescope_integration  Hard-requires telescope; redundant with the
                          builtin-fallback find_or_grep_menu / find_files.
+  tree_open_keymaps      Binds global (not tree-local) normal-mode keys to toggle
+                         the tree left/right/float/current — too opinionated to
+                         enable without explicit opt-in.
 
 Everything else in the feature registry is on by default. For the full keymap
 reference see docs/BINDINGS/KEYMAPS.md.
