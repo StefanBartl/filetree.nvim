@@ -4,7 +4,10 @@
 local M = {}
 
 ---@type FiletreeSmartCreateConfig
-local _cfg = {}
+local _cfg = {
+  enabled = false,
+  keymap  = "a",
+}
 ---@type FiletreeAdapter?
 local _adapter = nil
 
@@ -163,12 +166,12 @@ end
 ---@param cfg FiletreeSmartCreateConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = cfg
+  _cfg     = vim.tbl_deep_extend("force", _cfg, cfg or {})
   _adapter = adapter
 
-  if cfg.keymap then
+  if _cfg.keymap then
     local function set_km(buf)
-      vim.keymap.set("n", cfg.keymap, function() M.create() end,
+      vim.keymap.set("n", _cfg.keymap, function() M.create() end,
         { buffer = buf, desc = "filetree: smart create", silent = true })
     end
 

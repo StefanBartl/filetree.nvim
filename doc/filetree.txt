@@ -11,6 +11,7 @@ CONTENTS                                                    *filetree-contents*
   2. Requirements ........................... |filetree-requirements|
   3. Quick start ............................ |filetree-quickstart|
   4. Configuration .......................... |filetree-config|
+     4.1 Default-disabled features ......... |filetree-default-disabled|
   5. Features ............................... |filetree-features|
      5.1 Picker ............................ |filetree-picker|
      5.2 Layout Guard ...................... |filetree-layout-guard|
@@ -25,15 +26,19 @@ CONTENTS                                                    *filetree-contents*
 ==============================================================================
 1. INTRODUCTION                                               *filetree-intro*
 
-filetree.nvim provides powerful file-tree features that work with any
-supported filetree plugin via an adapter pattern:
+filetree.nvim provides a large set of file-tree features that work with any
+supported filetree plugin via an adapter pattern — picker, marks, preview,
+path tools, search/grep, git decorations, batch rename, archives, and many
+more.
 
-  • Two-digit quick-pick mode (picker)
-  • Layout guard (prevent tree-only windows)
-  • Auto-reveal current file (cwd_sync)
-  • Current-file highlighting (current_hl)
-  • Backup before destructive operations (safety)
+filetree.nvim is OPT-OUT: every feature is enabled by default. You do not
+write `enabled = true` to get a feature — you only write `enabled = false` to
+turn one off. A short, deliberately-argued list stays off until you ask for it
+(see |filetree-default-disabled|).
 
+  Minimal setup — the full feature set, nothing to wire up: >lua
+    require("filetree").setup({ adapter = "neotree" })
+<
 Supported backends: neo-tree.nvim, nvim-tree.lua
 
 ==============================================================================
@@ -45,30 +50,35 @@ Supported backends: neo-tree.nvim, nvim-tree.lua
 ==============================================================================
 3. QUICK START                                          *filetree-quickstart*
 
-Minimal setup with neo-tree: >lua
-  require("filetree").setup({
-    adapter = "neotree",
-    features = {
-      picker       = { enabled = true },
-      layout_guard = { enabled = true },
-    },
-  })
+Minimal setup with neo-tree (all features on by default): >lua
+  require("filetree").setup({ adapter = "neotree" })
 <
 
 For nvim-tree: >lua
+  require("filetree").setup({ adapter = "nvimtree" })
+<
+
+Turn things off (or override defaults) only where you want to: >lua
   require("filetree").setup({
-    adapter  = "nvimtree",
-    features = { picker = { enabled = true } },
+    adapter = "neotree",
+    features = {
+      shell_run   = { enabled = false },   -- disable a default-on feature
+      git_actions = { enabled = true },    -- enable a default-off feature
+      marks       = { keymap = "M" },      -- keep on, remap its key
+    },
   })
 <
 
 ==============================================================================
 4. CONFIGURATION                                           *filetree-config*
 
-`setup({})` accepts a |FiletreeConfig| table. All fields are optional; omitted
-keys fall back to the defaults shown below.
+`setup({})` accepts a |FiletreeConfig| table. All fields are optional. Every
+feature is ON by default; omitting a feature leaves it enabled with its default
+options. You only ever set `enabled = false` to turn a default-on feature off,
+or `enabled = true` to turn on one of the opt-in few (|filetree-default-disabled|).
 
->lua
+Representative options with their defaults (the `enabled` line is shown only to
+make the default state explicit — you can drop it): >lua
   require("filetree").setup({
     -- "auto" picks the first available adapter (neotree → nvimtree)
     adapter = "auto",
@@ -76,7 +86,7 @@ keys fall back to the defaults shown below.
     features = {
       -- Quick two-digit picker
       picker = {
-        enabled     = true,
+        enabled     = true,   -- default: on
         index_width = 2,      -- digits per index label
         timeout_ms  = 3000,   -- auto-exit after inactivity
         keymaps = {
@@ -87,29 +97,29 @@ keys fall back to the defaults shown below.
 
       -- Ensure an editor window always exists
       layout_guard = {
-        enabled  = true,
+        enabled  = true,      -- default: on
         delay_ms = 50,
       },
 
-      -- Auto-reveal current file in the tree
+      -- Auto-reveal current file in the tree  (opt-in)
       cwd_sync = {
-        enabled       = false,
+        enabled       = false, -- default: off
         debounce_ms   = 150,
         parent_levels = 0,    -- parent dirs to ascend when revealing
         keep_focus    = true, -- keep focus in editor after reveal
       },
 
-      -- Highlight the current file and its parent dir
+      -- Highlight the current file and its parent dir  (opt-in)
       current_hl = {
-        enabled     = false,
+        enabled     = false,  -- default: off
         file_hl     = { fg = "#7aa2f7", bold = true },
         parent_hl   = { fg = "#565f89" },
         debounce_ms = 100,
       },
 
-      -- Backup files before delete/move
+      -- Backup files before delete/move  (opt-in, API only)
       safety = {
-        enabled     = false,
+        enabled     = false,  -- default: off
         backup_dir  = nil,    -- default: stdpath("data")/filetree/backups
         max_backups = 5,
         dry_run     = false,
@@ -123,6 +133,31 @@ Highlight specs accept:
   • A hex string: `"#7aa2f7"`
   • A link: `"link:Comment"`
   • A named color: `"red"`, `"darkblue"` …
+
+------------------------------------------------------------------------------
+DEFAULT-DISABLED FEATURES                          *filetree-default-disabled*
+
+These features stay OFF until you set `{ enabled = true }`, each for a concrete
+reason:
+
+  cwd_sync               Changes the global cwd automatically on buffer switch;
+                         aggressive, and overlaps auto_reveal / tree_traverse.
+  current_hl             Purely cosmetic; ships hardcoded colours that only fit
+                         some colorschemes.
+  safety                 A backup API with no keymaps; enabling it has no
+                         visible effect unless other code calls into it.
+  auto_resize            Automatic width management fights the manual
+                         window_size_cycler (on by default).
+  git_actions            Default `gs` collides with live_search, and it mutates
+                         the git index (stage/unstage) from the tree.
+  path_utils             Redundant with path_copy (on by default); enabling
+                         both ships two overlapping path-copy keymap families.
+  harpoon_integration    Hard-requires the external harpoon plugin.
+  telescope_integration  Hard-requires telescope; redundant with the
+                         builtin-fallback find_or_grep_menu / find_files.
+
+Everything else in the feature registry is on by default. For the full keymap
+reference see docs/BINDINGS/KEYMAPS.md.
 
 ==============================================================================
 5. FEATURES                                                *filetree-features*

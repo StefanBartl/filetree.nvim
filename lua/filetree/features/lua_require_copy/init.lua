@@ -4,7 +4,10 @@
 local M = {}
 
 ---@type FiletreeLuaRequireCopyConfig
-local _cfg = {}
+local _cfg = {
+  enabled = false,
+  keymap  = "rq",
+}
 ---@type FiletreeAdapter?
 local _adapter = nil
 
@@ -159,12 +162,12 @@ end
 ---@param cfg FiletreeLuaRequireCopyConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = cfg
+  _cfg     = vim.tbl_deep_extend("force", _cfg, cfg or {})
   _adapter = adapter
 
-  if cfg.keymap then
+  if _cfg.keymap then
     local function set_km(buf)
-      vim.keymap.set("n", cfg.keymap, function() M.copy_require() end,
+      vim.keymap.set("n", _cfg.keymap, function() M.copy_require() end,
         { buffer = buf, desc = "filetree: copy as require()", silent = true })
     end
 

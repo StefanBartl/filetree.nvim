@@ -140,9 +140,19 @@ function M.check()
     { key = "smart_create",           name = "Smart Create"            },
   }
 
+  -- Resolve enabled-state under the opt-out model (on by default unless the
+  -- user disabled it, or it is in the default-disabled set).
+  local ok_ft, ft = pcall(require, "filetree")
+  local function is_enabled(key)
+    if ok_ft and type(ft.is_feature_enabled) == "function" then
+      return ft.is_feature_enabled(key)
+    end
+    local fc = feat_cfg[key]
+    return type(fc) == "table" and fc.enabled == true
+  end
+
   -- Extra check for trash backend availability
-  local trash_cfg = feat_cfg["trash"]
-  if trash_cfg and trash_cfg.enabled then
+  if is_enabled("trash") then
     local ok_tp, tp = pcall(require, "filetree.features.trash.platform")
     if ok_tp then
       if tp.available() then
@@ -154,8 +164,7 @@ function M.check()
   end
 
   -- Watcher quarantine: note Windows-only relevance
-  local wq_cfg = feat_cfg["watcher_quarantine"]
-  if wq_cfg and wq_cfg.enabled then
+  if is_enabled("watcher_quarantine") then
     local plat_ok, plat = pcall(require, "filetree.util.platform")
     if plat_ok and not plat.is_windows() and not plat.is_wsl() then
       vim.health.info("watcher_quarantine: no-op on non-Windows platforms")
@@ -163,13 +172,10 @@ function M.check()
   end
 
   for _, f in ipairs(features) do
-    local fcfg = feat_cfg[f.key]
-    if fcfg and fcfg.enabled then
+    if is_enabled(f.key) then
       vim.health.ok(f.name .. " — enabled")
-    elseif fcfg then
-      vim.health.info(f.name .. " — disabled")
     else
-      vim.health.info(f.name .. " — not configured (using defaults)")
+      vim.health.info(f.name .. " — disabled")
     end
   end
 

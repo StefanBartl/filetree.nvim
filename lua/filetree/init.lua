@@ -88,6 +88,41 @@ local FEATURES = {
   smart_create        = { mod = "filetree.features.smart_create",        key = "smart_create"        },
 }
 
+-- ── Default-disabled features ─────────────────────────────────────────────────
+--
+-- filetree.nvim is opt-out: every feature in FEATURES is ON by default. The user
+-- disables what they don't want with `{ enabled = false }`. The short list below
+-- is the exception — features that stay OFF until explicitly enabled, each for a
+-- concrete reason:
+--
+--   cwd_sync              Changes the global cwd automatically on buffer switch;
+--                         aggressive and overlaps auto_reveal / tree_traverse.
+--   current_hl            Purely cosmetic; ships hardcoded colours that only fit
+--                         some colorschemes — better tuned by the user.
+--   safety                A backup API with no keymaps; enabling it has no visible
+--                         effect unless other code calls into it.
+--   auto_resize           Automatic width management fights the manual
+--                         window_size_cycler (kept on by default).
+--   git_actions           Default `gs` collides with live_search, and it mutates
+--                         the git index (stage/unstage) from the tree.
+--   path_utils            Redundant with path_copy (kept on by default); enabling
+--                         both ships two overlapping path-copy keymap families.
+--   harpoon_integration   Hard-requires the external harpoon plugin.
+--   telescope_integration Hard-requires telescope; redundant with the
+--                         builtin-fallback find_or_grep_menu / find_files.
+--
+---@type table<string, boolean>
+local DEFAULT_DISABLED = {
+  cwd_sync              = true,
+  current_hl            = true,
+  safety                = true,
+  auto_resize           = true,
+  git_actions           = true,
+  path_utils            = true,
+  harpoon_integration   = true,
+  telescope_integration = true,
+}
+
 ---@type table<string, table>  name → loaded feature module
 local _active_features = {}
 
@@ -124,11 +159,22 @@ function M.setup(user_config)
   end
   _active_features = {}
 
-  -- Set up each enabled feature
+  -- Set up each enabled feature.
+  -- Opt-out model: a feature runs unless the user set `enabled = false`, or it is
+  -- in DEFAULT_DISABLED and the user did not explicitly set `enabled = true`.
   local feat_cfg = cfg.features or {}
   for name, info in pairs(FEATURES) do
     local fcfg = feat_cfg[name]
-    if fcfg and fcfg.enabled ~= false then
+    local enabled
+    if type(fcfg) == "table" and fcfg.enabled ~= nil then
+      enabled = fcfg.enabled                 -- explicit user choice always wins
+    else
+      enabled = not DEFAULT_DISABLED[name]   -- default: on, except the opt-in few
+    end
+    if enabled then
+      fcfg = fcfg or {}
+      fcfg.enabled = true
+      feat_cfg[name] = fcfg                   -- keep M.config() in sync
       local ok2, feat_mod = pcall(require, info.mod)
       if ok2 and type(feat_mod.setup) == "function" then
         local ok3, setup_err = pcall(feat_mod.setup, fcfg, adapter)
@@ -244,6 +290,20 @@ end
 ---@return table?
 function M.feature(name)
   return _active_features[name]
+end
+
+---Return whether `name` is enabled under the current config and the opt-out
+---rules: on by default unless the user set `enabled = false`, or it is in the
+---default-disabled set and the user did not explicitly set `enabled = true`.
+---@param name string
+---@return boolean
+function M.is_feature_enabled(name)
+  local features = config_mod.get().features
+  local fcfg = features and features[name]
+  if type(fcfg) == "table" and fcfg.enabled ~= nil then
+    return fcfg.enabled == true
+  end
+  return not DEFAULT_DISABLED[name]
 end
 
 ---Register a custom adapter.

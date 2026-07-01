@@ -152,9 +152,12 @@ end
 function M.build_mappings(config)
   local mappings = {}
   local feat_cfg = (config and config.features) or {}
+  -- Opt-out model: every feature in SPEC is on by default (none are in the
+  -- default-disabled set), so a missing config table still means "enabled".
+  -- Only an explicit `enabled = false` removes it from the cheatsheet.
   for feature, entries in pairs(SPEC) do
-    local fc = feat_cfg[feature]
-    if type(fc) == "table" and fc.enabled ~= false then
+    local fc = feat_cfg[feature] or {}
+    if fc.enabled ~= false then
       for _, entry in ipairs(entries) do
         local key = resolve_key(fc, entry)
         if key then
