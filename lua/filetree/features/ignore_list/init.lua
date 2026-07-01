@@ -55,8 +55,11 @@ end
 ---@param names string[]
 ---@param adapter FiletreeAdapter
 local function apply_neotree(names, adapter)
-  local ok, neo_cfg = pcall(require, "neo-tree.config")
-  if not ok or not (neo_cfg and neo_cfg.config) then
+  -- The merged neo-tree config lives on require("neo-tree").config after its
+  -- setup() has run (require("neo-tree.config") does NOT exist in v3.x).
+  local ok, nt = pcall(require, "neo-tree")
+  local ncfg = ok and (nt.config or (type(nt.ensure_config) == "function" and nt.ensure_config())) or nil
+  if not ncfg or not ncfg.filesystem then
     -- neo-tree.setup() hasn't run yet (e.g. lazy=false startup race).
     -- Retry once after VimEnter when all plugin configs have executed.
     vim.api.nvim_create_autocmd("VimEnter", {
@@ -68,12 +71,10 @@ local function apply_neotree(names, adapter)
     return
   end
 
-  local fi = neo_cfg.config.filesystem
-             and neo_cfg.config.filesystem.filtered_items
+  local fi = ncfg.filesystem.filtered_items
   if not fi then
-    neo_cfg.config.filesystem = neo_cfg.config.filesystem or {}
-    neo_cfg.config.filesystem.filtered_items = {}
-    fi = neo_cfg.config.filesystem.filtered_items
+    ncfg.filesystem.filtered_items = {}
+    fi = ncfg.filesystem.filtered_items
   end
 
   fi.hide_by_name = fi.hide_by_name or {}

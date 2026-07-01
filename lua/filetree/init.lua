@@ -203,6 +203,25 @@ function M.setup(user_config)
     })
   end
 
+  -- Auto-inject filetree keymaps into neo-tree's window.mappings so they appear in
+  -- the `?` cheatsheet — no user wiring needed beyond setup().  neo-tree's merged
+  -- config only exists after its own setup() has run, which (with lazy=false) may
+  -- be before or after ours; run once when Neovim has finished starting (all
+  -- lazy=false plugin configs done), and immediately if we loaded post-startup.
+  if adapter.name == "neotree" then
+    local function do_inject()
+      require("filetree.attach").inject(config_mod.get(), adapter)
+    end
+    if vim.v.vim_did_enter == 1 then
+      vim.schedule(function() vim.defer_fn(do_inject, 50) end)
+    else
+      vim.api.nvim_create_autocmd("VimEnter", {
+        once     = true,
+        callback = function() vim.defer_fn(do_inject, 50) end,
+      })
+    end
+  end
+
   _initialized = true
 end
 

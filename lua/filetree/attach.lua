@@ -5,24 +5,25 @@
 --- AFTER the adapter has set up its own buffer-local keymaps.  Those keymaps work,
 --- but they are invisible to neo-tree's `?` cheatsheet, because that help screen is
 --- generated purely from `state.resolved_mappings` — which neo-tree builds from the
---- `window.mappings` table passed to `require("neo-tree").setup(opts)`.
+--- `window.mappings` table (per source config and per live state).
 ---
---- `attach(opts, config)` bridges that gap: called BEFORE `neo-tree.setup(opts)`, it
---- writes an entry `{ handler, desc = "…" }` into `opts.window.mappings` for every
---- enabled feature keymap.  neo-tree then:
----   * binds the key to `handler` (which calls the filetree feature action), and
----   * lists it in the `?` cheatsheet using `desc`.
+--- Two ways to get filetree keymaps into that cheatsheet:
 ---
---- The FileType autocmds still run and re-bind the same keys to the same functions,
---- so behaviour is identical whether or not `attach` is used — `attach` only adds
---- cheatsheet visibility (and native neo-tree multi-key `?` sub-menu grouping).
+---   1. AUTOMATIC (default) — `filetree.setup()` calls `M.inject(config)` after
+---      neo-tree is configured.  It writes `{ handler, desc }` entries into
+---      `require("neo-tree").config[source].window.mappings` (so future tree states
+---      pick them up) and into any already-open state's `window.mappings` (then
+---      refreshes).  No user wiring required — just `require("filetree").setup{…}`.
 ---
---- Usage (in your neo-tree `config` function, before `neo-tree.setup`):
----   local ft_opts = require("config.my_filetree_opts")  -- same table you pass to setup
----   require("filetree").attach(opts, ft_opts)
----   require("neo-tree").setup(opts)
----   ...
----   require("filetree").setup(ft_opts)
+---   2. EXPLICIT — `M.neotree(opts, config)` (exposed as `require("filetree").attach`)
+---      writes the same entries into the `opts` table BEFORE you call
+---      `require("neo-tree").setup(opts)`.  Use this if you prefer not to rely on
+---      post-setup config mutation.
+---
+--- Either way neo-tree binds the key to `handler` (which calls the filetree feature
+--- action) and lists it in `?` using `desc`.  The FileType autocmds still run and
+--- re-bind the same keys to the same functions, so behaviour is identical with or
+--- without this module — it only adds cheatsheet visibility.
 
 local M = {}
 
@@ -130,28 +131,34 @@ local function make_handler(feature, method)
   end
 end
 
+---Normalize a neo-tree map key (e.g. "<C-M>" → "<c-m>") so injected entries merge
+---and display consistently with neo-tree's own normalized mappings.
+---@param key string
+---@return string
+local function normalize_key(key)
+  local ok, helper = pcall(require, "neo-tree.setup.mapping-helper")
+  if ok and type(helper.normalize_map_key) == "function" then
+    local nk = helper.normalize_map_key(key)
+    if type(nk) == "string" then return nk end
+  end
+  return key
+end
+
 -- ── Public API ────────────────────────────────────────────────────────────────
 
----Inject enabled filetree feature keymaps into neo-tree's window.mappings so they
----appear in the `?` cheatsheet.  Call BEFORE `require("neo-tree").setup(opts)`.
----@param opts table       The neo-tree opts table you will pass to setup().
----@param config table     The filetree config table (same one passed to setup()).
----@return table opts      The mutated opts (for chaining).
-function M.neotree(opts, config)
-  opts = opts or {}
-  opts.window = opts.window or {}
-  opts.window.mappings = opts.window.mappings or {}
-  local mappings = opts.window.mappings
-
+---Build the filetree keymap table for neo-tree from a filetree config.
+---@param config table            Filetree config (as passed to setup()).
+---@return table<string, table>   { [lhs] = { handler, desc = "…" } }
+function M.build_mappings(config)
+  local mappings = {}
   local feat_cfg = (config and config.features) or {}
-
   for feature, entries in pairs(SPEC) do
     local fc = feat_cfg[feature]
     if type(fc) == "table" and fc.enabled ~= false then
       for _, entry in ipairs(entries) do
         local key = resolve_key(fc, entry)
         if key then
-          mappings[key] = {
+          mappings[normalize_key(key)] = {
             make_handler(feature, entry.method),
             desc = entry.desc,
           }
@@ -159,8 +166,87 @@ function M.neotree(opts, config)
       end
     end
   end
+  return mappings
+end
 
+---Inject enabled filetree feature keymaps into a neo-tree `opts` table's
+---window.mappings.  Call BEFORE `require("neo-tree").setup(opts)`.
+---@param opts table       The neo-tree opts table you will pass to setup().
+---@param config table     The filetree config table (same one passed to setup()).
+---@return table opts      The mutated opts (for chaining).
+function M.neotree(opts, config)
+  opts = opts or {}
+  opts.window = opts.window or {}
+  opts.window.mappings = opts.window.mappings or {}
+  local mappings = M.build_mappings(config)
+  for k, v in pairs(mappings) do
+    opts.window.mappings[k] = v
+  end
   return opts
+end
+
+---Merge `mappings` into every window.mappings table in `windows`.
+---@param windows table[]  list of neo-tree `window` config tables
+---@param mappings table
+local function merge_into_windows(windows, mappings)
+  for _, w in ipairs(windows) do
+    if type(w) == "table" then
+      w.mappings = w.mappings or {}
+      for k, v in pairs(mappings) do
+        w.mappings[k] = v
+      end
+    end
+  end
+end
+
+---Automatically inject filetree keymaps into the LIVE neo-tree config + any open
+---states, so they show up in `?` without the user wiring up `M.neotree`.
+---Safe to call repeatedly (idempotent merge).  Returns false if neo-tree's config
+---is not ready yet (caller should retry, e.g. at VimEnter).
+---@param config table               Filetree config (as passed to setup()).
+---@param adapter FiletreeAdapter?    Active adapter (used for refresh).
+---@return boolean ok
+function M.inject(config, adapter)
+  local ok_nt, nt = pcall(require, "neo-tree")
+  if not ok_nt then return false end
+  local ncfg = nt.config or (type(nt.ensure_config) == "function" and nt.ensure_config())
+  if type(ncfg) ~= "table" then return false end
+
+  local mappings = M.build_mappings(config)
+  if vim.tbl_isempty(mappings) then return true end
+
+  -- 1. Future states: neo-tree deepcopies each state from these config tables.
+  local windows = {}
+  if type(ncfg.window) == "table" then windows[#windows + 1] = ncfg.window end
+  for _, src in ipairs({ "filesystem", "buffers", "git_status", "document_symbols" }) do
+    local s = ncfg[src]
+    if type(s) == "table" and type(s.window) == "table" then
+      windows[#windows + 1] = s.window
+    end
+  end
+  merge_into_windows(windows, mappings)
+
+  -- 2. Already-open states: patch live window.mappings and force a rebuild of
+  --    resolved_mappings (which neo-tree regenerates from window.mappings on render).
+  local patched_live = false
+  local ok_mgr, mgr = pcall(require, "neo-tree.sources.manager")
+  if ok_mgr and type(mgr._get_all_states) == "function" then
+    for _, state in ipairs(mgr._get_all_states()) do
+      if type(state.window) == "table" then
+        state.window.mappings = state.window.mappings or {}
+        for k, v in pairs(mappings) do state.window.mappings[k] = v end
+        state.resolved_mappings = nil
+        patched_live = true
+      end
+    end
+  end
+
+  -- 3. Refresh so the open tree re-renders and rebinds/re-resolves mappings.
+  if patched_live and adapter and type(adapter.refresh) == "function" then
+    vim.defer_fn(function() pcall(adapter.refresh) end, 50)
+  end
+
+  return true
 end
 
 return M
