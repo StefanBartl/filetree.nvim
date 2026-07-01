@@ -3,14 +3,13 @@
 All keymaps are buffer-local (tree window) unless marked **global**.
 A `?` suffix means the field is optional; omit or set to `false` to disable.
 
-> **Note: by default, filetree.nvim keymaps are not shown in the adapter's `?` cheatsheet.**
-> filetree sets keymaps via `vim.keymap.set()` after the adapter's own setup runs
-> (deferred via `vim.schedule` in a FileType autocmd). They work correctly but are
-> outside the adapter's mapping registry, so the built-in help (`?` in neo-tree,
-> `g?` in nvim-tree) will not list them.
->
-> **neo-tree users can opt in** to cheatsheet visibility — see
-> [neo-tree `?` cheatsheet integration](#neo-tree--cheatsheet-integration) below.
+> **neo-tree `?` cheatsheet:** filetree keymaps are shown there automatically
+> (filetree injects them into neo-tree's mapping registry on `setup()`).
+> For **nvim-tree** (`g?`) and other adapters the keymaps are set via
+> `vim.keymap.set()` in a FileType autocmd, which is outside their help registry,
+> so their built-in help will not list them (the keymaps still work — check with
+> `:nmap` in the tree buffer). See
+> [neo-tree `?` cheatsheet integration](#neo-tree--cheatsheet-integration) for details.
 
 ---
 
@@ -173,30 +172,41 @@ require("filetree").setup({
 
 ## neo-tree `?` cheatsheet integration
 
-neo-tree builds its `?` help screen purely from the `window.mappings` table you
-pass to `require("neo-tree").setup(opts)` — it does **not** read the buffer's
-actual keymaps. Because filetree sets its keymaps via a FileType autocmd (after
-neo-tree's own setup), they work but are invisible to `?`.
+neo-tree builds its `?` help screen from its `window.mappings` config (via
+`state.resolved_mappings`) — it does **not** read the buffer's actual keymaps.
+Because filetree sets its keymaps via a FileType autocmd (after neo-tree's own
+setup), those keymaps work but would normally be invisible to `?`.
 
-To make filetree's keymaps appear in the cheatsheet, call
-`require("filetree").attach(opts, config)` **before** `neo-tree.setup(opts)`.
-It injects a `{ handler, desc }` entry into `opts.window.mappings` for every
-enabled feature keymap, so neo-tree binds the key *and* lists it in `?`.
+### Automatic (default)
 
-Use one shared config table for both `attach` and `setup` so the cheatsheet and
-the live keymaps never drift apart:
+You don't need to do anything. `require("filetree").setup(config)` injects the
+enabled feature keymaps into neo-tree's live config (and any open tree) after
+neo-tree is configured, so they appear in `?` with a `filetree: …` label:
 
 ```lua
--- lua/config/filetree.lua  (single source of truth)
-return {
-  adapter = "neotree",
-  features = {
-    marks         = { enabled = true, keymap = "m" },
-    tree_traverse = { enabled = true, keymap_up = "-", keymap_down = "+" },
-    -- …
-  },
-}
+-- filetree plugin spec — that's it
+config = function()
+  require("filetree").setup({
+    adapter = "neotree",
+    features = {
+      marks         = { enabled = true, keymap = "m" },
+      tree_traverse = { enabled = true, keymap_up = "-", keymap_down = "+" },
+      -- …
+    },
+  })
+end
 ```
+
+The injection runs once when Neovim finishes starting (or immediately if filetree
+is loaded after startup), which handles the `lazy = false` ordering race where
+neo-tree's `setup()` may run before or after filetree's.
+
+### Explicit (optional)
+
+If you'd rather not rely on post-setup config mutation, call
+`require("filetree").attach(opts, config)` **before** `neo-tree.setup(opts)` to
+inject the same entries into the `opts` table yourself. Point both `attach` and
+`setup` at one shared config table so they can't drift:
 
 ```lua
 -- neo-tree plugin spec
@@ -204,20 +214,19 @@ config = function(_, opts)
   require("filetree").attach(opts, require("config.filetree"))
   require("neo-tree").setup(opts)
 end
-```
 
-```lua
 -- filetree plugin spec
 config = function()
   require("filetree").setup(require("config.filetree"))
 end
 ```
 
-Notes:
-- `attach` is neo-tree-specific; it is a no-op design for other adapters (whose
-  help systems differ). Calling it with a non-neotree config is harmless.
-- The FileType autocmds still run, so keymaps behave identically with or without
-  `attach`. `attach` only adds cheatsheet visibility (and native `?` multi-key
-  sub-menu grouping for prefixes like `]m` / `[m`).
+### Notes
+
+- Integration is neo-tree-specific. For other adapters the keymaps still work but
+  won't appear in their native help; verify with `:nmap` in the tree buffer.
+- The FileType autocmds always run, so keymaps behave identically regardless —
+  the injection only adds cheatsheet visibility (and native `?` multi-key sub-menu
+  grouping for prefixes like `]m` / `[m`).
 - Keys resolve from your feature config; a field set to `false` is skipped, and
   omitted fields fall back to the feature's default key.
