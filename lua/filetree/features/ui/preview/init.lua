@@ -247,7 +247,6 @@ local function open_preview(node)
   if ft ~= "" then
     pcall(vim.api.nvim_set_option_value, "filetype", ft, { buf = _bufnr })
   end
-  vim.api.nvim_set_option_value("wrap", _cfg.wrap, { buf = _bufnr })
 
   _win = vim.api.nvim_open_win(_bufnr, false, {
     relative  = "editor",
@@ -264,6 +263,7 @@ local function open_preview(node)
 
   vim.api.nvim_set_option_value("winhl",
     "Normal:NormalFloat,FloatBorder:FloatBorder", { win = _win })
+  vim.api.nvim_set_option_value("wrap", _cfg.wrap, { win = _win })
   pcall(vim.api.nvim_win_set_cursor, _win, { 1, 0 })
 end
 
