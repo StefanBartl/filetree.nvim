@@ -11,7 +11,16 @@ local _ok_libnode, libnode = pcall(require, "lib.nvim.neotree.node")
 if not _ok_libnode then libnode = nil end
 
 ---@class FiletreeNeotreeAdapter : FiletreeAdapter
-local M = { name = "neotree" }
+local M = {
+  name = "neotree",
+  -- UI capabilities consumed by adapter-agnostic features.
+  filetypes = { "neo-tree" },
+  hl_groups = {
+    NeoTreeNormal      = "Normal",
+    NeoTreeNormalNC    = "NormalNC",
+    NeoTreeEndOfBuffer = "EndOfBuffer",
+  },
+}
 
 -- ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -295,6 +304,25 @@ function M.open_cwd()
     position = "left",
   })
   return ok
+end
+
+---Toggle the tree at a given position, optionally revealing a file / setting root.
+---@param position FiletreeTreePosition
+---@param opts? FiletreeToggleOpts
+---@return boolean
+function M.toggle_at(position, opts)
+  opts = opts or {}
+  local commands = get_commands()
+  if not commands then return false end
+  return (pcall(commands.execute, {
+    action      = "focus",
+    source      = "filesystem",
+    position    = position,
+    toggle      = true,
+    reveal      = opts.reveal == true,
+    reveal_file = opts.reveal and opts.file or nil,
+    dir         = opts.dir,
+  }))
 end
 
 function M.close()

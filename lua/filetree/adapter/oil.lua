@@ -4,7 +4,7 @@
 local registry = require("filetree.adapter")
 
 ---@class FiletreeOilAdapter : FiletreeAdapter
-local M = { name = "oil" }
+local M = { name = "oil", filetypes = { "oil" } }
 
 local _ns = nil
 

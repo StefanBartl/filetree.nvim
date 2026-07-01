@@ -5,7 +5,15 @@ local notify = require("filetree.util.notify").create("[filetree.adapter.nvimtre
 local registry = require("filetree.adapter")
 
 ---@class FiletreeNvimtreeAdapter : FiletreeAdapter
-local M = { name = "nvimtree" }
+local M = {
+  name = "nvimtree",
+  filetypes = { "NvimTree" },
+  hl_groups = {
+    NvimTreeNormal      = "Normal",
+    NvimTreeNormalNC    = "NormalNC",
+    NvimTreeEndOfBuffer = "EndOfBuffer",
+  },
+}
 
 -- ── Internal helpers ──────────────────────────────────────────────────────────
 

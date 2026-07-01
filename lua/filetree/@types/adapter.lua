@@ -25,8 +25,25 @@
 ---@field scroll_to_line   fun(line: integer): boolean
 ---@field highlight_node   fun(path: string, hl_group: string): boolean          Optional — return false if unsupported.
 ---@field unhighlight_node fun(path: string): boolean                            Optional — return false if unsupported.
+---
+--- Optional UI capabilities. Features degrade gracefully when an adapter omits
+--- these, so backends can adopt them incrementally.
+---@field filetypes? string[]                    Buffer filetypes this backend's tree uses (e.g. {"neo-tree"}).
+---@field hl_groups? table<string, string>       Tree HL group → editor group, for `window_style.highlights_isolate`.
+---@field toggle_at? fun(position: FiletreeTreePosition, opts?: FiletreeToggleOpts): boolean  Position-aware toggle; return false if unsupported.
 
 ---@alias FiletreeAdapterName "neotree"|"nvimtree"|string
+
+---@alias FiletreeTreePosition
+---| "left"     Sidebar on the left
+---| "right"    Sidebar on the right
+---| "float"    Floating window
+---| "current"  In the current window (netrw-style)
+
+---@class FiletreeToggleOpts
+---@field reveal? boolean   Reveal the current file when opening.
+---@field file?   string?   File to reveal (absolute), when reveal is true.
+---@field dir?    string?   Root directory to open at (nil = leave as-is).
 
 ---@alias FiletreeFilterMode
 ---| "all"       All visible nodes (default)

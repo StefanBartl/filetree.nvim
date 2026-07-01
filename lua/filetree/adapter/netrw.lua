@@ -4,7 +4,7 @@
 local registry = require("filetree.adapter")
 
 ---@class FiletreeNetrwAdapter : FiletreeAdapter
-local M = { name = "netrw" }
+local M = { name = "netrw", filetypes = { "netrw" } }
 
 local _ns = nil
 

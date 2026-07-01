@@ -10,8 +10,11 @@
 ---                        to the editor's own, so the sidebar shares the editor
 ---                        background instead of a plugin-specific one.
 ---
---- Adapted from the neo-tree config's window/disable_statusline + window/highlight
---- helpers, generalized to neo-tree and nvim-tree.
+--- Adapter-agnostic: the tree filetypes and highlight-group names come from the
+--- active adapter's optional `filetypes` / `hl_groups` capabilities, so this
+--- works for any backend that declares them (neo-tree, nvim-tree ship them).
+--- When an adapter omits them, a superset covering all known trees is used as a
+--- harmless fallback.
 ---
 --- Config:
 ---   enabled              boolean
@@ -34,15 +37,36 @@ local _cfg = {
 
 ---@type integer?
 local _augroup = nil
+---@type FiletreeAdapter?
+local _adapter = nil
 
-local _TREE_FT = { ["neo-tree"] = true, ["NvimTree"] = true }
+-- Fallbacks used when the active adapter does not declare the capability.
+local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles" }
+local DEFAULT_HL_GROUPS = {
+  NeoTreeNormal       = "Normal",
+  NeoTreeNormalNC     = "NormalNC",
+  NeoTreeEndOfBuffer  = "EndOfBuffer",
+  NvimTreeNormal      = "Normal",
+  NvimTreeNormalNC    = "NormalNC",
+  NvimTreeEndOfBuffer = "EndOfBuffer",
+}
+
+---Tree filetypes to target — the adapter's if declared, else the superset.
+---@return string[]
+local function tree_filetypes()
+  local ft = _adapter and _adapter.filetypes
+  if type(ft) == "table" and #ft > 0 then return ft end
+  return DEFAULT_FILETYPES
+end
 
 ---Blank the statusline in every tree window of the current tabpage.
 local function apply_statusline()
+  local want = {}
+  for _, f in ipairs(tree_filetypes()) do want[f] = true end
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     if vim.api.nvim_win_is_valid(win) then
       local buf = vim.api.nvim_win_get_buf(win)
-      if vim.api.nvim_buf_is_valid(buf) and _TREE_FT[vim.bo[buf].filetype] then
+      if vim.api.nvim_buf_is_valid(buf) and want[vim.bo[buf].filetype] then
         vim.wo[win].statusline = " "
       end
     end
@@ -51,15 +75,11 @@ end
 
 ---Link tree highlight groups to the editor's own so the sidebar blends in.
 local function isolate_highlights()
-  local links = {
-    NeoTreeNormal      = "Normal",
-    NeoTreeNormalNC    = "NormalNC",
-    NeoTreeEndOfBuffer = "EndOfBuffer",
-    NvimTreeNormal      = "Normal",
-    NvimTreeNormalNC    = "NormalNC",
-    NvimTreeEndOfBuffer = "EndOfBuffer",
-  }
-  for group, target in pairs(links) do
+  local groups = _adapter and _adapter.hl_groups
+  if type(groups) ~= "table" or next(groups) == nil then
+    groups = DEFAULT_HL_GROUPS
+  end
+  for group, target in pairs(groups) do
     pcall(vim.api.nvim_set_hl, 0, group, { link = target })
   end
 end
@@ -67,9 +87,10 @@ end
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---@param config FiletreeWindowStyleConfig
----@param _adapter FiletreeAdapter
-function M.setup(config, _adapter)
-  _cfg = vim.tbl_deep_extend("force", _cfg, config or {})
+---@param adapter FiletreeAdapter
+function M.setup(config, adapter)
+  _cfg     = vim.tbl_deep_extend("force", _cfg, config or {})
+  _adapter = adapter
   if not _cfg.enabled then return end
   -- Nothing to do unless at least one effect is opted into.
   if not (_cfg.statusline or _cfg.highlights_isolate) then return end
@@ -80,7 +101,7 @@ function M.setup(config, _adapter)
   if _cfg.statusline then
     vim.api.nvim_create_autocmd("FileType", {
       group    = _augroup,
-      pattern  = { "neo-tree", "NvimTree" },
+      pattern  = tree_filetypes(),
       callback = function() vim.schedule(apply_statusline) end,
     })
   end

@@ -52,24 +52,16 @@ local function open_at(position)
   local has_file = file ~= "" and vim.fn.filereadable(file) == 1
   local dir = _cfg.reveal_force_cwd and vim.fn.getcwd() or nil
 
-  -- neo-tree: use its command so `position` (and float/current) is honoured.
-  if adapter.name == "neotree" then
-    local ok, cmd = pcall(require, "neo-tree.command")
-    if ok then
-      pcall(cmd.execute, {
-        action      = "focus",
-        source      = "filesystem",
-        position    = position,
-        toggle      = true,
-        reveal      = has_file,
-        reveal_file = has_file and file or nil,
-        dir         = dir,
-      })
+  -- Preferred: the adapter exposes a position-aware toggle (neo-tree does; other
+  -- backends can add `toggle_at` later). Position/float/current live in the
+  -- adapter, keeping this feature plugin-agnostic.
+  if type(adapter.toggle_at) == "function" then
+    if adapter.toggle_at(position, { reveal = has_file, file = file, dir = dir }) then
       return
     end
   end
 
-  -- Generic adapters: position is not expressible, so just reveal / open cwd.
+  -- Fallback for adapters without position support: just reveal / open cwd.
   if has_file and type(adapter.open_reveal) == "function" then
     adapter.open_reveal(file, 0)
   elseif type(adapter.open_cwd) == "function" then
