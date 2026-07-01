@@ -155,7 +155,7 @@ function M.check()
 
   -- Extra check for trash backend availability
   if is_enabled("trash") then
-    local ok_tp, tp = pcall(require, "filetree.features.trash.platform")
+    local ok_tp, tp = pcall(require, "filetree.features.fileops.trash.platform")
     if ok_tp then
       if tp.available() then
         vim.health.ok("Trash backend: " .. tp.backend_name())

@@ -122,7 +122,7 @@ end
 ---@return function
 local function make_handler(feature, method)
   return function()
-    local ok, mod = pcall(require, "filetree.features." .. feature)
+    local ok, mod = require("filetree.features").load(feature)
     if not ok then return end
     local fn = mod[method]
     if type(fn) == "function" then

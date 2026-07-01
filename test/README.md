@@ -166,7 +166,7 @@ Testet: `vim.fn.setreg`, Notifications.
 | # | Test | Erwartung |
 |---|------|-----------|
 | F.9 | Cursor auf `lua/filetree/init.lua`, `rq` | Clipboard enthält `require('filetree')` |
-| F.10 | Cursor auf `lua/filetree/features/marks/init.lua`, `rq` | `require('filetree.features.marks')` |
+| F.10 | Cursor auf `lua/filetree/features/org/marks/init.lua`, `rq` | `require('filetree.features.org.marks')` |
 | F.11 | Cursor auf Verzeichnis `lua/filetree/features/`, `rq` | Alle Lua-Module des Verzeichnisses in Clipboard |
 
 ---

@@ -7,6 +7,7 @@
 local config_mod  = require("filetree.config")
 local adapter_mod = require("filetree.adapter")
 local commands    = require("filetree.commands")
+local registry    = require("filetree.features")
 local notify      = require("filetree.util.notify").create("[filetree]")
 
 local M = {}
@@ -15,80 +16,10 @@ local M = {}
 local _initialized = false
 
 -- ── Feature registry ─────────────────────────────────────────────────────────
-
----@type table<string, { mod: string, key: string }>
-local FEATURES = {
-  ignore_list         = { mod = "filetree.features.ignore_list",         key = "ignore_list"         },
-  cursor_hide         = { mod = "filetree.features.cursor_hide",         key = "cursor_hide"         },
-  tree_reset          = { mod = "filetree.features.tree_reset",          key = "tree_reset"          },
-  open_replace        = { mod = "filetree.features.open_replace",        key = "open_replace"        },
-  reveal_alt          = { mod = "filetree.features.reveal_alt",          key = "reveal_alt"          },
-  buffer_save         = { mod = "filetree.features.buffer_save",         key = "buffer_save"         },
-  window_size_cycler  = { mod = "filetree.features.window_size_cycler",  key = "window_size_cycler"  },
-  open_in_fm          = { mod = "filetree.features.open_in_fm",          key = "open_in_fm"          },
-  shell_run           = { mod = "filetree.features.shell_run",           key = "shell_run"           },
-  picker              = { mod = "filetree.features.picker",              key = "picker"              },
-  layout_guard        = { mod = "filetree.features.layout_guard",        key = "layout_guard"        },
-  cwd_sync            = { mod = "filetree.features.cwd_sync",            key = "cwd_sync"            },
-  current_hl          = { mod = "filetree.features.current_hl",          key = "current_hl"          },
-  safety              = { mod = "filetree.features.safety",              key = "safety"              },
-  trash               = { mod = "filetree.features.trash",               key = "trash"               },
-  watcher_quarantine  = { mod = "filetree.features.watcher_quarantine",  key = "watcher_quarantine"  },
-  marks               = { mod = "filetree.features.marks",               key = "marks"               },
-  diff                = { mod = "filetree.features.diff",                key = "diff"                },
-  project_root        = { mod = "filetree.features.project_root",        key = "project_root"        },
-  path_utils          = { mod = "filetree.features.path_utils",          key = "path_utils"          },
-  git_status          = { mod = "filetree.features.git_status",          key = "git_status"          },
-  bookmarks           = { mod = "filetree.features.bookmarks",           key = "bookmarks"           },
-  preview             = { mod = "filetree.features.preview",             key = "preview"             },
-  rename_batch        = { mod = "filetree.features.rename_batch",        key = "rename_batch"        },
-  session             = { mod = "filetree.features.session",             key = "session"             },
-  open_terminal       = { mod = "filetree.features.open_terminal",       key = "open_terminal"       },
-  copy_move           = { mod = "filetree.features.copy_move",           key = "copy_move"           },
-  find_files          = { mod = "filetree.features.find_files",          key = "find_files"          },
-  filter              = { mod = "filetree.features.filter",              key = "filter"              },
-  grep_in_dir         = { mod = "filetree.features.grep_in_dir",         key = "grep_in_dir"         },
-  recent_files        = { mod = "filetree.features.recent_files",        key = "recent_files"        },
-  breadcrumbs         = { mod = "filetree.features.breadcrumbs",         key = "breadcrumbs"         },
-  lsp_diagnostics     = { mod = "filetree.features.lsp_diagnostics",     key = "lsp_diagnostics"     },
-  size_info           = { mod = "filetree.features.size_info",           key = "size_info"           },
-  notes               = { mod = "filetree.features.notes",               key = "notes"               },
-  create_from_template = { mod = "filetree.features.create_from_template", key = "create_from_template" },
-  symlink             = { mod = "filetree.features.symlink",             key = "symlink"             },
-  auto_reveal         = { mod = "filetree.features.auto_reveal",         key = "auto_reveal"         },
-  archive             = { mod = "filetree.features.archive",             key = "archive"             },
-  git_actions         = { mod = "filetree.features.git_actions",         key = "git_actions"         },
-  auto_resize         = { mod = "filetree.features.auto_resize",         key = "auto_resize"         },
-  ignore_patterns     = { mod = "filetree.features.ignore_patterns",     key = "ignore_patterns"     },
-  file_watcher        = { mod = "filetree.features.file_watcher",        key = "file_watcher"        },
-  hooks_api           = { mod = "filetree.features.hooks_api",           key = "hooks_api"           },
-  compare_dirs        = { mod = "filetree.features.compare_dirs",        key = "compare_dirs"        },
-  pin_node            = { mod = "filetree.features.pin_node",            key = "pin_node"            },
-  workspace           = { mod = "filetree.features.workspace",           key = "workspace"           },
-  color_labels        = { mod = "filetree.features.color_labels",        key = "color_labels"        },
-  jump_list           = { mod = "filetree.features.jump_list",           key = "jump_list"           },
-  outline             = { mod = "filetree.features.outline",             key = "outline"             },
-  duplicate_node      = { mod = "filetree.features.duplicate_node",      key = "duplicate_node"      },
-  git_blame           = { mod = "filetree.features.git_blame",           key = "git_blame"           },
-  open_with           = { mod = "filetree.features.open_with",           key = "open_with"           },
-  smart_rename        = { mod = "filetree.features.smart_rename",        key = "smart_rename"        },
-  tag_system          = { mod = "filetree.features.tag_system",          key = "tag_system"          },
-  telescope_integration = { mod = "filetree.features.telescope_integration", key = "telescope_integration" },
-  path_copy           = { mod = "filetree.features.path_copy",           key = "path_copy"           },
-  diagnostics_filter  = { mod = "filetree.features.diagnostics_filter",  key = "diagnostics_filter"  },
-  live_search         = { mod = "filetree.features.live_search",         key = "live_search"         },
-  quick_open          = { mod = "filetree.features.quick_open",          key = "quick_open"          },
-  harpoon_integration = { mod = "filetree.features.harpoon_integration", key = "harpoon_integration" },
-  file_permissions    = { mod = "filetree.features.file_permissions",    key = "file_permissions"    },
-  node_info           = { mod = "filetree.features.node_info",           key = "node_info"           },
-  tree_traverse       = { mod = "filetree.features.tree_traverse",       key = "tree_traverse"       },
-  lua_require_copy    = { mod = "filetree.features.lua_require_copy",    key = "lua_require_copy"    },
-  find_or_grep_menu   = { mod = "filetree.features.find_or_grep_menu",   key = "find_or_grep_menu"   },
-  copy_file_list      = { mod = "filetree.features.copy_file_list",      key = "copy_file_list"      },
-  smart_create        = { mod = "filetree.features.smart_create",        key = "smart_create"        },
-  window_style        = { mod = "filetree.features.window_style",        key = "window_style"        },
-  tree_open_keymaps   = { mod = "filetree.features.tree_open_keymaps",   key = "tree_open_keymaps"   },
-}
+-- The name → module-path mapping lives in `filetree.features` (a single source of
+-- truth) so features can be organized into category subfolders without any
+-- consumer hard-coding those paths.
+local FEATURES = registry.FEATURES
 
 -- ── Default-disabled features ─────────────────────────────────────────────────
 --
