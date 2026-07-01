@@ -369,6 +369,7 @@
 
 ---@class FiletreePreviewConfig
 ---@field enabled              boolean
+---@field mode                 "buffer"|"float"         Preview target: "buffer" shows the file in the editor window (default); "float" uses a floating window.
 ---@field keymap               string?                  Normal-mode key: toggle text preview; dispatch image/PDF (default "<Tab>").
 ---@field keymap_open          string?                  Normal-mode key: dispatch image/PDF; adapter default for other nodes (default "<CR>").
 ---@field max_lines            integer                  Max lines to read for text preview (default 40).

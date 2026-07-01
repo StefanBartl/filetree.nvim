@@ -1,29 +1,32 @@
 ---@module 'filetree.features.preview'
----@brief Floating file content preview + image/PDF dispatch triggered from the tree.
+---@brief File content preview + image/PDF dispatch triggered from the tree.
 ---@description
---- Opens a floating window showing the content of the file under the cursor.
---- Auto-closes when the cursor leaves the tree buffer or the preview window.
+--- Two preview modes (config `mode`):
 ---
---- Supported content:
----   Text files:   first N lines with syntax highlight via filetype detection.
----   Binary files: hex dump of the first 256 bytes.
----   Directories:  lists immediate children.
----   Images:       opens via system app, or inline via snacks.image / image.nvim.
----   PDFs:         opens via pdfport.nvim, falls back to system app.
+---   "buffer" (default) — show the file in the editor window (the non-tree
+---     window). Moving the cursor over file nodes live-updates it, like
+---     neo-tree's built-in preview. Focus stays in the tree. Toggling off (or
+---     leaving the tree) restores the buffer that was there before.
+---   "float"            — a floating window next to the tree showing the first
+---     N lines / hex dump / directory listing. Auto-closes on leaving the tree.
+---
+--- Images and PDFs are dispatched to an external/inline viewer in both modes.
 ---
 --- Keymaps (defaults):
----   <Tab>  — toggle text preview; image/PDF dispatch for those file types.
+---   <Tab>  — toggle preview; image/PDF dispatch for those file types.
 ---   <CR>   — image/PDF dispatch only; other nodes pass through to adapter's <CR>.
 
 local notify     = require("filetree.util.notify").create("[filetree.preview]")
 local platform   = require("filetree.util.platform")
 local line_count = require("filetree.util.line_count")
+local bufutil    = require("filetree.util.buffer")
 
 local M = {}
 
 ---@type FiletreePreviewConfig
 local _cfg = {
   enabled              = false,
+  mode                 = "buffer",   -- "buffer" | "float"
   keymap               = "<Tab>",
   keymap_open          = "<CR>",
   max_lines            = 40,
@@ -45,10 +48,18 @@ local _cfg = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
----@type integer?  current preview window
+---@type integer?  current float preview window
 local _win  = nil
----@type integer?  current preview buffer
+---@type integer?  current float preview buffer
 local _bufnr = nil
+
+-- Buffer-mode state: preview shown inside an existing editor window.
+---@type boolean
+local _buf_active = false
+---@type integer?  editor window used for buffer-mode preview
+local _editor_win = nil
+---@type integer?  buffer that was in _editor_win before preview started (to restore)
+local _saved_buf = nil
 
 -- ── File-type detection ───────────────────────────────────────────────────────
 
@@ -279,17 +290,79 @@ local function scroll_preview(delta)
   pcall(vim.api.nvim_win_set_cursor, _win, { next, 0 })
 end
 
--- ── Public API ────────────────────────────────────────────────────────────────
+-- ── Buffer-mode preview (show file in the editor window) ────────────────────────
 
-function M.toggle()
-  if _win and vim.api.nvim_win_is_valid(_win) then
-    close_preview()
+---Editor window to preview into: not the tree window, holds a normal buffer.
+---@return integer?
+local function editor_target()
+  local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid() or nil
+  return bufutil.find_editor_win(tree_win)
+end
+
+---Display `path` in the buffer-mode editor window without stealing focus.
+---@param path string
+local function buf_show(path)
+  local win = _editor_win
+  if not (win and vim.api.nvim_win_is_valid(win)) then return end
+  if vim.fn.filereadable(path) ~= 1 then return end
+  local b = vim.fn.bufadd(path)
+  vim.fn.bufload(b)                              -- triggers filetype/syntax
+  pcall(vim.api.nvim_win_set_buf, win, b)        -- set buffer, focus stays in tree
+end
+
+---Stop buffer-mode preview. When `restore` is true, put the original buffer back.
+---@param restore boolean
+local function buf_stop(restore)
+  if restore and _editor_win and vim.api.nvim_win_is_valid(_editor_win)
+     and _saved_buf and vim.api.nvim_buf_is_valid(_saved_buf) then
+    pcall(vim.api.nvim_win_set_buf, _editor_win, _saved_buf)
+  end
+  _buf_active = false
+  _editor_win = nil
+  _saved_buf  = nil
+end
+
+---Start buffer-mode preview for `node`, remembering the editor window's buffer.
+---@param node FiletreeNode
+local function buf_start(node)
+  local win = editor_target()
+  if not win then
+    notify.warn("no editor window to preview into")
     return
   end
+  _editor_win = win
+  _saved_buf  = vim.api.nvim_win_get_buf(win)
+  _buf_active = true
+  if node and node.path and node.path ~= "" and vim.fn.isdirectory(node.path) ~= 1 then
+    buf_show(node.path)
+  end
+end
+
+-- ── Public API ────────────────────────────────────────────────────────────────
+
+---Toggle text/dir preview in the configured mode.
+function M.toggle()
   if not _adapter then return end
+
+  if _cfg.mode == "float" then
+    if _win and vim.api.nvim_win_is_valid(_win) then
+      close_preview()
+      return
+    end
+    local node = _adapter.get_current_node()
+    if not node then notify.warn("no node under cursor"); return end
+    open_preview(node)
+    return
+  end
+
+  -- buffer mode
+  if _buf_active then
+    buf_stop(true)
+    return
+  end
   local node = _adapter.get_current_node()
   if not node then notify.warn("no node under cursor"); return end
-  open_preview(node)
+  buf_start(node)
 end
 
 ---Dispatch for <Tab>: image/PDF open, text preview toggle for everything else.
@@ -348,6 +421,7 @@ end
 
 function M.close()
   close_preview()
+  buf_stop(true)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -398,48 +472,64 @@ function M.setup(config, adapter)
           })
         end
 
-        -- Scroll keymaps
-        local scroll_keys = {
-          { _cfg.keymap_scroll_up,     1  },
-          { _cfg.keymap_scroll_down,   -1 },
-          { _cfg.keymap_scroll_up10,   10 },
-          { _cfg.keymap_scroll_down10, -10 },
-        }
-        for _, pair in ipairs(scroll_keys) do
-          local key, delta = pair[1], pair[2]
-          if key then
-            vim.keymap.set("n", key, function() scroll_preview(delta) end, {
-              buffer = buf, silent = true,
-              desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down"),
-            })
+        -- Scroll keymaps — only in float mode (they'd shadow the tree's own
+        -- <C-b>/<C-f>/<PageUp>/<PageDown> otherwise, and buffer mode has no float
+        -- to scroll; focus the editor window to scroll a buffer preview).
+        if _cfg.mode == "float" then
+          local scroll_keys = {
+            { _cfg.keymap_scroll_up,     1  },
+            { _cfg.keymap_scroll_down,   -1 },
+            { _cfg.keymap_scroll_up10,   10 },
+            { _cfg.keymap_scroll_down10, -10 },
+          }
+          for _, pair in ipairs(scroll_keys) do
+            local key, delta = pair[1], pair[2]
+            if key then
+              vim.keymap.set("n", key, function() scroll_preview(delta) end, {
+                buffer = buf, silent = true,
+                desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down"),
+              })
+            end
           end
         end
       end)
     end,
   })
 
-  -- Auto-close when leaving tree buffer
+  -- Leaving the tree ends the preview. Float: close it. Buffer: deactivate but
+  -- keep the shown file (the user is moving into the editor to use it); toggling
+  -- off from inside the tree is what restores the original buffer.
   vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
     group   = _augroup,
     pattern = "*",
     callback = function(ev)
       local ft = vim.bo[ev.buf].filetype
       if ft == "neo-tree" or ft == "NvimTree" then
-        close_preview()
+        if _cfg.mode == "float" then
+          close_preview()
+        elseif _buf_active then
+          buf_stop(false)
+        end
       end
     end,
   })
 
-  -- Update preview when cursor moves in tree (text preview only)
+  -- Live-update the preview as the cursor moves over tree nodes.
   vim.api.nvim_create_autocmd("CursorMoved", {
     group   = _augroup,
     pattern = "*",
     callback = function()
-      if not (_win and vim.api.nvim_win_is_valid(_win)) then return end
       local ft = vim.bo.filetype
-      if ft == "neo-tree" or ft == "NvimTree" then
-        local node = _adapter and _adapter.get_current_node()
-        if node then open_preview(node) end
+      if ft ~= "neo-tree" and ft ~= "NvimTree" then return end
+      local node = _adapter and _adapter.get_current_node()
+      if not node then return end
+
+      if _cfg.mode == "float" then
+        if _win and vim.api.nvim_win_is_valid(_win) then open_preview(node) end
+      elseif _buf_active then
+        if node.path and node.path ~= "" and vim.fn.isdirectory(node.path) ~= 1 then
+          buf_show(node.path)
+        end
       end
     end,
   })
@@ -447,6 +537,7 @@ end
 
 function M.teardown()
   close_preview()
+  buf_stop(true)
   _adapter = nil
   if _augroup then
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)

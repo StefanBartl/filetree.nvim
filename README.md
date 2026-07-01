@@ -65,7 +65,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 **`ui` — display**
 | Feature | What it does |
 |---|---|
-| `preview` | Toggle floating preview; dispatch images / PDFs (`<Tab>`/`<CR>`) |
+| `preview` | Toggle preview in the editor window (live-updates on cursor move) or a float; dispatch images / PDFs (`<Tab>`/`<CR>`) |
 | `node_info` | Node info float (`I`) |
 | `breadcrumbs` | Path breadcrumbs for the current node |
 | `size_info` | Show file / directory sizes |
@@ -287,9 +287,14 @@ require("filetree").setup({
 
     preview = {
       enabled     = true,      -- default: on
-      keymap      = "<Tab>",   -- text/dir: toggle float; image/PDF: dispatch
+      mode        = "buffer",  -- "buffer": show file in the editor window (default)
+                               -- "float":  floating window next to the tree
+      keymap      = "<Tab>",   -- text/dir: toggle preview; image/PDF: dispatch
       keymap_open = "<CR>",    -- image/PDF: dispatch; other: adapter default
-      max_lines   = 40,
+      max_lines   = 40,        -- float mode: lines to read
+      max_width   = 80,        -- float mode
+      max_height  = 25,        -- float mode
+      wrap        = false,     -- float mode: line wrapping
       image = {
         backend = "auto",     -- "snacks" | "image.nvim" | "system" | false
       },
