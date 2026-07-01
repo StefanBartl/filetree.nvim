@@ -158,6 +158,8 @@ These stay **off** until you set `{ enabled = true }`, each for a concrete reaso
 ## Requirements
 
 - Neovim >= 0.8
+- [lib.nvim](https://github.com/StefanBartl/lib.nvim) — shared helper library (declared
+  dependency; filetree degrades gracefully with local fallbacks if it is missing)
 - **One** of:
   - [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim)
   - [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua)
@@ -173,7 +175,8 @@ These stay **off** until you set `{ enabled = true }`, each for a concrete reaso
   "StefanBartl/filetree.nvim",
   event = "VeryLazy",   -- must load AFTER the tree plugin's config function runs
   dependencies = {
-    -- only ONE of these is needed
+    "StefanBartl/lib.nvim",   -- shared helpers (neo-tree node utils, etc.)
+    -- only ONE tree plugin is needed:
     "nvim-neo-tree/neo-tree.nvim",
     -- or: "nvim-tree/nvim-tree.lua",
   },

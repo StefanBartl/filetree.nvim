@@ -45,6 +45,8 @@ Supported backends: neo-tree.nvim, nvim-tree.lua
 2. REQUIREMENTS                                        *filetree-requirements*
 
   • Neovim >= 0.8
+  • lib.nvim (StefanBartl/lib.nvim) — shared helpers; declared dependency,
+    with local fallbacks if absent
   • One of: neo-tree.nvim, nvim-tree.lua
 
 ==============================================================================

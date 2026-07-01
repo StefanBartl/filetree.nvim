@@ -4,6 +4,12 @@
 local notify = require("filetree.util.notify").create("[filetree.adapter.neotree]")
 local registry = require("filetree.adapter")
 
+-- Shared neo-tree node helpers live in lib.nvim (a declared dependency). We still
+-- pcall it so filetree degrades gracefully to a local fallback if lib.nvim is
+-- absent, matching the adapter's defensive style everywhere else.
+local _ok_libnode, libnode = pcall(require, "lib.nvim.neotree.node")
+if not _ok_libnode then libnode = nil end
+
 ---@class FiletreeNeotreeAdapter : FiletreeAdapter
 local M = { name = "neotree" }
 
@@ -37,6 +43,12 @@ end
 ---@return string? path
 local function node_path(node)
   if not node then return nil end
+  -- Prefer the shared lib.nvim helper when available.
+  if libnode then
+    local p = libnode.get_path(node)
+    return p ~= "" and p or nil
+  end
+  -- Fallback: canonical node.path, then the node id.
   local p = node.path
   if (type(p) ~= "string" or p == "") and node.get_id then
     local ok, id = pcall(node.get_id, node)
@@ -125,6 +137,9 @@ end
 ---@param nodes table[]
 ---@return string[] paths, string[] names
 function M.extract_paths(nodes)
+  if libnode then
+    return libnode.extract_paths(nodes)
+  end
   local paths, names = {}, {}
   for _, node in ipairs(nodes or {}) do
     local p = node_path(node)
