@@ -74,73 +74,9 @@ function M.check()
     end
   end
 
-  -- ── Features ──────────────────────────────────────────────────────────────
-  vim.health.start("filetree.nvim — features")
-
+  -- ── Features (grouped by category, driven by the registry) ─────────────────
   local feat_cfg = cfg.features or {}
-  local features = {
-    { key = "picker",             name = "Quick Picker"          },
-    { key = "layout_guard",       name = "Layout Guard"          },
-    { key = "cwd_sync",           name = "CWD Sync"              },
-    { key = "current_hl",         name = "Current Highlight"     },
-    { key = "safety",             name = "Safety / Backup"       },
-    { key = "trash",              name = "Trash + Undo"          },
-    { key = "watcher_quarantine", name = "Watcher Quarantine"    },
-    { key = "marks",              name = "Node Marks"            },
-    { key = "diff",               name = "File Diff"             },
-    { key = "project_root",       name = "Project Root"          },
-    { key = "path_utils",         name = "Path Utilities"        },
-    { key = "git_status",         name = "Git Status"            },
-    { key = "bookmarks",          name = "Bookmarks"             },
-    { key = "preview",            name = "File Preview"          },
-    { key = "rename_batch",       name = "Rename Batch"          },
-    { key = "session",            name = "Session"               },
-    { key = "open_terminal",      name = "Open Terminal"         },
-    { key = "copy_move",          name = "Copy / Move"           },
-    { key = "find_files",         name = "Find Files"            },
-    { key = "filter",             name = "Filter"                },
-    { key = "grep_in_dir",        name = "Grep In Dir"           },
-    { key = "recent_files",       name = "Recent Files"          },
-    { key = "breadcrumbs",        name = "Breadcrumbs"           },
-    { key = "lsp_diagnostics",    name = "LSP Diagnostics"       },
-    { key = "size_info",          name = "Size Info"             },
-    { key = "notes",              name = "Notes"                 },
-    { key = "create_from_template", name = "Create From Template" },
-    { key = "symlink",            name = "Symlink"               },
-    { key = "auto_reveal",        name = "Auto Reveal"           },
-    { key = "archive",            name = "Archive (zip/tar)"     },
-    { key = "git_actions",        name = "Git Actions"           },
-    { key = "auto_resize",        name = "Auto Resize"           },
-    { key = "ignore_patterns",    name = "Ignore Patterns"       },
-    { key = "file_watcher",       name = "File Watcher"          },
-    { key = "hooks_api",          name = "Hooks API"             },
-    { key = "compare_dirs",       name = "Compare Dirs"          },
-    { key = "pin_node",           name = "Pin Node"              },
-    { key = "workspace",          name = "Workspace"             },
-    { key = "color_labels",       name = "Color Labels"          },
-    { key = "jump_list",          name = "Jump List"             },
-    { key = "outline",            name = "Outline"               },
-    { key = "duplicate_node",         name = "Duplicate Node"          },
-    { key = "git_blame",              name = "Git Blame"               },
-    { key = "open_with",              name = "Open With"               },
-    { key = "smart_rename",           name = "Smart Rename (LSP)"      },
-    { key = "tag_system",             name = "Tag System"              },
-    { key = "telescope_integration",  name = "Telescope Integration"   },
-    { key = "path_copy",              name = "Path Copy"               },
-    { key = "diagnostics_filter",     name = "Diagnostics Filter"      },
-    { key = "live_search",            name = "Live Search"             },
-    { key = "quick_open",             name = "Quick Open (Frecency)"   },
-    { key = "harpoon_integration",    name = "Harpoon Integration"     },
-    { key = "file_permissions",       name = "File Permissions"        },
-    { key = "node_info",              name = "Node Info"               },
-    { key = "tree_traverse",          name = "Tree Traverse"           },
-    { key = "lua_require_copy",       name = "Lua Require Copy"        },
-    { key = "find_or_grep_menu",      name = "Find or Grep Menu"       },
-    { key = "copy_file_list",         name = "Copy File List"          },
-    { key = "smart_create",           name = "Smart Create"            },
-    { key = "window_style",           name = "Window Style"            },
-    { key = "tree_open_keymaps",      name = "Tree Open Keymaps"       },
-  }
+  local registry = require("filetree.features")
 
   -- Resolve enabled-state under the opt-out model (on by default unless the
   -- user disabled it, or it is in the default-disabled set).
@@ -173,11 +109,32 @@ function M.check()
     end
   end
 
-  for _, f in ipairs(features) do
-    if is_enabled(f.key) then
-      vim.health.ok(f.name .. " — enabled")
-    else
-      vim.health.info(f.name .. " — disabled")
+  -- Human-readable category headings + feature names.
+  local CATEGORY_LABELS = {
+    nav = "navigation & reveal", ui = "display / UI", fileops = "file operations",
+    search = "search & filter",  paths = "paths & clipboard", git = "git",
+    org = "marks & organization", system = "system integration", lsp = "LSP",
+    compare = "diff & compare",  integration = "plugin integrations",
+    infra = "infrastructure",
+  }
+  local ACRONYM = { lsp = "LSP", fm = "FM", ui = "UI" }
+  local function humanize(key)
+    local out = {}
+    for word in key:gmatch("[^_]+") do
+      out[#out + 1] = ACRONYM[word] or (word:sub(1, 1):upper() .. word:sub(2))
+    end
+    return table.concat(out, " ")
+  end
+
+  local by_cat = registry.by_category()
+  for _, cat in ipairs(registry.CATEGORY_ORDER) do
+    vim.health.start("filetree.nvim — features: " .. (CATEGORY_LABELS[cat] or cat))
+    for _, name in ipairs(by_cat[cat] or {}) do
+      if is_enabled(name) then
+        vim.health.ok(humanize(name) .. " — enabled")
+      else
+        vim.health.info(humanize(name) .. " — disabled")
+      end
     end
   end
 

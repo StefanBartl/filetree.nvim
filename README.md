@@ -41,11 +41,14 @@
 
 ## Features
 
-All features below are **on by default** unless marked _(opt-in)_ — those few are
-listed under [Default-disabled features](#default-disabled-features). Every
-tree-buffer key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
+Features live in category subfolders under `lua/filetree/features/<category>/` and
+the tables below mirror those categories exactly (same order as
+`filetree.features.CATEGORY_ORDER`, which also drives `:checkhealth filetree`).
+All features are **on by default** unless marked _(opt-in)_ — those are collected
+under [Default-disabled features](#default-disabled-features). Every tree-buffer
+key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 
-**Navigation & reveal**
+**`nav` — navigation & reveal**
 | Feature | What it does |
 |---|---|
 | `picker` | Two-digit overlay to jump to any visible tree node instantly |
@@ -55,8 +58,26 @@ tree-buffer key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYM
 | `reveal_alt` | Reveal the alternate buffer `#` in the tree (`B`) |
 | `auto_reveal` | Scroll/highlight the current file in the tree on buffer switch |
 | `layout_guard` | Opens an editor window when the tree would be the only window |
+| `auto_resize` | Responsive tree width on `VimResized` _(opt-in)_ |
+| `cwd_sync` | Auto-reveal the current file on buffer switch _(opt-in)_ |
+| `tree_open_keymaps` | Global keys to toggle the tree left/right/float/current _(opt-in)_ |
 
-**Create / edit / move**
+**`ui` — display**
+| Feature | What it does |
+|---|---|
+| `preview` | Toggle floating preview; dispatch images / PDFs (`<Tab>`/`<CR>`) |
+| `node_info` | Node info float (`I`) |
+| `breadcrumbs` | Path breadcrumbs for the current node |
+| `size_info` | Show file / directory sizes |
+| `color_labels` | Assign color labels (`cl`) |
+| `ignore_patterns` | Toggle ignore-pattern highlighting (`gi`) |
+| `window_size_cycler` | Cycle the tree width through presets (`w`) |
+| `window_style` | Blank statusline + isolated tree highlights (adapter-agnostic; both effects off until configured) |
+| `cursor_hide` | Hide the block cursor inside the tree |
+| `tree_reset` | `<Esc>` clears preview + filter + live search |
+| `current_hl` | Highlight the current file + parent dir _(opt-in)_ |
+
+**`fileops` — create / edit / move**
 | Feature | What it does |
 |---|---|
 | `smart_create` | Smart create file or directory with templates (`a`) |
@@ -70,8 +91,9 @@ tree-buffer key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYM
 | `trash` | Cross-platform trash + undo |
 | `open_replace` | Open a file replacing the current editor buffer (`O`) |
 | `buffer_save` | Force-save adjacent / node buffer (`<C-s>`/`<M-s>`) |
+| `file_permissions` | Toggle exec bit / chmod / stat (`gx` `gX` `gP`) |
 
-**Search & filter**
+**`search` — search & filter**
 | Feature | What it does |
 |---|---|
 | `filter` | Live tree filter (`/`) |
@@ -80,62 +102,69 @@ tree-buffer key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYM
 | `find_or_grep_menu` | Unified find/grep picker menu (`<M-p>`) |
 | `grep_in_dir` | Grep in the node's directory (`gr` / `gR` for `<cword>`) |
 | `recent_files` | Recent-files picker (`r`) |
-| `diagnostics_filter` | Toggle a diagnostics-only filter (`df`) |
-| `ignore_patterns` | Toggle ignore-pattern highlighting (`gi`) |
 
-**Info, preview & git**
+**`paths` — paths & clipboard**
 | Feature | What it does |
 |---|---|
-| `preview` | Toggle floating preview; dispatch images / PDFs (`<Tab>`/`<CR>`) |
-| `node_info` | Node info float (`I`) |
-| `size_info` | Show file / directory sizes |
-| `breadcrumbs` | Path breadcrumbs for the current node |
+| `path_copy` | Copy absolute/relative path, filename, or pick a format (`[a` `]a` `<leader>yp` `<leader>yn`) |
+| `lua_require_copy` | Copy the node as a `require("…")` string (`rq`) |
+| `copy_file_list` | Copy recursive file/dir lists (`[f` `]f` `[F` `]F`) |
+| `path_utils` | Alternative path-copy family (`ya`/`yr`/`yn`/`yd`/`yq`/`ym`) _(opt-in)_ |
+
+**`git`**
+| Feature | What it does |
+|---|---|
 | `git_status` | Git status decorations in the tree |
 | `git_blame` | Toggle git blame float (`gB`) |
-| `lsp_diagnostics` | LSP diagnostic decorations |
-| `outline` | LSP symbol outline for the current file (`go`) |
+| `git_actions` | Stage/unstage/log from the tree (`gs`/`gS`/`gl`) _(opt-in)_ |
 
-**Marks & organization**
+**`org` — marks & organization**
 | Feature | What it does |
 |---|---|
 | `marks` | Toggle marks, batch mark/unmark, show list (`m` `]m` `[m` `<C-m>` `<leader>ms`) |
 | `bookmarks` | Toggle bookmarks on nodes (`b`) |
 | `pin_node` | Pin the current node (`gp`) |
 | `tag_system` | Edit tags for a node (`gt`) |
-| `color_labels` | Assign color labels (`cl`) |
 | `notes` | Attach notes to nodes (`gn`) |
 | `workspace` | Switch workspace root (`gw`) |
 | `session` | Persist / restore tree state |
 
-**Paths & clipboard**
-| Feature | What it does |
-|---|---|
-| `path_copy` | Copy absolute/relative path, filename, or pick a format (`[a` `]a` `<leader>yp` `<leader>yn`) |
-| `lua_require_copy` | Copy the node as a `require("…")` string (`rq`) |
-| `copy_file_list` | Copy recursive file/dir lists (`[f` `]f` `[F` `]F`) |
-
-**System & window**
+**`system` — external programs**
 | Feature | What it does |
 |---|---|
 | `open_in_fm` | Open the node's directory in the system file manager (`<leader>fm`) |
 | `open_with` | Open with a configured external app (`ox`) |
 | `open_terminal` | Open a terminal in the node's directory (`T`) |
 | `shell_run` | Prompt + run a shell command in the node's directory (`i`) |
-| `file_permissions` | Toggle exec bit / chmod / stat (`gx` `gX` `gP`) |
-| `window_size_cycler` | Cycle the tree width through presets (`w`) |
-| `window_style` | Opt-in blank statusline + isolated tree highlights (both off until configured) |
-| `tree_open_keymaps` | Global keys to toggle the tree left/right/float/current _(opt-in)_ |
-| `cursor_hide` | Hide the block cursor inside the tree |
-| `tree_reset` | `<Esc>` clears preview + filter + live search |
-| `diff` / `compare_dirs` | Diff a node (`D`) / compare two directories (`cd`) |
 
-**Infrastructure**
+**`lsp` — diagnostics & symbols**
 | Feature | What it does |
 |---|---|
-| `ignore_list` | Hide `.git`, `node_modules`, build artefacts, … (on by default) |
+| `lsp_diagnostics` | LSP diagnostic decorations |
+| `outline` | LSP symbol outline for the current file (`go`) |
+| `diagnostics_filter` | Toggle a diagnostics-only filter (`df`) |
+
+**`compare` — diff**
+| Feature | What it does |
+|---|---|
+| `diff` | Diff the current node (`D`) |
+| `compare_dirs` | Compare two directories (`cd`) |
+
+**`integration` — external plugins**
+| Feature | What it does |
+|---|---|
+| `harpoon_integration` | Add / open harpoon marks (`gh`/`gH`) _(opt-in)_ |
+| `telescope_integration` | Telescope-backed pickers _(opt-in)_ |
+
+**`infra` — plumbing**
+| Feature | What it does |
+|---|---|
+| `ignore_list` | Hide `.git`, `node_modules`, build artefacts, … |
 | `project_root` | Shared project-root detection used by other features |
-| `file_watcher` / `watcher_quarantine` | Refresh on external FS changes; quarantine noisy watchers |
+| `file_watcher` | Refresh the tree on external filesystem changes |
+| `watcher_quarantine` | Suppress watcher EPERM noise around file ops (Windows/WSL) |
 | `hooks_api` | Programmatic hooks for other code to react to tree events |
+| `safety` | Backup API used before destructive ops _(opt-in)_ |
 
 ### Default-disabled features
 
