@@ -367,10 +367,15 @@ require("filetree").setup({
 All tree-buffer keymaps, defaults, and how to remap or disable them:
 → [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md)
 
-> **filetree.nvim keymaps are not listed in the adapter's `?` cheatsheet.**
+> **By default, filetree.nvim keymaps are not listed in the adapter's `?` cheatsheet.**
 > They are registered via `vim.keymap.set()` after the adapter's own setup, so
 > neo-tree's `?` / nvim-tree's `g?` will not show them. They do work correctly —
 > check `:nmap` in the tree buffer to verify.
+>
+> **neo-tree users can opt in:** call `require("filetree").attach(opts, config)`
+> before `require("neo-tree").setup(opts)` to inject filetree's keymaps into
+> `window.mappings` so they show up in `?`. See
+> [neo-tree `?` cheatsheet integration](docs/BINDINGS/KEYMAPS.md#neo-tree--cheatsheet-integration).
 
 **Remap filetree feature keys:**
 
