@@ -87,16 +87,35 @@ end
 
 ---@type integer?
 local _augroup = nil
+---@type FiletreeAdapter?
+local _adapter = nil
+---@type table
+local _opts = {}
+
+---Prompt for a shell command and run it in the node directory.
+function M.run()
+  local adapter = _adapter
+  if not adapter then return end
+  local dir = resolve_dir(adapter)
+  local prompt = "$ (" .. vim.fn.fnamemodify(dir, ":~") .. ") "
+  vim.ui.input({ prompt = prompt }, function(cmd)
+    if not cmd or cmd == "" then return end
+    run_in_terminal(dir, cmd, _opts.close_on_ok, _opts.split, _opts.height)
+  end)
+end
 
 ---@param config FiletreeShellRunConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  local keymap      = config.keymap      or "i"
-  local close_on_ok = config.close_on_ok ~= false   -- default true
-  local split       = config.split       or "split"
-  local height      = config.height      or 12
+  local keymap = config.keymap or "i"
+  _adapter = adapter
+  _opts = {
+    close_on_ok = config.close_on_ok ~= false,   -- default true
+    split       = config.split       or "split",
+    height      = config.height      or 12,
+  }
 
   if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
   _augroup = vim.api.nvim_create_augroup("filetree_shell_run", { clear = true })
@@ -108,14 +127,7 @@ function M.setup(config, adapter)
       local buf = ev.buf
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
-        vim.keymap.set("n", keymap, function()
-          local dir = resolve_dir(adapter)
-          local prompt = "$ (" .. vim.fn.fnamemodify(dir, ":~") .. ") "
-          vim.ui.input({ prompt = prompt }, function(cmd)
-            if not cmd or cmd == "" then return end
-            run_in_terminal(dir, cmd, close_on_ok, split, height)
-          end)
-        end, {
+        vim.keymap.set("n", keymap, M.run, {
           buffer = buf, silent = true,
           desc   = "Filetree: run shell command in node directory",
         })

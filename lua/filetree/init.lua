@@ -234,6 +234,17 @@ function M.register_adapter(adapter)
   adapter_mod.register(adapter)
 end
 
+---Inject filetree feature keymaps into neo-tree's `window.mappings` so they show
+---up in neo-tree's `?` cheatsheet.  Call BEFORE `require("neo-tree").setup(opts)`,
+---passing the neo-tree opts table and the same config you give to `setup()`.
+---No-op for non-neotree adapters (their help systems differ).
+---@param opts table    neo-tree opts table (mutated in place).
+---@param config FiletreeConfig  Same config table passed to setup().
+---@return table opts
+function M.attach(opts, config)
+  return require("filetree.attach").neotree(opts, config)
+end
+
 ---Return true when setup() has completed successfully.
 ---@return boolean
 function M.is_initialized()

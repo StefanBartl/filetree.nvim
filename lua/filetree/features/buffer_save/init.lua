@@ -76,6 +76,35 @@ end
 
 ---@type integer?
 local _augroup = nil
+---@type FiletreeAdapter?
+local _adapter = nil
+---@type boolean
+local _force = true
+
+---Force-save the last-focused adjacent editor buffer.
+function M.save_adjacent()
+  local win = find_adjacent_win()
+  if not win then
+    notify.warn("No editor window found")
+    return
+  end
+  save_buf(vim.api.nvim_win_get_buf(win), _force)
+end
+
+---Force-save the buffer whose path matches the node under the cursor.
+function M.save_node()
+  local node = _adapter and _adapter.get_current_node and _adapter.get_current_node()
+  if not node or not node.path or node.path == "" then
+    notify.warn("No file node under cursor")
+    return
+  end
+  local bufnr = vim.fn.bufnr(node.path)
+  if bufnr < 0 then
+    notify.warn("File not loaded: " .. vim.fn.fnamemodify(node.path, ":~:."))
+    return
+  end
+  save_buf(bufnr, _force)
+end
 
 ---@param config FiletreeBufferSaveConfig
 ---@param adapter FiletreeAdapter
@@ -84,7 +113,8 @@ function M.setup(config, adapter)
 
   local keymap_adj  = config.keymap_adjacent or "<C-s>"
   local keymap_node = config.keymap_node     or "<M-s>"
-  local force       = config.force ~= false  -- default true
+  _adapter = adapter
+  _force   = config.force ~= false  -- default true
 
   if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
   _augroup = vim.api.nvim_create_augroup("filetree_buffer_save", { clear = true })
@@ -99,14 +129,7 @@ function M.setup(config, adapter)
 
         -- <C-s>: save the last adjacent editor buffer
         if keymap_adj then
-          vim.keymap.set("n", keymap_adj, function()
-            local win = find_adjacent_win()
-            if not win then
-              notify.warn("No editor window found")
-              return
-            end
-            save_buf(vim.api.nvim_win_get_buf(win), force)
-          end, {
+          vim.keymap.set("n", keymap_adj, M.save_adjacent, {
             buffer = buf,
             silent = true,
             desc   = "Filetree: force-save adjacent editor buffer",
@@ -115,19 +138,7 @@ function M.setup(config, adapter)
 
         -- <M-s>: save the buffer whose path matches the node under cursor
         if keymap_node then
-          vim.keymap.set("n", keymap_node, function()
-            local node = adapter.get_current_node and adapter.get_current_node()
-            if not node or not node.path or node.path == "" then
-              notify.warn("No file node under cursor")
-              return
-            end
-            local bufnr = vim.fn.bufnr(node.path)
-            if bufnr < 0 then
-              notify.warn("File not loaded: " .. vim.fn.fnamemodify(node.path, ":~:."))
-              return
-            end
-            save_buf(bufnr, force)
-          end, {
+          vim.keymap.set("n", keymap_node, M.save_node, {
             buffer = buf,
             silent = true,
             desc   = "Filetree: force-save buffer matching node under cursor",

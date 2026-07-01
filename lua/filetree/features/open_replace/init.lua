@@ -40,6 +40,37 @@ end
 
 ---@type integer?
 local _augroup = nil
+---@type FiletreeAdapter?
+local _adapter = nil
+---@type boolean
+local _close_tree = true
+
+---Open the file under the cursor, replacing the current editor buffer.
+function M.open_replace()
+  local adapter = _adapter
+  if not adapter then return end
+  local node = adapter.get_current_node and adapter.get_current_node()
+  if not node or node.type == "directory" then return end
+  local path = node.path
+  if not path or path == "" then return end
+
+  local ewin = find_editor_win()
+  if ewin then
+    vim.api.nvim_set_current_win(ewin)
+  else
+    -- No editor window open yet; let the close+edit flow create one.
+  end
+
+  local ok = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(path))
+  if not ok then
+    notify.warn("Could not open: " .. path)
+    return
+  end
+
+  if _close_tree and type(adapter.close) == "function" then
+    pcall(adapter.close)
+  end
+end
 
 ---@param config FiletreeOpenReplaceConfig
 ---@param adapter FiletreeAdapter
@@ -47,7 +78,8 @@ function M.setup(config, adapter)
   if not config.enabled then return end
 
   local keymap    = config.keymap     or "O"
-  local close_tree = config.close_tree ~= false
+  _adapter    = adapter
+  _close_tree = config.close_tree ~= false
 
   if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
   _augroup = vim.api.nvim_create_augroup("filetree_open_replace", { clear = true })
@@ -59,29 +91,7 @@ function M.setup(config, adapter)
       local buf = ev.buf
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
-        vim.keymap.set("n", keymap, function()
-          local node = adapter.get_current_node and adapter.get_current_node()
-          if not node or node.type == "directory" then return end
-          local path = node.path
-          if not path or path == "" then return end
-
-          local ewin = find_editor_win()
-          if ewin then
-            vim.api.nvim_set_current_win(ewin)
-          else
-            -- No editor window open yet; let the close+edit flow create one.
-          end
-
-          local ok = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(path))
-          if not ok then
-            notify.warn("Could not open: " .. path)
-            return
-          end
-
-          if close_tree and type(adapter.close) == "function" then
-            pcall(adapter.close)
-          end
-        end, {
+        vim.keymap.set("n", keymap, M.open_replace, {
           buffer = buf,
           silent = true,
           desc   = "Filetree: open file replacing current editor buffer",

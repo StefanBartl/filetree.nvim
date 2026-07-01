@@ -55,6 +55,35 @@ end
 
 ---@type integer?
 local _augroup = nil
+---@type FiletreeAdapter?
+local _adapter = nil
+---@type string?
+local _cmd = nil
+
+---Open the directory of the node under the cursor in the system file manager.
+function M.open()
+  local adapter = _adapter
+  if not adapter then return end
+  local node = adapter.get_current_node and adapter.get_current_node()
+  if not node or not node.path or node.path == "" then
+    notify.warn("No node under cursor")
+    return
+  end
+
+  local dir
+  if vim.fn.isdirectory(node.path) == 1 then
+    dir = node.path
+  else
+    dir = vim.fn.fnamemodify(node.path, ":h")
+  end
+
+  if not dir or dir == "" then
+    notify.warn("Cannot resolve directory for node")
+    return
+  end
+
+  launch(dir, _cmd or default_cmd())
+end
 
 ---@param config FiletreeOpenInFmConfig
 ---@param adapter FiletreeAdapter
@@ -62,7 +91,8 @@ function M.setup(config, adapter)
   if not config.enabled then return end
 
   local keymap = config.keymap  or "<leader>fm"
-  local cmd    = config.command or default_cmd()
+  _adapter = adapter
+  _cmd     = config.command or default_cmd()
 
   if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
   _augroup = vim.api.nvim_create_augroup("filetree_open_in_fm", { clear = true })
@@ -74,27 +104,7 @@ function M.setup(config, adapter)
       local buf = ev.buf
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
-        vim.keymap.set("n", keymap, function()
-          local node = adapter.get_current_node and adapter.get_current_node()
-          if not node or not node.path or node.path == "" then
-            notify.warn("No node under cursor")
-            return
-          end
-
-          local dir
-          if vim.fn.isdirectory(node.path) == 1 then
-            dir = node.path
-          else
-            dir = vim.fn.fnamemodify(node.path, ":h")
-          end
-
-          if not dir or dir == "" then
-            notify.warn("Cannot resolve directory for node")
-            return
-          end
-
-          launch(dir, cmd)
-        end, {
+        vim.keymap.set("n", keymap, M.open, {
           buffer = buf, silent = true,
           desc   = "Filetree: open node directory in system file manager",
         })

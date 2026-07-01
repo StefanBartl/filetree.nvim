@@ -124,6 +124,16 @@ function M.mark_all_visible()
   redraw()
 end
 
+---Unmark all currently visible nodes.
+function M.unmark_all_visible()
+  if not _adapter then return end
+  local nodes = _adapter.get_visible_nodes()
+  for _, node in ipairs(nodes) do
+    _marks[node.path] = nil
+  end
+  redraw()
+end
+
 ---Show a floating summary of all marked paths.
 function M.show()
   local marked = M.get_marked()
@@ -201,18 +211,8 @@ function M.setup(config, adapter)
           end
         end
         km(_cfg.keymap,            function() M.toggle_current() end,  "Filetree: toggle mark")
-        km(_cfg.keymap_all,        function()
-          if not _adapter then return end
-          local nodes = _adapter.get_visible_nodes("files")
-          for _, node in ipairs(nodes) do _marks[node.path] = true end
-          redraw()
-        end, "Filetree: mark all in directory")
-        km(_cfg.keymap_unmark_all, function()
-          if not _adapter then return end
-          local nodes = _adapter.get_visible_nodes("files")
-          for _, node in ipairs(nodes) do _marks[node.path] = nil end
-          redraw()
-        end, "Filetree: unmark all in directory")
+        km(_cfg.keymap_all,        M.mark_all_visible,                 "Filetree: mark all visible")
+        km(_cfg.keymap_unmark_all, M.unmark_all_visible,               "Filetree: unmark all visible")
         km(_cfg.keymap_clear,      function() M.clear_all() end,       "Filetree: clear all marks")
         km(_cfg.keymap_show,       function() M.show() end,            "Filetree: show marked nodes")
       end)
