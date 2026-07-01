@@ -29,6 +29,34 @@ local function get_commands()
   return commands
 end
 
+---Resolve a neo-tree node's filesystem path robustly.
+---Prefers the canonical `node.path`, falls back to the node id (which for the
+---filesystem source is the path). Returns nil for nodes without a real path
+---(message / loading / virtual nodes), so callers can skip them.
+---@param node table?
+---@return string? path
+local function node_path(node)
+  if not node then return nil end
+  local p = node.path
+  if (type(p) ~= "string" or p == "") and node.get_id then
+    local ok, id = pcall(node.get_id, node)
+    if ok then p = id end
+  end
+  if type(p) ~= "string" or p == "" then return nil end
+  return p
+end
+
+---Determine whether a node is a directory (uses node.type, falls back to a
+---filesystem check when the field is absent).
+---@param node table
+---@param path string
+---@return boolean
+local function node_is_dir(node, path)
+  if node.type == "directory" then return true end
+  if node.type == "file" then return false end
+  return vim.fn.isdirectory(path) == 1
+end
+
 -- ── Interface ─────────────────────────────────────────────────────────────────
 
 function M.is_available()
@@ -74,17 +102,38 @@ function M.get_current_node()
     return state.tree:get_node()
   end)
   if not ok or not node then return nil end
-  local id = (node.get_id and node:get_id()) or node.id or ""
-  local ntype = node.type == "directory" and "directory" or "file"
+
+  local path = node_path(node)
+  if not path then return nil end   -- skip message / virtual nodes without a path
+
+  local is_dir = node_is_dir(node, path)
+  local ntype  = is_dir and "directory" or "file"
   return {
-    id          = id,
-    name        = node.name or "",
-    path        = id,
+    id          = (node.get_id and node:get_id()) or node.id or path,
+    name        = node.name or vim.fn.fnamemodify(path, ":t"),
+    path        = path,
     type        = ntype,
     depth       = (node.get_depth and node:get_depth()) or 0,
     line_number = vim.fn.line("."),
-    is_expanded = ntype == "directory" and ((node.is_expanded and node:is_expanded()) or false) or nil,
+    is_expanded = is_dir and ((node.is_expanded and node:is_expanded()) or false) or nil,
   }
+end
+
+---Extract filesystem paths (and display names) from a list of neo-tree nodes.
+---Nodes without a real path are skipped. Useful for batch operations over
+---marked nodes.
+---@param nodes table[]
+---@return string[] paths, string[] names
+function M.extract_paths(nodes)
+  local paths, names = {}, {}
+  for _, node in ipairs(nodes or {}) do
+    local p = node_path(node)
+    if p then
+      paths[#paths + 1] = p
+      names[#names + 1] = node.name or vim.fn.fnamemodify(p, ":t")
+    end
+  end
+  return paths, names
 end
 
 function M.get_visible_nodes(filter)
