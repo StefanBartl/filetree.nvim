@@ -71,10 +71,18 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
+---@type FiletreeTreeTraverseConfig
+local DEFAULTS = {
+  keymap_up   = "-",
+  keymap_down = "+",
+  sync_cwd    = false,
+}
+
 ---@param cfg FiletreeTreeTraverseConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = cfg
+  _cfg     = vim.tbl_extend("force", DEFAULTS, cfg or {})
+  cfg      = _cfg
   _adapter = adapter
 
   if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end

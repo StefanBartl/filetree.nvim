@@ -171,10 +171,17 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
+---@type FiletreeNodeInfoConfig
+local DEFAULTS = {
+  keymap     = "I",
+  show_lines = true,
+}
+
 ---@param cfg FiletreeNodeInfoConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = cfg
+  _cfg     = vim.tbl_extend("force", DEFAULTS, cfg or {})
+  cfg      = _cfg
   _adapter = adapter
 
   if cfg.keymap then

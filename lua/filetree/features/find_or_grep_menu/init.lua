@@ -151,10 +151,17 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
+---@type FiletreeFindOrGrepMenuConfig
+local DEFAULTS = {
+  keymap = "<M-p>",
+  prefer = "auto",
+}
+
 ---@param cfg FiletreeFindOrGrepMenuConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = cfg
+  _cfg     = vim.tbl_extend("force", DEFAULTS, cfg or {})
+  cfg      = _cfg
   _adapter = adapter
 
   if cfg.keymap then

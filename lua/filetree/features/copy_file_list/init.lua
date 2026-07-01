@@ -121,10 +121,19 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
+---@type FiletreeCopyFileListConfig
+local DEFAULTS = {
+  keymap_files_abs = "[f",
+  keymap_files_rel = "]f",
+  keymap_dirs_abs  = "[F",
+  keymap_dirs_rel  = "]F",
+}
+
 ---@param cfg FiletreeCopyFileListConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = cfg
+  _cfg     = vim.tbl_extend("force", DEFAULTS, cfg or {})
+  cfg      = _cfg
   _adapter = adapter
 
   local keymaps = {
