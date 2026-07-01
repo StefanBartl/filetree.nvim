@@ -15,28 +15,10 @@
 ---   keymap      string?   Key in tree buffer (default "O").
 ---   close_tree  boolean   Close the tree after opening (default true).
 
-local notify = require("filetree.util.notify").create("[filetree.open_replace]")
+local notify  = require("filetree.util.notify").create("[filetree.open_replace]")
+local bufutil = require("filetree.util.buffer")
 
 local M = {}
-
-local _TREE_FT = { ["neo-tree"] = true, ["NvimTree"] = true,
-                   ["netrw"] = true, ["oil"] = true, ["minifiles"] = true }
-
----Return the last-focused non-tree window, or nil.
-local function find_editor_win()
-  local prev = vim.fn.win_getid(vim.fn.winnr("#"))
-  if prev and prev ~= 0 and vim.api.nvim_win_is_valid(prev) then
-    if not _TREE_FT[vim.bo[vim.api.nvim_win_get_buf(prev)].filetype] then
-      return prev
-    end
-  end
-  for _, win in ipairs(vim.api.nvim_list_wins()) do
-    if not _TREE_FT[vim.bo[vim.api.nvim_win_get_buf(win)].filetype] then
-      return win
-    end
-  end
-  return nil
-end
 
 ---@type integer?
 local _augroup = nil
@@ -54,7 +36,7 @@ function M.open_replace()
   local path = node.path
   if not path or path == "" then return end
 
-  local ewin = find_editor_win()
+  local ewin = bufutil.find_editor_win(vim.api.nvim_get_current_win())
   if ewin then
     vim.api.nvim_set_current_win(ewin)
   else

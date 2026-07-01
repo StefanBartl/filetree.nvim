@@ -21,6 +21,7 @@
 ---   height       integer?  Terminal height in lines when split="split" (default 12).
 
 local notify = require("filetree.util.notify").create("[filetree.shell_run]")
+local path   = require("filetree.util.path")
 
 local M = {}
 
@@ -32,11 +33,7 @@ local M = {}
 local function resolve_dir(adapter)
   local node = adapter.get_current_node and adapter.get_current_node()
   if node and node.path and node.path ~= "" then
-    if vim.fn.isdirectory(node.path) == 1 then
-      return node.path
-    else
-      return vim.fn.fnamemodify(node.path, ":h")
-    end
+    return path.ensure_dir(node.path)
   end
   return vim.fn.getcwd()
 end

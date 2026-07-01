@@ -3,6 +3,13 @@
 
 local M = {}
 
+---Filetypes treated as tree/explorer windows — never valid editor targets.
+---@type table<string, true>
+M.TREE_FT = {
+  ["neo-tree"] = true, ["NvimTree"] = true,
+  ["netrw"]    = true, ["oil"]      = true, ["minifiles"] = true,
+}
+
 ---@type table<integer, {valid:boolean, timestamp:number}>
 local _cache = {}
 setmetatable(_cache, { __mode = "k" })
@@ -69,6 +76,31 @@ function M.find_last_normal_buffer(exclude_win)
     end
   end
   return nil, nil
+end
+
+---Find the most-recently-focused normal editor window: non-tree filetype,
+---editable (`buftype == ""`), non-floating. Prefers the alternate window
+---(`winnr("#")`), then falls back to the first matching window.
+---Replaces the per-feature `find_adjacent_win()` / `find_editor_win()` helpers.
+---@param exclude_win integer|nil  Window to skip (e.g. the tree window).
+---@return integer|nil winid
+function M.find_editor_win(exclude_win)
+  local function is_editor(win)
+    if not win or win == 0 or win == exclude_win then return false end
+    if not vim.api.nvim_win_is_valid(win) then return false end
+    if vim.api.nvim_win_get_config(win).relative ~= "" then return false end -- float
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.bo[buf].buftype ~= "" then return false end
+    return not M.TREE_FT[vim.bo[buf].filetype]
+  end
+
+  local prev = vim.fn.win_getid(vim.fn.winnr("#"))
+  if is_editor(prev) then return prev end
+
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if is_editor(win) then return win end
+  end
+  return nil
 end
 
 -- Auto-invalidate cache when buffers are deleted

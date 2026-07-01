@@ -20,6 +20,7 @@
 
 local notify   = require("filetree.util.notify").create("[filetree.open_in_fm]")
 local platform = require("filetree.util.platform")
+local path     = require("filetree.util.path")
 
 local M = {}
 
@@ -70,13 +71,7 @@ function M.open()
     return
   end
 
-  local dir
-  if vim.fn.isdirectory(node.path) == 1 then
-    dir = node.path
-  else
-    dir = vim.fn.fnamemodify(node.path, ":h")
-  end
-
+  local dir = path.ensure_dir(node.path)
   if not dir or dir == "" then
     notify.warn("Cannot resolve directory for node")
     return

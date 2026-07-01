@@ -19,30 +19,10 @@
 ---   keymap_node      string?   Save buffer for node under cursor (default "<M-s>").
 ---   force            boolean   Use write! instead of update (default true).
 
-local notify = require("filetree.util.notify").create("[filetree.buffer_save]")
+local notify  = require("filetree.util.notify").create("[filetree.buffer_save]")
+local bufutil = require("filetree.util.buffer")
 
 local M = {}
-
-local _TREE_FT = {
-  ["neo-tree"] = true, ["NvimTree"] = true,
-  ["netrw"]    = true, ["oil"]      = true, ["minifiles"] = true,
-}
-
----Return the last-focused non-tree window, or nil.
-local function find_adjacent_win()
-  local prev = vim.fn.win_getid(vim.fn.winnr("#"))
-  if prev and prev ~= 0 and vim.api.nvim_win_is_valid(prev) then
-    if not _TREE_FT[vim.bo[vim.api.nvim_win_get_buf(prev)].filetype] then
-      return prev
-    end
-  end
-  for _, win in ipairs(vim.api.nvim_list_wins()) do
-    if not _TREE_FT[vim.bo[vim.api.nvim_win_get_buf(win)].filetype] then
-      return win
-    end
-  end
-  return nil
-end
 
 ---Save buffer `bufnr`.  Returns true on success.
 ---@param bufnr  integer
@@ -83,7 +63,7 @@ local _force = true
 
 ---Force-save the last-focused adjacent editor buffer.
 function M.save_adjacent()
-  local win = find_adjacent_win()
+  local win = bufutil.find_editor_win(vim.api.nvim_get_current_win())
   if not win then
     notify.warn("No editor window found")
     return
