@@ -16,7 +16,7 @@ local fs     = require("filetree.util.fs")
 ---@param relative boolean  If true, make paths relative to cwd.
 ---@return string[]
 local function collect_files(path, relative)
-  local raw = fs.collect_files(path:gsub("\\", "/"))
+  local raw = fs.collect_files((path:gsub("\\", "/")))
   if not relative then
     return vim.tbl_map(function(p) return p:gsub("\\", "/") end, raw)
   end
@@ -32,7 +32,7 @@ end
 ---@param relative boolean
 ---@return string[]
 local function collect_dirs(path, relative)
-  local raw = fs.collect_folders(path:gsub("\\", "/"))
+  local raw = fs.collect_folders((path:gsub("\\", "/")))
   if not relative then
     return vim.tbl_map(function(p) return p:gsub("\\", "/") end, raw)
   end
