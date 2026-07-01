@@ -3,6 +3,12 @@
 All keymaps are buffer-local (tree window) unless marked **global**.
 A `?` suffix means the field is optional; omit or set to `false` to disable.
 
+> **Note: filetree.nvim keymaps are not shown in the adapter's `?` cheatsheet.**
+> filetree sets keymaps via `vim.keymap.set()` after the adapter's own setup runs
+> (deferred via `vim.schedule` in a FileType autocmd). They work correctly but are
+> outside the adapter's mapping registry, so the built-in help (`?` in neo-tree,
+> `g?` in nvim-tree) will not list them.
+
 ---
 
 ## Tree-buffer keymaps

@@ -65,6 +65,7 @@
 ```lua
 {
   "StefanBartl/filetree.nvim",
+  event = "VeryLazy",   -- must load AFTER the tree plugin's config function runs
   dependencies = {
     -- only ONE of these is needed
     "nvim-neo-tree/neo-tree.nvim",
@@ -87,6 +88,7 @@
 ## Quick start
 
 ```lua
+-- Use event = "VeryLazy" so filetree loads after the tree plugin's config runs.
 require("filetree").setup({
   adapter = "neotree",
   features = {
@@ -364,6 +366,11 @@ require("filetree").setup({
 
 All tree-buffer keymaps, defaults, and how to remap or disable them:
 → [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md)
+
+> **filetree.nvim keymaps are not listed in the adapter's `?` cheatsheet.**
+> They are registered via `vim.keymap.set()` after the adapter's own setup, so
+> neo-tree's `?` / nvim-tree's `g?` will not show them. They do work correctly —
+> check `:nmap` in the tree buffer to verify.
 
 **Remap filetree feature keys:**
 
