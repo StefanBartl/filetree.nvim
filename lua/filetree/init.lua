@@ -154,7 +154,12 @@ function M.setup(user_config)
       if vim.api.nvim_buf_is_loaded(buf) then
         local ft = vim.api.nvim_get_option_value("filetype", { buf = buf })
         if ft == "neo-tree" or ft == "NvimTree" then
-          vim.api.nvim_exec_autocmds("FileType", { buf = buf, pattern = ft })
+          -- Fire FileType with the tree buffer current so the feature autocmd
+          -- callbacks see the correct ev.buf.  (pattern and buf are mutually
+          -- exclusive in nvim_exec_autocmds, hence nvim_buf_call.)
+          vim.api.nvim_buf_call(buf, function()
+            vim.api.nvim_exec_autocmds("FileType", { pattern = ft, modeline = false })
+          end)
         end
       end
     end
