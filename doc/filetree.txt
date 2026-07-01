@@ -1,7 +1,6 @@
 *filetree.txt*   Adapter-agnostic filetree features for Neovim
 
 Author:  Stefan Bartl
-License: MIT
 Version: 0.1.0
 
 ==============================================================================

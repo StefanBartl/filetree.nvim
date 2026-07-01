@@ -10,8 +10,9 @@
 
 ![Neovim](https://img.shields.io/badge/Neovim-0.8%2B-brightgreen?logo=neovim&logoColor=white)
 ![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-blue?logo=lua)
-![License](https://img.shields.io/badge/license-MIT-blue)
 ![Status](https://img.shields.io/badge/status-alpha-orange)
+
+> **Pairs well with [fileops.nvim](https://github.com/StefanBartl/fileops.nvim)** — filetree.nvim gives you the in-tree actions, fileops.nvim handles the heavier file operations. Use them together for a complete file-management workflow.
 
 **Adapter-agnostic filetree features for Neovim.** Works with neo-tree.nvim and nvim-tree.lua via a clean adapter interface — swap your tree plugin without losing your features.
 
@@ -197,17 +198,21 @@ These stay **off** until you set `{ enabled = true }`, each for a concrete reaso
 
 ## Installation
 
-**lazy.nvim**
+filetree.nvim must load **after** your tree plugin's own config runs, so pick a
+load point like `event = "VeryLazy"` (lazy.nvim) or place the `setup()` call after
+the tree plugin is configured. Only **one** tree plugin is needed; `lib.nvim` is a
+declared dependency.
+
+<details open>
+<summary><b>lazy.nvim</b></summary>
 
 ```lua
 {
   "StefanBartl/filetree.nvim",
-  event = "VeryLazy",   -- must load AFTER the tree plugin's config function runs
+  event = "VeryLazy",   -- load AFTER the tree plugin's config function runs
   dependencies = {
-    "StefanBartl/lib.nvim",   -- shared helpers (neo-tree node utils, etc.)
-    -- only ONE tree plugin is needed:
-    "nvim-neo-tree/neo-tree.nvim",
-    -- or: "nvim-tree/nvim-tree.lua",
+    "StefanBartl/lib.nvim",        -- shared helpers
+    "nvim-neo-tree/neo-tree.nvim", -- or: "nvim-tree/nvim-tree.lua"
   },
   config = function()
     -- That's it — every feature is on by default.
@@ -215,6 +220,56 @@ These stay **off** until you set `{ enabled = true }`, each for a concrete reaso
   end,
 }
 ```
+</details>
+
+<details>
+<summary><b>packer.nvim</b></summary>
+
+```lua
+use {
+  "StefanBartl/filetree.nvim",
+  after    = "neo-tree.nvim",   -- ensure the tree plugin is configured first
+  requires = {
+    "StefanBartl/lib.nvim",
+    "nvim-neo-tree/neo-tree.nvim", -- or: "nvim-tree/nvim-tree.lua"
+  },
+  config = function()
+    require("filetree").setup({ adapter = "neotree" })
+  end,
+}
+```
+</details>
+
+<details>
+<summary><b>vim-plug</b></summary>
+
+```vim
+Plug 'StefanBartl/lib.nvim'
+Plug 'nvim-neo-tree/neo-tree.nvim'   " or: Plug 'nvim-tree/nvim-tree.lua'
+Plug 'StefanBartl/filetree.nvim'
+```
+
+Then, after neo-tree/nvim-tree is set up (e.g. in an `init.lua` sourced later):
+
+```lua
+require("filetree").setup({ adapter = "neotree" })
+```
+</details>
+
+<details>
+<summary><b>mini.deps</b></summary>
+
+```lua
+local add, now = MiniDeps.add, MiniDeps.now
+add({
+  source  = "StefanBartl/filetree.nvim",
+  depends = { "StefanBartl/lib.nvim", "nvim-neo-tree/neo-tree.nvim" },
+})
+now(function()
+  require("filetree").setup({ adapter = "neotree" })
+end)
+```
+</details>
 
 ---
 
@@ -625,7 +680,3 @@ Which features create behavioral autocmds and how to disable them:
 ## Roadmap
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) — planned: netrw/oil adapters, trash/undo, marks, diff, Telescope/fzf integration.
-
----
-
-MIT © Stefan Bartl
