@@ -49,6 +49,13 @@ function M.get_winid()
   return nil
 end
 
+function M.set_root(path)
+  local a = api()
+  if not a then return false end
+  local ok = pcall(a.tree.change_root, path)
+  return ok
+end
+
 function M.get_root_path()
   local a = api()
   if not a then return nil end

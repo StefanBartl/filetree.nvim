@@ -193,11 +193,23 @@ function M.open_file(path, mode)
   return ok
 end
 
+function M.set_root(path)
+  local commands = get_commands()
+  if not commands then return false end
+  local ok = pcall(commands.execute, {
+    action   = "show",
+    source   = "filesystem",
+    position = "left",
+    dir      = path,
+  })
+  return ok
+end
+
 function M.open_reveal(path, parent_levels)
   local commands = get_commands()
   if not commands then return false end
   local target = path
-  for _ = 0, (parent_levels or 0) do
+  for _ = 1, (parent_levels or 0) do   -- fixed: was 0,n (ran n+1 times); now 1,n (runs n times)
     target = vim.fn.fnamemodify(target, ":h")
   end
   local ok = pcall(commands.execute, {

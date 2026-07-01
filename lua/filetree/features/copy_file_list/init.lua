@@ -9,34 +9,22 @@ local _cfg = {}
 local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.copy_file_list]")
+local fs     = require("filetree.util.fs")
 
 ---Recursively collect all file paths under a path.
 ---@param path string
 ---@param relative boolean  If true, make paths relative to cwd.
 ---@return string[]
 local function collect_files(path, relative)
-  local cwd = relative and (vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")) or nil
-  local results = {}
-
-  local function recurse(p)
-    if vim.fn.isdirectory(p) == 1 then
-      local entries = vim.fn.readdir(p)
-      if entries then
-        for _, e in ipairs(entries) do
-          recurse(p .. "/" .. e)
-        end
-      end
-    else
-      local norm = p:gsub("\\", "/")
-      if cwd then
-        norm = norm:gsub("^" .. vim.pesc(cwd), "")
-      end
-      results[#results + 1] = norm
-    end
+  local raw = fs.collect_files(path:gsub("\\", "/"))
+  if not relative then
+    return vim.tbl_map(function(p) return p:gsub("\\", "/") end, raw)
   end
-
-  recurse(path:gsub("\\", "/"))
-  return results
+  local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
+  return vim.tbl_map(function(p)
+    p = p:gsub("\\", "/")
+    return p:gsub("^" .. vim.pesc(cwd), "")
+  end, raw)
 end
 
 ---Recursively collect all directory paths under a path (including root).
@@ -44,28 +32,16 @@ end
 ---@param relative boolean
 ---@return string[]
 local function collect_dirs(path, relative)
-  local cwd = relative and (vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")) or nil
-  local results = {}
-
-  local function recurse(p)
-    if vim.fn.isdirectory(p) == 1 then
-      local norm = p:gsub("\\", "/")
-      if cwd then
-        norm = norm:gsub("^" .. vim.pesc(cwd), "")
-        if norm == "" then norm = "." end
-      end
-      results[#results + 1] = norm
-      local entries = vim.fn.readdir(p)
-      if entries then
-        for _, e in ipairs(entries) do
-          recurse(p .. "/" .. e)
-        end
-      end
-    end
+  local raw = fs.collect_folders(path:gsub("\\", "/"))
+  if not relative then
+    return vim.tbl_map(function(p) return p:gsub("\\", "/") end, raw)
   end
-
-  recurse(path:gsub("\\", "/"))
-  return results
+  local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
+  return vim.tbl_map(function(p)
+    p = p:gsub("\\", "/")
+    p = p:gsub("^" .. vim.pesc(cwd), "")
+    return p == "" and "." or p
+  end, raw)
 end
 
 ---Write lines to clipboard and show notification.

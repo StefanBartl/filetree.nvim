@@ -15,7 +15,9 @@
 ---   <Tab>  — toggle text preview; image/PDF dispatch for those file types.
 ---   <CR>   — image/PDF dispatch only; other nodes pass through to adapter's <CR>.
 
-local notify = require("filetree.util.notify").create("[filetree.preview]")
+local notify     = require("filetree.util.notify").create("[filetree.preview]")
+local platform   = require("filetree.util.platform")
+local line_count = require("filetree.util.line_count")
 
 local M = {}
 
@@ -67,17 +69,15 @@ local function is_pdf(path)   return _PDF_EXTS[ext(path)]   == 1 end
 -- ── Cross-platform system-open ────────────────────────────────────────────────
 
 local function system_open(path)
-  local uname = vim.loop and vim.loop.os_uname and vim.loop.os_uname()
-  local sys   = uname and (uname.sysname or "") or ""
   local args
-  if sys:find("Windows") or sys:find("MINGW") or sys:find("CYGWIN") then
+  if platform.is_windows() then
     args = { "cmd", "/c", "start", "", path:gsub("/", "\\") }
-  elseif sys == "Darwin" then
+  elseif platform.is_mac() then
     args = { "open", path }
+  elseif platform.is_wsl() or platform.has_executable("wslview") then
+    args = { "wslview", path }
   else
-    -- Linux / WSL: prefer wslview if available (WSL → Windows app)
-    local has_wslview = vim.fn.executable("wslview") == 1
-    args = has_wslview and { "wslview", path } or { "xdg-open", path }
+    args = { "xdg-open", path }
   end
   local ok = vim.fn.jobstart(args, { detach = true })
   if not ok or ok <= 0 then
@@ -147,6 +147,9 @@ end
 -- ── Text preview helpers ──────────────────────────────────────────────────────
 
 local function is_binary(path)
+  local e = ext(path)
+  if line_count.is_binary_ext(e) then return true end
+  -- Unknown extension: probe for null bytes
   local ok, data = pcall(vim.fn.readfile, path, "b", 1)
   if not ok or not data or #data == 0 then return false end
   local line = data[1]

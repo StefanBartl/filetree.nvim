@@ -1,6 +1,8 @@
 ---@module 'filetree.features.node_info'
 ---@brief Toggleable hover window showing filesystem metadata for the current tree node.
 
+local line_count = require("filetree.util.line_count")
+
 local M = {}
 
 ---@type FiletreeNodeInfoConfig
@@ -78,13 +80,11 @@ local function build_lines(path)
 
   -- Line count for files
   if _cfg.show_lines and stat.type == "file" then
-    local max = _cfg.max_lines_size or (5 * 1024 * 1024)
-    if stat.size <= max then
-      local ok, content = pcall(vim.fn.readfile, path)
-      if ok and type(content) == "table" then
-        lines[#lines + 1] = "  Lines:    " .. #content
-      end
-    else
+    local e     = path:match("%.([^.]+)$") or ""
+    local count = line_count.count(path, e)
+    if count then
+      lines[#lines + 1] = "  Lines:    " .. line_count.format(count)
+    elseif stat.size > 5 * 1024 * 1024 then
       lines[#lines + 1] = "  Lines:    (file too large)"
     end
   end

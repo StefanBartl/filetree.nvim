@@ -34,4 +34,18 @@ function M.current()
   return "linux"
 end
 
+---Return true when `name` is found in PATH.
+---@param name string
+---@return boolean
+function M.has_executable(name)
+  return vim.fn.executable(name) == 1
+end
+
+---Return the current working directory (never nil).
+---@return string
+function M.get_cwd()
+  local uv = vim.uv or vim.loop
+  return (uv and uv.cwd and uv.cwd()) or vim.fn.getcwd()
+end
+
 return M

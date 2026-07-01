@@ -57,14 +57,20 @@ end
 local function apply_neotree(names, adapter)
   local ok, neo_cfg = pcall(require, "neo-tree.config")
   if not ok or not (neo_cfg and neo_cfg.config) then
-    notify.warn("neo-tree config not accessible — ignore_list will not apply")
+    -- neo-tree.setup() hasn't run yet (e.g. lazy=false startup race).
+    -- Retry once after VimEnter when all plugin configs have executed.
+    vim.api.nvim_create_autocmd("VimEnter", {
+      once     = true,
+      callback = function()
+        vim.defer_fn(function() apply_neotree(names, adapter) end, 50)
+      end,
+    })
     return
   end
 
   local fi = neo_cfg.config.filesystem
              and neo_cfg.config.filesystem.filtered_items
   if not fi then
-    -- filtered_items table doesn't exist yet; create it
     neo_cfg.config.filesystem = neo_cfg.config.filesystem or {}
     neo_cfg.config.filesystem.filtered_items = {}
     fi = neo_cfg.config.filesystem.filtered_items
@@ -80,12 +86,10 @@ local function apply_neotree(names, adapter)
     end
   end
 
-  -- Ensure the list is active (visible = false means "apply filters")
   if fi.visible == nil then fi.visible = false end
 
-  -- Refresh the tree so the new filter takes effect
   if type(adapter.refresh) == "function" then
-    vim.defer_fn(function() pcall(adapter.refresh) end, 50)
+    vim.defer_fn(function() pcall(adapter.refresh) end, 100)
   end
 end
 

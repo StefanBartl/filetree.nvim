@@ -18,23 +18,17 @@
 ---   command   string?    Override the launch command entirely. The directory
 ---                        path is appended as the last argument.
 
-local notify = require("filetree.util.notify").create("[filetree.open_in_fm]")
+local notify   = require("filetree.util.notify").create("[filetree.open_in_fm]")
+local platform = require("filetree.util.platform")
 
 local M = {}
 
 -- ── Platform detection ────────────────────────────────────────────────────────
 
 local function default_cmd()
-  local uname = vim.loop and vim.loop.os_uname and vim.loop.os_uname()
-  if uname then
-    local sys = uname.sysname or ""
-    if sys:find("Windows") or sys:find("MINGW") or sys:find("CYGWIN") then
-      return "explorer"
-    elseif sys == "Darwin" then
-      return "open"
-    end
-  end
-  -- Linux / BSD / WSL fallback
+  if platform.is_windows() then return "explorer" end
+  if platform.is_mac()     then return "open" end
+  if platform.has_executable("wslview") then return "wslview" end
   return "xdg-open"
 end
 
@@ -45,11 +39,7 @@ end
 ---@param cmd string  Binary to invoke.
 local function launch(dir, cmd)
   local args
-  if cmd == "open" then
-    -- macOS: -R reveals the item in Finder; fall back to dir directly
-    args = { "open", dir }
-  elseif cmd == "explorer" then
-    -- Windows: explorer path\ — trailing backslash ensures it opens the folder
+  if cmd == "explorer" then
     args = { "explorer", dir:gsub("/", "\\") }
   else
     args = { cmd, dir }
