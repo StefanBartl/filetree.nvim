@@ -200,6 +200,13 @@ function M.open_reveal(path, _parent_levels)
   return ok
 end
 
+function M.set_root(path)
+  local oil = get_oil()
+  if not oil then return false end
+  local ok = pcall(oil.open, path)
+  return ok
+end
+
 function M.open_cwd()
   local oil = get_oil()
   if not oil then return false end

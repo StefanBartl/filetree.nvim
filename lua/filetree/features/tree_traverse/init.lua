@@ -7,6 +7,8 @@ local M = {}
 local _cfg = {}
 ---@type FiletreeAdapter?
 local _adapter = nil
+---@type integer?
+local _augroup = nil
 
 local notify = require("filetree.util.notify").create("[filetree.tree_traverse]")
 
@@ -15,16 +17,18 @@ local notify = require("filetree.util.notify").create("[filetree.tree_traverse]"
 local function go_to(path)
   if not _adapter then return end
 
-  -- Try open_reveal with depth 0 as the mechanism to change root
-  local ok = pcall(_adapter.open_reveal, path, 0)
-  if not ok then
+  if type(_adapter.set_root) == "function" then
+    pcall(_adapter.set_root, path)
+  else
+    -- Fallback: set cwd first, then re-open at cwd
+    pcall(vim.cmd, "cd " .. vim.fn.fnameescape(path:gsub("\\", "/")))
     pcall(_adapter.open_cwd)
   end
 
   if _cfg.sync_cwd then
     local safe_path = path:gsub("\\", "/")
     pcall(vim.cmd, "cd " .. vim.fn.fnameescape(safe_path))
-    notify.info("cwd → " .. path)
+    notify.info("cwd → " .. safe_path)
   end
 end
 
@@ -73,7 +77,11 @@ function M.setup(cfg, adapter)
   _cfg     = cfg
   _adapter = adapter
 
+  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
+  _augroup = vim.api.nvim_create_augroup("filetree_tree_traverse", { clear = true })
+
   vim.api.nvim_create_autocmd("FileType", {
+    group    = _augroup,
     pattern  = { "neo-tree", "NvimTree" },
     callback = function(ev)
       local buf = ev.buf
@@ -94,6 +102,10 @@ end
 
 function M.teardown()
   _adapter = nil
+  if _augroup then
+    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    _augroup = nil
+  end
 end
 
 return M

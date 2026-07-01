@@ -145,6 +145,21 @@ function M.setup(user_config)
 
   commands.setup(cfg.command)
 
+  -- After registering all FileType autocmds, re-fire them for any tree buffer
+  -- that is already open.  Handles two cases:
+  --   (a) filetree loads after the tree was opened (e.g. event="VeryLazy" in real config)
+  --   (b) filetree.setup() is called a second time while the tree is already visible
+  vim.schedule(function()
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.api.nvim_buf_is_loaded(buf) then
+        local ft = vim.api.nvim_get_option_value("filetype", { buf = buf })
+        if ft == "neo-tree" or ft == "NvimTree" then
+          vim.api.nvim_exec_autocmds("FileType", { buf = buf, pattern = ft })
+        end
+      end
+    end
+  end)
+
   -- Apply adapter_keymaps: override / noop the adapter's own native keymaps.
   -- false → <Nop>, string → remap target.
   -- Runs in vim.schedule inside a FileType autocmd to fire AFTER the adapter

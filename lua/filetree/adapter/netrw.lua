@@ -183,6 +183,11 @@ function M.open_reveal(path, _parent_levels)
   return ok
 end
 
+function M.set_root(path)
+  local ok = pcall(vim.cmd, "Explore " .. vim.fn.fnameescape(path))
+  return ok
+end
+
 function M.open_cwd()
   local ok = pcall(vim.cmd, "Explore " .. vim.fn.fnameescape(vim.fn.getcwd()))
   return ok

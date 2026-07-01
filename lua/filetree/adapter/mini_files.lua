@@ -164,6 +164,13 @@ function M.open_reveal(path, _parent_levels)
   return ok
 end
 
+function M.set_root(path)
+  local mf = get_mf()
+  if not mf then return false end
+  local ok = pcall(mf.open, path)
+  return ok
+end
+
 function M.open_cwd()
   local mf = get_mf()
   if not mf then return false end

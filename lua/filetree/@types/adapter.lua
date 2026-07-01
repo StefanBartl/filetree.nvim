@@ -18,6 +18,7 @@
 ---@field collapse_node    fun(node: FiletreeNode): boolean
 ---@field open_file        fun(path: string, mode?: FiletreeOpenMode): boolean
 ---@field open_reveal      fun(path: string, parent_levels?: integer): boolean  Open tree and reveal file.
+---@field set_root         fun(path: string): boolean                            Change the tree root to path.
 ---@field open_cwd         fun(): boolean                                        Open tree at cwd.
 ---@field close            fun(): boolean
 ---@field refresh          fun(): boolean
