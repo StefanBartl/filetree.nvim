@@ -13,8 +13,8 @@ local _defaults = {
       index_width = 2,
       timeout_ms  = 3000,
       keymaps = {
-        trigger_reveal = "<leader>fp",
-        trigger_cwd    = "<leader>fc",
+        trigger_reveal = "<leader>ftp",
+        trigger_cwd    = "<leader>ftc",
       },
     },
     layout_guard = {

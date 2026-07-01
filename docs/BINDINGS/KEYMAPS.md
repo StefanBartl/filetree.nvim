@@ -99,8 +99,8 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 
 | Key | Feature | Config field | Action |
 |-----|---------|-------------|--------|
-| `<leader>fp` | picker | `keymaps.trigger_reveal` | Enter picker + reveal current file |
-| `<leader>fc` | picker | `keymaps.trigger_cwd` | Enter picker at cwd |
+| `<leader>ftp` | picker | `keymaps.trigger_reveal` | Enter picker + reveal current file |
+| `<leader>ftc` | picker | `keymaps.trigger_cwd` | Enter picker at cwd |
 
 ---
 

@@ -92,8 +92,8 @@ make the default state explicit — you can drop it): >lua
         index_width = 2,      -- digits per index label
         timeout_ms  = 3000,   -- auto-exit after inactivity
         keymaps = {
-          trigger_reveal = "<leader>fp",
-          trigger_cwd    = "<leader>fc",
+          trigger_reveal = "<leader>ftp",
+          trigger_cwd    = "<leader>ftc",
         },
       },
 
@@ -174,8 +174,8 @@ The picker overlays numbered labels on every visible tree node. Type a
 two-digit number to open/toggle the corresponding node immediately.
 
 Default keymaps (configurable): >
-  <leader>fp   Enter picker — reveal current buffer's file
-  <leader>fc   Enter picker — open at cwd
+  <leader>ftp   Enter picker — reveal current buffer's file
+  <leader>ftc   Enter picker — open at cwd
 <
 Inside picker mode:
   0-9        Enter digits. Complete index opens/toggles the node.

@@ -19,8 +19,8 @@ function M.setup(config, adapter)
   core.init(config, adapter)
 
   local kmaps = config.keymaps or {}
-  local reveal_key = kmaps.trigger_reveal or "<leader>fp"
-  local cwd_key    = kmaps.trigger_cwd    or "<leader>fc"
+  local reveal_key = kmaps.trigger_reveal or "<leader>ftp"
+  local cwd_key    = kmaps.trigger_cwd    or "<leader>ftc"
 
   if _augroup then
     pcall(vim.api.nvim_del_augroup_by_id, _augroup)

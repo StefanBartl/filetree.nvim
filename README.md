@@ -275,8 +275,8 @@ require("filetree").setup({
       index_width = 2,        -- digits per label  (2 → 01..99)
       timeout_ms  = 3000,     -- auto-exit after ms of inactivity
       keymaps = {
-        trigger_reveal = "<leader>fp",
-        trigger_cwd    = "<leader>fc",
+        trigger_reveal = "<leader>ftp",
+        trigger_cwd    = "<leader>ftc",
       },
     },
 
@@ -427,8 +427,8 @@ Overlay two-digit labels on all visible tree nodes.
 
 | Key | Action |
 |---|---|
-| `<leader>fp` | Picker — reveal current file |
-| `<leader>fc` | Picker — open at cwd |
+| `<leader>ftp` | Picker — reveal current file |
+| `<leader>ftc` | Picker — open at cwd |
 
 **Inside picker mode:**
 
