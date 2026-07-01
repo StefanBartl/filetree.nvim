@@ -86,6 +86,8 @@ local FEATURES = {
   find_or_grep_menu   = { mod = "filetree.features.find_or_grep_menu",   key = "find_or_grep_menu"   },
   copy_file_list      = { mod = "filetree.features.copy_file_list",      key = "copy_file_list"      },
   smart_create        = { mod = "filetree.features.smart_create",        key = "smart_create"        },
+  window_style        = { mod = "filetree.features.window_style",        key = "window_style"        },
+  tree_open_keymaps   = { mod = "filetree.features.tree_open_keymaps",   key = "tree_open_keymaps"   },
 }
 
 -- ── Default-disabled features ─────────────────────────────────────────────────
@@ -110,6 +112,8 @@ local FEATURES = {
 --   harpoon_integration   Hard-requires the external harpoon plugin.
 --   telescope_integration Hard-requires telescope; redundant with the
 --                         builtin-fallback find_or_grep_menu / find_files.
+--   tree_open_keymaps     Binds global (not tree-local) normal-mode keys — too
+--                         opinionated to enable without explicit opt-in.
 --
 ---@type table<string, boolean>
 local DEFAULT_DISABLED = {
@@ -121,6 +125,7 @@ local DEFAULT_DISABLED = {
   path_utils            = true,
   harpoon_integration   = true,
   telescope_integration = true,
+  tree_open_keymaps     = true,
 }
 
 ---@type table<string, table>  name → loaded feature module

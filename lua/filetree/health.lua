@@ -138,6 +138,8 @@ function M.check()
     { key = "find_or_grep_menu",      name = "Find or Grep Menu"       },
     { key = "copy_file_list",         name = "Copy File List"          },
     { key = "smart_create",           name = "Smart Create"            },
+    { key = "window_style",           name = "Window Style"            },
+    { key = "tree_open_keymaps",      name = "Tree Open Keymaps"       },
   }
 
   -- Resolve enabled-state under the opt-out model (on by default unless the
