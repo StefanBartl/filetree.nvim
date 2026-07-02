@@ -4,6 +4,32 @@ Features sorted roughly by priority and estimated complexity.
 
 ---
 
+## Checklist audits & implementation plan
+
+filetree.nvim was audited against the project checklists. Full per-rule status:
+- [Zentral-Prinzipien.md](ROADMAP/Zentral-Prinzipien.md)
+- [Arch&Coding.md](ROADMAP/Arch%26Coding.md)
+- [Checklist.md](ROADMAP/Checklist.md)
+- Feature port map: [NEOTREE_FEATURES.md](ROADMAP/NEOTREE_FEATURES.md)
+
+**Prioritized action items surfaced by the audits:**
+1. **lib.nvim adoption** — route keymaps/usercmds/autocmds/augroups through
+   `lib.nvim.map` / `usercmd` / `autocmd` / `augroup`, and pickers through
+   `lib.nvim.ui.hover_select`. Biggest item (touches every feature); do it
+   incrementally with a local fallback so filetree still runs standalone.
+   (`util.notify` already delegates to `lib.nvim.notify`.)
+2. **Centralize FileType keymap binding** — one dispatcher binds all enabled
+   features' tree-buffer keymaps instead of N per-feature `FileType` autocmds.
+3. **Broaden automated tests** beyond `test/smoke.lua` (preview modes, copy_move,
+   path helpers).
+4. **Bound `get_visible_nodes`** on very large trees; audit `CursorMoved` handlers
+   for per-event allocations.
+5. **Verify persisted state** (recent_files / session / quick_open) lives under
+   `stdpath("data")` / `stdpath("cache")`.
+6. **Global debug switch** (`config.debug`) feeding `notify.debug`.
+
+---
+
 ## Near-term
 
 ### UI folder reorganization
