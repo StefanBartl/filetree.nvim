@@ -252,4 +252,39 @@ function M.inject(config, adapter)
   return true
 end
 
+---@type integer?
+local _popup_augroup = nil
+
+---Restore native `/` search in neo-tree's help (`?`) popup.
+---
+---neo-tree's help screen maps *every* tree key inside the popup to run that
+---command (so you can press a key to execute it). That means `/` runs the tree
+---filter instead of searching the help text. This registers a `neo-tree-popup`
+---FileType autocmd that removes the popup's buffer-local `/` (and `?`) maps, so
+---they fall back to Neovim's built-in `/` search and native paging. `n`/`N` are
+---not mapped by neo-tree, so they already page through matches natively.
+---Idempotent — safe to call once at setup.
+---@param keys string[]?  Keys to hand back to native behaviour (default { "/" }).
+function M.native_search_in_help(keys)
+  keys = keys or { "/" }
+  if _popup_augroup then
+    pcall(vim.api.nvim_del_augroup_by_id, _popup_augroup)
+  end
+  _popup_augroup = vim.api.nvim_create_augroup("filetree_neotree_popup_search", { clear = true })
+  vim.api.nvim_create_autocmd("FileType", {
+    group   = _popup_augroup,
+    pattern = "neo-tree-popup",
+    callback = function(ev)
+      local buf = ev.buf
+      -- Defer past neo-tree's own popup:map() calls so our removal wins.
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        for _, key in ipairs(keys) do
+          pcall(vim.keymap.del, "n", key, { buffer = buf })
+        end
+      end)
+    end,
+  })
+end
+
 return M

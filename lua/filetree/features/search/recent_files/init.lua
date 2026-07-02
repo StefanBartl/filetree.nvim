@@ -23,7 +23,9 @@ local M = {}
 local _cfg = {
   enabled      = false,
   max_files    = 100,
-  keymap_tree  = "r",
+  -- Not "r": that is neo-tree's native rename. Use a leader mapping so the
+  -- adapter's own editing keys keep working.
+  keymap_tree  = "<leader>fr",
   keymap_global = nil,
   reveal_on_open = true,
   exclude      = {

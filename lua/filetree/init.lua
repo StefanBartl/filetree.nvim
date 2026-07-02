@@ -205,6 +205,8 @@ function M.setup(user_config)
         callback = function() vim.defer_fn(do_inject, 50) end,
       })
     end
+    -- Give `/` back its native search inside neo-tree's `?` help popup.
+    require("filetree.attach").native_search_in_help()
   end
 
   _initialized = true
