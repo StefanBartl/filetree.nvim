@@ -7,6 +7,11 @@ local M = {}
 local _cfg = {
   enabled = false,
   keymap  = "a",
+  -- LuaLS scaffolding for new files — all OFF by default (opt in per key):
+  auto_module_annot   = false,  -- new .lua files get a `---@module '<derived>'` header
+  auto_types_template = false,  -- files under an `@types` path get `---@meta` + `---@module`
+  auto_init_lua       = false,  -- creating a directory also creates init.lua (with the header)
+  ask_clipboard       = false,  -- if the clipboard is non-empty, offer to paste it into the file
 }
 ---@type FiletreeAdapter?
 local _adapter = nil
@@ -101,13 +106,28 @@ end
 function M.create()
   local parent = resolve_parent_dir()
 
+  -- Show the parent directory in the prompt (relative to cwd) rather than
+  -- pre-filling the absolute path — the user only types the new name.
+  local display = vim.fn.fnamemodify(parent, ":~:.")
+  if display == "" or display == "." then display = "./" else display = display .. "/" end
+
   vim.ui.input(
-    { prompt = "Create (append / for dir): ", default = parent .. "/" },
+    { prompt = "Create in " .. display .. "  (append / for a directory): " },
     function(input)
       if not input or input == "" then return end
 
       local is_dir = input:sub(-1) == "/"
-      local target = input:gsub("/?$", "")  -- strip trailing slash for ops
+      local name   = input:gsub("/?$", "")  -- strip trailing slash for ops
+
+      -- Relative names are created inside the parent dir; an absolute path (or
+      -- Windows drive path) is honoured as-is.
+      local target
+      if name:match("^/") or name:match("^%a:[/\\]") then
+        target = name
+      else
+        target = parent .. "/" .. name
+      end
+      target = (target:gsub("\\", "/"))
 
       if is_dir then
         -- Create directory
@@ -116,7 +136,7 @@ function M.create()
           notify.error("Failed to create directory: " .. target)
           return
         end
-        notify.info("Created directory: " .. target)
+        notify.info("Created directory: " .. vim.fn.fnamemodify(target, ":~:."))
 
         -- Auto init.lua
         if _cfg.auto_init_lua then
