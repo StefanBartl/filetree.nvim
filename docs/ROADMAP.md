@@ -95,6 +95,23 @@ features = {
 
 ---
 
+## lib.nvim adoption (shared code)
+
+filetree declares `lib.nvim` as a dependency. Shared code should live there so it
+is reused across the author's plugins rather than duplicated.
+
+- **Done:** `lib.nvim.neotree.node` (node path/collection helpers, used by the
+  neo-tree adapter); `util.notify` now delegates to `lib.nvim.notify`.
+- **Candidates** (overlap with existing lib modules; migrate when the APIs are
+  reconciled, keeping a local fallback so filetree runs standalone):
+  - `util.platform` → `lib.nvim.cross.platform`
+  - `util.path` → `lib.nvim.fs.path` / `lib.nvim.normalize`
+  - `util.buffer` → `lib.nvim.buf_win_tab.normal_buffer`
+  - `util.fs` (recursive collect) → `lib.nvim.fs.*`
+  - `util.line_count` → `lib.lua.*` (pure, editor-independent)
+
+---
+
 ## Won't implement (out of scope)
 
 - Direct LSP integration (belongs in LSP plugins).

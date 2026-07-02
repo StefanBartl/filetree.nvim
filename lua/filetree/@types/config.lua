@@ -91,6 +91,8 @@
 ---@field find_or_grep_menu       FiletreeFindOrGrepMenuConfig?
 ---@field copy_file_list          FiletreeCopyFileListConfig?
 ---@field smart_create            FiletreeSmartCreateConfig?
+---@field window_style            FiletreeWindowStyleConfig?
+---@field tree_open_keymaps       FiletreeTreeOpenKeymapsConfig?
 
 -- ── picker ────────────────────────────────────────────────────────────────────
 
