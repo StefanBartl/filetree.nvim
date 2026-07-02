@@ -48,9 +48,7 @@ end
 
 local function open_builtin(dir)
   local split = _cfg.split
-  if split == "vertical" then
-    vim.cmd("vsplit | terminal")
-  elseif split == "float" then
+  if split == "float" then
     -- minimal floating terminal
     local bufnr = vim.api.nvim_create_buf(false, true)
     local width  = math.floor(vim.o.columns * 0.75)
@@ -63,26 +61,17 @@ local function open_builtin(dir)
       width = width, height = height,
       style = "minimal", border = "rounded",
     })
-    vim.fn.termopen(vim.o.shell, { cwd = dir })
-    vim.cmd("startinsert")
+  elseif split == "vertical" then
+    vim.cmd("vsplit | enew")
   else
-    vim.cmd("split | terminal")
+    vim.cmd("split | enew")
   end
-  -- cd into the target dir for builtin terminal
-  if split ~= "float" then
-    vim.defer_fn(function()
-      local buf = vim.api.nvim_get_current_buf()
-      if vim.bo[buf].buftype == "terminal" then
-        local shell_cd
-        if vim.fn.has("win32") == 1 then
-          shell_cd = "cd /d " .. dir .. "\r"
-        else
-          shell_cd = "cd " .. vim.fn.shellescape(dir) .. "\n"
-        end
-        vim.api.nvim_chan_send(vim.b[buf].terminal_job_id or 0, shell_cd)
-      end
-    end, 50)
-  end
+
+  -- Start the shell with cwd set natively. This is shell-agnostic — no manual
+  -- `cd` is sent, so it works with cmd, PowerShell, bash, zsh, … alike (the old
+  -- `cd /d` was cmd.exe-only and broke under PowerShell).
+  vim.fn.termopen(vim.o.shell, { cwd = dir })
+  vim.cmd("startinsert")
   return true
 end
 

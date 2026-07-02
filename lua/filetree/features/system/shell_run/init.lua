@@ -5,9 +5,9 @@
 ---
 ---   1. Resolves the directory of the node under the cursor (or cwd if none).
 ---   2. Prompts for a shell command via vim.ui.input.
----   3. Runs the command via a split terminal (`:split term://cd <dir> && <cmd>`).
----      The terminal window closes automatically when the command exits with
----      code 0 (`on_exit` callback).
+---   3. Runs the command in a split terminal via `termopen(cmd, { cwd = dir })`
+---      — cwd is set natively (shell-agnostic; no `cd … &&`). The terminal
+---      window closes automatically when the command exits 0 (`on_exit`).
 ---
 --- The terminal approach gives the user live output, coloured output, and
 --- interactive input (password prompts, confirm dialogs) without blocking
@@ -45,38 +45,27 @@ end
 ---@param split        string   "split" | "vsplit"
 ---@param height       integer
 local function run_in_terminal(dir, cmd, close_on_ok, split, height)
-  -- Build a shell one-liner: cd into dir, then run the user command
-  local shell_line = "cd " .. vim.fn.shellescape(dir) .. " && " .. cmd
-
-  -- Open the split terminal
-  local term_cmd
-  if split == "vsplit" then
-    term_cmd = "vsplit term://" .. shell_line
-  else
-    term_cmd = height .. "split term://" .. shell_line
-  end
-
-  local ok, err = pcall(vim.cmd, term_cmd)
+  -- Open an empty split, then run the command with cwd set natively. No manual
+  -- `cd … && …` — that was shell-specific (`&&` breaks on older PowerShell);
+  -- termopen's `cwd` is shell-agnostic (cmd, PowerShell, bash, zsh, …).
+  local open_cmd = split == "vsplit" and "vsplit | enew" or (height .. "split | enew")
+  local ok, err = pcall(vim.cmd, open_cmd)
   if not ok then
-    notify.warn("Could not open terminal: " .. tostring(err))
+    notify.warn("Could not open terminal split: " .. tostring(err))
     return
   end
 
-  -- In the new terminal buffer, auto-close on successful exit
-  if close_on_ok then
-    local term_buf = vim.api.nvim_get_current_buf()
-    vim.api.nvim_create_autocmd("TermClose", {
-      buffer = term_buf,
-      once   = true,
-      callback = function(ev)
-        -- ev.data (Neovim ≥ 0.10) or pattern contains exit code after space
-        local code_str = tostring(ev.data or "")
-        local code     = tonumber(code_str:match("%d+")) or -1
-        if code == 0 then
-          pcall(vim.api.nvim_buf_delete, term_buf, { force = true })
-        end
-      end,
-    })
+  local term_buf = vim.api.nvim_get_current_buf()
+  local job = vim.fn.termopen(cmd, {
+    cwd     = dir,
+    on_exit = function(_, code)
+      if close_on_ok and code == 0 then
+        pcall(vim.api.nvim_buf_delete, term_buf, { force = true })
+      end
+    end,
+  })
+  if not job or job <= 0 then
+    notify.warn("Could not run command: " .. cmd)
   end
 end
 

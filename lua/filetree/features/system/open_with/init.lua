@@ -37,14 +37,13 @@ local _adapter = nil
 
 -- ── Open helpers ──────────────────────────────────────────────────────────────
 
+---Per-OS "open with default handler" command (fallback for Neovim < 0.10).
+---@return string[]
 local function system_open_cmd()
-  if platform.is_windows() then return { "cmd", "/c", "start", "" }
-  elseif platform.is_wsl()  then return { "wsl-open" }
-  end
-  -- macOS or Linux
-  local uname = vim.fn.system("uname -s"):gsub("%s+", "")
-  if uname == "Darwin" then return { "open" }
-  else return { "xdg-open" } end
+  if platform.is_windows() then return { "cmd", "/c", "start", "" } end
+  if platform.is_mac()     then return { "open" } end
+  if platform.is_wsl() or platform.has_executable("wslview") then return { "wslview" } end
+  return { "xdg-open" }
 end
 
 local function open_with_cmd(cmd_parts, path)
@@ -59,6 +58,17 @@ local function open_with_cmd(cmd_parts, path)
   end)
 end
 
+---Open `path` with the OS default handler. Prefers Neovim's built-in
+---`vim.ui.open` (0.10+, platform-correct + maintained); falls back to a manual
+---per-OS spawn otherwise.
+local function system_open(path)
+  if type(vim.ui.open) == "function" then
+    local ok, obj = pcall(vim.ui.open, path)
+    if ok and obj ~= nil then return end
+  end
+  open_with_cmd(system_open_cmd(), path)
+end
+
 local function current_path()
   if not _adapter then return nil end
   local node = _adapter.get_current_node()
@@ -71,7 +81,7 @@ end
 function M.open_system()
   local path = current_path()
   if not path then notify.warn("No node under cursor"); return end
-  open_with_cmd(system_open_cmd(), path)
+  system_open(path)
   notify.info("Opening: " .. vim.fn.fnamemodify(path, ":t"))
 end
 
@@ -121,7 +131,7 @@ function M.pick()
     local app = apps[row]
     vim.api.nvim_win_close(win, true)
     if app.cmd == "_system" then
-      open_with_cmd(system_open_cmd(), path)
+      system_open(path)
     else
       local cmd = { app.cmd }
       for _, a in ipairs(app.args or {}) do cmd[#cmd + 1] = a end
