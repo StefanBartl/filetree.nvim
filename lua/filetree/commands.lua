@@ -552,4 +552,27 @@ function M.teardown()
   _registered_commands = {}
 end
 
+---Walk the command TREE and return every sub-command path as a string, sorted.
+---The dispatcher's TREE is the single source of truth, so this never drifts from
+---what is actually registered. Default-action (`""`) keys are skipped.
+---@return string[]  e.g. { "archive tar", "git stage", "marks show", … }
+function M.command_paths()
+  local out = {}
+  local function walk(node, prefix)
+    for key, val in pairs(node) do
+      if key ~= "" then
+        local path = prefix == "" and key or (prefix .. " " .. key)
+        if type(val) == "table" then
+          walk(val, path)
+        else
+          out[#out + 1] = path
+        end
+      end
+    end
+  end
+  walk(TREE, "")
+  table.sort(out)
+  return out
+end
+
 return M

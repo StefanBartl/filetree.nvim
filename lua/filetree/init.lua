@@ -127,6 +127,9 @@ function M.setup(user_config)
 
   commands.setup(cfg.command)
 
+  -- Register which-key group labels (no-op when which-key is absent).
+  pcall(function() require("filetree.bindings").setup_which_key() end)
+
   -- After registering all FileType autocmds, re-fire them for any tree buffer
   -- that is already open.  Handles two cases:
   --   (a) filetree loads after the tree was opened (e.g. event="VeryLazy" in real config)

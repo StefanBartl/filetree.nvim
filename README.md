@@ -611,6 +611,15 @@ require("filetree").setup({
 All tree-buffer keymaps, defaults, and how to remap or disable them:
 → [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md)
 
+**Machine-readable catalog:** [docs/BINDINGS.lua](docs/BINDINGS.lua) returns every
+keymap, `:Filetree` sub-command and autocmd as data
+(`require("filetree.bindings").catalog()`), sourced from `lua/filetree/bindings/`
+and the command dispatcher so it never drifts.
+
+**which-key:** if [which-key.nvim](https://github.com/folke/which-key.nvim) is
+installed, `setup()` registers leader-group labels automatically (v2 and v3 APIs);
+individual tree keys carry a `desc` so which-key shows them out of the box.
+
 > **neo-tree `?` cheatsheet:** filetree keymaps appear there automatically —
 > `setup()` injects them into neo-tree's mapping registry, no extra wiring needed.
 > For **nvim-tree** (`g?`) and other adapters the keymaps are registered via
