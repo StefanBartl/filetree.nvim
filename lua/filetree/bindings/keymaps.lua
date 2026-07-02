@@ -71,7 +71,7 @@ return {
     { lhs = "<M-p>", desc = "Find/grep menu",      feature = "find_or_grep_menu", scope = "tree" },
     { lhs = "gr", desc = "Grep in dir",            feature = "grep_in_dir", scope = "tree" },
     { lhs = "gR", desc = "Grep <cword> in dir",    feature = "grep_in_dir", scope = "tree" },
-    { lhs = "r",  desc = "Recent files",           feature = "recent_files", scope = "tree" },
+    { lhs = "<leader>fr", desc = "Recent files",   feature = "recent_files", scope = "tree" },
   },
   paths = {
     { lhs = "[a", desc = "Copy absolute path",     feature = "path_copy", scope = "tree" },

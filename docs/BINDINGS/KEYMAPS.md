@@ -74,7 +74,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `R` | rename_batch | `keymap` | Open batch rename buffer |
 | `T` | open_terminal | `keymap` | Open terminal in node directory |
 | `f` | find_files | `keymap_tree` | Find files (telescope/fzf-lua/builtin) |
-| `r` | recent_files | `keymap_tree` | Open recent files picker |
+| `<leader>fr` | recent_files | `keymap_tree` | Open recent files picker (not `r` — that is neo-tree's native rename) |
 | `gr` | grep_in_dir | `keymap` | Grep in node directory |
 | `gR` | grep_in_dir | `keymap_cword` | Grep `<cword>` in node directory |
 | `yy` | copy_move | `keymaps.copy` | Stage node for copy |

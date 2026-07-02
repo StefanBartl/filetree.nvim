@@ -102,7 +102,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `find_files` | Find files via telescope / fzf-lua / mini.pick / builtin (`f`) |
 | `find_or_grep_menu` | Unified find/grep picker menu (`<M-p>`) |
 | `grep_in_dir` | Grep in the node's directory (`gr` / `gR` for `<cword>`) |
-| `recent_files` | Recent-files picker (`r`) |
+| `recent_files` | Recent-files picker (`<leader>fr`) |
 
 **`paths` — paths & clipboard**
 | Feature | What it does |
@@ -627,6 +627,10 @@ individual tree keys carry a `desc` so which-key shows them out of the box.
 > built-in help won't list them — they still work; check `:nmap` in the tree
 > buffer. See
 > [neo-tree `?` cheatsheet integration](docs/BINDINGS/KEYMAPS.md#neo-tree--cheatsheet-integration).
+>
+> Inside the neo-tree `?` help popup, filetree restores `/` to Neovim's **native
+> search** (neo-tree otherwise maps `/` to run the tree filter), so you can search
+> the cheatsheet text and page matches with `n`/`N`.
 
 **Remap filetree feature keys:**
 
