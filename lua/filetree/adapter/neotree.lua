@@ -160,15 +160,25 @@ function M.extract_paths(nodes)
   return paths, names
 end
 
+-- Safety cap: the walk already only descends into *expanded* nodes (so it is
+-- bounded by the rendered line count, not the filesystem), but a single directory
+-- expanded with tens of thousands of entries could still be pathological. Stop
+-- collecting past this many nodes — far more than any picker/marks use needs.
+local MAX_VISIBLE = 5000
+
 function M.get_visible_nodes(filter)
   local state = get_state()
   if not state or not state.tree then return {} end
 
   local nodes = {}
   local line_nr = 1
+  local capped = false
 
   local function collect(node)
-    if not node then return end
+    if not node or #nodes >= MAX_VISIBLE then
+      capped = capped or #nodes >= MAX_VISIBLE
+      return
+    end
     local depth = (node.get_depth and node:get_depth()) or 0
     if depth > 0 then
       local ntype = node.type == "directory" and "directory" or "file"
@@ -205,6 +215,9 @@ function M.get_visible_nodes(filter)
   local roots = state.tree.get_nodes and state.tree:get_nodes()
   if roots then
     for _, root in ipairs(roots) do collect(root) end
+  end
+  if capped then
+    notify.debug("get_visible_nodes: capped at " .. MAX_VISIBLE .. " nodes")
   end
   return nodes
 end

@@ -316,6 +316,7 @@ explicit — you can drop the line in your own config.
 ```lua
 require("filetree").setup({
   adapter = "auto",   -- "neotree" | "nvimtree" | "auto"
+  debug   = false,    -- true → show internal debug notifications (troubleshooting)
 
   -- Ignore list: hide common dirs/files from the tree by default.
   -- true (default) → built-in list (.git, node_modules, …)
