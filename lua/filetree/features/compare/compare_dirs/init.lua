@@ -23,7 +23,7 @@
 local notify = require("filetree.util.notify").create("[filetree.compare_dirs]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeCompareDirsConfig
@@ -197,9 +197,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeCompareDirsConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -207,32 +204,17 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_compare_dirs", true)
-
   if _cfg.keymap then
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = { "neo-tree", "NvimTree" },
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          map("n", _cfg.keymap, M.compare_current, {
-            buffer = buf, silent = true, desc = "Filetree: compare dirs",
-          })
-        end)
-      end,
-    })
+    tree_attach.on_attach(function(buf)
+      map("n", _cfg.keymap, M.compare_current, {
+        buffer = buf, silent = true, desc = "Filetree: compare dirs",
+      })
+    end)
   end
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

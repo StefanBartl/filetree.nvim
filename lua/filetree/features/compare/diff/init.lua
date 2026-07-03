@@ -10,7 +10,7 @@
 local notify = require("filetree.util.notify").create("[filetree.diff]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeDiffConfig
@@ -133,9 +133,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeDiffConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -143,36 +140,20 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_diff", true)
-
   if _cfg.keymap then
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = "neo-tree,NvimTree",
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          map("n", _cfg.keymap, M.stage_or_diff_current, {
-            buffer = buf,
-            silent = true,
-            desc   = "Filetree: stage/diff current file",
-          })
-        end)
-      end,
-    })
+    tree_attach.on_attach(function(buf)
+      map("n", _cfg.keymap, M.stage_or_diff_current, {
+        buffer = buf,
+        silent = true,
+        desc   = "Filetree: stage/diff current file",
+      })
+    end)
   end
-
 end
 
 function M.teardown()
   _staged   = nil
   _adapter  = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

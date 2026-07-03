@@ -8,6 +8,7 @@ local config_mod  = require("filetree.config")
 local adapter_mod = require("filetree.adapter")
 local commands    = require("filetree.commands")
 local registry    = require("filetree.features")
+local tree_attach = require("filetree.util.tree_attach")
 local notify      = require("filetree.util.notify").create("[filetree]")
 
 local M = {}
@@ -90,6 +91,11 @@ function M.setup(user_config)
   -- Apply the global debug switch so notifier.debug(...) becomes visible.
   require("filetree.util.notify").set_debug(cfg.debug == true)
 
+  -- Reset the central tree-buffer keymap dispatcher; features re-register their
+  -- on_attach callbacks during their own setup() below, then install() wires the
+  -- single FileType autocmd.
+  tree_attach.reset()
+
   -- Tear down previous features (re-setup is idempotent)
   for _, feat in pairs(_active_features) do
     if type(feat.teardown) == "function" then
@@ -127,6 +133,10 @@ function M.setup(user_config)
       end
     end
   end
+
+  -- Wire the single FileType autocmd that dispatches to every feature's
+  -- on_attach callback registered above.
+  tree_attach.install(adapter)
 
   commands.setup(cfg.command)
 
