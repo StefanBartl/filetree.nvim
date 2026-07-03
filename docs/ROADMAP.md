@@ -30,8 +30,14 @@ filetree.nvim was audited against the project checklists. Full per-rule status:
      pure LRU (no TTL/invalidation); the validity cache must expire and be
      invalidatable, so it stays a TTL cache. memo remains available for future
      pure hot-path needs.
-2. **Centralize FileType keymap binding** — one dispatcher binds all enabled
-   features' tree-buffer keymaps instead of N per-feature `FileType` autocmds.
+2. **Centralize FileType keymap binding** — *assessed, deferred.* Each feature
+   registers its own `FileType` autocmd to bind tree-buffer keymaps (~40 total).
+   A single dispatcher would be tidier, but the current form is cheap (fires once
+   per tree buffer), already reload-safe (named `filetree_<feature>` augroups) and
+   uniformly routed through `util.autocmd`. The benefit is code-organization only;
+   the cost is rewriting every feature's `setup()`. Left as an opt-in future
+   refactor: a `util.tree_attach.on_attach(fn)` registry + one FileType autocmd.
+   New features should prefer that pattern once it exists.
 3. **Broaden automated tests** beyond `test/smoke.lua` (preview modes, copy_move,
    path helpers).
 4. ✅ **Bound `get_visible_nodes`** — safety cap (`MAX_VISIBLE = 5000`) for
