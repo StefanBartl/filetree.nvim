@@ -24,8 +24,12 @@ filetree.nvim was audited against the project checklists. Full per-rule status:
      `nvim_create_autocmd` / `nvim_create_augroup` onto `util.map` / `util.autocmd`
      (nav · ui · fileops · search · paths · git · org · system · lsp · compare ·
      integration · infra)
-   - ⏳ `commands.lua` → `lib.nvim.usercmd`; pickers → `lib.nvim.ui.hover_select`;
-     `util.buffer` cache → `lib.nvim.memo`
+   - ✅ `commands.lua` → `util.usercmd` (→ `lib.nvim.usercmd`)
+   - ✅ `vim.ui.select` sites → `util.select` (→ `lib.nvim.ui.hover_select`)
+   - ✅ `util.buffer` cache: **assessed — memo does not fit.** `lib.nvim.memo` is
+     pure LRU (no TTL/invalidation); the validity cache must expire and be
+     invalidatable, so it stays a TTL cache. memo remains available for future
+     pure hot-path needs.
 2. **Centralize FileType keymap binding** — one dispatcher binds all enabled
    features' tree-buffer keymaps instead of N per-feature `FileType` autocmds.
 3. **Broaden automated tests** beyond `test/smoke.lua` (preview modes, copy_move,

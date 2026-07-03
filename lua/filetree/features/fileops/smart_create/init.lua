@@ -3,6 +3,7 @@
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local ui_select = require("filetree.util.select")
 local M = {}
 
 ---@type FiletreeSmartCreateConfig
@@ -155,7 +156,7 @@ function M.create()
         if _cfg.ask_clipboard then
           local clip = vim.fn.getreg("+")
           if clip and clip ~= "" then
-            vim.ui.select(
+            ui_select(
               { "Empty", "Paste clipboard" },
               { prompt = "Create " .. vim.fn.fnamemodify(target, ":t") .. " with:" },
               function(choice)

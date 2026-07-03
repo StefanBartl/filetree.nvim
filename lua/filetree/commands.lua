@@ -14,6 +14,8 @@
 ---   :Filetree reveal pause 2000
 ---   :Filetree archive zip
 
+local usercmd = require("filetree.util.usercmd")
+
 local M = {}
 
 -- ── Feature accessor (lazy, only works after setup()) ─────────────────────────
@@ -533,7 +535,7 @@ function M.setup(cfg)
   for _, cmd_name in ipairs(names) do
     if not seen[cmd_name] then
       seen[cmd_name] = true
-      vim.api.nvim_create_user_command(cmd_name, function(opts)
+      usercmd.create(cmd_name, function(opts)
         dispatch(opts.args)
       end, {
         nargs    = "*",
@@ -547,7 +549,7 @@ end
 
 function M.teardown()
   for _, cmd_name in ipairs(_registered_commands) do
-    pcall(vim.api.nvim_del_user_command, cmd_name)
+    usercmd.del(cmd_name)
   end
   _registered_commands = {}
 end

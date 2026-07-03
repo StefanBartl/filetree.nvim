@@ -23,6 +23,7 @@ local platform = require("filetree.util.platform")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local ui_select = require("filetree.util.select")
 local M = {}
 
 ---@type FiletreeDuplicateNodeConfig
@@ -100,7 +101,7 @@ function M.duplicate_current()
     -- Confirm overwrite
     if _cfg.confirm_overwrite and
        (vim.fn.filereadable(dst) == 1 or vim.fn.isdirectory(dst) == 1) then
-      vim.ui.select({ "Overwrite", "Cancel" }, { prompt = "'" .. dst .. "' exists. " }, function(choice)
+      ui_select({ "Overwrite", "Cancel" }, { prompt = "'" .. dst .. "' exists. " }, function(choice)
         if choice == "Overwrite" then M._do_copy(src, dst, is_dir) end
       end)
     else

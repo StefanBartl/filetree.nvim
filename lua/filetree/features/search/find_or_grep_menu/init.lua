@@ -3,6 +3,7 @@
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local ui_select = require("filetree.util.select")
 local M = {}
 
 ---@type FiletreeFindOrGrepMenuConfig
@@ -75,7 +76,7 @@ local function run_find(dir)
     local display = vim.tbl_map(function(f)
       return f:gsub("\\", "/"):gsub("^" .. vim.pesc(cwd_prefix), "")
     end, files)
-    vim.ui.select(display, {
+    ui_select(display, {
       prompt = "Open: ",
     }, function(_, idx)
       if idx then
@@ -129,7 +130,7 @@ function M.open()
     { label = "live_grep",  fn = function() run_grep(dir) end },
   }
 
-  vim.ui.select(
+  ui_select(
     vim.tbl_map(function(c) return c.label end, choices),
     { prompt = "Search in " .. vim.fn.fnamemodify(dir, ":~") .. " :" },
     function(choice)
