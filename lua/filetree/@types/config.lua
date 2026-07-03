@@ -15,6 +15,7 @@
 
 ---@class FiletreeConfig
 ---@field adapter          FiletreeAdapterName|"auto"       Which adapter to use. "auto" picks the first available one.
+---@field debug            boolean?                         true → show notifier.debug(...) messages for troubleshooting (default false).
 ---@field features         FiletreeFeaturesConfig
 ---@field keymaps          table<string,string|false>?      Global keymap remap: { ["<old>"] = "<new>" } or { ["<key>"] = false } to disable.
 ---@field adapter_keymaps  table<string,string|false>?      Override the adapter's own native keymaps: false → <Nop>, string → remap target. Applied after the adapter sets its keymaps. Example: { ["i"] = false } noops neotree's built-in `i` (toggle-info).

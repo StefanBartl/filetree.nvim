@@ -34,11 +34,13 @@ filetree.nvim was audited against the project checklists. Full per-rule status:
    features' tree-buffer keymaps instead of N per-feature `FileType` autocmds.
 3. **Broaden automated tests** beyond `test/smoke.lua` (preview modes, copy_move,
    path helpers).
-4. **Bound `get_visible_nodes`** on very large trees; audit `CursorMoved` handlers
-   for per-event allocations.
-5. **Verify persisted state** (recent_files / session / quick_open) lives under
-   `stdpath("data")` / `stdpath("cache")`.
-6. **Global debug switch** (`config.debug`) feeding `notify.debug`.
+4. ✅ **Bound `get_visible_nodes`** — safety cap (`MAX_VISIBLE = 5000`) for
+   pathological single-directory expansions; the walk already only descends into
+   expanded nodes.
+5. ✅ **Persisted state verified** — all of recent_files / session / quick_open /
+   notes / pins / tags store under `stdpath("data")/filetree/*.json`.
+6. ✅ **Global debug switch** — `setup({ debug = true })` flips
+   `util.notify.set_debug`, making `notifier.debug(...)` visible (as INFO).
 
 ---
 

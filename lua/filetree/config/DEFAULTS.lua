@@ -10,6 +10,7 @@
 ---@type FiletreeConfig
 return {
   adapter     = "auto",
+  debug       = false,  -- true → show notifier.debug(...) messages (troubleshooting)
   ignore_list = true,   -- hide .git, node_modules, etc. by default
   features = {
     picker = {

@@ -87,6 +87,9 @@ function M.setup(user_config)
     return
   end
 
+  -- Apply the global debug switch so notifier.debug(...) becomes visible.
+  require("filetree.util.notify").set_debug(cfg.debug == true)
+
   -- Tear down previous features (re-setup is idempotent)
   for _, feat in pairs(_active_features) do
     if type(feat.teardown) == "function" then
