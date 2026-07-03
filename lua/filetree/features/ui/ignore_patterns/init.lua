@@ -25,6 +25,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.ignore_patterns]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeIgnorePatternsConfig
@@ -154,11 +156,11 @@ function M.setup(config, adapter)
   _adapter  = adapter
   _compiled = compile_patterns(_cfg.patterns)
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_ignore_patterns", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_ignore_patterns", true)
 
   -- Re-render on every tree buffer refresh
-  vim.api.nvim_create_autocmd({ "BufEnter", "TextChanged", "TextChangedI" }, {
+  au.acmd({ "BufEnter", "TextChanged", "TextChangedI" }, {
     group   = _augroup,
     pattern = { "neo-tree://*", "NvimTree_*" },
     callback = function(ev)
@@ -166,7 +168,7 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -175,7 +177,7 @@ function M.setup(config, adapter)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.toggle, {
+          map("n", _cfg.keymap, M.toggle, {
             buffer = buf, silent = true, desc = "Filetree: toggle ignore patterns",
           })
         end)
@@ -189,7 +191,7 @@ function M.teardown()
   _compiled = {}
   _active   = true
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

@@ -1,6 +1,8 @@
 ---@module 'filetree.features.find_or_grep_menu'
 ---@brief Mini-picker to choose between find_files and live_grep for the node directory.
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeFindOrGrepMenuConfig
@@ -166,7 +168,7 @@ function M.setup(cfg, adapter)
 
   if cfg.keymap then
     local function set_km(buf)
-      vim.keymap.set("n", cfg.keymap, function() M.open() end,
+      map("n", cfg.keymap, function() M.open() end,
         { buffer = buf, desc = "filetree: find or grep menu", silent = true })
     end
 
@@ -174,7 +176,7 @@ function M.setup(cfg, adapter)
     if winid then
       set_km(vim.api.nvim_win_get_buf(winid))
     else
-      vim.api.nvim_create_autocmd("FileType", {
+      au.acmd("FileType", {
         pattern  = { "neo-tree", "NvimTree" },
         callback = function(ev)
           local buf = ev.buf

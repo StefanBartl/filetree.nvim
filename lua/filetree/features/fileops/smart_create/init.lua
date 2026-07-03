@@ -1,6 +1,8 @@
 ---@module 'filetree.features.smart_create'
 ---@brief Enhanced file/directory creation with clipboard paste and LuaLS templates.
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeSmartCreateConfig
@@ -191,7 +193,7 @@ function M.setup(cfg, adapter)
 
   if _cfg.keymap then
     local function set_km(buf)
-      vim.keymap.set("n", _cfg.keymap, function() M.create() end,
+      map("n", _cfg.keymap, function() M.create() end,
         { buffer = buf, desc = "filetree: smart create", silent = true })
     end
 
@@ -199,7 +201,7 @@ function M.setup(cfg, adapter)
     if winid then
       set_km(vim.api.nvim_win_get_buf(winid))
     else
-      vim.api.nvim_create_autocmd("FileType", {
+      au.acmd("FileType", {
         pattern  = { "neo-tree", "NvimTree" },
         callback = function(ev)
           local buf = ev.buf

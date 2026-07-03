@@ -21,6 +21,8 @@ local platform   = require("filetree.util.platform")
 local line_count = require("filetree.util.line_count")
 local bufutil    = require("filetree.util.buffer")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreePreviewConfig
@@ -436,10 +438,10 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_preview", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_preview", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = "neo-tree,NvimTree",
     callback = function(ev)
@@ -449,7 +451,7 @@ function M.setup(config, adapter)
 
         -- <Tab>: toggle text preview, or dispatch image/PDF
         if _cfg.keymap then
-          vim.keymap.set("n", _cfg.keymap, M.toggle_or_open, {
+          map("n", _cfg.keymap, M.toggle_or_open, {
             buffer = buf, silent = true, desc = "Filetree: preview / open image or PDF",
           })
         end
@@ -464,7 +466,7 @@ function M.setup(config, adapter)
             end
           end
 
-          vim.keymap.set("n", _cfg.keymap_open, function()
+          map("n", _cfg.keymap_open, function()
             M.open_or_fallback(original_cr_cb)
           end, {
             buffer = buf, silent = true,
@@ -485,7 +487,7 @@ function M.setup(config, adapter)
           for _, pair in ipairs(scroll_keys) do
             local key, delta = pair[1], pair[2]
             if key then
-              vim.keymap.set("n", key, function() scroll_preview(delta) end, {
+              map("n", key, function() scroll_preview(delta) end, {
                 buffer = buf, silent = true,
                 desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down"),
               })
@@ -499,7 +501,7 @@ function M.setup(config, adapter)
   -- Leaving the tree ends the preview. Float: close it. Buffer: deactivate but
   -- keep the shown file (the user is moving into the editor to use it); toggling
   -- off from inside the tree is what restores the original buffer.
-  vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
+  au.acmd({ "BufLeave", "WinLeave" }, {
     group   = _augroup,
     pattern = "*",
     callback = function(ev)
@@ -515,7 +517,7 @@ function M.setup(config, adapter)
   })
 
   -- Live-update the preview as the cursor moves over tree nodes.
-  vim.api.nvim_create_autocmd("CursorMoved", {
+  au.acmd("CursorMoved", {
     group   = _augroup,
     pattern = "*",
     callback = function()
@@ -540,7 +542,7 @@ function M.teardown()
   buf_stop(true)
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

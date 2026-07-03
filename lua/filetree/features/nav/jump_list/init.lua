@@ -24,6 +24,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.jump_list]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeJumpListConfig
@@ -156,14 +158,14 @@ function M.show()
   end
 
   local opts = { buffer = buf, nowait = true, silent = true }
-  vim.keymap.set("n", "<CR>", function()
+  map("n", "<CR>", function()
     local row = vim.api.nvim_win_get_cursor(win)[1]
     vim.api.nvim_win_close(win, true)
     _cursor = row
     go_to(_list[_cursor])
   end, opts)
-  vim.keymap.set("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
-  vim.keymap.set("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
 end
 
 ---@return integer  current cursor position (1-based)
@@ -183,10 +185,10 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_jump_list", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_jump_list", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -194,12 +196,12 @@ function M.setup(config, adapter)
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
         if _cfg.keymap_back then
-          vim.keymap.set("n", _cfg.keymap_back, M.back, {
+          map("n", _cfg.keymap_back, M.back, {
             buffer = buf, silent = true, desc = "Filetree: jump back",
           })
         end
         if _cfg.keymap_fwd then
-          vim.keymap.set("n", _cfg.keymap_fwd, M.forward, {
+          map("n", _cfg.keymap_fwd, M.forward, {
             buffer = buf, silent = true, desc = "Filetree: jump forward",
           })
         end
@@ -208,7 +210,7 @@ function M.setup(config, adapter)
   })
 
   -- Record jump on CursorMoved in tree window (debounced)
-  vim.api.nvim_create_autocmd("CursorMoved", {
+  au.acmd("CursorMoved", {
     group   = _augroup,
     callback = function()
       if not _adapter then return end
@@ -236,7 +238,7 @@ function M.teardown()
   _cursor  = 0
   if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

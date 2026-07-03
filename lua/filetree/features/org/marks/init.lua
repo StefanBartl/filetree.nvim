@@ -7,6 +7,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.marks]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeMarksConfig
@@ -169,8 +171,8 @@ function M.show()
     title     = " Marked Nodes ",
     title_pos = "center",
   })
-  vim.keymap.set("n", "q",     "<cmd>close<cr>", { buffer = buf, silent = true })
-  vim.keymap.set("n", "<Esc>", "<cmd>close<cr>", { buffer = buf, silent = true })
+  map("n", "q",     "<cmd>close<cr>", { buffer = buf, silent = true })
+  map("n", "<Esc>", "<cmd>close<cr>", { buffer = buf, silent = true })
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -185,11 +187,11 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_marks", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_marks", true)
 
   -- Redraw marks whenever the tree buffer is entered/refreshed
-  vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost" }, {
+  au.acmd({ "BufEnter", "BufWritePost" }, {
     group    = _augroup,
     pattern  = "*",
     callback = function()
@@ -198,7 +200,7 @@ function M.setup(config, adapter)
   })
 
   -- Keymaps inside tree buffer — vim.schedule defers past neotree's own keymap setup
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -207,7 +209,7 @@ function M.setup(config, adapter)
         if not vim.api.nvim_buf_is_valid(buf) then return end
         local function km(key, fn, desc)
           if key and key ~= "" then
-            vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = desc })
+            map("n", key, fn, { buffer = buf, silent = true, desc = desc })
           end
         end
         km(_cfg.keymap,            function() M.toggle_current() end,  "Filetree: toggle mark")
@@ -230,7 +232,7 @@ function M.teardown()
     end
   end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
   _adapter = nil

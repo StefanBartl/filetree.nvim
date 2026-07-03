@@ -8,6 +8,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.cwd_sync]")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@class CwdSyncState
@@ -97,11 +98,11 @@ function M.setup(config, adapter)
   _adapter = adapter
 
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
   end
-  _augroup = vim.api.nvim_create_augroup("filetree_cwd_sync", { clear = true })
+  _augroup = au.group("filetree_cwd_sync", true)
 
-  vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
+  au.acmd({ "BufEnter", "WinEnter" }, {
     group    = _augroup,
     callback = function()
       -- Skip if cursor is inside the tree window
@@ -118,7 +119,7 @@ end
 function M.teardown()
   cancel_timer()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
   S.last_path      = nil

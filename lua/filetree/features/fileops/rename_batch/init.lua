@@ -17,6 +17,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.rename_batch]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeRenameBatchConfig
@@ -166,10 +168,10 @@ function M.open()
   vim.api.nvim_set_option_value("bufhidden","wipe",    { buf = bufnr })
   vim.api.nvim_set_option_value("swapfile", false,     { buf = bufnr })
 
-  local augroup = vim.api.nvim_create_augroup("filetree_rename_batch_" .. bufnr, { clear = true })
+  local augroup = au.group("filetree_rename_batch_" .. bufnr, true)
 
   -- BufWriteCmd fires when user does :w
-  vim.api.nvim_create_autocmd("BufWriteCmd", {
+  au.acmd("BufWriteCmd", {
     group  = augroup,
     buffer = bufnr,
     callback = function()
@@ -183,12 +185,12 @@ function M.open()
     end,
   })
 
-  vim.api.nvim_create_autocmd("BufDelete", {
+  au.acmd("BufDelete", {
     group  = augroup,
     buffer = bufnr,
     once   = true,
     callback = function()
-      pcall(vim.api.nvim_del_augroup_by_id, augroup)
+      au.del_group(augroup)
     end,
   })
 
@@ -205,9 +207,9 @@ function M.open()
   vim.api.nvim_buf_set_var(bufnr, "filetree_header_lines", 2)
 
   -- Override execute to handle header offset
-  vim.api.nvim_del_augroup_by_id(augroup)
-  augroup = vim.api.nvim_create_augroup("filetree_rename_batch_" .. bufnr, { clear = true })
-  vim.api.nvim_create_autocmd("BufWriteCmd", {
+  au.del_group(augroup)
+  augroup = au.group("filetree_rename_batch_" .. bufnr, true)
+  au.acmd("BufWriteCmd", {
     group  = augroup,
     buffer = bufnr,
     callback = function()
@@ -223,12 +225,12 @@ function M.open()
       end
     end,
   })
-  vim.api.nvim_create_autocmd("BufDelete", {
+  au.acmd("BufDelete", {
     group  = augroup,
     buffer = bufnr,
     once   = true,
     callback = function()
-      pcall(vim.api.nvim_del_augroup_by_id, augroup)
+      au.del_group(augroup)
     end,
   })
 
@@ -250,18 +252,18 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_rename_batch", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_rename_batch", true)
 
   if _cfg.keymap then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = "neo-tree,NvimTree",
       callback = function(ev)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.open, {
+          map("n", _cfg.keymap, M.open, {
             buffer = buf,
             silent = true,
             desc   = "Filetree: open batch rename buffer",
@@ -276,7 +278,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

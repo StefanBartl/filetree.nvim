@@ -17,6 +17,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.recent_files]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeRecentFilesConfig
@@ -177,14 +179,14 @@ function M.show()
   end
 
   local opts = { buffer = bufnr, nowait = true, silent = true }
-  vim.keymap.set("n", "<CR>",  open_entry,   opts)
-  vim.keymap.set("n", "d",     delete_entry, opts)
-  vim.keymap.set("n", "q",     close,        opts)
-  vim.keymap.set("n", "<Esc>", close,        opts)
+  map("n", "<CR>",  open_entry,   opts)
+  map("n", "d",     delete_entry, opts)
+  map("n", "q",     close,        opts)
+  map("n", "<Esc>", close,        opts)
 
   -- Number-jump: press 1-9 to jump to that entry
   for i = 1, 9 do
-    vim.keymap.set("n", tostring(i), function()
+    map("n", tostring(i), function()
       if entries[i] then
         close()
         vim.cmd("edit " .. vim.fn.fnameescape(entries[i].path))
@@ -224,11 +226,11 @@ function M.setup(config, adapter)
 
   load()
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_recent_files", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_recent_files", true)
 
   -- Record every normal buffer open
-  vim.api.nvim_create_autocmd("BufEnter", {
+  au.acmd("BufEnter", {
     group    = _augroup,
     callback = function(ev)
       if vim.bo[ev.buf].buftype ~= "" then return end
@@ -239,14 +241,14 @@ function M.setup(config, adapter)
 
   -- Tree keymap
   if _cfg.keymap_tree then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = "neo-tree,NvimTree",
       callback = function(ev)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap_tree, M.show, {
+          map("n", _cfg.keymap_tree, M.show, {
             buffer = buf, silent = true, desc = "Filetree: show recent files",
           })
         end)
@@ -256,7 +258,7 @@ function M.setup(config, adapter)
 
   -- Global keymap
   if _cfg.keymap_global then
-    vim.keymap.set("n", _cfg.keymap_global, M.show, {
+    map("n", _cfg.keymap_global, M.show, {
       silent = true, desc = "Filetree: show recent files",
     })
   end
@@ -266,7 +268,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
   if _cfg.keymap_global then

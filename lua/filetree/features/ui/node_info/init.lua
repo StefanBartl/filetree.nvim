@@ -3,6 +3,8 @@
 
 local line_count = require("filetree.util.line_count")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeNodeInfoConfig
@@ -151,11 +153,11 @@ function M.show_current()
   local close_fn = function()
     close_win()
   end
-  vim.keymap.set("n", "q",     close_fn, { buffer = bufnr, nowait = true, silent = true })
-  vim.keymap.set("n", "<Esc>", close_fn, { buffer = bufnr, nowait = true, silent = true })
+  map("n", "q",     close_fn, { buffer = bufnr, nowait = true, silent = true })
+  map("n", "<Esc>", close_fn, { buffer = bufnr, nowait = true, silent = true })
 
   -- Auto-close when leaving
-  vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
+  au.acmd({ "BufLeave", "WinLeave" }, {
     buffer  = bufnr,
     once    = true,
     callback = function()
@@ -188,17 +190,17 @@ function M.setup(cfg, adapter)
     local winid = adapter.get_winid and adapter.get_winid()
     if winid then
       local bufnr = vim.api.nvim_win_get_buf(winid)
-      vim.keymap.set("n", cfg.keymap, function() M.show_current() end,
+      map("n", cfg.keymap, function() M.show_current() end,
         { buffer = bufnr, desc = "filetree: node info", silent = true })
     else
       -- Fallback: set up autocmd to set keymap when tree opens
-      vim.api.nvim_create_autocmd("FileType", {
+      au.acmd("FileType", {
         pattern  = { "neo-tree", "NvimTree" },
         callback = function(ev)
           local buf = ev.buf
           vim.schedule(function()
             if not vim.api.nvim_buf_is_valid(buf) then return end
-            vim.keymap.set("n", cfg.keymap, function() M.show_current() end,
+            map("n", cfg.keymap, function() M.show_current() end,
               { buffer = buf, desc = "filetree: node info", silent = true })
           end)
         end,

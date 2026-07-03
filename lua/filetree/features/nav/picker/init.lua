@@ -7,6 +7,8 @@
 
 local core = require("filetree.features.nav.picker.core")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type integer?
@@ -23,18 +25,18 @@ function M.setup(config, adapter)
   local cwd_key    = kmaps.trigger_cwd    or "<leader>ftc"
 
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
   end
-  _augroup = vim.api.nvim_create_augroup("filetree_picker", { clear = true })
+  _augroup = au.group("filetree_picker", true)
 
   -- Global normal-mode keymaps (outside tree buffer)
-  vim.keymap.set("n", reveal_key, function() core.start_reveal() end,
+  map("n", reveal_key, function() core.start_reveal() end,
     { desc = "Filetree: picker (reveal)", silent = true })
-  vim.keymap.set("n", cwd_key, function() core.start_cwd() end,
+  map("n", cwd_key, function() core.start_cwd() end,
     { desc = "Filetree: picker (cwd)", silent = true })
 
   -- Exit picker on BufLeave from the tree
-  vim.api.nvim_create_autocmd("BufLeave", {
+  au.acmd("BufLeave", {
     group    = _augroup,
     callback = function()
       if core.state.active then core.exit() end
@@ -45,7 +47,7 @@ end
 function M.teardown()
   core.exit()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

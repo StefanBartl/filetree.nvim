@@ -24,6 +24,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.live_search]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeLiveSearchConfig
@@ -118,8 +120,8 @@ local function open_input_bar(tree_winid, tree_bufnr)
   end
 
   -- TextChangedI: debounced overlay
-  local group = vim.api.nvim_create_augroup("filetree_live_search_input", { clear = true })
-  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+  local group = au.group("filetree_live_search_input", true)
+  au.acmd({ "TextChangedI", "TextChanged" }, {
     group  = group,
     buffer = bar_buf,
     callback = function()
@@ -136,12 +138,12 @@ local function open_input_bar(tree_winid, tree_bufnr)
     end,
   })
 
-  vim.api.nvim_create_autocmd("BufLeave", {
+  au.acmd("BufLeave", {
     group  = group,
     buffer = bar_buf,
     once   = true,
     callback = function()
-      pcall(vim.api.nvim_del_augroup_by_id, group)
+      au.del_group(group)
     end,
   })
 
@@ -152,7 +154,7 @@ local function open_input_bar(tree_winid, tree_bufnr)
   -- <Esc> or <C-c>: cancel
   local function cancel()
     close_bar(false)
-    pcall(vim.api.nvim_del_augroup_by_id, group)
+    au.del_group(group)
     -- Return focus to tree
     if vim.api.nvim_win_is_valid(tree_winid) then
       vim.api.nvim_set_current_win(tree_winid)
@@ -164,7 +166,7 @@ local function open_input_bar(tree_winid, tree_bufnr)
     local line  = vim.api.nvim_buf_get_lines(bar_buf, 0, 1, false)[1] or ""
     local query = line:match("^%s*(.-)%s*$")
     close_bar(true)
-    pcall(vim.api.nvim_del_augroup_by_id, group)
+    au.del_group(group)
 
     if _cfg.commit_to_filter and query ~= "" then
       local ok, filter = require("filetree.features").load("filter")
@@ -179,9 +181,9 @@ local function open_input_bar(tree_winid, tree_bufnr)
     end
   end
 
-  vim.keymap.set({ "i", "n" }, "<Esc>",   cancel, km_opts)
-  vim.keymap.set({ "i", "n" }, "<C-c>",   cancel, km_opts)
-  vim.keymap.set({ "i", "n" }, "<CR>",    commit, km_opts)
+  map({ "i", "n" }, "<Esc>",   cancel, km_opts)
+  map({ "i", "n" }, "<C-c>",   cancel, km_opts)
+  map({ "i", "n" }, "<CR>",    commit, km_opts)
 
   -- Start insert so user can type immediately
   vim.cmd("startinsert!")
@@ -222,18 +224,18 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_live_search", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_live_search", true)
 
   if _cfg.keymap then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = { "neo-tree", "NvimTree" },
       callback = function(ev)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.open, {
+          map("n", _cfg.keymap, M.open, {
             buffer = buf, silent = true,
             desc   = "Filetree: live search",
           })
@@ -247,7 +249,7 @@ function M.teardown()
   _adapter = nil
   if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

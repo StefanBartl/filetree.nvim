@@ -20,6 +20,7 @@
 ---   keymaps           { left?, right?, float?, current? }  Global lhs per position.
 ---   reveal_force_cwd  boolean  Set the tree root to cwd when toggling (default false).
 
+local map = require("filetree.util.map")
 local M = {}
 
 ---@class FiletreeTreeOpenKeymapsConfig
@@ -88,7 +89,7 @@ function M.setup(config, adapter)
 
   for _, d in ipairs(defs) do
     if type(d.key) == "string" and d.key ~= "" then
-      vim.keymap.set("n", d.key, function() open_at(d.pos) end, {
+      map("n", d.key, function() open_at(d.pos) end, {
         silent = true, desc = d.desc,
       })
     end

@@ -21,6 +21,7 @@
 ---   statusline           boolean  Blank statusline in tree windows (default false).
 ---   highlights_isolate   boolean  Link tree HL groups to editor groups (default false).
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@class FiletreeWindowStyleConfig
@@ -95,11 +96,11 @@ function M.setup(config, adapter)
   -- Nothing to do unless at least one effect is opted into.
   if not (_cfg.statusline or _cfg.highlights_isolate) then return end
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_window_style", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_window_style", true)
 
   if _cfg.statusline then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group    = _augroup,
       pattern  = tree_filetypes(),
       callback = function() vim.schedule(apply_statusline) end,
@@ -107,7 +108,7 @@ function M.setup(config, adapter)
   end
 
   if _cfg.highlights_isolate then
-    vim.api.nvim_create_autocmd("ColorScheme", {
+    au.acmd("ColorScheme", {
       group    = _augroup,
       callback = function() vim.schedule(isolate_highlights) end,
     })
@@ -117,7 +118,7 @@ end
 
 function M.teardown()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

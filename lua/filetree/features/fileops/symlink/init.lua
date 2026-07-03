@@ -23,6 +23,8 @@
 local notify   = require("filetree.util.notify").create("[filetree.symlink]")
 local platform = require("filetree.util.platform")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeSymlinkConfig
@@ -198,10 +200,10 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_symlink")
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_symlink", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_symlink", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = "neo-tree,NvimTree",
     callback = function(ev)
@@ -209,18 +211,18 @@ function M.setup(config, adapter)
       local buf = ev.buf
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function map(key, fn, desc)
+        local function bind(key, fn, desc)
           if key then
-            vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+            map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
           end
         end
-        map(_cfg.keymap_follow, M.follow,         "follow symlink")
-        map(_cfg.keymap_create, M.create_current, "create symlink")
+        bind(_cfg.keymap_follow, M.follow,         "follow symlink")
+        bind(_cfg.keymap_create, M.create_current, "create symlink")
       end)
     end,
   })
 
-  vim.api.nvim_create_autocmd("BufEnter", {
+  au.acmd("BufEnter", {
     group   = _augroup,
     pattern = "*",
     callback = function(ev)
@@ -240,7 +242,7 @@ function M.teardown()
   end
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

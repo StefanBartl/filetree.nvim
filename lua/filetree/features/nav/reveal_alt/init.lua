@@ -14,6 +14,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.reveal_alt]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type integer?
@@ -26,17 +28,17 @@ function M.setup(config, adapter)
 
   local keymap = config.keymap or "B"
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_reveal_alt", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_reveal_alt", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
       local buf = ev.buf
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
-        vim.keymap.set("n", keymap, function()
+        map("n", keymap, function()
           local alt = vim.fn.expand("#:p")
           if not alt or alt == "" then
             notify.warn("No alternate buffer")
@@ -64,7 +66,7 @@ end
 
 function M.teardown()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

@@ -143,9 +143,9 @@ function M.pick()
   end
 
   local opts = { buffer = buf, nowait = true, silent = true }
-  vim.keymap.set("n", "<CR>",  choose, opts)
-  vim.keymap.set("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
-  vim.keymap.set("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "<CR>",  choose, opts)
+  map("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────

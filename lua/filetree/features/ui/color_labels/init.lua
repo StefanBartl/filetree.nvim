@@ -27,6 +27,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.color_labels]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@class FiletreeLabel
@@ -158,16 +160,16 @@ local function open_picker(on_select)
   end
 
   local opts = { buffer = buf, nowait = true, silent = true }
-  vim.keymap.set("n", "<CR>", function()
+  map("n", "<CR>", function()
     local row = vim.api.nvim_win_get_cursor(win)[1]
     vim.api.nvim_win_close(win, true)
     on_select(row <= #lbls and row or 0)  -- 0 = clear
   end, opts)
-  vim.keymap.set("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
-  vim.keymap.set("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
   -- digit shortcuts
   for d = 0, 9 do
-    vim.keymap.set("n", tostring(d), function()
+    map("n", tostring(d), function()
       vim.api.nvim_win_close(win, true)
       on_select(d)
     end, opts)
@@ -252,10 +254,10 @@ function M.setup(config, adapter)
 
   load()
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_color_labels", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_color_labels", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -264,7 +266,7 @@ function M.setup(config, adapter)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.pick_current, {
+          map("n", _cfg.keymap, M.pick_current, {
             buffer = buf, silent = true, desc = "Filetree: set color label",
           })
         end)
@@ -272,7 +274,7 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_autocmd({ "BufEnter", "TextChanged" }, {
+  au.acmd({ "BufEnter", "TextChanged" }, {
     group   = _augroup,
     pattern = { "neo-tree://*", "NvimTree_*" },
     callback = function(ev) render(ev.buf) end,
@@ -282,7 +284,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

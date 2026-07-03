@@ -19,6 +19,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.session]")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeSessionConfig
@@ -190,16 +191,16 @@ function M.setup(config, adapter)
 
   load_store()
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_session", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_session", true)
 
   if _cfg.auto_save then
-    vim.api.nvim_create_autocmd("VimLeavePre", {
+    au.acmd("VimLeavePre", {
       group    = _augroup,
       callback = M.save,
     })
     -- Also save when the tree buffer is hidden
-    vim.api.nvim_create_autocmd("BufHidden", {
+    au.acmd("BufHidden", {
       group   = _augroup,
       pattern = "*",
       callback = function(ev)
@@ -211,7 +212,7 @@ function M.setup(config, adapter)
 
   if _cfg.auto_restore then
     -- Restore after the tree is opened (FileType fires after buffer is set up)
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = "neo-tree,NvimTree",
       once    = true,
@@ -225,7 +226,7 @@ function M.teardown()
   if _cfg.auto_save then pcall(M.save) end
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end
