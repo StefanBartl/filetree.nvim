@@ -4,18 +4,20 @@ Manueller Testlauf: neotree + filetree.nvim ohne echte User-Config.
 
 ---
 
-## Automated smoke test
+## Automated tests
 
-Headless regression test (no tree plugin needed — runs against a stub adapter).
-Asserts that every feature module loads, the opt-out defaults resolve, the
-registry resolver works, and the binding catalog is populated:
+Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
+
+- **[smoke.lua](smoke.lua)** — integration: every feature module loads, opt-out
+  defaults resolve, registry resolver + binding catalog work.
+- **[units.lua](units.lua)** — unit: the util layer (path, buffer, line_count,
+  map/autocmd, select adapter) + neo-tree adapter helpers.
 
 ```
 cd e:/repos/filetree.nvim
 nvim --clean --headless -u NONE -l test/smoke.lua
+nvim --clean --headless -u NONE -l test/units.lua
 ```
-
-Exit code 0 = all checks passed, 1 = a check failed. See [smoke.lua](smoke.lua).
 
 ---
 
