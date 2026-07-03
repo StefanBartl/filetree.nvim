@@ -10,6 +10,11 @@ M.TREE_FT = {
   ["netrw"]    = true, ["oil"]      = true, ["minifiles"] = true,
 }
 
+-- Buffer-validity cache. Deliberately a TTL + explicit-invalidation cache, NOT
+-- `lib.nvim.memo` (which is pure LRU memoization): buffer validity changes over
+-- time (a buffer can become unlisted, unreadable, or wiped without our seeing a
+-- BufDelete), so results must expire (TTL) and be invalidatable — semantics memo
+-- does not provide. Weak keys let entries GC with the buffer numbers.
 ---@type table<integer, {valid:boolean, timestamp:number}>
 local _cache = {}
 setmetatable(_cache, { __mode = "k" })

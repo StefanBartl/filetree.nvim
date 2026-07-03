@@ -22,6 +22,7 @@ local notify = require("filetree.util.notify").create("[filetree.find_files]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local ui_select = require("filetree.util.select")
 local M = {}
 
 ---@type FiletreeFindFilesConfig
@@ -144,7 +145,7 @@ local function via_builtin(root)
   for _, f in ipairs(filtered) do
     display[#display + 1] = f:sub(root_len)
   end
-  vim.ui.select(display, {
+  ui_select(display, {
     prompt = "Find files: ",
     format_item = function(item) return item end,
   }, function(choice, idx)

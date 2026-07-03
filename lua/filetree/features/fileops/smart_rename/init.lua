@@ -22,6 +22,7 @@ local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local ui_select = require("filetree.util.select")
 local M = {}
 
 ---@type FiletreeSmartRenameConfig
@@ -167,7 +168,7 @@ function M.rename_current()
     if not new_name or new_name == "" or new_name == old_name then return end
     local new_path = dir .. "/" .. new_name
     if vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1 then
-      vim.ui.select({ "Overwrite", "Cancel" }, { prompt = "'" .. new_name .. "' exists. " }, function(choice)
+      ui_select({ "Overwrite", "Cancel" }, { prompt = "'" .. new_name .. "' exists. " }, function(choice)
         if choice == "Overwrite" then do_rename(old_path, new_path) end
       end)
     else
