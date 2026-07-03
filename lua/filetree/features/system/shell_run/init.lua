@@ -22,6 +22,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.shell_run]")
 local path   = require("filetree.util.path")
+local map    = require("filetree.util.map")
+local au     = require("filetree.util.autocmd")
 
 local M = {}
 
@@ -103,30 +105,22 @@ function M.setup(config, adapter)
     height      = config.height      or 12,
   }
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_shell_run", { clear = true })
+  au.del_group(_augroup)
+  _augroup = au.group("filetree_shell_run", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        vim.keymap.set("n", keymap, M.run, {
-          buffer = buf, silent = true,
-          desc   = "Filetree: run shell command in node directory",
-        })
-      end)
-    end,
-  })
+  au.create("FileType", function(ev)
+    local buf = ev.buf
+    vim.schedule(function()
+      if not vim.api.nvim_buf_is_valid(buf) then return end
+      map("n", keymap, M.run, { buffer = buf },
+        "Filetree: run shell command in node directory")
+    end)
+  end, { group = _augroup, pattern = { "neo-tree", "NvimTree" } })
 end
 
 function M.teardown()
-  if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
-    _augroup = nil
-  end
+  au.del_group(_augroup)
+  _augroup = nil
 end
 
 return M
