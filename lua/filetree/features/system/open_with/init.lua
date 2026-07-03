@@ -22,6 +22,8 @@
 
 local notify   = require("filetree.util.notify").create("[filetree.open_with]")
 local platform = require("filetree.util.platform")
+local map      = require("filetree.util.map")
+local au       = require("filetree.util.autocmd")
 
 local M = {}
 
@@ -158,42 +160,33 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_open_with", { clear = true })
+  au.del_group(_augroup)
+  _augroup = au.group("filetree_open_with", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        if _cfg.keymap then
-          vim.keymap.set("n", _cfg.keymap, M.open_system, {
-            buffer = buf, silent = true, desc = "Filetree: open with system default",
-          })
+  au.create("FileType", function(ev)
+    local buf = ev.buf
+    vim.schedule(function()
+      if not vim.api.nvim_buf_is_valid(buf) then return end
+      if _cfg.keymap then
+        map("n", _cfg.keymap, M.open_system, { buffer = buf },
+          "Filetree: open with system default")
+      end
+      -- Register per-app keymaps
+      for _, app in ipairs(_cfg.apps) do
+        if app.keymap then
+          local app_copy = app
+          map("n", app.keymap, function() M.open_app(app_copy.name) end,
+            { buffer = buf }, "Filetree: open with " .. app.name)
         end
-        -- Register per-app keymaps
-        for _, app in ipairs(_cfg.apps) do
-          if app.keymap then
-            local app_copy = app
-            vim.keymap.set("n", app.keymap, function() M.open_app(app_copy.name) end, {
-              buffer = buf, silent = true,
-              desc   = "Filetree: open with " .. app.name,
-            })
-          end
-        end
-      end)
-    end,
-  })
+      end
+    end)
+  end, { group = _augroup, pattern = { "neo-tree", "NvimTree" } })
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
-    _augroup = nil
-  end
+  au.del_group(_augroup)
+  _augroup = nil
 end
 
 return M
