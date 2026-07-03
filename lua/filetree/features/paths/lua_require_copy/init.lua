@@ -1,6 +1,8 @@
 ---@module 'filetree.features.lua_require_copy'
 ---@brief Copy current node as require('module.path') string(s) to clipboard.
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeLuaRequireCopyConfig
@@ -167,7 +169,7 @@ function M.setup(cfg, adapter)
 
   if _cfg.keymap then
     local function set_km(buf)
-      vim.keymap.set("n", _cfg.keymap, function() M.copy_require() end,
+      map("n", _cfg.keymap, function() M.copy_require() end,
         { buffer = buf, desc = "filetree: copy as require()", silent = true })
     end
 
@@ -175,7 +177,7 @@ function M.setup(cfg, adapter)
     if winid then
       set_km(vim.api.nvim_win_get_buf(winid))
     else
-      vim.api.nvim_create_autocmd("FileType", {
+      au.acmd("FileType", {
         pattern  = { "neo-tree", "NvimTree" },
         callback = function(ev)
           local buf = ev.buf

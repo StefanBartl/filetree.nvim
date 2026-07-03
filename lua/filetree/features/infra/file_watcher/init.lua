@@ -20,6 +20,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.file_watcher]")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeFileWatcherConfig
@@ -143,11 +144,11 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_file_watcher", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_file_watcher", true)
 
   -- Start watching when the tree opens, re-watch when DirChanged
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function()
@@ -156,7 +157,7 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_autocmd("DirChanged", {
+  au.acmd("DirChanged", {
     group    = _augroup,
     callback = function()
       watch(vim.fn.getcwd())
@@ -170,7 +171,7 @@ function M.teardown()
   _adapter = nil
   _watched = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

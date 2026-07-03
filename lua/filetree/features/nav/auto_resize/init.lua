@@ -24,6 +24,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.auto_resize]")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeAutoResizeConfig
@@ -101,16 +102,16 @@ function M.setup(config, adapter)
   -- Sort breakpoints ascending by cols so the last match wins
   table.sort(_cfg.breakpoints, function(a, b) return a.cols < b.cols end)
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_auto_resize", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_auto_resize", true)
 
-  vim.api.nvim_create_autocmd("VimResized", {
+  au.acmd("VimResized", {
     group    = _augroup,
     callback = function() M.apply() end,
   })
 
   -- Also apply when the tree window opens / gets focus
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function()
@@ -125,7 +126,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

@@ -11,6 +11,8 @@
 local notify = require("filetree.util.notify").create("[filetree.path_utils]")
 local path   = require("filetree.util.path")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreePathUtilsConfig
@@ -164,27 +166,27 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_path_utils", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_path_utils", true)
 
   local km = _cfg.keymaps or {}
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = "neo-tree,NvimTree",
     callback = function(ev)
       local buf = ev.buf
-      local function map(key, fn, desc)
+      local function bind(key, fn, desc)
         if key then
-          vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+          map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
         end
       end
-      map(km.copy_abs,   function() on_current(M.copy_absolute)        end, "copy abs path")
-      map(km.copy_rel,   function() on_current(M.copy_relative)        end, "copy rel path")
-      map(km.copy_name,  function() on_current(M.copy_name)            end, "copy filename")
-      map(km.copy_dir,   function() on_current(M.copy_dir)             end, "copy dir")
-      map(km.to_require, function() on_current(M.copy_as_require)      end, "copy as require()")
-      map(km.md_link,    function() on_current(M.copy_markdown_link)   end, "copy markdown link")
+      bind(km.copy_abs,   function() on_current(M.copy_absolute)        end, "copy abs path")
+      bind(km.copy_rel,   function() on_current(M.copy_relative)        end, "copy rel path")
+      bind(km.copy_name,  function() on_current(M.copy_name)            end, "copy filename")
+      bind(km.copy_dir,   function() on_current(M.copy_dir)             end, "copy dir")
+      bind(km.to_require, function() on_current(M.copy_as_require)      end, "copy as require()")
+      bind(km.md_link,    function() on_current(M.copy_markdown_link)   end, "copy markdown link")
     end,
   })
 end
@@ -192,7 +194,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

@@ -4,6 +4,7 @@
 local notify   = require("filetree.util.notify").create("[filetree.trash.undo]")
 local platform = require("filetree.util.platform")
 
+local map = require("filetree.util.map")
 local M = {}
 
 local MAX_HISTORY = 50
@@ -149,8 +150,8 @@ function M.show_history()
     title_pos = "center",
   })
 
-  vim.keymap.set("n", "q",     "<cmd>close<cr>", { buffer = buf, silent = true })
-  vim.keymap.set("n", "<Esc>", "<cmd>close<cr>", { buffer = buf, silent = true })
+  map("n", "q",     "<cmd>close<cr>", { buffer = buf, silent = true })
+  map("n", "<Esc>", "<cmd>close<cr>", { buffer = buf, silent = true })
 end
 
 return M

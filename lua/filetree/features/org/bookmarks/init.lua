@@ -24,6 +24,8 @@
 local notify = require("filetree.util.notify").create("[filetree.bookmarks]")
 local store  = require("filetree.features.org.bookmarks.store")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeBookmarksConfig
@@ -199,10 +201,10 @@ function M.show()
   end
 
   local opts = { buffer = bufnr, nowait = true, silent = true }
-  vim.keymap.set("n", "<CR>", open_entry,    opts)
-  vim.keymap.set("n", "d",    delete_entry,  opts)
-  vim.keymap.set("n", "q",    close,         opts)
-  vim.keymap.set("n", "<Esc>",close,         opts)
+  map("n", "<CR>", open_entry,    opts)
+  map("n", "d",    delete_entry,  opts)
+  map("n", "q",    close,         opts)
+  map("n", "<Esc>",close,         opts)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -220,11 +222,11 @@ function M.setup(config, adapter)
 
   if _cfg.persist then store.load() end
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_bookmarks", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_bookmarks", true)
 
   if _cfg.keymap then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = "neo-tree,NvimTree",
       callback = function(ev)
@@ -232,7 +234,7 @@ function M.setup(config, adapter)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.toggle_current, {
+          map("n", _cfg.keymap, M.toggle_current, {
             buffer  = buf,
             silent  = true,
             desc    = "Filetree: toggle bookmark on current node",
@@ -243,7 +245,7 @@ function M.setup(config, adapter)
   end
 
   -- Re-render when entering or refreshing the tree
-  vim.api.nvim_create_autocmd("BufEnter", {
+  au.acmd("BufEnter", {
     group   = _augroup,
     pattern = "*",
     callback = function(ev)
@@ -259,7 +261,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

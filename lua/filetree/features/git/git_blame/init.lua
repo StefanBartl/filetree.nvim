@@ -24,6 +24,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.git_blame]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeGitBlameConfig
@@ -122,8 +124,8 @@ local function show_float(path)
           title_pos = "center",
         })
         local opts = { buffer = buf, nowait = true, silent = true }
-        vim.keymap.set("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
-        vim.keymap.set("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
+        map("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
+        map("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
       end)
     end
   )
@@ -184,13 +186,13 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_git_blame", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_git_blame", true)
 
   local do_inline = _cfg.mode == "inline" or _cfg.mode == "both"
 
   if do_inline then
-    vim.api.nvim_create_autocmd("CursorMoved", {
+    au.acmd("CursorMoved", {
       group    = _augroup,
       callback = function()
         if not _adapter then return end
@@ -203,14 +205,14 @@ function M.setup(config, adapter)
   end
 
   if _cfg.keymap then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = { "neo-tree", "NvimTree" },
       callback = function(ev)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.show_float_current, {
+          map("n", _cfg.keymap, M.show_float_current, {
             buffer = buf, silent = true, desc = "Filetree: git blame / last commit",
           })
         end)
@@ -224,7 +226,7 @@ function M.teardown()
   _last_path = nil
   if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

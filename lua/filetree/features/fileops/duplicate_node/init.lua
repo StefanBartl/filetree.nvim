@@ -21,6 +21,8 @@
 local notify   = require("filetree.util.notify").create("[filetree.duplicate_node]")
 local platform = require("filetree.util.platform")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeDuplicateNodeConfig
@@ -136,18 +138,18 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_duplicate_node", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_duplicate_node", true)
 
   if _cfg.keymap then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = { "neo-tree", "NvimTree" },
       callback = function(ev)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.duplicate_current, {
+          map("n", _cfg.keymap, M.duplicate_current, {
             buffer = buf, silent = true, desc = "Filetree: duplicate node",
           })
         end)
@@ -159,7 +161,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

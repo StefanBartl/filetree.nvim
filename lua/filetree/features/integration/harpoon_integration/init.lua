@@ -23,6 +23,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.harpoon_integration]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeHarpoonConfig
@@ -213,10 +215,10 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_harpoon", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_harpoon", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -226,7 +228,7 @@ function M.setup(config, adapter)
         if not vim.api.nvim_buf_is_valid(buf) then return end
         local function km(key, fn, desc)
           if key then
-            vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = desc })
+            map("n", key, fn, { buffer = buf, silent = true, desc = desc })
           end
         end
         km(_cfg.keymap_add,  M.add_current, "Filetree: add to harpoon")
@@ -236,7 +238,7 @@ function M.setup(config, adapter)
   })
 
   -- Refresh marks when cursor moves in tree
-  vim.api.nvim_create_autocmd("CursorMoved", {
+  au.acmd("CursorMoved", {
     group = _augroup,
     callback = function()
       if not _adapter then return end
@@ -253,7 +255,7 @@ function M.teardown()
   _harpoon = nil
   if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

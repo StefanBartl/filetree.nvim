@@ -22,6 +22,8 @@
 local notify  = require("filetree.util.notify").create("[filetree.buffer_save]")
 local bufutil = require("filetree.util.buffer")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---Save buffer `bufnr`.  Returns true on success.
@@ -96,10 +98,10 @@ function M.setup(config, adapter)
   _adapter = adapter
   _force   = config.force ~= false  -- default true
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_buffer_save", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_buffer_save", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -109,7 +111,7 @@ function M.setup(config, adapter)
 
         -- <C-s>: save the last adjacent editor buffer
         if keymap_adj then
-          vim.keymap.set("n", keymap_adj, M.save_adjacent, {
+          map("n", keymap_adj, M.save_adjacent, {
             buffer = buf,
             silent = true,
             desc   = "Filetree: force-save adjacent editor buffer",
@@ -118,7 +120,7 @@ function M.setup(config, adapter)
 
         -- <M-s>: save the buffer whose path matches the node under cursor
         if keymap_node then
-          vim.keymap.set("n", keymap_node, M.save_node, {
+          map("n", keymap_node, M.save_node, {
             buffer = buf,
             silent = true,
             desc   = "Filetree: force-save buffer matching node under cursor",
@@ -131,7 +133,7 @@ end
 
 function M.teardown()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

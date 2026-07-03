@@ -28,6 +28,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.diagnostics_filter]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeDiagnosticsFilterConfig
@@ -179,17 +181,17 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_diagnostics_filter", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_diagnostics_filter", true)
 
   -- Re-render on diagnostic changes (debounced)
-  vim.api.nvim_create_autocmd("DiagnosticChanged", {
+  au.acmd("DiagnosticChanged", {
     group    = _augroup,
     callback = schedule_refresh,
   })
 
   -- Initial render when tree buffer opens
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -198,7 +200,7 @@ function M.setup(config, adapter)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.toggle_filter, {
+          map("n", _cfg.keymap, M.toggle_filter, {
             buffer = buf, silent = true,
             desc   = "Filetree: toggle diagnostic filter",
           })
@@ -213,7 +215,7 @@ function M.teardown()
   _filter  = false
   if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

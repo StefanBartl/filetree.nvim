@@ -17,6 +17,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.copy_move]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeCopyMoveConfig
@@ -262,11 +264,11 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_copy_move")
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_copy_move", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_copy_move", true)
 
   local km = _cfg.keymaps or {}
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = "neo-tree,NvimTree",
     callback = function(ev)
@@ -274,20 +276,20 @@ function M.setup(config, adapter)
       local buf = ev.buf
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function map(key, fn, desc)
+        local function bind(key, fn, desc)
           if key then
-            vim.keymap.set("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+            map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
           end
         end
-        map(km.copy,  M.stage_copy, "stage copy")
-        map(km.cut,   M.stage_cut,  "stage cut")
-        map(km.paste, M.paste,      "paste clipboard")
-        map(km.show,  M.show,       "show clipboard")
+        bind(km.copy,  M.stage_copy, "stage copy")
+        bind(km.cut,   M.stage_cut,  "stage cut")
+        bind(km.paste, M.paste,      "paste clipboard")
+        bind(km.show,  M.show,       "show clipboard")
       end)
     end,
   })
 
-  vim.api.nvim_create_autocmd("BufEnter", {
+  au.acmd("BufEnter", {
     group   = _augroup,
     pattern = "*",
     callback = function(ev)
@@ -301,7 +303,7 @@ function M.teardown()
   _clipboard = {}
   _adapter   = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

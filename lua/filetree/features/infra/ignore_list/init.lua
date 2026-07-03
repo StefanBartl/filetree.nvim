@@ -21,6 +21,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.ignore_list]")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 -- ── Built-in name list (mirrored from lib.nvim's canonical ignore list) ───────
@@ -62,7 +63,7 @@ local function apply_neotree(names, adapter)
   if not ncfg or not ncfg.filesystem then
     -- neo-tree.setup() hasn't run yet (e.g. lazy=false startup race).
     -- Retry once after VimEnter when all plugin configs have executed.
-    vim.api.nvim_create_autocmd("VimEnter", {
+    au.acmd("VimEnter", {
       once     = true,
       callback = function()
         vim.defer_fn(function() apply_neotree(names, adapter) end, 50)
@@ -117,8 +118,8 @@ local function apply_dim(names)
     end
   end
 
-  local aug = vim.api.nvim_create_augroup("filetree_ignore_list_dim", { clear = true })
-  vim.api.nvim_create_autocmd({ "BufEnter", "TextChanged" }, {
+  local aug = au.group("filetree_ignore_list_dim", true)
+  au.acmd({ "BufEnter", "TextChanged" }, {
     group   = aug,
     pattern = { "neo-tree://*", "NvimTree_*" },
     callback = function(ev) render(ev.buf) end,

@@ -28,6 +28,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.telescope_integration]")
 
+local map = require("filetree.util.map")
 local M = {}
 
 ---@type FiletreeTelescopeConfig
@@ -313,7 +314,7 @@ function M.setup(config, _adapter)
   if _cfg.keymap_prefix then
     local p = _cfg.keymap_prefix
     local map = function(k, fn, desc)
-      vim.keymap.set("n", p .. k, fn, { silent = true, desc = "Filetree: " .. desc })
+      map("n", p .. k, fn, { silent = true, desc = "Filetree: " .. desc })
     end
     map("b", M.bookmarks,    "telescope bookmarks")
     map("m", M.marks,        "telescope marks")

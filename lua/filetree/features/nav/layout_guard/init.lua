@@ -7,6 +7,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.layout_guard]")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type integer?
@@ -43,12 +44,10 @@ function M.setup(config, adapter)
 
   local delay = config.delay_ms or 50
 
-  if _augroup then
-    vim.api.nvim_del_augroup_by_id(_augroup)
-  end
-  _augroup = vim.api.nvim_create_augroup("filetree_layout_guard", { clear = true })
+  au.del_group(_augroup)
+  _augroup = au.group("filetree_layout_guard", true)
 
-  vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout", "WinClosed" }, {
+  au.acmd({ "BufDelete", "BufWipeout", "WinClosed" }, {
     group    = _augroup,
     callback = function()
       vim.defer_fn(function()
@@ -61,7 +60,7 @@ end
 
 function M.teardown()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

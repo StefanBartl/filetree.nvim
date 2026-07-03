@@ -20,6 +20,7 @@
 local notify   = require("filetree.util.notify").create("[filetree.git_status]")
 local platform = require("filetree.util.platform")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeGitStatusConfig
@@ -197,24 +198,24 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_git_status")
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_git_status", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_git_status", true)
 
   -- Re-render when entering the tree buffer
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = "neo-tree,NvimTree",
     callback = function() debounce_refresh() end,
   })
 
   -- Re-query on file save or focus return
-  vim.api.nvim_create_autocmd({ "BufWritePost", "FocusGained" }, {
+  au.acmd({ "BufWritePost", "FocusGained" }, {
     group    = _augroup,
     callback = function() debounce_refresh() end,
   })
 
   -- Re-render when tree buffer is redrawn (cursor moves inside tree)
-  vim.api.nvim_create_autocmd("CursorMoved", {
+  au.acmd("CursorMoved", {
     group   = _augroup,
     pattern = "*",
     callback = function()
@@ -236,7 +237,7 @@ function M.teardown()
     _timer = nil
   end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

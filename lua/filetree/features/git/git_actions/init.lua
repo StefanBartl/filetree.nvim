@@ -26,6 +26,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.git_actions]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeGitActionsConfig
@@ -166,10 +168,10 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_git_actions", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_git_actions", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -177,17 +179,17 @@ function M.setup(config, adapter)
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
         if _cfg.keymap_stage then
-          vim.keymap.set("n", _cfg.keymap_stage, M.stage_current, {
+          map("n", _cfg.keymap_stage, M.stage_current, {
             buffer = buf, silent = true, desc = "Filetree: git stage current node",
           })
         end
         if _cfg.keymap_unstage then
-          vim.keymap.set("n", _cfg.keymap_unstage, M.unstage_current, {
+          map("n", _cfg.keymap_unstage, M.unstage_current, {
             buffer = buf, silent = true, desc = "Filetree: git unstage current node",
           })
         end
         if _cfg.keymap_log then
-          vim.keymap.set("n", _cfg.keymap_log, M.log_current, {
+          map("n", _cfg.keymap_log, M.log_current, {
             buffer = buf, silent = true, desc = "Filetree: git log for current node",
           })
         end
@@ -199,7 +201,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

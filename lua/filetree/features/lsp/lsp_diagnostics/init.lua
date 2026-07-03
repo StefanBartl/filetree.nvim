@@ -12,6 +12,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.lsp_diagnostics]")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeLspDiagnosticsConfig
@@ -174,15 +175,15 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_lsp_diagnostics")
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_lsp_diagnostics", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_lsp_diagnostics", true)
 
-  vim.api.nvim_create_autocmd("DiagnosticChanged", {
+  au.acmd("DiagnosticChanged", {
     group    = _augroup,
     callback = schedule_update,
   })
 
-  vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost" }, {
+  au.acmd({ "BufEnter", "BufWritePost" }, {
     group   = _augroup,
     pattern = "*",
     callback = function(ev)
@@ -211,7 +212,7 @@ function M.teardown()
   _adapter = nil
   if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

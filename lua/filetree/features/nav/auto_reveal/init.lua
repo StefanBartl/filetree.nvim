@@ -22,6 +22,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.auto_reveal]")
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
@@ -134,10 +135,10 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_auto_reveal", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_auto_reveal", true)
 
-  vim.api.nvim_create_autocmd("BufEnter", {
+  au.acmd("BufEnter", {
     group    = _augroup,
     callback = function(ev)
       if should_ignore(ev.buf) then return end
@@ -149,7 +150,7 @@ function M.setup(config, adapter)
   })
 
   -- Auto-pause when user enters the tree window
-  vim.api.nvim_create_autocmd("WinEnter", {
+  au.acmd("WinEnter", {
     group    = _augroup,
     callback = function()
       local ft = vim.bo.filetype
@@ -171,7 +172,7 @@ function M.teardown()
     _timer = nil
   end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

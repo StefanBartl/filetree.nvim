@@ -9,6 +9,7 @@
 --- Config:
 ---   enabled  boolean
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 local _TREE_FT = { ["neo-tree"] = true, ["NvimTree"] = true,
@@ -23,10 +24,10 @@ function M.setup(config, _adapter)
 
   vim.api.nvim_set_hl(0, "FiletreeCursorHidden", { blend = 100, nocombine = true })
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_cursor_hide", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_cursor_hide", true)
 
-  vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
+  au.acmd({ "BufEnter", "WinEnter" }, {
     group = _augroup,
     callback = function(ev)
       if _TREE_FT[vim.bo[ev.buf].filetype] then
@@ -37,7 +38,7 @@ function M.setup(config, _adapter)
     end,
   })
 
-  vim.api.nvim_create_autocmd({ "BufLeave", "WinLeave" }, {
+  au.acmd({ "BufLeave", "WinLeave" }, {
     group = _augroup,
     callback = function(ev)
       if _TREE_FT[vim.bo[ev.buf].filetype] then
@@ -54,7 +55,7 @@ end
 
 function M.teardown()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

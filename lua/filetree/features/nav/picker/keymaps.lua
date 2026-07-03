@@ -1,6 +1,7 @@
 ---@module 'filetree.features.picker.keymaps'
 ---@brief Keymap management for the picker mode — install/restore per-buffer mappings.
 
+local map = require("filetree.util.map")
 local M = {}
 
 ---@alias SavedMapping { lhs: string, rhs: string, noremap: boolean, silent: boolean }
@@ -60,18 +61,18 @@ function M.install(bufnr, callbacks)
   -- digit keys 0-9
   for i = 0, 9 do
     local digit = tostring(i)
-    vim.keymap.set("n", digit, function() callbacks.on_digit(digit) end, opts)
+    map("n", digit, function() callbacks.on_digit(digit) end, opts)
   end
 
   -- mode prefix keys
   for key in pairs(MODE_PREFIXES) do
-    vim.keymap.set("n", key, function() callbacks.on_mode_prefix(key) end, opts)
+    map("n", key, function() callbacks.on_mode_prefix(key) end, opts)
   end
 
-  vim.keymap.set("n", "<Esc>",    callbacks.on_escape,       opts)
-  vim.keymap.set("n", "<Tab>",    callbacks.on_cycle_filter,  opts)
-  vim.keymap.set("n", "<C-k>",    callbacks.on_scroll_up,     opts)
-  vim.keymap.set("n", "<C-j>",    callbacks.on_scroll_down,   opts)
+  map("n", "<Esc>",    callbacks.on_escape,       opts)
+  map("n", "<Tab>",    callbacks.on_cycle_filter,  opts)
+  map("n", "<C-k>",    callbacks.on_scroll_up,     opts)
+  map("n", "<C-j>",    callbacks.on_scroll_down,   opts)
 end
 
 ---Remove picker keymaps and restore saved ones.

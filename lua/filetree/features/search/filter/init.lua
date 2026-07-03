@@ -15,6 +15,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.filter]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeFilterConfig
@@ -181,8 +183,8 @@ function M.enter()
   vim.cmd("startinsert!")
 
   -- Live update on TextChangedI
-  local aug = vim.api.nvim_create_augroup("filetree_filter_input_" .. _input_buf, { clear = true })
-  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+  local aug = au.group("filetree_filter_input_" .. _input_buf, true)
+  au.acmd({ "TextChangedI", "TextChanged" }, {
     group  = aug,
     buffer = _input_buf,
     callback = function()
@@ -193,7 +195,7 @@ function M.enter()
 
   -- Confirm / cancel keymaps
   local opts = { buffer = _input_buf, nowait = true }
-  vim.keymap.set({ "i", "n" }, "<CR>", function()
+  map({ "i", "n" }, "<CR>", function()
     local lines = vim.api.nvim_buf_get_lines(_input_buf, 0, 1, false)
     apply(lines[1] or "")
     close_input()
@@ -203,7 +205,7 @@ function M.enter()
     end
   end, opts)
 
-  vim.keymap.set({ "i", "n" }, "<Esc>", function()
+  map({ "i", "n" }, "<Esc>", function()
     M.clear()
     close_input()
     if tree_win > 0 and vim.api.nvim_win_is_valid(tree_win) then
@@ -211,13 +213,13 @@ function M.enter()
     end
   end, opts)
 
-  vim.api.nvim_create_autocmd("BufLeave", {
+  au.acmd("BufLeave", {
     group  = aug,
     buffer = _input_buf,
     once   = true,
     callback = function()
       close_input()
-      pcall(vim.api.nvim_del_augroup_by_id, aug)
+      au.del_group(aug)
     end,
   })
 end
@@ -247,18 +249,18 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_filter")
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_filter", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_filter", true)
 
   if _cfg.keymap then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = "neo-tree,NvimTree",
       callback = function(ev)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.enter, {
+          map("n", _cfg.keymap, M.enter, {
             buffer = buf,
             silent = true,
             desc   = "Filetree: enter filter mode",
@@ -276,7 +278,7 @@ function M.teardown()
   _adapter = nil
   if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

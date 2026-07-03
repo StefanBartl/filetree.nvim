@@ -13,6 +13,7 @@
 ---   - CursorHold inside tree buffer (re-renders cached values)
 ---   - :FiletreeSizeRefresh
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeSizeInfoConfig
@@ -160,10 +161,10 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_size_info")
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_size_info", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_size_info", true)
 
-  vim.api.nvim_create_autocmd({ "BufEnter" }, {
+  au.acmd({ "BufEnter" }, {
     group   = _augroup,
     pattern = "*",
     callback = function(ev)
@@ -172,7 +173,7 @@ function M.setup(config, adapter)
     end,
   })
 
-  vim.api.nvim_create_autocmd("CursorHold", {
+  au.acmd("CursorHold", {
     group   = _augroup,
     pattern = "*",
     callback = function()
@@ -194,7 +195,7 @@ function M.teardown()
   _cache   = {}
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 

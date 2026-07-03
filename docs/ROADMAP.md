@@ -18,12 +18,14 @@ filetree.nvim was audited against the project checklists. Full per-rule status:
    `lib.nvim.ui.hover_select`. Biggest item (touches every feature); do it
    incrementally with a local fallback so filetree still runs standalone.
    - ✅ `util.notify` → `lib.nvim.notify`
-   - ✅ `util.map` (→ `lib.nvim.map`) + `util.autocmd` (→ `lib.nvim.autocmd`)
-     wrappers established, with local fallbacks
-   - ✅ `system/` category migrated (open_in_fm, open_with, open_terminal, shell_run)
-   - ⏳ remaining categories: nav · ui · fileops · search · paths · git · org ·
-     lsp · compare · integration · infra (migrate each to `util.map`/`util.autocmd`)
-   - ⏳ `commands.lua` → `lib.nvim.usercmd`; pickers → `lib.nvim.ui.hover_select`
+   - ✅ `util.map` (→ `lib.nvim.map`) + `util.autocmd` (→ `lib.nvim.autocmd`,
+     incl. `acmd` drop-in) wrappers established, with local fallbacks
+   - ✅ **all feature categories migrated** off raw `vim.keymap.set` /
+     `nvim_create_autocmd` / `nvim_create_augroup` onto `util.map` / `util.autocmd`
+     (nav · ui · fileops · search · paths · git · org · system · lsp · compare ·
+     integration · infra)
+   - ⏳ `commands.lua` → `lib.nvim.usercmd`; pickers → `lib.nvim.ui.hover_select`;
+     `util.buffer` cache → `lib.nvim.memo`
 2. **Centralize FileType keymap binding** — one dispatcher binds all enabled
    features' tree-buffer keymaps instead of N per-feature `FileType` autocmds.
 3. **Broaden automated tests** beyond `test/smoke.lua` (preview modes, copy_move,

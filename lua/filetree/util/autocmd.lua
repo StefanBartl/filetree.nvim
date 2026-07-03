@@ -40,6 +40,24 @@ function M.create(event, callback, opts)
   return vim.api.nvim_create_autocmd(event, o)
 end
 
+---Drop-in replacement for `nvim_create_autocmd`: `opts` carries the callback (or
+---command) plus group/pattern/etc., exactly as the native API. Lets call sites
+---migrate with a pure textual swap; routes through lib.nvim when its callback
+---form is available.
+---@param event string|string[]
+---@param opts  table  Native nvim_create_autocmd opts (with `callback`/`command`).
+---@return integer
+function M.acmd(event, opts)
+  opts = opts or {}
+  if has_lib and type(lib.create) == "function" and type(opts.callback) == "function" then
+    local o = vim.tbl_extend("force", {}, opts)
+    local cb = o.callback
+    o.callback = nil
+    return lib.create(event, cb, o)
+  end
+  return vim.api.nvim_create_autocmd(event, opts)
+end
+
 ---Delete an augroup by id, ignoring errors.
 ---@param id integer|nil
 function M.del_group(id)

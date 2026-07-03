@@ -6,6 +6,7 @@
 --- Highlight groups are resolved from the config spec which accepts hex colors,
 --- linked groups ("link:GroupName"), or named colors ("red", "darkred", etc.).
 
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type integer?
@@ -115,17 +116,17 @@ function M.setup(config, adapter)
   setup_hl_groups()
 
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
   end
-  _augroup = vim.api.nvim_create_augroup("filetree_current_hl", { clear = true })
+  _augroup = au.group("filetree_current_hl", true)
 
-  vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "BufWritePost" }, {
+  au.acmd({ "BufEnter", "WinEnter", "BufWritePost" }, {
     group    = _augroup,
     callback = debounced_apply,
   })
 
   -- Re-apply after colorscheme changes
-  vim.api.nvim_create_autocmd("ColorScheme", {
+  au.acmd("ColorScheme", {
     group    = _augroup,
     callback = function()
       setup_hl_groups()
@@ -144,7 +145,7 @@ function M.teardown()
     _timer = nil
   end
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

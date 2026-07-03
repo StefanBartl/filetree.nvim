@@ -27,6 +27,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.quick_open]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeQuickOpenConfig
@@ -195,8 +197,8 @@ local function open_picker()
   render_list()
 
   -- Input autocmd
-  local grp = vim.api.nvim_create_augroup("filetree_quick_open_input", { clear = true })
-  vim.api.nvim_create_autocmd({ "TextChangedI", "TextChanged" }, {
+  local grp = au.group("filetree_quick_open_input", true)
+  au.acmd({ "TextChangedI", "TextChanged" }, {
     group = grp, buffer = input_buf,
     callback = function()
       query = vim.api.nvim_buf_get_lines(input_buf, 0, 1, false)[1] or ""
@@ -205,32 +207,32 @@ local function open_picker()
   })
 
   local list_km = { buffer = buf, nowait = true, silent = true }
-  vim.keymap.set("n", "<CR>",  function() open_selected(_cfg.split) end,  list_km)
-  vim.keymap.set("n", "<C-v>", function() open_selected("vsplit") end, list_km)
-  vim.keymap.set("n", "<C-x>", function() open_selected("split")  end, list_km)
-  vim.keymap.set("n", "<Esc>", close_all, list_km)
-  vim.keymap.set("n", "q",     close_all, list_km)
-  vim.keymap.set("n", "<Tab>", function()
+  map("n", "<CR>",  function() open_selected(_cfg.split) end,  list_km)
+  map("n", "<C-v>", function() open_selected("vsplit") end, list_km)
+  map("n", "<C-x>", function() open_selected("split")  end, list_km)
+  map("n", "<Esc>", close_all, list_km)
+  map("n", "q",     close_all, list_km)
+  map("n", "<Tab>", function()
     if vim.api.nvim_win_is_valid(input_win) then
       vim.api.nvim_set_current_win(input_win)
     end
   end, list_km)
 
   local inp_km = { buffer = input_buf, nowait = true, silent = true }
-  vim.keymap.set({ "i", "n" }, "<Esc>",   close_all, inp_km)
-  vim.keymap.set({ "i", "n" }, "<CR>", function()
+  map({ "i", "n" }, "<Esc>",   close_all, inp_km)
+  map({ "i", "n" }, "<CR>", function()
     vim.api.nvim_set_current_win(win)
     open_selected(_cfg.split)
   end, inp_km)
-  vim.keymap.set({ "i", "n" }, "<C-v>", function()
+  map({ "i", "n" }, "<C-v>", function()
     vim.api.nvim_set_current_win(win)
     open_selected("vsplit")
   end, inp_km)
-  vim.keymap.set({ "i", "n" }, "<C-k>", function()
+  map({ "i", "n" }, "<C-k>", function()
     local row = vim.api.nvim_win_get_cursor(win)[1]
     if row > 1 then vim.api.nvim_win_set_cursor(win, { row - 1, 0 }) end
   end, inp_km)
-  vim.keymap.set({ "i", "n" }, "<C-j>", function()
+  map({ "i", "n" }, "<C-j>", function()
     local row = vim.api.nvim_win_get_cursor(win)[1]
     local max = #filtered
     if row < max then vim.api.nvim_win_set_cursor(win, { row + 1, 0 }) end
@@ -257,18 +259,18 @@ function M.setup(config, _adapter)
   _cfg   = vim.tbl_deep_extend("force", _cfg, config)
   _store = load_store()
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_quick_open", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_quick_open", true)
 
   if _cfg.keymap then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = { "neo-tree", "NvimTree" },
       callback = function(ev)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.open, {
+          map("n", _cfg.keymap, M.open, {
             buffer = buf, silent = true,
             desc   = "Filetree: quick open (frecency)",
           })
@@ -280,7 +282,7 @@ end
 
 function M.teardown()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

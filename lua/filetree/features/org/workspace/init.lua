@@ -22,6 +22,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.workspace]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeWorkspaceConfig
@@ -175,10 +177,10 @@ function M.switch()
   end
 
   local opts = { buffer = buf, nowait = true, silent = true }
-  vim.keymap.set("n", "<CR>",  do_switch, opts)
-  vim.keymap.set("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
-  vim.keymap.set("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
-  vim.keymap.set("n", "dd", function()
+  map("n", "<CR>",  do_switch, opts)
+  map("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "dd", function()
     local idx = vim.api.nvim_win_get_cursor(win)[1]
     local path = _roots[idx]
     vim.api.nvim_win_close(win, true)
@@ -215,18 +217,18 @@ function M.setup(config, adapter)
     end
   end
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_workspace", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_workspace", true)
 
   if _cfg.keymap_switch then
-    vim.api.nvim_create_autocmd("FileType", {
+    au.acmd("FileType", {
       group   = _augroup,
       pattern = { "neo-tree", "NvimTree" },
       callback = function(ev)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap_switch, M.switch, {
+          map("n", _cfg.keymap_switch, M.switch, {
             buffer = buf, silent = true, desc = "Filetree: workspace switcher",
           })
         end)
@@ -238,7 +240,7 @@ end
 function M.teardown()
   _adapter = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

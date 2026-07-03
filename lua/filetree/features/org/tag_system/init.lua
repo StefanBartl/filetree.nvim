@@ -24,6 +24,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.tag_system]")
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeTagSystemConfig
@@ -226,8 +228,8 @@ function M.list()
   })
 
   local opts = { buffer = buf, nowait = true, silent = true }
-  vim.keymap.set("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
-  vim.keymap.set("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
 end
 
 ---Return all tags for a given path.
@@ -248,10 +250,10 @@ function M.setup(config, adapter)
   _adapter = adapter
   _store   = load_store()
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_tag_system", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_tag_system", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
@@ -260,7 +262,7 @@ function M.setup(config, adapter)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          vim.keymap.set("n", _cfg.keymap, M.edit_current, {
+          map("n", _cfg.keymap, M.edit_current, {
             buffer = buf, silent = true, desc = "Filetree: edit tags",
           })
         end)
@@ -273,7 +275,7 @@ function M.teardown()
   _adapter    = nil
   _filter_tag = nil
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end

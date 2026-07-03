@@ -18,6 +18,8 @@
 ---   enabled  boolean
 ---   keymap   string?   Key in tree buffer (default "<Esc>").
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@type integer?
@@ -50,17 +52,17 @@ function M.setup(config, _adapter)
 
   local keymap = config.keymap or "<Esc>"
 
-  if _augroup then pcall(vim.api.nvim_del_augroup_by_id, _augroup) end
-  _augroup = vim.api.nvim_create_augroup("filetree_tree_reset", { clear = true })
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_tree_reset", true)
 
-  vim.api.nvim_create_autocmd("FileType", {
+  au.acmd("FileType", {
     group   = _augroup,
     pattern = { "neo-tree", "NvimTree" },
     callback = function(ev)
       local buf = ev.buf
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
-        vim.keymap.set("n", keymap, do_reset, {
+        map("n", keymap, do_reset, {
           buffer = buf,
           silent = true,
           desc   = "Filetree: reset tree UI state (preview, filter, search)",
@@ -72,7 +74,7 @@ end
 
 function M.teardown()
   if _augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _augroup)
+    au.del_group(_augroup)
     _augroup = nil
   end
 end
