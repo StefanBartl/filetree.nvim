@@ -24,6 +24,7 @@ local notify = require("filetree.util.notify").create("[filetree.compare_dirs]")
 
 local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
+local path = require("filetree.util.path")
 local M = {}
 
 ---@type FiletreeCompareDirsConfig
@@ -190,8 +191,9 @@ function M.compare_current()
     end
   end
   dir1 = dir1 or vim.fn.getcwd()
-  vim.ui.input({ prompt = "Compare with dir: ", default = dir1, completion = "dir" }, function(dir2)
-    if dir2 and dir2 ~= "" then do_compare(dir1, dir2) end
+  -- Display with "/" regardless of OS; accept either "/" or "\" on input.
+  vim.ui.input({ prompt = "Compare with dir: ", default = path.slashify(dir1), completion = "dir" }, function(dir2)
+    if dir2 and dir2 ~= "" then do_compare(dir1, path.slashify(dir2)) end
   end)
 end
 

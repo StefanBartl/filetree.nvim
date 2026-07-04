@@ -32,6 +32,22 @@ function M.to_unix(p)
   return (M.to_absolute(p):gsub("\\", "/"))
 end
 
+---Replace backslashes with forward slashes, without touching absoluteness or
+---the path's meaning otherwise (no fnamemodify, no cwd resolution) — a pure
+---string transform. This is filetree's single canonical separator: prompts,
+---notifications and any other path shown to the user always display with `/`,
+---on every OS, and any raw path typed by the user (who may type either `/` or
+---`\`) is sanitized to this form immediately after `vim.ui.input` returns, before
+---it is used for anything. Forward slashes work fine for Neovim's own path/buffer
+---APIs and for libuv on Windows; only literal OS-shell invocations (e.g.
+---explorer.exe, cmd /c) need native backslashes, and those call sites convert
+---explicitly at the point of use (see open_in_fm/open_with).
+---@param p string
+---@return string
+function M.slashify(p)
+  return (p:gsub("\\", "/"))
+end
+
 ---Convert to a Windows-style absolute path (backslashes).
 ---@param p string
 ---@return string
@@ -39,11 +55,11 @@ function M.to_win(p)
   return (M.to_absolute(p):gsub("/", "\\"))
 end
 
----Return the parent directory of a path.
+---Return the parent directory of a path (forward-slash, see M.slashify).
 ---@param p string
 ---@return string
 function M.parent(p)
-  return vim.fn.fnamemodify(p, ":h")
+  return M.slashify(vim.fn.fnamemodify(p, ":h"))
 end
 
 ---Return the filename (tail) of a path.
@@ -84,7 +100,10 @@ function M.relative(p, base)
     local rel = abs_p:sub(#abs_base + 2)
     return rel == "" and "." or rel
   end
-  return vim.fn.fnamemodify(abs_p, ":~:.")
+  -- fnamemodify's ":~:." returns OS-native separators (backslash on Windows);
+  -- slashify keeps this consistent with the rest of the plugin's forward-slash
+  -- display convention.
+  return M.slashify(vim.fn.fnamemodify(abs_p, ":~:."))
 end
 
 ---Escape a path for use as a vim command argument.

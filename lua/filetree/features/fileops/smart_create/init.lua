@@ -1,9 +1,11 @@
 ---@module 'filetree.features.smart_create'
 ---@brief Enhanced file/directory creation with clipboard paste and LuaLS templates.
 
-local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local map     = require("filetree.util.map")
+local au      = require("filetree.util.autocmd")
 local ui_select = require("filetree.util.select")
+local path    = require("filetree.util.path")
+local bufutil = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeSmartCreateConfig
@@ -22,10 +24,10 @@ local _adapter = nil
 local notify = require("filetree.util.notify").create("[filetree.smart_create]")
 
 ---Find the lua/ root above a path.
----@param path string
+---@param filepath string
 ---@return string?
-local function find_lua_root(path)
-  local cur = path
+local function find_lua_root(filepath)
+  local cur = filepath
   while true do
     local parent = vim.fn.fnamemodify(cur, ":h")
     if parent == cur then break end
@@ -40,20 +42,38 @@ local function find_lua_root(path)
 end
 
 ---Derive module path from an absolute file path.
----@param path string
+---@param filepath string
 ---@return string
-local function path_to_module(path)
-  local lua_root = find_lua_root(path)
-  if not lua_root then return path end
-  local root_norm = lua_root:gsub("\\", "/"):gsub("/?$", "/")
-  local rel = path:gsub("\\", "/"):gsub("^" .. vim.pesc(root_norm), "")
+local function path_to_module(filepath)
+  local lua_root = find_lua_root(filepath)
+  if not lua_root then return filepath end
+  local root_norm = path.slashify(lua_root):gsub("/?$", "/")
+  local rel = path.slashify(filepath):gsub("^" .. vim.pesc(root_norm), "")
   return rel:gsub("%.lua$", ""):gsub("/init$", ""):gsub("/", ".")
+end
+
+---Open `filepath` for editing in a real editor window — never in the tree
+---window itself. Loading a new buffer into the tree's own window fights neo-
+---tree's window-management autocmds (and this plugin's own layout_guard),
+---which can spiral into an autocmd storm that looks like Neovim hanging.
+---@return integer winid  The editor window now showing filepath.
+local function open_editor_window()
+  local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid()
+  local win = bufutil.find_editor_win(tree_win)
+  if not win then
+    -- No editor window yet: open one next to the tree instead of editing here.
+    vim.cmd("vsplit")
+    win = vim.api.nvim_get_current_win()
+  end
+  vim.api.nvim_set_current_win(win)
+  return win
 end
 
 ---Write initial content to a new buffer and save.
 ---@param filepath string
 ---@param lines string[]
 local function create_with_content(filepath, lines)
+  open_editor_window()
   vim.cmd("edit " .. vim.fn.fnameescape(filepath))
   if #lines > 0 then
     local buf = vim.api.nvim_get_current_buf()
@@ -98,11 +118,11 @@ end
 ---Get the directory to create in (current node's dir or cwd).
 ---@return string
 local function resolve_parent_dir()
-  if not _adapter then return vim.fn.getcwd() end
+  if not _adapter then return path.slashify(vim.fn.getcwd()) end
   local node = _adapter.get_current_node()
-  if not node then return vim.fn.getcwd() end
-  if node.type == "directory" then return node.path end
-  return vim.fn.fnamemodify(node.path, ":h")
+  if not node then return path.slashify(vim.fn.getcwd()) end
+  if node.type == "directory" then return path.slashify(node.path) end
+  return path.parent(node.path)
 end
 
 ---Create a file or directory interactively.
@@ -110,8 +130,9 @@ function M.create()
   local parent = resolve_parent_dir()
 
   -- Show the parent directory in the prompt (relative to cwd) rather than
-  -- pre-filling the absolute path — the user only types the new name.
-  local display = vim.fn.fnamemodify(parent, ":~:.")
+  -- pre-filling the absolute path — the user only types the new name. Always
+  -- displayed with "/" regardless of OS (see path.slashify).
+  local display = path.relative(parent)
   if display == "" or display == "." then display = "./" else display = display .. "/" end
 
   vim.ui.input(
@@ -119,18 +140,21 @@ function M.create()
     function(input)
       if not input or input == "" then return end
 
+      -- Sanitize immediately: the user may type "/" or "\" — both are accepted,
+      -- and everything from here on uses "/" (see path.slashify).
+      input = path.slashify(input)
+
       local is_dir = input:sub(-1) == "/"
       local name   = input:gsub("/?$", "")  -- strip trailing slash for ops
 
       -- Relative names are created inside the parent dir; an absolute path (or
       -- Windows drive path) is honoured as-is.
       local target
-      if name:match("^/") or name:match("^%a:[/\\]") then
+      if name:match("^/") or name:match("^%a:/") then
         target = name
       else
         target = parent .. "/" .. name
       end
-      target = (target:gsub("\\", "/"))
 
       if is_dir then
         -- Create directory
@@ -139,7 +163,7 @@ function M.create()
           notify.error("Failed to create directory: " .. target)
           return
         end
-        notify.info("Created directory: " .. vim.fn.fnamemodify(target, ":~:."))
+        notify.info("Created directory: " .. path.relative(target))
 
         -- Auto init.lua
         if _cfg.auto_init_lua then

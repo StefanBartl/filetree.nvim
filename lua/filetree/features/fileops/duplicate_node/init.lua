@@ -24,6 +24,8 @@ local platform = require("filetree.util.platform")
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
 local ui_select = require("filetree.util.select")
+local path    = require("filetree.util.path")
+local bufutil = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeDuplicateNodeConfig
@@ -65,11 +67,11 @@ end
 
 -- ── Default name suggestion ───────────────────────────────────────────────────
 
-local function suggest_name(path)
-  local dir  = vim.fn.fnamemodify(path, ":h")
-  local name = vim.fn.fnamemodify(path, ":t")
+local function suggest_name(src_path)
+  local dir  = path.parent(src_path)
+  local name = vim.fn.fnamemodify(src_path, ":t")
 
-  if vim.fn.isdirectory(path) == 1 then
+  if vim.fn.isdirectory(src_path) == 1 then
     return dir .. "/" .. name .. _cfg.suffix
   end
 
@@ -93,10 +95,11 @@ function M.duplicate_current()
 
   vim.ui.input({
     prompt  = "Duplicate to: ",
-    default = default,
+    default = path.slashify(default),
     completion = is_dir and "dir" or "file",
   }, function(dst)
     if not dst or dst == "" then return end
+    dst = path.slashify(dst)  -- accept "/" or "\" from the user
 
     -- Confirm overwrite
     if _cfg.confirm_overwrite and
@@ -116,6 +119,12 @@ function M._do_copy(src, dst, is_dir)
       notify.info("Duplicated → " .. vim.fn.fnamemodify(dst, ":t"))
       if _adapter and _adapter.refresh then _adapter.refresh() end
       if _cfg.open_after and not is_dir and vim.fn.filereadable(dst) == 1 then
+        -- Open in a real editor window, never the tree window itself (loading
+        -- a buffer into the tree's own window fights its window-management
+        -- autocmds and can hang Neovim).
+        local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid()
+        local win = bufutil.find_editor_win(tree_win)
+        if win then vim.api.nvim_set_current_win(win) else vim.cmd("vsplit") end
         vim.cmd("edit " .. vim.fn.fnameescape(dst))
       end
     else
