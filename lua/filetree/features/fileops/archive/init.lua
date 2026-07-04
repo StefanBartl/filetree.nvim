@@ -17,8 +17,9 @@
 ---   :Filetree archive tar     — tar.gz current/marked node(s)
 ---   :Filetree archive extract — extract archive under cursor
 
-local notify  = require("filetree.util.notify").create("[filetree.archive]")
+local notify   = require("filetree.util.notify").create("[filetree.archive]")
 local platform = require("filetree.util.platform")
+local path_u   = require("filetree.util.path")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
@@ -163,9 +164,10 @@ function M.extract_current()
     return
   end
 
-  local out_dir = vim.fn.fnamemodify(archive, ":h")
+  local out_dir = path_u.slashify(vim.fn.fnamemodify(archive, ":h"))
   vim.ui.input({ prompt = "Extract to: ", default = out_dir }, function(dest)
     if not dest or dest == "" then return end
+    dest = path_u.slashify(dest)  -- accept "/" or "\" from the user
     vim.fn.mkdir(dest, "p")
 
     local cmd

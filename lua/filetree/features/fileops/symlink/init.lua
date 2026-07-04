@@ -22,6 +22,8 @@
 
 local notify   = require("filetree.util.notify").create("[filetree.symlink]")
 local platform = require("filetree.util.platform")
+local path_u   = require("filetree.util.path")
+local bufutil  = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
@@ -139,6 +141,17 @@ function M.show_target()
   end
 end
 
+---Open `target` in a real editor window — never the tree window itself.
+---Loading a buffer into the tree's own window fights its window-management
+---autocmds and can hang Neovim (see smart_create/duplicate_node).
+---@param target string
+local function open_in_editor_win(target)
+  local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid()
+  local win = bufutil.find_editor_win(tree_win)
+  if win then vim.api.nvim_set_current_win(win) else vim.cmd("vsplit") end
+  vim.cmd("edit " .. vim.fn.fnameescape(target))
+end
+
 ---Follow the symlink under the cursor (open its real target).
 function M.follow()
   if not _adapter then return end
@@ -148,7 +161,7 @@ function M.follow()
   if not target then
     notify.info("Not a symlink — opening normally")
     if vim.fn.filereadable(node.path) == 1 then
-      vim.cmd("edit " .. vim.fn.fnameescape(node.path))
+      open_in_editor_win(node.path)
     end
     return
   end
@@ -157,7 +170,7 @@ function M.follow()
     target = vim.fn.fnamemodify(node.path, ":h") .. "/" .. target
   end
   if vim.fn.filereadable(target) == 1 then
-    vim.cmd("edit " .. vim.fn.fnameescape(target))
+    open_in_editor_win(target)
   elseif vim.fn.isdirectory(target) == 1 then
     if _adapter.reveal then _adapter.reveal(target) end
   else
@@ -173,7 +186,7 @@ function M.create_current()
 
   local link_dir = vim.fn.input("Create symlink in directory: ", vim.fn.getcwd(), "dir")
   if link_dir == "" then return end
-  link_dir = vim.fn.expand(link_dir)
+  link_dir = path_u.slashify(vim.fn.expand(link_dir))
 
   if vim.fn.isdirectory(link_dir) == 0 then
     notify.error("Not a directory: " .. link_dir)
@@ -183,6 +196,7 @@ function M.create_current()
   local link_name = vim.fn.input(
     "Link name: ", vim.fn.fnamemodify(node.path, ":t"))
   if link_name == "" then return end
+  link_name = path_u.slashify(link_name)
 
   M.create(node.path, link_dir, link_name)
 end
