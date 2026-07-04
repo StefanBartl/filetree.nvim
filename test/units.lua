@@ -35,6 +35,16 @@ do
   eq("path.basename", path.basename("/a/b/c.lua"), "c.lua")
   eq("path.parent", path.parent("/a/b/c.lua"):gsub("\\", "/"), "/a/b")
   check("path.escape_shell_arg is string", type(path.escape_shell_arg("a b")) == "string")
+
+  -- Single canonical separator: prompts/notifications always show "/", and
+  -- either "/" or "\" typed by the user sanitizes to "/". Regression coverage
+  -- for the smart_create/compare_dirs/duplicate_node/smart_rename prompt fix.
+  eq("path.slashify converts backslashes", path.slashify("E:\\a\\b"), "E:/a/b")
+  eq("path.slashify is idempotent on forward slashes", path.slashify("E:/a/b"), "E:/a/b")
+  check("path.parent never contains a backslash",
+    not path.parent(root .. "\\lua\\filetree\\init.lua"):find("\\", 1, true))
+  check("path.relative (outside base) never contains a backslash",
+    not path.relative("Z:\\some\\other\\file.lua", root):find("\\", 1, true))
 end
 
 -- ── util.buffer ───────────────────────────────────────────────────────────────

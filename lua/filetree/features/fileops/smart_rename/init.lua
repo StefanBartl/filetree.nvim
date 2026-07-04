@@ -23,6 +23,7 @@ local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
 local ui_select = require("filetree.util.select")
+local path = require("filetree.util.path")
 local M = {}
 
 ---@type FiletreeSmartRenameConfig
@@ -42,8 +43,8 @@ local function make_rename_files_params(old_uri, new_uri)
   return { files = { { oldUri = old_uri, newUri = new_uri } } }
 end
 
-local function uri(path)
-  return vim.uri_from_fname(path)
+local function uri(fname)
+  return vim.uri_from_fname(fname)
 end
 
 ---Send willRenameFiles to all supporting clients. Returns edit to apply (or nil).
@@ -162,10 +163,11 @@ function M.rename_current()
 
   local old_path = node.path
   local old_name = vim.fn.fnamemodify(old_path, ":t")
-  local dir      = vim.fn.fnamemodify(old_path, ":h")
+  local dir      = path.parent(old_path)
 
   vim.ui.input({ prompt = "Rename to: ", default = old_name }, function(new_name)
     if not new_name or new_name == "" or new_name == old_name then return end
+    new_name = path.slashify(new_name)  -- accept "/" or "\" if renaming into a subdir
     local new_path = dir .. "/" .. new_name
     if vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1 then
       ui_select({ "Overwrite", "Cancel" }, { prompt = "'" .. new_name .. "' exists. " }, function(choice)
