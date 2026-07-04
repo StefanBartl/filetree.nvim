@@ -166,7 +166,7 @@ function M.follow()
     return
   end
   -- Make absolute if relative
-  if not vim.fn.fnamemodify(target, ":p") == target then
+  if vim.fn.fnamemodify(target, ":p") ~= target then
     target = vim.fn.fnamemodify(node.path, ":h") .. "/" .. target
   end
   if vim.fn.filereadable(target) == 1 then
