@@ -7,6 +7,13 @@
 
 local platform = require("filetree.util.platform")
 
+-- Optional: lib.nvim ships the same pure separator-unify transform under
+-- lib.nvim.cross.fs.separators.unify_slashes. Prefer it when present so both
+-- plugins share one implementation; fall back to the local gsub otherwise
+-- (mirrors the lib.nvim-optional pattern used by features.ignore_list).
+local _ok_cross, _cross_unify = pcall(require, "lib.nvim.cross.fs.separators.unify_slashes")
+local _has_cross_unify = _ok_cross and type(_cross_unify) == "function"
+
 local M = {}
 
 ---Expand to absolute path and strip surrounding quotes.
@@ -45,6 +52,10 @@ end
 ---@param p string
 ---@return string
 function M.slashify(p)
+  if _has_cross_unify then
+    local ok, result = pcall(_cross_unify, p)
+    if ok and type(result) == "string" then return result end
+  end
   return (p:gsub("\\", "/"))
 end
 
