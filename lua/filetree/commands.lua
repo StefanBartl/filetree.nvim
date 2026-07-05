@@ -514,6 +514,12 @@ local _registered_commands = {}
 
 ---@param cfg FiletreeCommandConfig?
 function M.setup(cfg)
+  -- Re-setup is idempotent: nvim_create_user_command errors (E174) if the
+  -- command already exists, which a second require("filetree").setup() call
+  -- in the same session would otherwise hit — so drop any commands this
+  -- module registered before, then recreate.
+  M.teardown()
+
   -- Determine name(s) to register.
   -- cfg.command = "Ft"                  → just :Ft
   -- cfg.command = { name="Ft", aliases={"Filetree"} } → :Ft and :Filetree

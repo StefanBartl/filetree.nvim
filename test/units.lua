@@ -8,8 +8,12 @@
 --
 -- Exit 0 = all passed, 1 = a check failed.
 
+-- ":p" resolves to absolute *before* walking up two levels, so `root` stays
+-- correct even if a test later changes Neovim's cwd (":h:h" alone would give a
+-- path relative to invocation-time cwd, e.g. "." when run as `-l test/units.lua`,
+-- which breaks require() after any vim.fn.chdir()).
 local this = debug.getinfo(1, "S").source:sub(2)
-local root = vim.fn.fnamemodify(this, ":h:h")
+local root = vim.fn.fnamemodify(this, ":p:h:h")
 vim.opt.rtp:prepend(root)
 local sibling_lib = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
 if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) end
@@ -109,6 +113,42 @@ do
   eq("extract_paths path 1", paths[1], "E:/a/b.lua")
   eq("extract_paths name 1", names[1], "b.lua")
   check("extract_paths resolves via get_id", paths[2] == "E:/c/d.lua")
+end
+
+-- ── cwd_sync: silently changes cwd + refreshes, never prompts ────────────────
+do
+  local tmp = (vim.env.TEMP .. "/units-cwdsync"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/proj/.git", "p")
+  vim.fn.mkdir(tmp .. "/proj/sub", "p")
+  vim.fn.writefile({ "x" }, tmp .. "/proj/sub/file.lua")
+  vim.fn.chdir(tmp)  -- start OUTSIDE the project root
+
+  local refreshed, revealed_path = false, nil
+  local stub = setmetatable({
+    name = "units-stub", is_available = function() return true end,
+    get_winid   = function() return nil end,
+    open_reveal = function(p) revealed_path = p; return true end,
+    refresh     = function() refreshed = true; return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+
+  local ui_input_called = false
+  local orig_input = vim.ui.input
+  vim.ui.input = function(...) ui_input_called = true; return orig_input(...) end
+
+  ft.setup({ adapter = "units-stub", features = { cwd_sync = { enabled = true, debounce_ms = 0 } } })
+  vim.cmd("edit " .. tmp .. "/proj/sub/file.lua")
+  vim.wait(200, function() return revealed_path ~= nil end, 10)
+  vim.ui.input = orig_input
+
+  check("cwd_sync never prompts (no vim.ui.input)", not ui_input_called)
+  eq("cwd_sync chdir's to the detected project root",
+    vim.fn.getcwd():gsub("\\", "/"), tmp .. "/proj")
+  check("cwd_sync triggers adapter.refresh()", refreshed)
+  check("cwd_sync still reveals the file",
+    revealed_path and revealed_path:gsub("\\", "/") == tmp .. "/proj/sub/file.lua")
 end
 
 -- ── Report ────────────────────────────────────────────────────────────────────

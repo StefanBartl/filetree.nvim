@@ -10,8 +10,10 @@
 -- Exit code 0 = all checks passed; 1 = a check failed (message printed).
 
 -- ── Locate the repo root relative to this file, put it (and lib.nvim) on rtp ──
+-- ":p" resolves to absolute first, so `root` survives any later cwd change
+-- (":h:h" alone would stay relative to invocation-time cwd).
 local this = debug.getinfo(1, "S").source:sub(2)
-local root = vim.fn.fnamemodify(this, ":h:h")
+local root = vim.fn.fnamemodify(this, ":p:h:h")
 vim.opt.rtp:prepend(root)
 -- lib.nvim is a declared dependency; add a sibling checkout if present.
 local sibling_lib = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
