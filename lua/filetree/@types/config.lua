@@ -665,6 +665,9 @@
 ---@field auto_types_template  boolean   @types dirs → ---@meta template (default true).
 ---@field auto_module_annot    boolean   .lua files → ---@module annotation (default true).
 ---@field ask_clipboard        boolean   Ask whether to paste clipboard content (default true).
+---@field notify_level         "verbose"|"short"|"off"  Success-message verbosity (default "verbose").
+---                                     "verbose": "Created file/directory: <path>". "short": just
+---                                     "Path: <path>". "off": no notification at all.
 
 -- ── cursor_hide ───────────────────────────────────────────────────────────────
 
