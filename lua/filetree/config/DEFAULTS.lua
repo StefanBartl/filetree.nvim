@@ -27,10 +27,12 @@ return {
       delay_ms = 50,
     },
     cwd_sync = {
-      enabled       = false,
-      debounce_ms   = 150,
-      parent_levels = 0,
-      keep_focus    = true,
+      enabled          = false,
+      debounce_ms      = 150,
+      parent_levels    = 0,
+      keep_focus       = true,
+      change_dir       = true,  -- actually chdir; never prompts
+      use_project_root = true,  -- target the detected project root, not just the file's dir
     },
     current_hl = {
       enabled     = false,

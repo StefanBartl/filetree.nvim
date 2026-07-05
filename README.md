@@ -60,7 +60,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `auto_reveal` | Scroll/highlight the current file in the tree on buffer switch |
 | `layout_guard` | Opens an editor window when the tree would be the only window |
 | `auto_resize` | Responsive tree width on `VimResized` _(opt-in)_ |
-| `cwd_sync` | Auto-reveal the current file on buffer switch _(opt-in)_ |
+| `cwd_sync` | Silently `chdir` to the project root of the current file + refresh the tree, then reveal it _(opt-in)_ |
 | `tree_open_keymaps` | Global keys to toggle the tree left/right/float/current _(opt-in)_ |
 
 **`ui` — display**
@@ -412,10 +412,12 @@ require("filetree").setup({
 
     -- ── Off by default (opt-in) ───────────────────────────────────────────
     cwd_sync = {
-      enabled       = false,  -- default: off
-      debounce_ms   = 150,
-      parent_levels = 0,
-      keep_focus    = true,
+      enabled          = false,  -- default: off
+      debounce_ms      = 150,
+      parent_levels    = 0,     -- how far the tree-reveal call itself ascends
+      keep_focus       = true,  -- keep focus in the editor window after reveal
+      change_dir       = true,  -- actually chdir to the target dir — never prompts
+      use_project_root = true,  -- target the detected project root, not just the file's dir
     },
 
     current_hl = {
@@ -507,7 +509,11 @@ When all editor windows close, opens a new one automatically. Fires on `BufDelet
 
 ### CWD Sync
 
-Reveals the current buffer file on `BufEnter` / `WinEnter`. Auto-pauses 2 seconds when cursor enters the tree window.
+On `BufEnter` / `WinEnter`, when the current file is not under Neovim's cwd:
+silently `chdir` to its project root (or its own parent directory if
+`use_project_root = false` or no root marker is found — see [project_root](#infra--plumbing)),
+refresh the tree adapter, then reveal the file. Never prompts. Auto-pauses 2
+seconds when the cursor enters the tree window (manual navigation).
 
 ```lua
 require("filetree").feature("cwd_sync").pause(5000)

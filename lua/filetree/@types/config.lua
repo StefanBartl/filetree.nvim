@@ -116,10 +116,14 @@
 -- ── cwd_sync ──────────────────────────────────────────────────────────────────
 
 ---@class FiletreeCwdSyncConfig
----@field enabled       boolean
----@field debounce_ms   integer   Debounce delay for buffer-change events (default 150).
----@field parent_levels integer   How many parent dirs to ascend when revealing (default 0).
----@field keep_focus    boolean   Keep focus in the editor window after reveal (default true).
+---@field enabled          boolean
+---@field debounce_ms      integer   Debounce delay for buffer-change events (default 150).
+---@field parent_levels    integer   How many parent dirs to ascend when revealing (default 0).
+---@field keep_focus       boolean   Keep focus in the editor window after reveal (default true).
+---@field change_dir       boolean   Actually change Neovim's cwd (default true). Never prompts —
+---                                  always applies silently, then refreshes the tree adapter.
+---@field use_project_root boolean   Target the detected project root instead of the file's
+---                                  immediate parent directory (default true; see project_root).
 
 -- ── current_hl ────────────────────────────────────────────────────────────────
 

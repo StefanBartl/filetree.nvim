@@ -102,12 +102,14 @@ make the default state explicit — you can drop it): >lua
         delay_ms = 50,
       },
 
-      -- Auto-reveal current file in the tree  (opt-in)
+      -- Silently chdir + refresh + reveal the current file  (opt-in)
       cwd_sync = {
-        enabled       = false, -- default: off
-        debounce_ms   = 150,
-        parent_levels = 0,    -- parent dirs to ascend when revealing
-        keep_focus    = true, -- keep focus in editor after reveal
+        enabled          = false, -- default: off
+        debounce_ms      = 150,
+        parent_levels    = 0,     -- parent dirs to ascend when revealing
+        keep_focus       = true,  -- keep focus in editor after reveal
+        change_dir       = true,  -- actually chdir; never prompts
+        use_project_root = true,  -- target project root, not just the file's dir
       },
 
       -- Highlight the current file and its parent dir  (opt-in)
@@ -194,9 +196,12 @@ Triggers on: BufDelete, BufWipeout, WinClosed
 ------------------------------------------------------------------------------
 5.3 CWD SYNC                                            *filetree-cwd-sync*
 
-Reveals the current buffer's file in the tree whenever a new buffer is
-entered (BufEnter / WinEnter). Auto-pauses for 2 seconds when the cursor
-moves inside the tree window to avoid interfering with manual navigation.
+On BufEnter / WinEnter, when the current file is not under Neovim's cwd:
+silently `chdir` to its project root (or its own parent directory when
+use_project_root = false, or no root marker is found), refresh the tree
+adapter, then reveal the file. Never prompts. Auto-pauses for 2 seconds when
+the cursor moves inside the tree window to avoid interfering with manual
+navigation.
 
 `cwd_sync.pause(ms)` pauses auto-reveal programmatically: >lua
   require("filetree").feature("cwd_sync").pause(5000)
