@@ -17,6 +17,7 @@ local _cfg = {
   auto_types_template = false,  -- files under an `@types` path get `---@meta` + `---@module`
   auto_init_lua       = false,  -- creating a directory also creates init.lua (with the header)
   ask_clipboard       = false,  -- if the clipboard is non-empty, offer to paste it into the file
+  notify_level        = "verbose",  -- "verbose" | "short" | "off" — success message verbosity
 }
 ---@type FiletreeAdapter?
 local _adapter = nil
@@ -50,6 +51,78 @@ local function path_to_module(filepath)
   local root_norm = path.slashify(lua_root):gsub("/?$", "/")
   local rel = path.slashify(filepath):gsub("^" .. vim.pesc(root_norm), "")
   return rel:gsub("%.lua$", ""):gsub("/init$", ""):gsub("/", ".")
+end
+
+---Show a success notification for a created file/directory, at the
+---configured verbosity: "verbose" (default) names what was created, "short"
+---is little more than the path, "off" is silent.
+---@param kind "file"|"directory"
+---@param target string  Absolute path of what was created.
+local function notify_created(kind, target)
+  local level = _cfg.notify_level or "verbose"
+  if level == "off" then return end
+  local rel = path.relative(target)
+  if level == "short" then
+    notify.info("Path: " .. rel)
+  else
+    notify.info("Created " .. kind .. ": " .. rel)
+  end
+end
+
+-- ── "?" cheatsheet ────────────────────────────────────────────────────────────
+-- vim.ui.input only ever hands back the *final* submitted string (no mid-typing
+-- keystroke hooks — this must work with any vim.ui.input backend, not just the
+-- builtin one), so "?" is a full input, not a live keypress: type "?" and press
+-- <CR>. The cheatsheet closes on any key and re-opens the create prompt so the
+-- user can immediately act on what they just read.
+
+local CHEATSHEET_LINES = {
+  " Smart create — type a name relative to the shown directory ",
+  "",
+  "  name.lua        create a file",
+  "  name.lua/       create a directory (trailing / or \\)",
+  "  sub/dir/name    missing subdirectories are created automatically",
+  "  /abs/path       an absolute path (or C:\\... / C:/...) is used as-is",
+  "  ?  <CR>         show this cheatsheet",
+  "  <Esc> / empty   cancel",
+}
+
+---@param on_close fun()  Called after the cheatsheet window closes.
+local function show_cheatsheet(on_close)
+  local width = 0
+  for _, l in ipairs(CHEATSHEET_LINES) do width = math.max(width, #l) end
+  width = math.min(width + 2, math.floor(vim.o.columns * 0.9))
+  local height = #CHEATSHEET_LINES
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, CHEATSHEET_LINES)
+  vim.bo[buf].modifiable = false
+
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative  = "editor",
+    style     = "minimal",
+    border    = "rounded",
+    width     = width,
+    height    = height,
+    row       = math.floor((vim.o.lines - height) / 2) - 2,
+    col       = math.floor((vim.o.columns - width) / 2),
+    title     = " smart_create help ",
+    title_pos = "center",
+  })
+
+  local closed = false
+  local function close()
+    if closed then return end
+    closed = true
+    pcall(vim.api.nvim_win_close, win, true)
+    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    if on_close then on_close() end
+  end
+
+  local opts = { buffer = buf, nowait = true, silent = true }
+  map("n", "q",     close, opts)
+  map("n", "<Esc>", close, opts)
+  map("n", "<CR>",  close, opts)
 end
 
 ---Open `filepath` for editing in a real editor window — never in the tree
@@ -136,9 +209,14 @@ function M.create()
   if display == "" or display == "." then display = "./" else display = display .. "/" end
 
   vim.ui.input(
-    { prompt = "Create in " .. display .. "  (append / for a directory): " },
+    { prompt = "Create in " .. display .. "  (/ = dir, ? = help): " },
     function(input)
       if not input or input == "" then return end
+
+      if input == "?" then
+        show_cheatsheet(M.create)
+        return
+      end
 
       -- Sanitize immediately: the user may type "/" or "\" — both are accepted,
       -- and everything from here on uses "/" (see path.slashify).
@@ -163,7 +241,7 @@ function M.create()
           notify.error("Failed to create directory: " .. target)
           return
         end
-        notify.info("Created directory: " .. path.relative(target))
+        notify_created("directory", target)
 
         -- Auto init.lua
         if _cfg.auto_init_lua then
@@ -188,6 +266,7 @@ function M.create()
                 paste = choice == "Paste clipboard"
                 local lines = build_template(target, paste)
                 create_with_content(target, lines)
+                notify_created("file", target)
                 if _adapter and _adapter.refresh then
                   pcall(_adapter.refresh)
                 end
@@ -199,6 +278,7 @@ function M.create()
 
         local lines = build_template(target, false)
         create_with_content(target, lines)
+        notify_created("file", target)
       end
 
       if _adapter and _adapter.refresh then
