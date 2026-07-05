@@ -14,14 +14,20 @@ local has_lib = _ok and type(lib) == "table"
 local M = {}
 
 ---Create (or clear) a named augroup and return its id.
+---
+---Deliberately NOT delegated to lib.nvim.autocmd.group(): that function caches
+---the returned id per name forever and never re-validates it, so once a
+---feature's own re-setup cycle deletes its previous augroup by id (the pattern
+---used throughout filetree — del_group(_augroup) then group(name, true) again),
+---lib's cache keeps handing back the now-dangling id, and the next
+---nvim_create_autocmd call fails with "Invalid 'group': N". filetree calls
+---setup() more than once in the same process routinely (re-setup, tests), so
+---this goes straight to the native API instead, which is idempotent by name.
 ---@param name  string
 ---@param clear boolean|nil  Default true.
 ---@return integer
 function M.group(name, clear)
   if clear == nil then clear = true end
-  if has_lib and type(lib.group) == "function" then
-    return lib.group(name, clear)
-  end
   return vim.api.nvim_create_augroup(name, { clear = clear })
 end
 
