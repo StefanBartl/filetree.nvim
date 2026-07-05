@@ -152,3 +152,39 @@ These have **no** filetree.nvim counterpart and are the concrete work items:
 - The bulk of the config's features (✅ above) are **already implemented** in
   filetree.nvim's 62-feature registry — this audit's real yield is the four gaps
   in the section above.
+
+---
+
+## Pass 2: github_stats.nvim — reusable infra/UI patterns
+
+**Purpose.** Second audit called for in `FINISH.md`, this time against
+[`github_stats.nvim`](https://github.com/StefanBartl/github_stats.nvim)
+(`E:/repos/github_stats.nvim`) — not a filetree plugin, so nothing here is a
+feature *port target* the way the Neo-tree gaps above are. It's a different
+kind of yield: **architectural/UI patterns** worth reusing when they come up in
+filetree.nvim's own infra and UI work, since they were built and refined
+against a real plugin with the same cross-platform/config-system/health-check
+concerns.
+
+For each: **what** it is, **origin** (`file:line`), **thematic home** in
+filetree.nvim, and **notes** on applicability.
+
+| Feature | Origin | Thematic home | Notes |
+|---|---|---|---|
+| Cross-platform command detection (PowerShell `Get-Command` on Windows, `command -v` on Unix, with a direct-exec fallback) | `lua/github_stats/health.lua:21` (`command_exists`) | `util/platform.lua`, `filetree/health.lua` | Directly portable. Same shape needed for anything filetree.nvim's `checkhealth` or `system.*` openers must probe for (external tools, `pdftotext`, etc.). |
+| Atomic file write (write to `<path>.tmp`, then `vim.loop.fs_rename` to the final path; delete the temp file on failure) | `lua/github_stats/storage.lua:81-93` (`M.write_metric`), same pattern again at `:185-195` | `infra.safety` (file-operation safety wrapper) | Cheap, dependency-free crash-safety primitive. Worth using anywhere filetree.nvim persists state to disk (marks, bookmarks, watcher-quarantine data) instead of a plain `writefile`. |
+| Dual config source with clear priority order: `setup(opts)` > `config.json` on disk > auto-created default `config.json`, merged via `vim.tbl_deep_extend("force", DEFAULTS, opts)` | `lua/github_stats/config/init.lua:96-138` (`M.init`, see the "Priority 1/2/3" comments) | `infra` (config system) | Not currently in filetree.nvim's registry. The JSON-file fallback is specifically useful for syncing config *and data* across machines via dotfiles — could matter if filetree.nvim ever persists cross-machine state (e.g. marks, recent-files) rather than just runtime config. |
+| `notify(message, level)` wrapper gating on a 3-state `notification_level` ("all"\|"errors"\|"silent") | `lua/github_stats/config/init.lua:219` (`get_notification_level`), `:229` (`M.notify`) | `infra` / cross-cutting UX | Small, generically useful pattern for any plugin with frequent background notifications (fetches, watcher events) that shouldn't spam by default. |
+| `bindings/{usrcmds,keymaps,autocmds}` module split, with a single `usrcmds/init.lua` registering every `vim.api.nvim_create_user_command` call, and keymaps split into **configurable** (read from a `keybindings` config table, `""` disables a binding) vs **fixed** (always-on, not user-remappable) | `lua/github_stats/bindings/{usrcmds/init.lua, keymaps.lua}` (whole module) | `bindings/` (already exists) | filetree.nvim already has its own `docs/BINDINGS/` — this is a cross-check/validation that the configurable-vs-fixed keymap split and the "empty string disables" convention are a sound, already-battle-tested design, not a new idea to import wholesale. |
+| Optional which-key registration, guarded entirely by `pcall(require, "which-key")` so the integration is zero-cost and crash-free when which-key isn't installed | `lua/github_stats/bindings/keymaps.lua:83-93` (`register_which_key`) | `bindings/keymaps.lua`, `ui` | Directly portable pattern for any optional-dependency UI enhancement: never `require` unguarded, always collect entries and register once at the end. |
+| Debounced re-render: a single-shot `vim.loop.new_timer()` coalesces rapid state changes into one render, with a `force` bypass for user-triggered actions that should feel instant | `lua/github_stats/dashboard/init.lua:20,28-57` (`RENDER_DEBOUNCE_MS`, `M.schedule_render`) | `ui` | Relevant to any tree/list UI that re-renders on frequent events (fs-watcher ticks, cursor moves) — avoids redrawing on every single event while keeping user-initiated actions (open, refresh) snappy via the `force` path. |
+| Blocking native cursor movement in a display-only buffer (`h`/`l`/arrows/`<PageUp>`/`<PageDown>`/`<Home>`/`<End>` mapped to `<Nop>`) so custom navigation is the *only* way to move, avoiding races between Vim's native cursor motion and app-managed selection state | `lua/github_stats/bindings/keymaps.lua:57-77` (`block_cursor_movement`) | `nav`, `ui` | Same problem class as any custom list/tree buffer where "current selection" is app state, not just the cursor line — worth having as a named, reusable helper rather than re-deriving per feature. |
+| Sort-cycling that resorts an ordered list in place, then restores the previously-selected item's new position **by identity** (name) so the highlighted item doesn't visually jump when the sort criteria changes | `lua/github_stats/dashboard/render.lua:145-186` (`sort_repos`) | `ui`, `nav` | Exactly the shape of "cycle a tree/list's sort order (name/size/mtime/type) without losing the user's place" — a common filetree expectation. The "capture selected identity before sort, look it up after" technique generalizes directly. |
+| Async subprocess calls via `vim.system(args, ...)` with `args` as a **table of arguments**, never an interpolated shell string | `lua/github_stats/api.lua:117,176` | `util/platform.lua`, `system.open_in_fm`/`system.open_with` | Avoids shell-quoting/injection bugs entirely by construction. Directly applicable to the `pdfport` and open-in-system-app gaps noted in the Neo-tree audit above, which already shell out per-OS. |
+| `@types/` split into one file per concern (`dashboard.lua`, `gh_api.lua`, `metrics.lua`, `state.lua`, `init.lua`), each returning `{}` and existing purely for `---@class`/`---@field` annotations | `lua/github_stats/@types/*.lua` | Coding convention (see `Arch&Coding.md`) | Not a runtime feature, a typing/organization convention: keeps LSP-facing type definitions colocated by domain instead of one sprawling types file. Matches the typing requirements already tracked in the Arch&Coding checklist. |
+
+### Not applicable
+
+github_stats.nvim's domain-specific modules (date-range presets, period diff/
+comparison, CSV/Markdown export of traffic metrics, the GitHub REST API
+client) don't map to anything a filetree plugin needs and aren't listed above.
