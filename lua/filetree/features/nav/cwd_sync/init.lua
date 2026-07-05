@@ -1,12 +1,22 @@
 ---@module 'filetree.features.cwd_sync'
----@brief Auto-reveal the current buffer's file in the tree on buffer change.
+---@brief Keep Neovim's cwd (and the tree) in sync with the current buffer.
 ---@description
---- Debounced BufEnter/WinEnter handler that calls adapter.open_reveal() when
---- the active buffer changes to a real file. Pauses automatically when the
---- user navigates manually in the tree (detected via cursor movement inside
---- the tree window).
+--- Debounced BufEnter/WinEnter handler for the active buffer's file:
+---
+---   1. change_dir (default true): if the file is not under the current cwd,
+---      silently `chdir` to its project root (via the project_root feature —
+---      falls back to the file's own parent directory when no root marker is
+---      found, or when use_project_root is false) — never prompts.
+---   2. Refreshes the tree adapter so its cwd/root display updates.
+---   3. Calls adapter.open_reveal() to scroll/highlight the file in the tree
+---      (unchanged behaviour from before; parent_levels still governs how far
+---      the reveal call itself ascends).
+---
+--- Pauses automatically when the user navigates manually in the tree (detected
+--- via cursor movement inside the tree window).
 
 local notify = require("filetree.util.notify").create("[filetree.cwd_sync]")
+local path = require("filetree.util.path")
 
 local au  = require("filetree.util.autocmd")
 local M = {}
@@ -54,15 +64,64 @@ local function cancel_timer()
   end
 end
 
-local function do_reveal(path)
+---Compare two directories for equality, ignoring separator style and a
+---trailing slash.
+---@param a string
+---@param b string
+---@return boolean
+local function same_dir(a, b)
+  local na = path.slashify(a):gsub("/$", "")
+  local nb = path.slashify(b):gsub("/$", "")
+  return na == nb
+end
+
+---Resolve the directory `file` should put Neovim's cwd in: the detected
+---project root (default), or just the file's own parent directory.
+---@param file string
+---@return string
+local function target_dir(file)
+  if _cfg.use_project_root ~= false then
+    local registry = require("filetree.features")
+    local proot = registry.require("project_root")
+    if proot then
+      local ok, root = pcall(proot.find, file)
+      if ok and root and root ~= "" then return root end
+    end
+  end
+  return path.parent(file)
+end
+
+---Silently `chdir` to `file`'s target directory when it differs from the
+---current cwd, then refresh the tree adapter so its cwd/root display updates.
+---Never prompts — that is the whole point of "sync".
+---@param file string
+local function sync_cwd(file)
+  if _cfg.change_dir == false then return end
+  local dir = target_dir(file)
+  if dir == "" or same_dir(dir, vim.fn.getcwd()) then return end
+
+  local ok = pcall(vim.fn.chdir, dir)
+  if not ok then
+    notify.warn("could not change cwd to: " .. dir)
+    return
+  end
+
+  if _adapter and type(_adapter.refresh) == "function" then
+    pcall(_adapter.refresh)
+  end
+end
+
+local function do_reveal(path_)
   if not _adapter then return end
   if paused() then return end
-  if S.last_path == path then return end
+  if S.last_path == path_ then return end
 
-  S.last_path = path
-  local ok = _adapter.open_reveal(path, _cfg.parent_levels or 0)
+  S.last_path = path_
+  sync_cwd(path_)
+
+  local ok = _adapter.open_reveal(path_, _cfg.parent_levels or 0)
   if not ok then
-    notify.warn("reveal failed for: " .. path)
+    notify.warn("reveal failed for: " .. path_)
     return
   end
 
@@ -79,14 +138,14 @@ end
 
 local function debounced_reveal()
   cancel_timer()
-  local path = vim.fn.expand("%:p")
-  if path == "" or vim.fn.filereadable(path) == 0 then return end
+  local file = vim.fn.expand("%:p")
+  if file == "" or vim.fn.filereadable(file) == 0 then return end
 
   local uv = vim.uv or vim.loop
   S.timer = uv.new_timer()
   S.timer:start(_cfg.debounce_ms or 150, 0, vim.schedule_wrap(function()
     cancel_timer()
-    do_reveal(path)
+    do_reveal(file)
   end))
 end
 
