@@ -89,21 +89,31 @@ local function via_builtin(dir, pattern)
 
   -- Prefer rg, then grep
   local has_rg = vim.fn.executable("rg") == 1
-  local cmd
+  local output, exit_code
+
   if has_rg then
+    -- vim.system with an argv list (not a shell string) on purpose: it execs
+    -- rg directly with no shell in between, so there's nothing to quote/escape
+    -- and no dependency on &shell being cmd.exe-compatible (e.g. Git Bash as
+    -- &shell on Windows mishandles a hand-built quoted command string passed
+    -- through vim.fn.system/systemlist).
     local args = { "rg", "--vimgrep", "--color=never" }
     if _cfg.hidden then args[#args + 1] = "--hidden" end
     for _, a in ipairs(_cfg.extra_args) do args[#args + 1] = a end
     args[#args + 1] = "--"
     args[#args + 1] = pattern
     args[#args + 1] = dir
-    cmd = table.concat(args, " ")
+
+    local result = vim.system(args, { text = true }):wait()
+    output = vim.split(result.stdout or "", "\n", { trimempty = true })
+    exit_code = result.code
   else
-    cmd = string.format('grep -rn -- %s %s', vim.fn.shellescape(pattern), vim.fn.shellescape(dir))
+    local cmd = string.format('grep -rn -- %s %s', vim.fn.shellescape(pattern), vim.fn.shellescape(dir))
+    output = vim.fn.systemlist(cmd)
+    exit_code = vim.v.shell_error
   end
 
-  local output = vim.fn.systemlist(cmd)
-  if vim.v.shell_error ~= 0 and #output == 0 then
+  if exit_code ~= 0 and #output == 0 then
     notify.info("No matches for: " .. pattern)
     return true
   end
