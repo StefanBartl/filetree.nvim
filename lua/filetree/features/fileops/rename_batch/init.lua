@@ -12,8 +12,13 @@
 ---   - Undo: uses safety backup if safety feature is loaded.
 ---   - Conflict detection: refuses to rename if the target already exists.
 ---
---- Keymap (default): "R" in tree buffer.
+--- Keymap (default): "<leader>rb" in tree buffer.
 --- User commands: :FiletreeRenameBatch
+---
+--- NOTE: does not default to "R" -- that's left free for the adapter's own
+--- native refresh command (neo-tree's window.mappings default binds "R" to
+--- refresh; overriding it here would silently shadow that far more commonly
+--- expected action).
 
 local notify = require("filetree.util.notify").create("[filetree.rename_batch]")
 
@@ -24,7 +29,7 @@ local M = {}
 ---@type FiletreeRenameBatchConfig
 local _cfg = {
   enabled     = false,
-  keymap      = "R",
+  keymap      = "<leader>rb",
   confirm     = true,
   use_safety  = true,
   dry_run     = false,

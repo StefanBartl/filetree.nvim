@@ -19,7 +19,7 @@ local _cfg = {
   keymap           = "m",
   keymap_all       = "]m",
   keymap_unmark_all = "[m",
-  keymap_clear     = "<leader>mc",
+  keymap_clear     = "<C-m>",
   keymap_show      = "<leader>ms",
 }
 

@@ -15,10 +15,10 @@
 ---
 --- Config:
 ---   enabled        boolean
----   keymap_pick    string?  Opens format picker (default "yp").
----   keymap_abs     string?  Copy absolute directly (default "ya").
----   keymap_rel     string?  Copy relative directly (default "yr").
----   keymap_name    string?  Copy name directly    (default "yn").
+---   keymap_pick    string?  Opens format picker (default nil, off).
+---   keymap_abs     string?  Copy absolute path directly (default "[a").
+---   keymap_dirname string?  Copy absolute parent dir directly (default "]a").
+---   keymap_name    string?  Copy name directly (default nil, off).
 ---   notify         boolean  Show a notification after copying (default true).
 ---
 --- Commands (via :Filetree dispatcher):
@@ -32,12 +32,12 @@ local M = {}
 
 ---@type FiletreePathCopyConfig
 local _cfg = {
-  enabled      = false,
-  keymap_pick  = "<leader>yp",
-  keymap_abs   = "[a",
-  keymap_rel   = "]a",
-  keymap_name  = "<leader>yn",
-  notify       = true,
+  enabled        = false,
+  keymap_pick    = nil,
+  keymap_abs     = "[a",
+  keymap_dirname = "]a",
+  keymap_name    = nil,
+  notify         = true,
 }
 
 ---@type FiletreeAdapter?
@@ -172,10 +172,10 @@ function M.setup(config, adapter)
             map("n", key, fn, { buffer = buf, silent = true, desc = desc })
           end
         end
-        kmap(_cfg.keymap_pick, M.pick,          "Filetree: copy path (pick format)")
-        kmap(_cfg.keymap_abs,  M.copy_absolute, "Filetree: copy absolute path")
-        kmap(_cfg.keymap_rel,  M.copy_relative, "Filetree: copy relative path")
-        kmap(_cfg.keymap_name, M.copy_name,     "Filetree: copy filename")
+        kmap(_cfg.keymap_pick,    M.pick,          "Filetree: copy path (pick format)")
+        kmap(_cfg.keymap_abs,     M.copy_absolute, "Filetree: copy absolute path")
+        kmap(_cfg.keymap_dirname, M.copy_dirname,  "Filetree: copy absolute parent directory")
+        kmap(_cfg.keymap_name,    M.copy_name,     "Filetree: copy filename")
       end)
     end,
   })

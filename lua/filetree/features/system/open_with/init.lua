@@ -7,7 +7,7 @@
 ---
 --- Config:
 ---   enabled  boolean
----   keymap   string?  Key for system default open (default "ox").
+---   keymap   string?  Key for system default open (default "<leader>sm").
 ---   apps     FiletreeOpenWithApp[]  List of custom app entries.
 ---
 --- Example config:
@@ -30,7 +30,7 @@ local M = {}
 ---@type FiletreeOpenWithConfig
 local _cfg = {
   enabled = false,
-  keymap  = "ox",
+  keymap  = "<leader>sm",
   apps    = {},
 }
 

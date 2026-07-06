@@ -9,10 +9,9 @@
 ---
 --- Examples:
 ---   :Filetree trash undo
----   :Filetree git stage
+---   :Filetree git refresh
 ---   :Filetree filter foo bar
 ---   :Filetree reveal pause 2000
----   :Filetree archive zip
 
 local usercmd = require("filetree.util.usercmd")
 
@@ -58,20 +57,9 @@ local TREE = {
     close  = function(_) local f = ft("diff"); if f then f.close()       end end,
   },
 
-  -- ── git (git_status + git_actions) ──────────────────────────────────────────
+  -- ── git (git_status) ─────────────────────────────────────────────────────────
   git = {
-    refresh     = function(_) local f = ft("git_status");  if f then f.refresh()      end end,
-    stage       = function(_) local f = ft("git_actions"); if f then f.stage_current()   end end,
-    unstage     = function(_) local f = ft("git_actions"); if f then f.unstage_current() end end,
-    stash       = function(_) local f = ft("git_actions"); if f then f.stash()        end end,
-    ["stash-pop"] = function(_) local f = ft("git_actions"); if f then f.stash_pop()  end end,
-    log         = function(_) local f = ft("git_actions"); if f then f.log_current()  end end,
-  },
-
-  -- ── bookmarks ───────────────────────────────────────────────────────────────
-  bookmarks = {
-    show  = function(_) local f = ft("bookmarks"); if f then f.show()      end end,
-    clear = function(_) local f = ft("bookmarks"); if f then f.clear_all() end end,
+    refresh = function(_) local f = ft("git_status"); if f then f.refresh() end end,
   },
 
   -- ── safety ──────────────────────────────────────────────────────────────────
@@ -114,37 +102,16 @@ local TREE = {
     clear = function(_) local f = ft("filter"); if f then f.clear() end end,
   },
 
-  -- ── recent ──────────────────────────────────────────────────────────────────
-  recent = {
-    [""] = function(_) local f = ft("recent_files"); if f then f.show()  end end,
-    clear = function(_) local f = ft("recent_files"); if f then f.clear() end end,
-  },
-
-  -- ── notes ───────────────────────────────────────────────────────────────────
-  notes = {
-    show  = function(_) local f = ft("notes"); if f then f.toggle_current() end end,
-    clear = function(_) local f = ft("notes"); if f then f.clear_all()      end end,
-  },
-
   -- ── size ────────────────────────────────────────────────────────────────────
   size = {
     refresh = function(_) local f = ft("size_info"); if f then f.refresh() end end,
   },
-
-  -- ── terminal ────────────────────────────────────────────────────────────────
-  terminal = function(_) local f = ft("open_terminal"); if f then f.open_current() end end,
 
   -- ── rename ──────────────────────────────────────────────────────────────────
   rename = function(_) local f = ft("rename_batch"); if f then f.open() end end,
 
   -- ── template ────────────────────────────────────────────────────────────────
   template = function(_) local f = ft("create_from_template"); if f then f.open_current() end end,
-
-  -- ── symlink ─────────────────────────────────────────────────────────────────
-  symlink = {
-    follow = function(_) local f = ft("symlink"); if f then f.follow()         end end,
-    create = function(_) local f = ft("symlink"); if f then f.create_current() end end,
-  },
 
   -- ── reveal ──────────────────────────────────────────────────────────────────
   -- :Filetree reveal           → reveal current buffer
@@ -154,13 +121,6 @@ local TREE = {
     [""] = function(_)   local f = ft("auto_reveal"); if f then f.reveal_current()              end end,
     pause  = function(a) local f = ft("auto_reveal"); if f then f.pause(tonumber(a[1]) or 2000) end end,
     resume = function(_) local f = ft("auto_reveal"); if f then f.resume()                      end end,
-  },
-
-  -- ── archive ─────────────────────────────────────────────────────────────────
-  archive = {
-    zip     = function(_) local f = ft("archive"); if f then f.zip_current()     end end,
-    tar     = function(_) local f = ft("archive"); if f then f.tar_current()     end end,
-    extract = function(_) local f = ft("archive"); if f then f.extract_current() end end,
   },
 
   -- ── resize ──────────────────────────────────────────────────────────────────
@@ -193,80 +153,11 @@ local TREE = {
     end end,
   },
 
-  -- ── duplicate_node ───────────────────────────────────────────────────────────
-  duplicate = function(_) local f = ft("duplicate_node"); if f then f.duplicate_current() end end,
-
-  -- ── git_blame ────────────────────────────────────────────────────────────────
-  blame = function(_) local f = ft("git_blame"); if f then f.show_float_current() end end,
-
   -- ── open_with ────────────────────────────────────────────────────────────────
   open = {
     system = function(_)   local f = ft("open_with"); if f then f.open_system()  end end,
     pick   = function(_)   local f = ft("open_with"); if f then f.pick()         end end,
     app    = function(a)   local f = ft("open_with"); if f then f.open_app(a[1] or "") end end,
-  },
-
-  -- ── color_labels ─────────────────────────────────────────────────────────────
-  label = {
-    set   = function(a)
-      local f = ft("color_labels"); if not f then return end
-      local arg = a[1]
-      if not arg then f.pick_current()
-      elseif tonumber(arg) then f.set_current(tonumber(arg))
-      else f.set_by_name(arg) end
-    end,
-    clear = function(_) local f = ft("color_labels"); if f then f.clear_current() end end,
-    list  = function(_) local f = ft("color_labels"); if f then f.show_list()    end end,
-  },
-
-  -- ── jump_list ────────────────────────────────────────────────────────────────
-  jump = {
-    back    = function(_) local f = ft("jump_list"); if f then f.back()    end end,
-    forward = function(_) local f = ft("jump_list"); if f then f.forward() end end,
-    list    = function(_) local f = ft("jump_list"); if f then f.show()    end end,
-    clear   = function(_) local f = ft("jump_list"); if f then f.clear()   end end,
-  },
-
-  -- ── outline ──────────────────────────────────────────────────────────────────
-  outline = function(_) local f = ft("outline"); if f then f.show_current() end end,
-
-  -- ── compare_dirs ─────────────────────────────────────────────────────────────
-  compare = {
-    marked  = function(_) local f = ft("compare_dirs"); if f then f.compare_marked()  end end,
-    current = function(_) local f = ft("compare_dirs"); if f then f.compare_current() end end,
-  },
-
-  -- ── pin_node ─────────────────────────────────────────────────────────────────
-  pin = {
-    toggle = function(_) local f = ft("pin_node"); if f then f.toggle_current() end end,
-    show   = function(_) local f = ft("pin_node"); if f then f.show()           end end,
-    clear  = function(_) local f = ft("pin_node"); if f then f.clear_all()      end end,
-  },
-
-  -- ── workspace ────────────────────────────────────────────────────────────────
-  workspace = {
-    switch = function(_)  local f = ft("workspace"); if f then f.switch()        end end,
-    add    = function(a)  local f = ft("workspace"); if f then f.add(a[1])       end end,
-    remove = function(a)  local f = ft("workspace"); if f then f.remove(a[1])    end end,
-    list   = function(_)
-      local f = ft("workspace"); if not f then return end
-      local roots = f.list()
-      if #roots == 0 then vim.notify("[filetree] Workspace empty", vim.log.levels.INFO)
-      else vim.notify("[filetree] Workspace:\n  " .. table.concat(roots, "\n  "), vim.log.levels.INFO) end
-    end,
-  },
-
-  -- ── ignore_patterns ──────────────────────────────────────────────────────────
-  ignore = {
-    toggle = function(_)  local f = ft("ignore_patterns"); if f then f.toggle()      end end,
-    clear  = function(_)  local f = ft("ignore_patterns"); if f then f.clear_all()   end end,
-    add    = function(a)  local f = ft("ignore_patterns"); if f then f.add(table.concat(a, " ")) end end,
-    list   = function(_)
-      local f = ft("ignore_patterns"); if not f then return end
-      local pats = f.get_patterns()
-      if #pats == 0 then vim.notify("[filetree] No ignore patterns", vim.log.levels.INFO)
-      else vim.notify("[filetree] Patterns:\n  " .. table.concat(pats, "\n  "), vim.log.levels.INFO) end
-    end,
   },
 
   -- ── hooks_api ─────────────────────────────────────────────────────────────
@@ -291,27 +182,6 @@ local TREE = {
   -- ── smart_rename ─────────────────────────────────────────────────────────────
   smartrename = function(_) local f = ft("smart_rename"); if f then f.rename_current() end end,
 
-  -- ── tag_system ───────────────────────────────────────────────────────────────
-  tag = {
-    add    = function(a) local f = ft("tag_system"); if f then f.add(a[1] or "")    end end,
-    remove = function(a) local f = ft("tag_system"); if f then f.remove(a[1] or "") end end,
-    filter = function(a) local f = ft("tag_system"); if f then f.filter(a[1])       end end,
-    clear  = function(_) local f = ft("tag_system"); if f then f.clear_current()    end end,
-    list   = function(_) local f = ft("tag_system"); if f then f.list()             end end,
-    edit   = function(_) local f = ft("tag_system"); if f then f.edit_current()     end end,
-  },
-
-  -- ── telescope_integration ────────────────────────────────────────────────────
-  telescope = {
-    bookmarks = function(_) local f = ft("telescope_integration"); if f then f.bookmarks()    end end,
-    marks     = function(_) local f = ft("telescope_integration"); if f then f.marks()        end end,
-    recent    = function(_) local f = ft("telescope_integration"); if f then f.recent_files() end end,
-    notes     = function(_) local f = ft("telescope_integration"); if f then f.notes()        end end,
-    pins      = function(_) local f = ft("telescope_integration"); if f then f.pins()         end end,
-    workspace = function(_) local f = ft("telescope_integration"); if f then f.workspace()    end end,
-    tags      = function(_) local f = ft("telescope_integration"); if f then f.tags()         end end,
-  },
-
   -- ── path_copy ─────────────────────────────────────────────────────────────────
   copy = {
     absolute = function(_) local f = ft("path_copy"); if f then f.copy_absolute() end end,
@@ -324,36 +194,10 @@ local TREE = {
     pick     = function(_) local f = ft("path_copy"); if f then f.pick()          end end,
   },
 
-  -- ── diagnostics_filter ───────────────────────────────────────────────────────
-  diag = {
-    filter   = function(_) local f = ft("diagnostics_filter"); if f then f.toggle_filter() end end,
-    refresh  = function(_) local f = ft("diagnostics_filter"); if f then f.refresh()       end end,
-    severity = function(a) local f = ft("diagnostics_filter"); if f then f.set_severity(a[1]) end end,
-  },
-
   -- ── live_search ──────────────────────────────────────────────────────────────
   search = {
     [""]    = function(_) local f = ft("live_search"); if f then f.open()  end end,
     clear   = function(_) local f = ft("live_search"); if f then f.clear() end end,
-  },
-
-  -- ── quick_open ───────────────────────────────────────────────────────────────
-  quickopen = function(_) local f = ft("quick_open"); if f then f.open() end end,
-
-  -- ── harpoon_integration ──────────────────────────────────────────────────────
-  harpoon = {
-    add    = function(_) local f = ft("harpoon_integration"); if f then f.add_current()    end end,
-    remove = function(_) local f = ft("harpoon_integration"); if f then f.remove_current() end end,
-    menu   = function(_) local f = ft("harpoon_integration"); if f then f.menu()           end end,
-  },
-
-  -- ── file_permissions ─────────────────────────────────────────────────────────
-  chmod       = function(a)
-    local f = ft("file_permissions"); if f then f.chmod(a[1]) end
-  end,
-  permissions = {
-    show = function(_) local f = ft("file_permissions"); if f then f.show_current() end end,
-    exec = function(_) local f = ft("file_permissions"); if f then f.toggle_exec()  end end,
   },
 
   -- ── smart_create ──────────────────────────────────────────────────────────────
@@ -369,13 +213,6 @@ local TREE = {
       abs = function(_) local f = ft("copy_file_list"); if f then f.copy_dirs_abs() end end,
       rel = function(_) local f = ft("copy_file_list"); if f then f.copy_dirs_rel() end end,
     },
-  },
-
-  -- ── find_or_grep_menu ─────────────────────────────────────────────────────────
-  findgrep = {
-    [""] = function(_) local f = ft("find_or_grep_menu"); if f then f.open() end end,
-    find  = function(_) local f = ft("find_or_grep_menu"); if f then f.find() end end,
-    grep  = function(_) local f = ft("find_or_grep_menu"); if f then f.grep() end end,
   },
 
   -- ── lua_require_copy ─────────────────────────────────────────────────────────
@@ -563,7 +400,7 @@ end
 ---Walk the command TREE and return every sub-command path as a string, sorted.
 ---The dispatcher's TREE is the single source of truth, so this never drifts from
 ---what is actually registered. Default-action (`""`) keys are skipped.
----@return string[]  e.g. { "archive tar", "git stage", "marks show", … }
+---@return string[]  e.g. { "trash undo", "git refresh", "marks show", … }
 function M.command_paths()
   local out = {}
   local function walk(node, prefix)

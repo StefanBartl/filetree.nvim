@@ -11,7 +11,8 @@
 ---
 --- Keymaps (in tree buffer, default):
 ---   gr  grep with prompt
----   gR  grep word under cursor
+--- (keymap_cword, "grep word under cursor", has no default keymap — set one
+--- explicitly via config if wanted.)
 ---
 --- User commands:
 ---   :FiletreeGrepInDir [pattern]
@@ -26,7 +27,7 @@ local M = {}
 local _cfg = {
   enabled        = false,
   keymap         = "gr",
-  keymap_cword   = "gR",
+  keymap_cword   = nil,
   prefer         = "auto",   -- "auto"|"telescope"|"fzf-lua"|"builtin"
   hidden         = false,
   extra_args     = {},

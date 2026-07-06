@@ -37,27 +37,13 @@ local FEATURES = registry.FEATURES
 --                         effect unless other code calls into it.
 --   auto_resize           Automatic width management fights the manual
 --                         window_size_cycler (kept on by default).
---   git_actions           Default `gs` collides with live_search, and it mutates
---                         the git index (stage/unstage) from the tree.
---   path_utils            Redundant with path_copy (kept on by default); enabling
---                         both ships two overlapping path-copy keymap families.
---   harpoon_integration   Hard-requires the external harpoon plugin.
---   telescope_integration Hard-requires telescope; redundant with the
---                         builtin-fallback find_or_grep_menu / find_files.
---   tree_open_keymaps     Binds global (not tree-local) normal-mode keys — too
---                         opinionated to enable without explicit opt-in.
 --
 ---@type table<string, boolean>
 local DEFAULT_DISABLED = {
-  cwd_sync              = true,
-  current_hl            = true,
-  safety                = true,
-  auto_resize           = true,
-  git_actions           = true,
-  path_utils            = true,
-  harpoon_integration   = true,
-  telescope_integration = true,
-  tree_open_keymaps     = true,
+  cwd_sync    = true,
+  current_hl  = true,
+  safety      = true,
+  auto_resize = true,
 }
 
 ---@type table<string, table>  name → loaded feature module

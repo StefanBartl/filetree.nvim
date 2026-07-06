@@ -149,7 +149,7 @@ require("lazy").setup({
             keymap            = "m",
             keymap_all        = "]m",
             keymap_unmark_all = "[m",
-            keymap_clear      = "<leader>mc",
+            keymap_clear      = "<C-m>",
             keymap_show       = "<leader>ms",
           },
           git_status = {
@@ -240,11 +240,9 @@ require("lazy").setup({
           -- ── Group F: Clipboard / copy ─────────────────────────────────────
           -- Tests: vim.fn.setreg, notify
           path_copy = {
-            enabled      = true,
-            keymap_abs   = "[a",          -- copy absolute path (original: [a)
-            keymap_rel   = "]a",          -- copy base/dir path  (original: ]a)
-            keymap_pick  = "<leader>yp",  -- format picker
-            keymap_name  = "<leader>yn",  -- filename only
+            enabled        = true,
+            keymap_abs     = "[a",  -- copy absolute path (original: [a)
+            keymap_dirname = "]a",  -- copy absolute parent directory (original: ]a)
           },
           copy_file_list = {
             enabled          = true,
@@ -266,14 +264,6 @@ require("lazy").setup({
             keymap_up    = "-",   -- navigate to parent (original: -)
             keymap_down  = "+",   -- set dir as root    (original: +)
             sync_cwd     = true,
-          },
-
-          -- ── Group H: Find / grep ──────────────────────────────────────────
-          -- Tests: telescope/fzf-lua cascade, vim.ui.select fallback
-          find_or_grep_menu = {
-            enabled = true,
-            keymap  = "<M-p>",
-            prefer  = "auto",
           },
         },
       })

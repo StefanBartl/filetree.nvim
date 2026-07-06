@@ -13,15 +13,6 @@ return {
   debug       = false,  -- true → show notifier.debug(...) messages (troubleshooting)
   ignore_list = true,   -- hide .git, node_modules, etc. by default
   features = {
-    picker = {
-      enabled     = true,
-      index_width = 2,
-      timeout_ms  = 3000,
-      keymaps = {
-        trigger_reveal = "<leader>ftp",
-        trigger_cwd    = "<leader>ftc",
-      },
-    },
     layout_guard = {
       enabled  = true,
       delay_ms = 50,

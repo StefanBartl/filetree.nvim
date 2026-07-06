@@ -14,7 +14,7 @@
 ---
 --- Config:
 ---   enabled            boolean
----   keymap             string?   Key inside tree (default "<F2>").
+---   keymap             string?   Key inside tree (default "r").
 ---   use_safety         boolean   Create safety backup before rename (default true).
 ---   dry_run            boolean   Log without executing (default false).
 ---   update_references  boolean   Fallback require()/import rewrite across the
@@ -34,7 +34,7 @@ local M = {}
 ---@type FiletreeSmartRenameConfig
 local _cfg = {
   enabled           = false,
-  keymap            = "<F2>",
+  keymap            = "r",
   use_safety        = true,
   dry_run           = false,
   update_references = true,

@@ -46,10 +46,7 @@ end
 -- Leader-prefix group labels (only these need explicit which-key groups; single
 -- tree-buffer keys already carry a `desc`).
 local WK_GROUPS = {
-  { "<leader>ft", "filetree: picker" },
-  { "<leader>e",  "filetree: open tree" },
-  { "<leader>y",  "filetree: yank/copy" },
-  { "<leader>m",  "filetree: marks" },
+  { "<leader>m", "filetree: marks" },
 }
 
 ---Register which-key group labels, if which-key is installed. Safe to call
