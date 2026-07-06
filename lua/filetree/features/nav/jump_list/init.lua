@@ -2,8 +2,9 @@
 ---@brief Back/forward navigation through tree cursor positions.
 ---@description
 --- Tracks cursor movements in the tree buffer and maintains a ring-buffer
---- of (path, line) positions. <C-o>/<C-i> inside the tree navigate the
---- jump list (mirroring Neovim's own jumplist but scoped to the tree).
+--- of (path, line) positions. <C-o>/<C-n> inside the tree navigate the
+--- jump list (back/forward, loosely mirroring Neovim's own jumplist but
+--- scoped to the tree).
 ---
 --- A new jump is recorded when:
 ---   - The tree's cursor dwells on a new line for > debounce_ms ms
@@ -14,7 +15,16 @@
 ---   max_jumps    integer   Ring buffer size (default 50).
 ---   debounce_ms  integer   Minimum dwell time before recording (default 500).
 ---   keymap_back  string?   Navigate backwards (default "<C-o>").
----   keymap_fwd   string?   Navigate forwards  (default "<C-i>").
+---   keymap_fwd   string?   Navigate forwards  (default "<C-n>").
+---
+--- NOTE: the forward default deliberately avoids "<C-i>". In any terminal,
+--- a physical Tab keypress and Ctrl-I send the identical byte, so "<C-i>"
+--- would silently fight the `preview` feature's default "<Tab>" keymap for
+--- the same physical key (with unpredictable resolution, since some
+--- terminals/Neovim versions can register them as distinct buffer-local
+--- entries that a plain, non-disambiguated keypress can't reliably pick
+--- between) — "<Tab>" is the far more expected default (matches most other
+--- file-manager-style pickers), so jump_list's forward key moved instead.
 ---
 --- Commands (via :Filetree dispatcher):
 ---   :Filetree jump back
@@ -34,7 +44,7 @@ local _cfg = {
   max_jumps   = 50,
   debounce_ms = 500,
   keymap_back = "<C-o>",
-  keymap_fwd  = "<C-i>",
+  keymap_fwd  = "<C-n>",
 }
 
 ---@type FiletreeAdapter?

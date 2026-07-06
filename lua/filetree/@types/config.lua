@@ -165,7 +165,7 @@
 ---@field keymap           string?  Toggle mark on current node (default "m").
 ---@field keymap_all       string?  Mark all files in current directory (default "]m").
 ---@field keymap_unmark_all string? Unmark all files in current directory (default "[m").
----@field keymap_clear     string?  Clear all marks (default "<C-m>").
+---@field keymap_clear     string?  Clear all marks (default "<leader>mc").
 ---@field keymap_show      string?  Show floating list of marked nodes (default "<leader>ms").
 
 -- ── diff ──────────────────────────────────────────────────────────────────────
@@ -405,7 +405,7 @@
 ---@field max_jumps    integer   Ring buffer size (default 50).
 ---@field debounce_ms  integer   Dwell time before recording (default 500ms).
 ---@field keymap_back  string?   Navigate backwards (default "<C-o>").
----@field keymap_fwd   string?   Navigate forwards  (default "<C-i>").
+---@field keymap_fwd   string?   Navigate forwards  (default "<C-n>").
 
 -- ── outline ───────────────────────────────────────────────────────────────────
 

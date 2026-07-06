@@ -50,7 +50,7 @@ local SPEC = {
     { field = "keymap",            method = "toggle_current",     desc = "filetree: toggle mark",       default = "m" },
     { field = "keymap_all",        method = "mark_all_visible",   desc = "filetree: mark all visible",  default = "]m" },
     { field = "keymap_unmark_all", method = "unmark_all_visible", desc = "filetree: unmark all visible", default = "[m" },
-    { field = "keymap_clear",      method = "clear_all",          desc = "filetree: clear all marks",   default = "<C-m>" },
+    { field = "keymap_clear",      method = "clear_all",          desc = "filetree: clear all marks",   default = "<leader>mc" },
     { field = "keymap_show",       method = "show",               desc = "filetree: show marked nodes", default = "<leader>ms" },
   },
   path_copy = {
