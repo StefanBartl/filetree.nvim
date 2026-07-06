@@ -145,6 +145,27 @@ end
 
 -- ── Paste ─────────────────────────────────────────────────────────────────────
 
+---Recursively copy a directory tree without shelling out (shell-agnostic:
+---works identically whether &shell is cmd.exe, PowerShell, or a POSIX shell).
+---@param src string
+---@param dst string
+---@return integer  0 on success, 1 on any failure
+local function copy_dir(src, dst)
+  if vim.fn.mkdir(dst, "p") == 0 then return 1 end
+  local uv = vim.uv or vim.loop
+  for _, name in ipairs(vim.fn.readdir(src)) do
+    local s = src .. "/" .. name
+    local d = dst .. "/" .. name
+    if vim.fn.isdirectory(s) == 1 then
+      if copy_dir(s, d) ~= 0 then return 1 end
+    else
+      local ok = uv.fs_copyfile(s, d)
+      if not ok then return 1 end
+    end
+  end
+  return 0
+end
+
 local function do_copy(src, dst_dir)
   local name = vim.fn.fnamemodify(src, ":t")
   local dst  = dst_dir .. "/" .. name
@@ -154,23 +175,12 @@ local function do_copy(src, dst_dir)
     dst = dst_dir .. "/" .. ts .. "_" .. name
   end
 
-  local is_dir = vim.fn.isdirectory(src) == 1
-  local cmd
-  if vim.fn.has("win32") == 1 then
-    if is_dir then
-      cmd = string.format('xcopy /E /I /Y "%s" "%s"', src, dst)
-    else
-      cmd = string.format('copy /Y "%s" "%s"', src, dst)
-    end
-    return vim.fn.system(cmd)
+  if vim.fn.isdirectory(src) == 1 then
+    return copy_dir(src, dst)
   else
-    if is_dir then
-      cmd = { "cp", "-r", src, dst }
-    else
-      cmd = { "cp", src, dst }
-    end
-    local result = vim.system(cmd):wait()
-    return result.code == 0 and 0 or 1
+    local uv = vim.uv or vim.loop
+    local ok = uv.fs_copyfile(src, dst)
+    return ok and 0 or 1
   end
 end
 
@@ -281,6 +291,29 @@ function M.setup(config, adapter)
             map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
           end
         end
+
+        -- neo-tree's own native keymaps (y/x/p/...) are registered with a
+        -- global `nowait = true`, which makes Vim resolve the ambiguity
+        -- between a single-char native mapping and our own longer "yy"/"xx"
+        -- sequence immediately in the native mapping's favour — the second
+        -- keypress never gets a chance to complete the double-tap. Re-binding
+        -- the bare prefix char to a plain <Nop> (no nowait) on this buffer
+        -- overrides neo-tree's mapping and restores Vim's normal
+        -- wait-for-more-input behaviour, making "yy"/"xx" reachable again.
+        local function unblock_prefix(key, desc)
+          if type(key) == "string" and #key == 2 and key:sub(1, 1) == key:sub(2, 2) then
+            local prefix = key:sub(1, 1)
+            if prefix ~= km.paste and prefix ~= km.show then
+              map("n", prefix, "<Nop>", {
+                buffer = buf, silent = true,
+                desc   = "Filetree: unblock " .. desc .. " (" .. key .. ")",
+              })
+            end
+          end
+        end
+        unblock_prefix(km.copy, "stage copy")
+        unblock_prefix(km.cut,  "stage cut")
+
         bind(km.copy,  M.stage_copy, "stage copy")
         bind(km.cut,   M.stage_cut,  "stage cut")
         bind(km.paste, M.paste,      "paste clipboard")

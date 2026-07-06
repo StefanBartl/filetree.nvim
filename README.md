@@ -81,7 +81,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 **`fileops` — create / edit / move**
 | Feature | What it does |
 |---|---|
-| `smart_create` | Smart create file or directory with templates (`a`); type `?` for an in-prompt cheatsheet |
+| `smart_create` | Smart create file or directory with templates (`a`) |
 | `copy_move` | Stage copy/cut (`yy`/`xx`) and paste (`p`) nodes |
 | `duplicate_node` | Duplicate the node under the cursor (`<C-d>`) |
 | `rename_batch` | Edit-buffer batch rename (`R`) |
