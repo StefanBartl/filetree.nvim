@@ -7,7 +7,8 @@
 ---
 --- Keymaps:
 ---   "/" inside tree buffer    → enter filter mode
----   <Esc> / empty query       → clear filter
+---   <Esc> / empty query       → clear filter (inside the input prompt)
+---   <C-c> inside tree buffer  → clear an already-applied filter directly
 ---
 --- User commands:
 ---   :FiletreeFilter [query]
@@ -23,6 +24,7 @@ local M = {}
 local _cfg = {
   enabled          = false,
   keymap           = "/",
+  keymap_clear     = "<C-c>",
   case_sensitive   = false,
   dim_hl_group     = "Comment",
   debounce_ms      = 80,
@@ -252,7 +254,7 @@ function M.setup(config, adapter)
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_filter", true)
 
-  if _cfg.keymap then
+  if _cfg.keymap or _cfg.keymap_clear then
     au.acmd("FileType", {
       group   = _augroup,
       pattern = "neo-tree,NvimTree",
@@ -260,11 +262,20 @@ function M.setup(config, adapter)
         local buf = ev.buf
         vim.schedule(function()
           if not vim.api.nvim_buf_is_valid(buf) then return end
-          map("n", _cfg.keymap, M.enter, {
-            buffer = buf,
-            silent = true,
-            desc   = "Filetree: enter filter mode",
-          })
+          if _cfg.keymap then
+            map("n", _cfg.keymap, M.enter, {
+              buffer = buf,
+              silent = true,
+              desc   = "Filetree: enter filter mode",
+            })
+          end
+          if _cfg.keymap_clear then
+            map("n", _cfg.keymap_clear, M.clear, {
+              buffer = buf,
+              silent = true,
+              desc   = "Filetree: clear filter",
+            })
+          end
         end)
       end,
     })

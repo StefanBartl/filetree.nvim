@@ -26,6 +26,9 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
 | `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard |
 | `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard |
+| `d` | trash | `keymap` | Trash current node (or all marked) |
+| `U` | trash | `keymap_undo` | Undo last trash operation |
+| `<leader>th` | trash | `keymap_history` | Show trash history |
 | `gs` | live_search | `keymap` | Open live search in tree |
 | `I` | node_info | `keymap` | Show node info float |
 | `rq` | lua_require_copy | `keymap` | Copy file as `require("…")` string |
@@ -35,6 +38,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `]F` | copy_file_list | `keymap_dirs_rel` | Copy recursive dir list (relative) |
 | `a` | smart_create | `keymap` | Smart create file or directory |
 | `/` | filter | `keymap` | Enter tree filter mode |
+| `<C-c>` | filter | `keymap_clear` | Clear an applied filter directly |
 | `<Tab>` | preview | `keymap` | Text/dir: toggle floating preview; image: open via backend; PDF: pdfport/system |
 | `<CR>` | preview | `keymap_open` | Image/PDF: open via backend; other nodes: adapter's default `<CR>` |
 | `D` | diff | `keymap` | Diff current node |
@@ -43,11 +47,19 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `t` | create_from_template | `keymap` | Create from template |
 | `<leader>rb` | rename_batch | `keymap` | Open batch rename buffer |
 | `f` | find_files | `keymap_tree` | Find files (telescope/fzf-lua/builtin) |
+| `tf` | find_files | `keymap_telescope` | Find files, forcing telescope specifically |
 | `gr` | grep_in_dir | `keymap` | Grep in node directory |
+| `tg` | grep_in_dir | `keymap_telescope` | Grep, forcing telescope specifically |
 | `c` | copy_move | `keymaps.copy` | Stage node for copy |
 | `x` | copy_move | `keymaps.cut` | Stage node for cut |
 | `p` | copy_move | `keymaps.paste` | Paste staged nodes |
 | `P` | copy_move | `keymaps.show` | Show copy/cut clipboard |
+| `<C-c>` | copy_move | `keymaps.clear` | Clear copy/cut clipboard |
+| `sg` | open_variants | `keymap_vsplit` | Open current node in a vertical split |
+| `sv` | open_variants | `keymap_split` | Open current node in a horizontal split |
+| `st` | open_variants | `keymap_tabnew` | Open current node in a new tab |
+| `gb` | open_variants | `keymap_badd` | Add current node to buffer list (no focus switch) |
+| `<S-CR>` | open_variants | `keymap_badd_alt` | Same as `gb` |
 | `<C-s>` | buffer_save | `keymap_adjacent` | Force-save the adjacent editor buffer |
 | `<M-s>` | buffer_save | `keymap_node` | Force-save buffer matching node under cursor |
 | `w` | window_size_cycler | `keymap` | Cycle tree width through presets (normal → large → small → …) |
@@ -62,6 +74,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 |------|---------|-------|
 | `/` | `filter` + neotree fuzzy finder | neotree uses `/` for its own search. Remap `filter.keymap` if using neotree. |
 | `i` | `shell_run` + neotree built-in `i` (toggle node info) | filetree's `node_info` provides a better `I`; noop neotree's `i` via `adapter_keymaps`. |
+| `<C-c>` | `filter.keymap_clear` + `copy_move.keymaps.clear` | Both default to `<C-c>`. Last one registered wins; remap one if you need both reachable at once. |
 
 ---
 

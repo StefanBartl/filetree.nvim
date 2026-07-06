@@ -27,12 +27,13 @@ local M = {}
 
 ---@type FiletreeFindFilesConfig
 local _cfg = {
-  enabled         = false,
-  keymap_tree     = "f",
-  keymap_global   = nil,
-  prefer          = "auto",  -- "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
-  reveal_on_open  = true,
-  hidden          = false,
+  enabled          = false,
+  keymap_tree      = "f",
+  keymap_telescope = "tf",
+  keymap_global    = nil,
+  prefer           = "auto",  -- "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
+  reveal_on_open   = true,
+  hidden           = false,
 }
 
 ---@type FiletreeAdapter?
@@ -174,6 +175,16 @@ function M.find(root)
   end
 end
 
+---Force telescope specifically, regardless of the configured `prefer` backend.
+---@param root? string
+function M.find_telescope(root)
+  local node = _adapter and _adapter.get_current_node()
+  root = root or get_root(node)
+  if not via_telescope(root) then
+    notify.warn("telescope.nvim not available")
+  end
+end
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---@type integer?
@@ -203,6 +214,13 @@ function M.setup(config, adapter)
             silent = true,
             desc   = "Filetree: find files from current node",
           })
+          if _cfg.keymap_telescope then
+            map("n", _cfg.keymap_telescope, M.find_telescope, {
+              buffer = buf,
+              silent = true,
+              desc   = "Filetree: find files via telescope specifically",
+            })
+          end
         end)
       end,
     })

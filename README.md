@@ -80,8 +80,9 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `rename_batch` | Edit-buffer batch rename (`<leader>rb`) |
 | `smart_rename` | Rename with LSP reference updates (`r`) |
 | `create_from_template` | Create a file from a template (`t`) |
-| `trash` | Cross-platform trash + undo |
+| `trash` | Cross-platform trash + undo (`d` `U` `<leader>th`) |
 | `open_replace` | Open a file replacing the current editor buffer (`O`) |
+| `open_variants` | Open in split/vsplit/tab, or badd without switching focus (`sg` `sv` `st` `gb`/`<S-CR>`) |
 | `buffer_save` | Force-save adjacent / node buffer (`<C-s>`/`<M-s>`) |
 
 **`search` — search & filter**
@@ -89,8 +90,8 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 |---|---|
 | `filter` | Live tree filter (`/`) |
 | `live_search` | Incremental search inside the tree (`gs`) |
-| `find_files` | Find files via telescope / fzf-lua / mini.pick / builtin (`f`) |
-| `grep_in_dir` | Grep in the node's directory (`gr`) |
+| `find_files` | Find files via telescope / fzf-lua / mini.pick / builtin (`f`); force telescope specifically with `tf` |
+| `grep_in_dir` | Grep in the node's directory (`gr`); force telescope specifically with `tg` |
 
 **`paths` — paths & clipboard**
 | Feature | What it does |
@@ -98,6 +99,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `path_copy` | Copy absolute path or absolute parent directory (`[a` `]a`) |
 | `lua_require_copy` | Copy the node as a `require("…")` string (`rq`) |
 | `copy_file_list` | Copy recursive file/dir lists (`[f` `]f` `[F` `]F`) |
+| `markdown_links` | Copy current/recursive/marked nodes as Markdown links (`ML` `MR` `MM`) |
 
 **`git`**
 | Feature | What it does |

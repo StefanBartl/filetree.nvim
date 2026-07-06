@@ -8,10 +8,11 @@
 --- c/x is pressed, all marked files are staged at once.
 ---
 --- Keymaps (in tree buffer):
----   c    Stage current node for copy (or all marked)
----   x    Stage current node for cut  (or all marked)
----   p    Paste staged files into the directory of the current node
----   P    Show / clear the current clipboard
+---   c      Stage current node for copy (or all marked)
+---   x      Stage current node for cut  (or all marked)
+---   p      Paste staged files into the directory of the current node
+---   P      Show the current clipboard
+---   <C-c>  Clear the current clipboard
 ---
 --- Extmark: staged-for-copy nodes get a "C" indicator, cut nodes get "X".
 
@@ -29,6 +30,7 @@ local _cfg = {
     cut   = "x",
     paste = "p",
     show  = "P",
+    clear = "<C-c>",
   },
   confirm    = true,
   use_safety = true,
@@ -318,6 +320,7 @@ function M.setup(config, adapter)
         bind(km.cut,   M.stage_cut,  "stage cut")
         bind(km.paste, M.paste,      "paste clipboard")
         bind(km.show,  M.show,       "show clipboard")
+        bind(km.clear, M.clear,      "clear clipboard")
       end)
     end,
   })
