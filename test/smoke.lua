@@ -113,6 +113,47 @@ do
     type(dofile(root .. "/docs/BINDINGS.lua")) == "table")
 end
 
+-- 6) no two default-on, tree-scoped keymaps target the same physical key ────
+-- Terminals cannot distinguish some key pairs from each other: a physical Tab
+-- keypress and Ctrl-I send the identical byte ("<Tab>" == "<C-i>"), likewise
+-- "<CR>" == "<C-m>" and "<Esc>" == "<C-[>". Two default-on features silently
+-- fighting over one of these pairs is exactly the jump_list/preview bug that
+-- made <Tab> preview toggle fall through to an unrelated global mapping
+-- instead of firing — this guards against that class of bug recurring.
+do
+  local ALIASES = {
+    ["<c-i>"] = "<tab>", ["<tab>"] = "<tab>",
+    ["<c-m>"] = "<cr>",  ["<cr>"]  = "<cr>",
+    ["<c-[>"] = "<esc>", ["<esc>"] = "<esc>",
+  }
+  local function canonical(lhs)
+    -- Only fold via the specific known alias pairs (case-insensitively, since
+    -- "<C-i>"/"<c-i>" are the same key spelled differently) — anything else
+    -- must stay case-sensitive: "b" and "B" are genuinely different physical
+    -- keypresses, not an alias.
+    return ALIASES[lhs:lower()] or lhs
+  end
+
+  local b = require("filetree.bindings")
+  local seen = {}   -- canonical key -> feature name that claimed it first
+  local collisions = {}
+  for _, entries in pairs(b.keymaps) do
+    for _, e in ipairs(entries) do
+      if e.scope == "tree" and not e.opt_in then
+        local key = canonical(e.lhs)
+        if seen[key] and seen[key] ~= e.feature then
+          collisions[#collisions + 1] = ("%s (%s) vs %s (%s) both target %q")
+            :format(seen[key], key, e.feature, e.lhs, key)
+        else
+          seen[key] = e.feature
+        end
+      end
+    end
+  end
+  check("no default-on tree keymaps collide on an alias-equivalent physical key",
+    #collisions == 0, table.concat(collisions, "; "))
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim smoke: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then

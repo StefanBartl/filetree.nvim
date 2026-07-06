@@ -149,7 +149,7 @@ require("lazy").setup({
             keymap            = "m",
             keymap_all        = "]m",
             keymap_unmark_all = "[m",
-            keymap_clear      = "<C-m>",
+            keymap_clear      = "<leader>mc",
             keymap_show       = "<leader>ms",
           },
           git_status = {

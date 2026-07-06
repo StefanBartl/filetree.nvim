@@ -20,7 +20,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `m` | marks | `keymap` | Toggle mark on current node |
 | `]m` | marks | `keymap_all` | Mark all nodes in current directory |
 | `[m` | marks | `keymap_unmark_all` | Unmark all nodes in current directory |
-| `<C-m>` | marks | `keymap_clear` | Clear all marks |
+| `<leader>mc` | marks | `keymap_clear` | Clear all marks |
 | `<leader>ms` | marks | `keymap_show` | Show floating list of marked nodes |
 | `-` | tree_traverse | `keymap_up` | Navigate to parent directory |
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
@@ -46,7 +46,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `gn` | notes | `keymap` | Toggle note on current node |
 | `cl` | color_labels | `keymap` | Open color-label picker |
 | `<C-o>` | jump_list | `keymap_back` | Navigate backwards in jump list |
-| `<C-i>` | jump_list | `keymap_fwd` | Navigate forwards in jump list |
+| `<C-n>` | jump_list | `keymap_fwd` | Navigate forwards in jump list |
 | `go` | outline | `keymap` | Show LSP outline for current file |
 | `cd` | compare_dirs | `keymap` | Compare directories |
 | `gp` | pin_node | `keymap` | Pin current node |
@@ -149,7 +149,7 @@ require("filetree").setup({
     -- rename
     ["gs"]   = "<leader>gs",   -- live_search: gs → <leader>gs
     -- disable
-    ["<C-m>"] = false,          -- marks.keymap_clear: disabled
+    ["<leader>mc"] = false,     -- marks.keymap_clear: disabled
   },
   features = { ... },
 })

@@ -54,7 +54,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 |---|---|
 | `picker` | Two-digit overlay to jump to any visible tree node instantly |
 | `tree_traverse` | `-` go to parent dir, `+` set dir under cursor as tree root |
-| `jump_list` | Back/forward through visited tree nodes (`<C-o>`/`<C-i>`) |
+| `jump_list` | Back/forward through visited tree nodes (`<C-o>`/`<C-n>`) |
 | `quick_open` | Frecency-sorted quick-open picker (`<C-p>`) |
 | `reveal_alt` | Reveal the alternate buffer `#` in the tree (`B`) |
 | `auto_reveal` | Scroll/highlight the current file in the tree on buffer switch |
@@ -122,7 +122,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 **`org` — marks & organization**
 | Feature | What it does |
 |---|---|
-| `marks` | Toggle marks, batch mark/unmark, show list (`m` `]m` `[m` `<C-m>` `<leader>ms`) |
+| `marks` | Toggle marks, batch mark/unmark, show list (`m` `]m` `[m` `<leader>mc` `<leader>ms`) |
 | `bookmarks` | Toggle bookmarks on nodes (`b`) |
 | `pin_node` | Pin the current node (`gp`) |
 | `tag_system` | Edit tags for a node (`gt`) |
@@ -645,7 +645,7 @@ individual tree keys carry a `desc` so which-key shows them out of the box.
 require("filetree").setup({
   keymaps = {
     ["gs"]    = "<leader>gs",   -- rename live_search key
-    ["<C-m>"] = false,          -- disable marks clear
+    ["<leader>mc"] = false,     -- disable marks clear
     ["<Tab>"] = "<leader>pv",   -- move preview to <leader>pv
   },
 })
