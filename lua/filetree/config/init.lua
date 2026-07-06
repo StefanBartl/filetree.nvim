@@ -31,7 +31,7 @@ end
 ---Covers two patterns:
 ---  1. Fields whose key starts with "keymap"  (e.g. keymap, keymap_open, keymap_scroll_up)
 ---  2. All string values inside a sub-table whose key is "keymaps"
----     (e.g. copy_move.keymaps.copy, path_utils.keymaps.copy_abs)
+---     (e.g. copy_move.keymaps.copy, copy_file_list.keymaps.files_abs)
 ---A remap value of `false` disables the key; a string replaces it.
 ---@param cfg FiletreeConfig
 local function apply_keymap_remap(cfg)
@@ -133,15 +133,6 @@ function M.validate()
   end
   if type(cfg.features) ~= "table" then
     return false, "config.features must be a table"
-  end
-  local picker = cfg.features.picker
-  if picker and picker.enabled then
-    if type(picker.index_width) ~= "number" or picker.index_width < 1 then
-      return false, "features.picker.index_width must be a positive number"
-    end
-    if type(picker.timeout_ms) ~= "number" or picker.timeout_ms < 0 then
-      return false, "features.picker.timeout_ms must be >= 0"
-    end
   end
   return true, nil
 end

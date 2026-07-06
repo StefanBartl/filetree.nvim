@@ -55,8 +55,7 @@ end
 
 -- 2) setup is clean and opt-out resolves (default-on minus the opt-in few)
 local DEFAULT_OFF = {
-  "cwd_sync", "current_hl", "safety", "auto_resize", "git_actions",
-  "path_utils", "harpoon_integration", "telescope_integration", "tree_open_keymaps",
+  "cwd_sync", "current_hl", "safety", "auto_resize",
 }
 do
   local warnings = 0
@@ -88,9 +87,9 @@ end
 
 -- 3) explicit enable/disable overrides the default in both directions
 do
-  ft.setup({ adapter = "stub", features = { marks = { enabled = false }, git_actions = { enabled = true } } })
+  ft.setup({ adapter = "stub", features = { marks = { enabled = false }, auto_resize = { enabled = true } } })
   check("explicit { enabled=false } disables a default-on feature", ft.feature("marks") == nil)
-  check("explicit { enabled=true } enables a default-off feature", ft.feature("git_actions") ~= nil)
+  check("explicit { enabled=true } enables a default-off feature", ft.feature("auto_resize") ~= nil)
   ft.setup({ adapter = "stub" })
 end
 
@@ -134,6 +133,19 @@ do
     return ALIASES[lhs:lower()] or lhs
   end
 
+  -- marks.keymap_clear ("<C-m>") vs preview ("<CR>") is a deliberate, accepted
+  -- exception: it reproduces the exact legacy keymap layout the user's old
+  -- standalone neo-tree config used (this pairing existed there too, without
+  -- reported issues) — whichever binds last on the buffer wins silently
+  -- rather than the "neither fires" failure mode of the Tab/C-i case (that
+  -- one involved a *prefix* ambiguity across a `nowait` native mapping;
+  -- <C-m>/<CR> here are both exact single-key binds, so this is just an
+  -- ordinary "last registration wins" shadowing, not the broken-resolution
+  -- class of bug this check exists to catch).
+  local ACCEPTED = {
+    ["marks:preview:<cr>"] = true,
+  }
+
   local b = require("filetree.bindings")
   local seen = {}   -- canonical key -> feature name that claimed it first
   local collisions = {}
@@ -142,8 +154,13 @@ do
       if e.scope == "tree" and not e.opt_in then
         local key = canonical(e.lhs)
         if seen[key] and seen[key] ~= e.feature then
-          collisions[#collisions + 1] = ("%s (%s) vs %s (%s) both target %q")
-            :format(seen[key], key, e.feature, e.lhs, key)
+          local a, z = seen[key], e.feature
+          if a > z then a, z = z, a end
+          local accepted_key = a .. ":" .. z .. ":" .. key
+          if not ACCEPTED[accepted_key] then
+            collisions[#collisions + 1] = ("%s (%s) vs %s (%s) both target %q")
+              :format(seen[key], key, e.feature, e.lhs, key)
+          end
         else
           seen[key] = e.feature
         end

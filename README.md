@@ -52,16 +52,12 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 **`nav` — navigation & reveal**
 | Feature | What it does |
 |---|---|
-| `picker` | Two-digit overlay to jump to any visible tree node instantly |
 | `tree_traverse` | `-` go to parent dir, `+` set dir under cursor as tree root |
-| `jump_list` | Back/forward through visited tree nodes (`<C-o>`/`<C-n>`) |
-| `quick_open` | Frecency-sorted quick-open picker (`<C-p>`) |
 | `reveal_alt` | Reveal the alternate buffer `#` in the tree (`B`) |
 | `auto_reveal` | Scroll/highlight the current file in the tree on buffer switch |
 | `layout_guard` | Opens an editor window when the tree would be the only window |
 | `auto_resize` | Responsive tree width on `VimResized` _(opt-in)_ |
 | `cwd_sync` | Silently `chdir` to the project root of the current file + refresh the tree, then reveal it _(opt-in)_ |
-| `tree_open_keymaps` | Global keys to toggle the tree left/right/float/current _(opt-in)_ |
 
 **`ui` — display**
 | Feature | What it does |
@@ -70,8 +66,6 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `node_info` | Node info float (`I`) |
 | `breadcrumbs` | Path breadcrumbs for the current node |
 | `size_info` | Show file / directory sizes |
-| `color_labels` | Assign color labels (`cl`) |
-| `ignore_patterns` | Toggle ignore-pattern highlighting (`gi`) |
 | `window_size_cycler` | Cycle the tree width through presets (`w`) |
 | `window_style` | Blank statusline + isolated tree highlights (adapter-agnostic; both effects off until configured) |
 | `cursor_hide` | Hide the block cursor inside the tree |
@@ -82,17 +76,13 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | Feature | What it does |
 |---|---|
 | `smart_create` | Smart create file or directory with templates (`a`) |
-| `copy_move` | Stage copy/cut (`yy`/`xx`) and paste (`p`) nodes |
-| `duplicate_node` | Duplicate the node under the cursor (`<C-d>`) |
-| `rename_batch` | Edit-buffer batch rename (`R`) |
-| `smart_rename` | Rename with LSP reference updates (`<F2>`) |
-| `symlink` | Follow / create symlinks (`sl`/`sL`) |
+| `copy_move` | Stage copy/cut (`c`/`x`) and paste (`p`) nodes |
+| `rename_batch` | Edit-buffer batch rename (`<leader>rb`) |
+| `smart_rename` | Rename with LSP reference updates (`r`) |
 | `create_from_template` | Create a file from a template (`t`) |
-| `archive` | Zip / tar.gz the current node (`az`/`at`) |
 | `trash` | Cross-platform trash + undo |
 | `open_replace` | Open a file replacing the current editor buffer (`O`) |
 | `buffer_save` | Force-save adjacent / node buffer (`<C-s>`/`<M-s>`) |
-| `file_permissions` | Toggle exec bit / chmod / stat (`gx` `gX` `gP`) |
 
 **`search` — search & filter**
 | Feature | What it does |
@@ -100,62 +90,42 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `filter` | Live tree filter (`/`) |
 | `live_search` | Incremental search inside the tree (`gs`) |
 | `find_files` | Find files via telescope / fzf-lua / mini.pick / builtin (`f`) |
-| `find_or_grep_menu` | Unified find/grep picker menu (`<M-p>`) |
-| `grep_in_dir` | Grep in the node's directory (`gr` / `gR` for `<cword>`) |
-| `recent_files` | Recent-files picker (`<leader>fr`) |
+| `grep_in_dir` | Grep in the node's directory (`gr`) |
 
 **`paths` — paths & clipboard**
 | Feature | What it does |
 |---|---|
-| `path_copy` | Copy absolute/relative path, filename, or pick a format (`[a` `]a` `<leader>yp` `<leader>yn`) |
+| `path_copy` | Copy absolute path or absolute parent directory (`[a` `]a`) |
 | `lua_require_copy` | Copy the node as a `require("…")` string (`rq`) |
 | `copy_file_list` | Copy recursive file/dir lists (`[f` `]f` `[F` `]F`) |
-| `path_utils` | Alternative path-copy family (`ya`/`yr`/`yn`/`yd`/`yq`/`ym`) _(opt-in)_ |
 
 **`git`**
 | Feature | What it does |
 |---|---|
 | `git_status` | Git status decorations in the tree |
-| `git_blame` | Toggle git blame float (`gB`) |
-| `git_actions` | Stage/unstage/log from the tree (`gs`/`gS`/`gl`) _(opt-in)_ |
 
 **`org` — marks & organization**
 | Feature | What it does |
 |---|---|
-| `marks` | Toggle marks, batch mark/unmark, show list (`m` `]m` `[m` `<leader>mc` `<leader>ms`) |
-| `bookmarks` | Toggle bookmarks on nodes (`b`) |
-| `pin_node` | Pin the current node (`gp`) |
-| `tag_system` | Edit tags for a node (`gt`) |
-| `notes` | Attach notes to nodes (`gn`) |
-| `workspace` | Switch workspace root (`gw`) |
+| `marks` | Toggle marks, batch mark/unmark, show list (`m` `]m` `[m` `<C-m>` `<leader>ms`) |
 | `session` | Persist / restore tree state |
 
 **`system` — external programs**
 | Feature | What it does |
 |---|---|
 | `open_in_fm` | Open the node's directory in the system file manager (`<leader>fm`) |
-| `open_with` | Open with a configured external app (`ox`) |
-| `open_terminal` | Open a terminal in the node's directory (`T`) |
+| `open_with` | Open with a configured external app (`<leader>sm`) |
 | `shell_run` | Prompt + run a shell command in the node's directory (`i`) |
 
 **`lsp` — diagnostics & symbols**
 | Feature | What it does |
 |---|---|
 | `lsp_diagnostics` | LSP diagnostic decorations |
-| `outline` | LSP symbol outline for the current file (`go`) |
-| `diagnostics_filter` | Toggle a diagnostics-only filter (`df`) |
 
 **`compare` — diff**
 | Feature | What it does |
 |---|---|
 | `diff` | Diff the current node (`D`) |
-| `compare_dirs` | Compare two directories (`cd`) |
-
-**`integration` — external plugins**
-| Feature | What it does |
-|---|---|
-| `harpoon_integration` | Add / open harpoon marks (`gh`/`gH`) _(opt-in)_ |
-| `telescope_integration` | Telescope-backed pickers _(opt-in)_ |
 
 **`infra` — plumbing**
 | Feature | What it does |
@@ -177,11 +147,6 @@ These stay **off** until you set `{ enabled = true }`, each for a concrete reaso
 | `current_hl` | Purely cosmetic; ships hardcoded colours that only fit some colorschemes |
 | `safety` | A backup **API** with no keymaps — enabling it has no visible effect unless other code calls in |
 | `auto_resize` | Automatic width management fights the manual `window_size_cycler` (on by default) |
-| `git_actions` | Default `gs` collides with `live_search`, and it mutates the git index (stage/unstage) |
-| `path_utils` | Redundant with `path_copy` (on by default) — two overlapping path-copy keymap families |
-| `harpoon_integration` | Hard-requires the external [harpoon](https://github.com/ThePrimeagen/harpoon) plugin |
-| `telescope_integration` | Hard-requires telescope; redundant with the builtin-fallback `find_or_grep_menu` / `find_files` |
-| `tree_open_keymaps` | Binds global (not tree-local) normal-mode keys — too opinionated to enable unasked |
 
 ---
 
@@ -288,7 +253,7 @@ require("filetree").setup({
   adapter = "neotree",
   features = {
     shell_run  = { enabled = false },          -- disable a default-on feature
-    git_actions = { enabled = true },          -- enable a default-off feature
+    auto_resize = { enabled = true },          -- enable a default-off feature
     marks       = { keymap = "M" },            -- keep on, remap its key
   },
 })
@@ -326,16 +291,6 @@ require("filetree").setup({
 
   features = {
     -- ── On by default ──────────────────────────────────────────────────────
-    picker = {
-      enabled     = true,     -- default: on
-      index_width = 2,        -- digits per label  (2 → 01..99)
-      timeout_ms  = 3000,     -- auto-exit after ms of inactivity
-      keymaps = {
-        trigger_reveal = "<leader>ftp",
-        trigger_cwd    = "<leader>ftc",
-      },
-    },
-
     layout_guard = {
       enabled  = true,        -- default: on
       delay_ms = 50,
@@ -434,23 +389,7 @@ require("filetree").setup({
       dry_run     = false,
     },
 
-    git_actions = {
-      enabled = false,        -- default: off (gs collides with live_search)
-    },
-
-    tree_open_keymaps = {
-      enabled          = false,   -- default: off (binds global keys)
-      reveal_force_cwd = false,   -- set tree root to cwd when toggling
-      keymaps = {
-        left    = "<leader>el",
-        right   = "<leader>er",
-        float   = "<leader>ef",
-        current = "<leader>ec",
-      },
-    },
-
-    -- auto_resize, path_utils, harpoon_integration, telescope_integration are
-    -- also off by default — see "Default-disabled features".
+    -- auto_resize is also off by default — see "Default-disabled features".
   },
 
   -- Override the adapter's (neotree/nvim-tree) own native keymaps.
@@ -481,27 +420,6 @@ require("filetree").setup({
 > The deep-dives below cover a few core features. For the complete list of
 > features and their keys see [Features](#features) above and
 > [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
-
-### Picker
-
-Overlay two-digit labels on all visible tree nodes.
-
-**Global keymaps (normal mode):**
-
-| Key | Action |
-|---|---|
-| `<leader>ftp` | Picker — reveal current file |
-| `<leader>ftc` | Picker — open at cwd |
-
-**Inside picker mode:**
-
-| Key | Action |
-|---|---|
-| `0`–`9` | Build index; complete index opens/toggles node |
-| `e` / `s` / `v` / `t` / `p` | Set open mode before digits |
-| `<Tab>` | Cycle filter: all → files → folders |
-| `<C-k>` / `<C-j>` | Scroll tree |
-| `<Esc>` | Exit picker |
 
 ### Layout Guard
 
@@ -542,7 +460,7 @@ local ft = require("filetree")
 ft.setup(config)
 ft.adapter()            -- → FiletreeAdapter?
 ft.config()             -- → FiletreeConfig
-ft.feature("picker")    -- → feature module | nil
+ft.feature("marks")     -- → feature module | nil
 ft.register_adapter(a)  -- register custom adapter (before setup)
 ft.is_initialized()     -- → boolean
 ```
@@ -645,7 +563,7 @@ individual tree keys carry a `desc` so which-key shows them out of the box.
 require("filetree").setup({
   keymaps = {
     ["gs"]    = "<leader>gs",   -- rename live_search key
-    ["<leader>mc"] = false,     -- disable marks clear
+    ["<C-m>"] = false,          -- disable marks clear
     ["<Tab>"] = "<leader>pv",   -- move preview to <leader>pv
   },
 })

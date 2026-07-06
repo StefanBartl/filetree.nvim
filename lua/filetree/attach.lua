@@ -50,14 +50,12 @@ local SPEC = {
     { field = "keymap",            method = "toggle_current",     desc = "filetree: toggle mark",       default = "m" },
     { field = "keymap_all",        method = "mark_all_visible",   desc = "filetree: mark all visible",  default = "]m" },
     { field = "keymap_unmark_all", method = "unmark_all_visible", desc = "filetree: unmark all visible", default = "[m" },
-    { field = "keymap_clear",      method = "clear_all",          desc = "filetree: clear all marks",   default = "<leader>mc" },
+    { field = "keymap_clear",      method = "clear_all",          desc = "filetree: clear all marks",   default = "<C-m>" },
     { field = "keymap_show",       method = "show",               desc = "filetree: show marked nodes", default = "<leader>ms" },
   },
   path_copy = {
-    { field = "keymap_abs",  method = "copy_absolute", desc = "filetree: copy absolute path", default = "[a" },
-    { field = "keymap_rel",  method = "copy_relative", desc = "filetree: copy relative path", default = "]a" },
-    { field = "keymap_name", method = "copy_name",     desc = "filetree: copy filename",      default = "<leader>yn" },
-    { field = "keymap_pick", method = "pick",          desc = "filetree: copy path (pick)",   default = "<leader>yp" },
+    { field = "keymap_abs",     method = "copy_absolute", desc = "filetree: copy absolute path",            default = "[a" },
+    { field = "keymap_dirname", method = "copy_dirname",  desc = "filetree: copy absolute parent directory", default = "]a" },
   },
   node_info = {
     { field = "keymap", method = "show_current", desc = "filetree: node info", default = "I" },
@@ -70,9 +68,6 @@ local SPEC = {
   },
   live_search = {
     { field = "keymap", method = "open", desc = "filetree: live search", default = "gs" },
-  },
-  find_or_grep_menu = {
-    { field = "keymap", method = "open", desc = "filetree: find/grep menu", default = "<M-p>" },
   },
   window_size_cycler = {
     { field = "keymap", method = "cycle", desc = "filetree: cycle window size", default = "w" },

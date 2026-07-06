@@ -5,11 +5,11 @@
 --- or cut, then paste them into any directory node.
 ---
 --- Multiple-file staging uses the marks feature: if files are marked when
---- yy/xx is pressed, all marked files are staged at once.
+--- c/x is pressed, all marked files are staged at once.
 ---
 --- Keymaps (in tree buffer):
----   yy   Stage current node for copy (or all marked)
----   xx   Stage current node for cut  (or all marked)
+---   c    Stage current node for copy (or all marked)
+---   x    Stage current node for cut  (or all marked)
 ---   p    Paste staged files into the directory of the current node
 ---   P    Show / clear the current clipboard
 ---
@@ -25,8 +25,8 @@ local M = {}
 local _cfg = {
   enabled    = false,
   keymaps = {
-    copy  = "yy",
-    cut   = "xx",
+    copy  = "c",
+    cut   = "x",
     paste = "p",
     show  = "P",
   },

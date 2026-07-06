@@ -42,7 +42,7 @@ do
 
   -- Single canonical separator: prompts/notifications always show "/", and
   -- either "/" or "\" typed by the user sanitizes to "/". Regression coverage
-  -- for the smart_create/compare_dirs/duplicate_node/smart_rename prompt fix.
+  -- for the smart_create/smart_rename prompt fix.
   eq("path.slashify converts backslashes", path.slashify("E:\\a\\b"), "E:/a/b")
   eq("path.slashify is idempotent on forward slashes", path.slashify("E:/a/b"), "E:/a/b")
   check("path.parent never contains a backslash",
@@ -202,13 +202,8 @@ do
   package.loaded["filetree.features.infra.ignore_list"] = nil
 end
 
--- ── copy_move: yy/xx must survive an adapter-native nowait single-char "y"/"x" ─
--- neo-tree's own window.mappings apply a global `nowait = true`, so its native
--- single-char "y"/"x" mappings fire immediately on the first keypress, never
--- giving Neovim a chance to wait for the second character of "yy"/"xx" — the
--- copy/cut stage would never actually happen ("Clipboard is empty" on paste).
--- copy_move must re-bind the bare prefix char to a plain (non-nowait) <Nop> to
--- restore Neovim's normal ambiguous-mapping wait behaviour.
+-- ── copy_move: default single-char "c"/"x" cleanly override the adapter's ───
+-- native "c"/"x" (exact same key, last-registration-wins -- no ambiguity).
 do
   local tmp = (vim.env.TEMP .. "/units-copymove"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/dst", "p")
@@ -231,9 +226,9 @@ do
   })
 
   local buf = vim.api.nvim_create_buf(true, false)
-  -- Simulate neo-tree's own native nowait single-char mappings, set BEFORE
+  -- Simulate the adapter's own native single-char mappings, set BEFORE
   -- filetree's FileType-driven keymaps get scheduled (mirrors real timing).
-  vim.api.nvim_buf_set_keymap(buf, "n", "y", "", { callback = function() end, nowait = true })
+  vim.api.nvim_buf_set_keymap(buf, "n", "c", "", { callback = function() end, nowait = true })
   vim.api.nvim_buf_set_keymap(buf, "n", "x", "", { callback = function() end, nowait = true })
   vim.api.nvim_set_current_buf(buf)
   vim.bo[buf].filetype = "neo-tree"
@@ -241,12 +236,10 @@ do
 
   local km = {}
   for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do km[m.lhs] = m end
-  check("copy_move: 'y' re-bound without nowait (unblocks 'yy')",
-    km["y"] ~= nil and (km["y"].nowait == 0 or not km["y"].nowait))
-  check("copy_move: 'x' re-bound without nowait (unblocks 'xx')",
-    km["x"] ~= nil and (km["x"].nowait == 0 or not km["x"].nowait))
-  check("copy_move: 'yy' still bound", km["yy"] ~= nil)
-  check("copy_move: 'xx' still bound", km["xx"] ~= nil)
+  check("copy_move: 'c' overridden by filetree's own stage-copy handler",
+    km["c"] ~= nil and km["c"].callback ~= nil)
+  check("copy_move: 'x' overridden by filetree's own stage-cut handler",
+    km["x"] ~= nil and km["x"].callback ~= nil)
 
   local cm = ft.feature("copy_move")
   cm.stage_copy()
@@ -260,6 +253,56 @@ do
     vim.fn.filereadable(tmp .. "/dst/file1.txt") == 1)
   check("copy_move: notifies 1/1 pasted, not 'Clipboard is empty'",
     captured and captured:find("1/1") ~= nil, tostring(captured))
+end
+
+-- ── copy_move: a user-configured two-char sequence (e.g. "yy"/"xx") must ────
+-- still survive an adapter-native nowait single-char "y"/"x", for anyone who
+-- opts back into that style via config. neo-tree's own window.mappings apply
+-- a global `nowait = true`, so a native single-char "y" mapping fires
+-- immediately on the first keypress, never giving Neovim a chance to wait
+-- for the second character of "yy" -- copy_move must re-bind the bare prefix
+-- char to a plain (non-nowait) <Nop> to restore Neovim's normal
+-- ambiguous-mapping wait behaviour.
+do
+  local tmp = (vim.env.TEMP .. "/units-copymove2"):gsub("\\", "/")
+  vim.fn.mkdir(tmp, "p")
+
+  local cur_node = { path = tmp, type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub2", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    get_bufnr = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub2",
+    features = {
+      copy_move = {
+        enabled = true, confirm = false, use_safety = false,
+        keymaps = { copy = "yy", cut = "xx", paste = "p", show = "P" },
+      },
+    },
+  })
+
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_keymap(buf, "n", "y", "", { callback = function() end, nowait = true })
+  vim.api.nvim_buf_set_keymap(buf, "n", "x", "", { callback = function() end, nowait = true })
+  vim.api.nvim_set_current_buf(buf)
+  vim.bo[buf].filetype = "neo-tree"
+  vim.wait(200, function() return false end)
+
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do km[m.lhs] = m end
+  check("copy_move (custom yy/xx): 'y' re-bound without nowait (unblocks 'yy')",
+    km["y"] ~= nil and (km["y"].nowait == 0 or not km["y"].nowait))
+  check("copy_move (custom yy/xx): 'x' re-bound without nowait (unblocks 'xx')",
+    km["x"] ~= nil and (km["x"].nowait == 0 or not km["x"].nowait))
+  check("copy_move (custom yy/xx): 'yy' still bound", km["yy"] ~= nil)
+  check("copy_move (custom yy/xx): 'xx' still bound", km["xx"] ~= nil)
 end
 
 -- ── Report ────────────────────────────────────────────────────────────────────

@@ -23,7 +23,6 @@ filetree.nvim creates autocmds in two categories:
 | `preview` | `BufLeave`, `WinLeave`, `CursorMoved` | Auto-close preview float on leave; live-update on cursor move | `enabled = false` |
 | `git_status` | `BufWritePost`, `FocusGained` | Refresh git decorations after write | `enabled = false` |
 | `file_watcher` | `User FileWatcherEvent` | Refresh tree on filesystem change | `enabled = false` |
-| `recent_files` | `BufReadPost` | Record opened file in recent list | `enabled = false` |
 | `session` | `VimLeavePre`, `BufHidden` (tree) | Auto-save/restore project session | `auto_save = false` / `auto_restore = false` |
 | `lsp_diagnostics` | `DiagnosticChanged` | Refresh diagnostic decorations | `enabled = false` |
 | `breadcrumbs` | `BufEnter`, `CursorMoved` | Update winbar/statusline breadcrumb | `enabled = false` |

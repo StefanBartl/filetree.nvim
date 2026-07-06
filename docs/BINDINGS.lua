@@ -15,7 +15,7 @@
 --   {
 --     command      = "Filetree",          -- active command name
 --     keymaps      = { <category> = { { lhs, desc, feature, scope, opt_in? } } },
---     usercommands = { "archive tar", "git stage", … },  -- sorted paths
+--     usercommands = { "trash undo", "git refresh", … },  -- sorted paths
 --     autocmds     = { { event, feature, desc }, … },
 --   }
 
