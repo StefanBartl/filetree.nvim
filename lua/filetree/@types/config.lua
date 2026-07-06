@@ -533,10 +533,13 @@
 -- ── smart_rename ─────────────────────────────────────────────────────────────
 
 ---@class FiletreeSmartRenameConfig
----@field enabled     boolean
----@field keymap      string?   Key inside tree (default "<F2>").
----@field use_safety  boolean   Create safety backup before rename (default true).
----@field dry_run     boolean   Log without executing (default false).
+---@field enabled            boolean
+---@field keymap             string?   Key inside tree (default "<F2>").
+---@field use_safety         boolean   Create safety backup before rename (default true).
+---@field dry_run            boolean   Log without executing (default false).
+---@field update_references  boolean   Fallback require()/import rewrite across the
+---                                    project when no LSP client applied a
+---                                    workspace edit, or the file is Lua (default true).
 
 -- ── tag_system ────────────────────────────────────────────────────────────────
 
