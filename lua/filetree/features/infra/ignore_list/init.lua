@@ -52,7 +52,42 @@ end
 
 -- ── Adapter-specific hide injection ──────────────────────────────────────────
 
----Inject names into neo-tree's filtered_items.hide_by_name and refresh.
+---Merge `names` into a filtered_items hide_by_name value, in place, returning
+---a dict (`{name = true, …}`).
+---
+---neo-tree's own `filesystem.setup()` converts `hide_by_name` from the
+---user-facing `string[]` shape into this dict shape (`utils.list_to_dict`) so
+---that its render-time filter (`file-items.lua`: `f.hide_by_name[name]`) is an
+---O(1) lookup — and it does this conversion exactly once, during its own
+---setup(), which normally runs *before* filetree's (event="VeryLazy"). Adding
+---entries as if `hide_by_name` were still an array (`ipairs` + `#+1` append, the
+---previous implementation here) silently does nothing: neo-tree's filter never
+---iterates the table, it only ever indexes it by name, so array-shaped entries
+---are invisible to it. This must always end up dict-shaped, regardless of
+---whether neo-tree already converted it (dict), the user pre-set it in their
+---own neo-tree opts (array, not yet converted), or it was never set (nil).
+---@param existing table?  Current filtered_items.hide_by_name value (any shape, or nil).
+---@param names    string[]
+---@return table<string, true>
+local function merge_hide_by_name(existing, names)
+  local dict = {}
+  if type(existing) == "table" then
+    for k, v in pairs(existing) do
+      if type(k) == "string" then
+        dict[k] = v            -- already dict-shaped (converted by neo-tree)
+      elseif type(v) == "string" then
+        dict[v] = true         -- still array-shaped (not yet converted)
+      end
+    end
+  end
+  for _, name in ipairs(names) do
+    dict[name] = true
+  end
+  return dict
+end
+
+---Inject names into neo-tree's filtered_items.hide_by_name (both the merged
+---config, for future states, and any already-open state) and refresh.
 ---@param names string[]
 ---@param adapter FiletreeAdapter
 local function apply_neotree(names, adapter)
@@ -72,23 +107,25 @@ local function apply_neotree(names, adapter)
     return
   end
 
+  -- 1. Future states: neo-tree deepcopies from this config template.
+  ncfg.filesystem.filtered_items = ncfg.filesystem.filtered_items or {}
   local fi = ncfg.filesystem.filtered_items
-  if not fi then
-    ncfg.filesystem.filtered_items = {}
-    fi = ncfg.filesystem.filtered_items
-  end
+  fi.hide_by_name = merge_hide_by_name(fi.hide_by_name, names)
+  if fi.visible == nil then fi.visible = false end
 
-  fi.hide_by_name = fi.hide_by_name or {}
-  local existing = {}
-  for _, n in ipairs(fi.hide_by_name) do existing[n] = true end
-  for _, name in ipairs(names) do
-    if not existing[name] then
-      fi.hide_by_name[#fi.hide_by_name + 1] = name
-      existing[name] = true
+  -- 2. Already-open state(s): patch live filtered_items directly, in case
+  -- neo-tree already built its filesystem-source state from the config
+  -- before we got here (shares the config's nested tables in some neo-tree
+  -- versions, but not reliably across all of them — patch explicitly either way).
+  local ok_mgr, mgr = pcall(require, "neo-tree.sources.manager")
+  if ok_mgr and type(mgr._get_all_states) == "function" then
+    for _, state in ipairs(mgr._get_all_states()) do
+      if state.filtered_items then
+        state.filtered_items.hide_by_name = merge_hide_by_name(state.filtered_items.hide_by_name, names)
+        if state.filtered_items.visible == nil then state.filtered_items.visible = false end
+      end
     end
   end
-
-  if fi.visible == nil then fi.visible = false end
 
   if type(adapter.refresh) == "function" then
     vim.defer_fn(function() pcall(adapter.refresh) end, 100)

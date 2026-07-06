@@ -151,6 +151,34 @@ do
     revealed_path and revealed_path:gsub("\\", "/") == tmp .. "/proj/sub/file.lua")
 end
 
+-- ── ignore_list: hide_by_name must be dict-shaped, not array-shaped ─────────
+-- neo-tree's own filesystem.setup() converts hide_by_name from a user-facing
+-- string[] into a {name=true,...} dict (utils.list_to_dict) — its render-time
+-- filter (file-items.lua) only ever does f.hide_by_name[name], never iterates.
+-- Appending array-style (ipairs + #+1) after that conversion silently hides
+-- nothing at all, which is exactly the bug this guards against.
+do
+  package.loaded["neo-tree"] = { config = { filesystem = { filtered_items = {} } } }
+  package.loaded["neo-tree.sources.manager"] = { _get_all_states = function() return {} end }
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+  local il = require("filetree.features.infra.ignore_list")
+  local refreshed = false
+  il.setup({ enabled = true }, { name = "neotree", refresh = function() refreshed = true end })
+
+  local fi = package.loaded["neo-tree"].config.filesystem.filtered_items
+  check("ignore_list: hide_by_name is a table", type(fi.hide_by_name) == "table")
+  check("ignore_list: '.git' hidden via dict lookup", fi.hide_by_name[".git"] == true)
+  check("ignore_list: '.agents' hidden (from lib.nvim's list)", fi.hide_by_name[".agents"] == true)
+  check("ignore_list: '.claude' hidden (from lib.nvim's list)", fi.hide_by_name[".claude"] == true)
+  check("ignore_list: not array-shaped (no numeric key 1)", fi.hide_by_name[1] == nil)
+  vim.wait(150, function() return refreshed end)
+  check("ignore_list: adapter.refresh() called", refreshed)
+
+  package.loaded["neo-tree"] = nil
+  package.loaded["neo-tree.sources.manager"] = nil
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
