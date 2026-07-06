@@ -57,6 +57,11 @@ local SPEC = {
     { field = "keymap_abs",     method = "copy_absolute", desc = "filetree: copy absolute path",            default = "[a" },
     { field = "keymap_dirname", method = "copy_dirname",  desc = "filetree: copy absolute parent directory", default = "]a" },
   },
+  trash = {
+    { field = "keymap",         method = "delete_current", desc = "filetree: trash current node",  default = "d" },
+    { field = "keymap_undo",    method = "undo_last",       desc = "filetree: undo last trash",     default = "U" },
+    { field = "keymap_history", method = "show_history",    desc = "filetree: show trash history",  default = "<leader>th" },
+  },
   node_info = {
     { field = "keymap", method = "show_current", desc = "filetree: node info", default = "I" },
   },
@@ -78,12 +83,24 @@ local SPEC = {
     { field = "keymap_dirs_abs",  method = "copy_dirs_abs",  desc = "filetree: copy dir list (abs)",  default = "[F" },
     { field = "keymap_dirs_rel",  method = "copy_dirs_rel",  desc = "filetree: copy dir list (rel)",  default = "]F" },
   },
+  markdown_links = {
+    { field = "keymap",             method = "link_current",    desc = "filetree: markdown link for current node", default = "ML" },
+    { field = "keymap_recursive",   method = "link_recursive",  desc = "filetree: markdown links recursively",     default = "MR" },
+    { field = "keymap_from_marked", method = "link_from_marked", desc = "filetree: markdown links from marked",    default = "MM" },
+  },
   buffer_save = {
     { field = "keymap_adjacent", method = "save_adjacent", desc = "filetree: save adjacent buffer", default = "<C-s>" },
     { field = "keymap_node",     method = "save_node",     desc = "filetree: save node buffer",     default = "<M-s>" },
   },
   open_replace = {
     { field = "keymap", method = "open_replace", desc = "filetree: open (replace buffer)", default = "O" },
+  },
+  open_variants = {
+    { field = "keymap_vsplit",   method = "open_vsplit", desc = "filetree: open in vertical split",   default = "sg" },
+    { field = "keymap_split",    method = "open_split",  desc = "filetree: open in horizontal split", default = "sv" },
+    { field = "keymap_tabnew",   method = "open_tabnew", desc = "filetree: open in new tab",          default = "st" },
+    { field = "keymap_badd",     method = "open_badd",   desc = "filetree: add to buffer list (no focus switch)", default = "gb" },
+    { field = "keymap_badd_alt", method = "open_badd",   desc = "filetree: add to buffer list (no focus switch)", default = "<S-CR>" },
   },
   open_in_fm = {
     { field = "keymap", method = "open", desc = "filetree: open in file manager", default = "<leader>fm" },

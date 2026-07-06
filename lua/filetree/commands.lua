@@ -160,6 +160,21 @@ local TREE = {
     app    = function(a)   local f = ft("open_with"); if f then f.open_app(a[1] or "") end end,
   },
 
+  -- ── open_variants ─────────────────────────────────────────────────────────────
+  openas = {
+    vsplit = function(_) local f = ft("open_variants"); if f then f.open_vsplit() end end,
+    split  = function(_) local f = ft("open_variants"); if f then f.open_split()  end end,
+    tabnew = function(_) local f = ft("open_variants"); if f then f.open_tabnew() end end,
+    badd   = function(_) local f = ft("open_variants"); if f then f.open_badd()   end end,
+  },
+
+  -- ── markdown_links ─────────────────────────────────────────────────────────────
+  mdlink = {
+    [""]      = function(_) local f = ft("markdown_links"); if f then f.link_current()    end end,
+    recursive = function(_) local f = ft("markdown_links"); if f then f.link_recursive()  end end,
+    marked    = function(_) local f = ft("markdown_links"); if f then f.link_from_marked() end end,
+  },
+
   -- ── hooks_api ─────────────────────────────────────────────────────────────
   hooks = {
     events = function(_)

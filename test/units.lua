@@ -305,6 +305,120 @@ do
   check("copy_move (custom yy/xx): 'xx' still bound", km["xx"] ~= nil)
 end
 
+-- ── trash: delete_current binds d/U/<leader>th and trashes the right node ───
+do
+  local tmp = (vim.env.TEMP .. "/units-trash"):gsub("\\", "/")
+  vim.fn.mkdir(tmp, "p")
+  vim.fn.writefile({ "x" }, tmp .. "/victim.txt")
+
+  local cur_node = { path = tmp .. "/victim.txt", type = "file" }
+  local stub = setmetatable({
+    name = "units-stub3", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub3",
+    features = { trash = { enabled = true, confirm = false, dry_run = true } },
+  })
+
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_set_current_buf(buf)
+  vim.bo[buf].filetype = "neo-tree"
+  vim.wait(200, function() return false end)
+
+  -- "<leader>" is substituted with the current mapleader (default "\") at
+  -- map-registration time, so nvim_buf_get_keymap reports the already-expanded
+  -- lhs, not the literal "<leader>..." string.
+  local leader = vim.g.mapleader or "\\"
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do km[m.lhs] = m end
+  check("trash: 'd' bound",          km["d"] ~= nil)
+  check("trash: 'U' bound",          km["U"] ~= nil)
+  check("trash: '<leader>th' bound", km[leader .. "th"] ~= nil)
+
+  local trash = ft.feature("trash")
+  local captured
+  local orig_notify = vim.notify
+  vim.notify = function(m) captured = m end
+  trash.delete_current()
+  vim.notify = orig_notify
+  check("trash: delete_current() (dry-run) targets the current node",
+    captured and captured:find("victim.txt", 1, true) ~= nil, tostring(captured))
+end
+
+-- ── open_variants: sg/sv/st/gb/<S-CR> are all bound ──────────────────────────
+do
+  local cur_node = { path = (vim.env.TEMP .. "/units-openvariants.txt"):gsub("\\", "/"), type = "file" }
+  vim.fn.writefile({ "x" }, cur_node.path)
+  local stub = setmetatable({
+    name = "units-stub4", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub4", features = { open_variants = { enabled = true } } })
+
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_set_current_buf(buf)
+  vim.bo[buf].filetype = "neo-tree"
+  vim.wait(200, function() return false end)
+
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do km[m.lhs] = m end
+  check("open_variants: 'sg' bound", km["sg"] ~= nil)
+  check("open_variants: 'sv' bound", km["sv"] ~= nil)
+  check("open_variants: 'st' bound", km["st"] ~= nil)
+  check("open_variants: 'gb' bound", km["gb"] ~= nil)
+  check("open_variants: '<S-CR>' bound", km["<S-CR>"] ~= nil)
+
+  local ov = ft.feature("open_variants")
+  ov.open_badd()
+  check("open_variants: open_badd() adds the file to the buffer list",
+    vim.fn.bufnr(cur_node.path) ~= -1)
+end
+
+-- ── markdown_links: current/recursive/marked all produce "[name](path)" ─────
+do
+  local tmp = (vim.env.TEMP .. "/units-mdlinks"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/sub", "p")
+  vim.fn.writefile({ "x" }, tmp .. "/a.lua")
+  vim.fn.writefile({ "x" }, tmp .. "/sub/b.lua")
+  vim.fn.chdir(tmp)
+
+  local cur_node = { path = tmp .. "/a.lua", type = "file" }
+  local stub = setmetatable({
+    name = "units-stub5", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub5", features = { markdown_links = { enabled = true } } })
+
+  local md = ft.feature("markdown_links")
+  md.link_current()
+  check("markdown_links: link_current() copies '[a.lua](a.lua)'",
+    vim.fn.getreg("+") == "[a.lua](a.lua)", vim.fn.getreg("+"))
+
+  cur_node = { path = tmp, type = "directory" }
+  md.link_recursive()
+  local recursive_reg = vim.fn.getreg("+")
+  check("markdown_links: link_recursive() includes the top-level file",
+    recursive_reg:find("[a.lua](a.lua)", 1, true) ~= nil, recursive_reg)
+  check("markdown_links: link_recursive() includes the nested file",
+    recursive_reg:find("b.lua", 1, true) ~= nil, recursive_reg)
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end

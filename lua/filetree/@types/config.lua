@@ -28,6 +28,7 @@
 ---@field cursor_hide         FiletreeCursorHideConfig?
 ---@field tree_reset          FiletreeTreeResetConfig?
 ---@field open_replace        FiletreeOpenReplaceConfig?
+---@field open_variants       FiletreeOpenVariantsConfig?
 ---@field reveal_alt          FiletreeRevealAltConfig?
 ---@field buffer_save         FiletreeBufferSaveConfig?
 ---@field window_size_cycler  FiletreeWindowSizeCyclerConfig?
@@ -66,6 +67,7 @@
 ---@field tree_traverse           FiletreeTreeTraverseConfig?
 ---@field lua_require_copy        FiletreeLuaRequireCopyConfig?
 ---@field copy_file_list          FiletreeCopyFileListConfig?
+---@field markdown_links          FiletreeMarkdownLinksConfig?
 ---@field smart_create            FiletreeSmartCreateConfig?
 ---@field window_style            FiletreeWindowStyleConfig?
 
@@ -106,10 +108,13 @@
 -- ── trash ─────────────────────────────────────────────────────────────────────
 
 ---@class FiletreeTrashConfig
----@field enabled      boolean
----@field confirm      boolean  Ask before trashing (default true).
----@field use_safety   boolean  Create a backup before trashing (default false).
----@field dry_run      boolean  Log without actually trashing (default false).
+---@field enabled        boolean
+---@field confirm        boolean  Ask before trashing (default true).
+---@field use_safety     boolean  Create a backup before trashing (default false).
+---@field dry_run        boolean  Log without actually trashing (default false).
+---@field keymap         string?  Trash current node / all marked (default "d").
+---@field keymap_undo    string?  Undo last trash operation (default "U").
+---@field keymap_history string?  Show trash history (default "<leader>th").
 
 -- ── watcher_quarantine ────────────────────────────────────────────────────────
 
@@ -184,12 +189,13 @@
 -- ── grep_in_dir ───────────────────────────────────────────────────────────────
 
 ---@class FiletreeGrepInDirConfig
----@field enabled       boolean
----@field keymap        string?    Key in tree for grep with prompt (default "gr").
----@field keymap_cword  string?    Key in tree for grep cword (default nil, off).
----@field prefer        "auto"|"telescope"|"fzf-lua"|"builtin"
----@field hidden        boolean    Include hidden files (default false).
----@field extra_args    string[]   Additional args passed to rg/grep.
+---@field enabled          boolean
+---@field keymap           string?    Key in tree for grep with prompt (default "gr").
+---@field keymap_cword     string?    Key in tree for grep cword (default nil, off).
+---@field keymap_telescope string?    Key in tree to force telescope specifically (default "tg").
+---@field prefer           "auto"|"telescope"|"fzf-lua"|"builtin"
+---@field hidden           boolean    Include hidden files (default false).
+---@field extra_args       string[]   Additional args passed to rg/grep.
 
 -- ── breadcrumbs ───────────────────────────────────────────────────────────────
 
@@ -206,10 +212,11 @@
 -- ── copy_move ─────────────────────────────────────────────────────────────────
 
 ---@class FiletreeCopyMoveKeymaps
----@field copy   string?  Stage for copy (default "c")
----@field cut    string?  Stage for cut  (default "x")
----@field paste  string?  Paste staged   (default "p")
----@field show   string?  Show clipboard (default "P")
+---@field copy   string?  Stage for copy  (default "c")
+---@field cut    string?  Stage for cut   (default "x")
+---@field paste  string?  Paste staged    (default "p")
+---@field show   string?  Show clipboard  (default "P")
+---@field clear  string?  Clear clipboard (default "<C-c>")
 
 ---@class FiletreeCopyMoveConfig
 ---@field enabled     boolean
@@ -221,18 +228,20 @@
 -- ── find_files ────────────────────────────────────────────────────────────────
 
 ---@class FiletreeFindFilesConfig
----@field enabled         boolean
----@field keymap_tree     string?  Key inside tree buffer (default "f").
----@field keymap_global   string?  Global normal-mode key (default nil).
----@field prefer          "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
----@field reveal_on_open  boolean  Reveal selected file in tree (default true).
----@field hidden          boolean  Include hidden files (default false).
+---@field enabled          boolean
+---@field keymap_tree      string?  Key inside tree buffer (default "f").
+---@field keymap_telescope string?  Key to force telescope specifically (default "tf").
+---@field keymap_global    string?  Global normal-mode key (default nil).
+---@field prefer           "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
+---@field reveal_on_open   boolean  Reveal selected file in tree (default true).
+---@field hidden           boolean  Include hidden files (default false).
 
 -- ── filter ────────────────────────────────────────────────────────────────────
 
 ---@class FiletreeFilterConfig
 ---@field enabled          boolean
 ---@field keymap           string?  Key inside tree to enter filter mode (default "/").
+---@field keymap_clear     string?  Key inside tree to clear an applied filter directly (default "<C-c>").
 ---@field case_sensitive   boolean  Case-sensitive matching (default false).
 ---@field dim_hl_group     string   Highlight group for non-matching lines (default "Comment").
 ---@field debounce_ms      integer  Input debounce delay (default 80ms).
@@ -402,6 +411,14 @@
 ---@field preview_limit    integer   Max lines shown in notification (default 5).
 ---@field separator        string    Separator between paths (default "\\n").
 
+-- ── markdown_links ────────────────────────────────────────────────────────────
+
+---@class FiletreeMarkdownLinksConfig
+---@field enabled            boolean
+---@field keymap             string?  Markdown link for current node (default "ML").
+---@field keymap_recursive   string?  Markdown links recursively (default "MR").
+---@field keymap_from_marked string?  Markdown links from marked nodes (default "MM").
+
 -- ── smart_create ──────────────────────────────────────────────────────────────
 
 ---@class FiletreeSmartCreateConfig
@@ -432,6 +449,16 @@
 ---@field enabled     boolean
 ---@field keymap      string?   Key in tree buffer (default "O").
 ---@field close_tree  boolean   Close the tree after opening the file (default true).
+
+-- ── open_variants ─────────────────────────────────────────────────────────────
+
+---@class FiletreeOpenVariantsConfig
+---@field enabled          boolean
+---@field keymap_vsplit    string?  Open in a vertical split (default "sg").
+---@field keymap_split     string?  Open in a horizontal split (default "sv").
+---@field keymap_tabnew    string?  Open in a new tab (default "st").
+---@field keymap_badd      string?  Add to buffer list without switching focus (default "gb").
+---@field keymap_badd_alt  string?  Same as keymap_badd (default "<S-CR>").
 
 -- ── reveal_alt ────────────────────────────────────────────────────────────────
 

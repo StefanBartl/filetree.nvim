@@ -141,6 +141,21 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree trash history` | Show trash history |
 | `:Filetree trash dry-run` | Toggle dry-run mode |
 
+### Open variants
+| Command | Action |
+|---------|--------|
+| `:Filetree openas vsplit` | Open current node in a vertical split |
+| `:Filetree openas split` | Open current node in a horizontal split |
+| `:Filetree openas tabnew` | Open current node in a new tab |
+| `:Filetree openas badd` | Add current node to buffer list (no focus switch) |
+
+### Markdown links
+| Command | Action |
+|---------|--------|
+| `:Filetree mdlink` | Markdown link for current node |
+| `:Filetree mdlink recursive` | Markdown links for every file under current node |
+| `:Filetree mdlink marked` | Markdown links for all marked nodes |
+
 ### Misc
 | Command | Action |
 |---------|--------|

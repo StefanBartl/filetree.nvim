@@ -44,6 +44,7 @@ M.FEATURES = {
   create_from_template = { mod = "filetree.features.fileops.create_from_template", category = "fileops" },
   trash                = { mod = "filetree.features.fileops.trash",               category = "fileops" },
   open_replace         = { mod = "filetree.features.fileops.open_replace",         category = "fileops" },
+  open_variants        = { mod = "filetree.features.fileops.open_variants",        category = "fileops" },
   buffer_save          = { mod = "filetree.features.fileops.buffer_save",          category = "fileops" },
 
   -- ── search: filter / find / grep ───────────────────────────────────────────
@@ -56,6 +57,7 @@ M.FEATURES = {
   path_copy        = { mod = "filetree.features.paths.path_copy",        category = "paths" },
   lua_require_copy = { mod = "filetree.features.paths.lua_require_copy", category = "paths" },
   copy_file_list   = { mod = "filetree.features.paths.copy_file_list",   category = "paths" },
+  markdown_links   = { mod = "filetree.features.paths.markdown_links",   category = "paths" },
 
   -- ── git ────────────────────────────────────────────────────────────────────
   git_status = { mod = "filetree.features.git.git_status", category = "git" },
@@ -88,7 +90,7 @@ M.FEATURES = {
 ---@type string[]
 M.CATEGORY_ORDER = {
   "nav", "ui", "fileops", "search", "paths",
-  "git", "org", "system", "lsp", "compare", "integration", "infra",
+  "git", "org", "system", "lsp", "compare", "infra",
 }
 
 ---Return the module path for a feature, or nil when the name is unknown.

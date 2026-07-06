@@ -142,8 +142,16 @@ do
   -- <C-m>/<CR> here are both exact single-key binds, so this is just an
   -- ordinary "last registration wins" shadowing, not the broken-resolution
   -- class of bug this check exists to catch).
+  -- filter.keymap_clear ("<C-c>") vs copy_move.keymaps.clear ("<C-c>") is the
+  -- same kind of deliberate, accepted exception: the reference legacy config
+  -- also had "<C-c>" bound to clear_filter AND clear-clipboard simultaneously
+  -- (two neo-tree native window.mappings entries for the same key) with no
+  -- reported issue. Both are exact single-key binds -- last-registration-wins
+  -- shadowing, not the broken-resolution class of bug this check exists to
+  -- catch.
   local ACCEPTED = {
     ["marks:preview:<cr>"] = true,
+    ["copy_move:filter:<C-c>"] = true,
   }
 
   local b = require("filetree.bindings")

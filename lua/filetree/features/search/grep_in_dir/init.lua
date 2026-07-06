@@ -25,12 +25,13 @@ local M = {}
 
 ---@type FiletreeGrepInDirConfig
 local _cfg = {
-  enabled        = false,
-  keymap         = "gr",
-  keymap_cword   = nil,
-  prefer         = "auto",   -- "auto"|"telescope"|"fzf-lua"|"builtin"
-  hidden         = false,
-  extra_args     = {},
+  enabled          = false,
+  keymap           = "gr",
+  keymap_cword     = nil,
+  keymap_telescope = "tg",
+  prefer           = "auto",   -- "auto"|"telescope"|"fzf-lua"|"builtin"
+  hidden           = false,
+  extra_args       = {},
 }
 
 ---@type FiletreeAdapter?
@@ -169,6 +170,16 @@ function M.grep_cword()
   M.grep(get_dir(), vim.fn.expand("<cword>"))
 end
 
+---Force telescope specifically, regardless of the configured `prefer` backend.
+---@param dir?     string
+---@param pattern? string
+function M.grep_telescope(dir, pattern)
+  dir = dir or get_dir()
+  if not via_telescope(dir, pattern) then
+    notify.warn("telescope.nvim not available")
+  end
+end
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---@type integer?
@@ -199,6 +210,11 @@ function M.setup(config, adapter)
         if _cfg.keymap_cword then
           map("n", _cfg.keymap_cword, M.grep_cword, {
             buffer = buf, silent = true, desc = "Filetree: grep cword in node directory",
+          })
+        end
+        if _cfg.keymap_telescope then
+          map("n", _cfg.keymap_telescope, M.grep_telescope, {
+            buffer = buf, silent = true, desc = "Filetree: grep via telescope specifically",
           })
         end
       end)
