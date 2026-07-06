@@ -111,7 +111,12 @@ local function apply_neotree(names, adapter)
   ncfg.filesystem.filtered_items = ncfg.filesystem.filtered_items or {}
   local fi = ncfg.filesystem.filtered_items
   fi.hide_by_name = merge_hide_by_name(fi.hide_by_name, names)
-  if fi.visible == nil then fi.visible = false end
+  -- Force-hide, even if the user's own neo-tree opts already set
+  -- `visible = true` (e.g. a leftover personal preference): `visible = true`
+  -- disables the hide_by_name filter entirely, so hidden clutter would show
+  -- by default and only get hidden after a manual `H` toggle -- defeating
+  -- this feature's whole purpose of hiding common clutter by default.
+  fi.visible = false
 
   -- 2. Already-open state(s): patch live filtered_items directly, in case
   -- neo-tree already built its filesystem-source state from the config
@@ -122,7 +127,7 @@ local function apply_neotree(names, adapter)
     for _, state in ipairs(mgr._get_all_states()) do
       if state.filtered_items then
         state.filtered_items.hide_by_name = merge_hide_by_name(state.filtered_items.hide_by_name, names)
-        if state.filtered_items.visible == nil then state.filtered_items.visible = false end
+        state.filtered_items.visible = false
       end
     end
   end

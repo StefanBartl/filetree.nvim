@@ -69,62 +69,6 @@ local function notify_created(kind, target)
   end
 end
 
--- ── "?" cheatsheet ────────────────────────────────────────────────────────────
--- vim.ui.input only ever hands back the *final* submitted string (no mid-typing
--- keystroke hooks — this must work with any vim.ui.input backend, not just the
--- builtin one), so "?" is a full input, not a live keypress: type "?" and press
--- <CR>. The cheatsheet closes on any key and re-opens the create prompt so the
--- user can immediately act on what they just read.
-
-local CHEATSHEET_LINES = {
-  " Smart create — type a name relative to the shown directory ",
-  "",
-  "  name.lua        create a file",
-  "  name.lua/       create a directory (trailing / or \\)",
-  "  sub/dir/name    missing subdirectories are created automatically",
-  "  /abs/path       an absolute path (or C:\\... / C:/...) is used as-is",
-  "  ?  <CR>         show this cheatsheet",
-  "  <Esc> / empty   cancel",
-}
-
----@param on_close fun()  Called after the cheatsheet window closes.
-local function show_cheatsheet(on_close)
-  local width = 0
-  for _, l in ipairs(CHEATSHEET_LINES) do width = math.max(width, #l) end
-  width = math.min(width + 2, math.floor(vim.o.columns * 0.9))
-  local height = #CHEATSHEET_LINES
-
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, CHEATSHEET_LINES)
-  vim.bo[buf].modifiable = false
-
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative  = "editor",
-    style     = "minimal",
-    border    = "rounded",
-    width     = width,
-    height    = height,
-    row       = math.floor((vim.o.lines - height) / 2) - 2,
-    col       = math.floor((vim.o.columns - width) / 2),
-    title     = " smart_create help ",
-    title_pos = "center",
-  })
-
-  local closed = false
-  local function close()
-    if closed then return end
-    closed = true
-    pcall(vim.api.nvim_win_close, win, true)
-    pcall(vim.api.nvim_buf_delete, buf, { force = true })
-    if on_close then on_close() end
-  end
-
-  local opts = { buffer = buf, nowait = true, silent = true }
-  map("n", "q",     close, opts)
-  map("n", "<Esc>", close, opts)
-  map("n", "<CR>",  close, opts)
-end
-
 ---Open `filepath` for editing in a real editor window — never in the tree
 ---window itself. Loading a new buffer into the tree's own window fights neo-
 ---tree's window-management autocmds (and this plugin's own layout_guard),
@@ -209,14 +153,9 @@ function M.create()
   if display == "" or display == "." then display = "./" else display = display .. "/" end
 
   vim.ui.input(
-    { prompt = "Create in " .. display .. "  (/ = dir, ? = help): " },
+    { prompt = "Create in " .. display .. "  (append / for a directory): " },
     function(input)
       if not input or input == "" then return end
-
-      if input == "?" then
-        show_cheatsheet(M.create)
-        return
-      end
 
       -- Sanitize immediately: the user may type "/" or "\" — both are accepted,
       -- and everything from here on uses "/" (see path.slashify).

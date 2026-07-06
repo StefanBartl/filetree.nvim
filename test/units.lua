@@ -179,6 +179,89 @@ do
   package.loaded["filetree.features.infra.ignore_list"] = nil
 end
 
+-- ── ignore_list: must force visible=false, even over a pre-existing true ────
+-- `filtered_items.visible = true` disables the hide_by_name filter entirely
+-- (neo-tree shows everything until "H" toggles it off). If the user's own
+-- neo-tree opts already set visible=true for any reason, hide_by_name would
+-- be correctly populated but never actually applied until a manual H press —
+-- defeating this feature's documented purpose of hiding clutter by default.
+do
+  package.loaded["neo-tree"] = {
+    config = { filesystem = { filtered_items = { visible = true } } },
+  }
+  package.loaded["neo-tree.sources.manager"] = { _get_all_states = function() return {} end }
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+  local il = require("filetree.features.infra.ignore_list")
+  il.setup({ enabled = true }, { name = "neotree", refresh = function() end })
+
+  local fi = package.loaded["neo-tree"].config.filesystem.filtered_items
+  check("ignore_list: visible forced to false even if pre-set true", fi.visible == false)
+
+  package.loaded["neo-tree"] = nil
+  package.loaded["neo-tree.sources.manager"] = nil
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+end
+
+-- ── copy_move: yy/xx must survive an adapter-native nowait single-char "y"/"x" ─
+-- neo-tree's own window.mappings apply a global `nowait = true`, so its native
+-- single-char "y"/"x" mappings fire immediately on the first keypress, never
+-- giving Neovim a chance to wait for the second character of "yy"/"xx" — the
+-- copy/cut stage would never actually happen ("Clipboard is empty" on paste).
+-- copy_move must re-bind the bare prefix char to a plain (non-nowait) <Nop> to
+-- restore Neovim's normal ambiguous-mapping wait behaviour.
+do
+  local tmp = (vim.env.TEMP .. "/units-copymove"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/dst", "p")
+  vim.fn.writefile({ "hi" }, tmp .. "/file1.txt")
+
+  local cur_node = { path = tmp .. "/file1.txt", type = "file" }
+  local stub = setmetatable({
+    name = "units-stub", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    get_bufnr = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub",
+    features = { copy_move = { enabled = true, confirm = false, use_safety = false } },
+  })
+
+  local buf = vim.api.nvim_create_buf(true, false)
+  -- Simulate neo-tree's own native nowait single-char mappings, set BEFORE
+  -- filetree's FileType-driven keymaps get scheduled (mirrors real timing).
+  vim.api.nvim_buf_set_keymap(buf, "n", "y", "", { callback = function() end, nowait = true })
+  vim.api.nvim_buf_set_keymap(buf, "n", "x", "", { callback = function() end, nowait = true })
+  vim.api.nvim_set_current_buf(buf)
+  vim.bo[buf].filetype = "neo-tree"
+  vim.wait(200, function() return false end)
+
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do km[m.lhs] = m end
+  check("copy_move: 'y' re-bound without nowait (unblocks 'yy')",
+    km["y"] ~= nil and (km["y"].nowait == 0 or not km["y"].nowait))
+  check("copy_move: 'x' re-bound without nowait (unblocks 'xx')",
+    km["x"] ~= nil and (km["x"].nowait == 0 or not km["x"].nowait))
+  check("copy_move: 'yy' still bound", km["yy"] ~= nil)
+  check("copy_move: 'xx' still bound", km["xx"] ~= nil)
+
+  local cm = ft.feature("copy_move")
+  cm.stage_copy()
+  cur_node = { path = tmp .. "/dst", type = "directory" }
+  local captured
+  local orig_notify = vim.notify
+  vim.notify = function(m) captured = m end
+  cm.paste()
+  vim.notify = orig_notify
+  check("copy_move: paste actually copies the file (shell-free vim.uv.fs_copyfile)",
+    vim.fn.filereadable(tmp .. "/dst/file1.txt") == 1)
+  check("copy_move: notifies 1/1 pasted, not 'Clipboard is empty'",
+    captured and captured:find("1/1") ~= nil, tostring(captured))
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
