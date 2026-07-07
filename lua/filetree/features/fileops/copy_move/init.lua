@@ -32,7 +32,7 @@ local _cfg = {
     show  = "P",
     clear = "<C-c>",
   },
-  confirm    = true,
+  confirm    = false,
   use_safety = true,
   dry_run    = false,
 }

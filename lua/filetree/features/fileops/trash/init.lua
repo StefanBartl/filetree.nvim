@@ -22,7 +22,7 @@ local M = {}
 ---@type FiletreeTrashConfig
 local _cfg = {
   enabled        = false,
-  confirm        = true,
+  confirm        = false,
   use_safety     = false,
   dry_run        = false,
   keymap         = "d",
