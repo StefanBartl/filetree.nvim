@@ -29,6 +29,7 @@ local M = {}
 local _cfg = {
   enabled              = false,
   mode                 = "buffer",   -- "buffer" | "float"
+  highlight            = true,       -- syntax/treesitter highlighting in the preview
   keymap               = "<Tab>",
   keymap_open          = "<CR>",
   max_lines            = 40,
@@ -77,6 +78,22 @@ local function ext(path)
 end
 
 local function is_image(path) return _IMAGE_EXTS[ext(path)] == 1 end
+
+---Enable treesitter highlighting on a preview buffer, if configured and a
+---parser is available. Explicit (rather than relying on the user's own
+---FileType-triggered auto-attach) so it works reliably for the float mode's
+---synthetic scratch buffer too — some treesitter setups skip auto-attaching
+---to `buftype=nofile` buffers. Safe/idempotent to call on a buffer that
+---already has treesitter running (e.g. buffer-mode's real file buffers).
+---@param bufnr integer
+---@param ft string  filetype, may be "".
+local function apply_highlight(bufnr, ft)
+  if _cfg.highlight == false then return end
+  if ft == "" then return end
+  local ok_lang, lang = pcall(vim.treesitter.language.get_lang, ft)
+  lang = (ok_lang and lang) or ft
+  pcall(vim.treesitter.start, bufnr, lang)
+end
 local function is_pdf(path)   return _PDF_EXTS[ext(path)]   == 1 end
 
 -- ── Cross-platform system-open ────────────────────────────────────────────────
@@ -259,6 +276,7 @@ local function open_preview(node)
   vim.api.nvim_set_option_value("buftype",    "nofile", { buf = _bufnr })
   if ft ~= "" then
     pcall(vim.api.nvim_set_option_value, "filetype", ft, { buf = _bufnr })
+    apply_highlight(_bufnr, ft)
   end
 
   _win = vim.api.nvim_open_win(_bufnr, false, {
@@ -310,6 +328,7 @@ local function buf_show(path)
   local b = vim.fn.bufadd(path)
   vim.fn.bufload(b)                              -- triggers filetype/syntax
   pcall(vim.api.nvim_win_set_buf, win, b)        -- set buffer, focus stays in tree
+  apply_highlight(b, vim.bo[b].filetype)
 end
 
 ---Stop buffer-mode preview. When `restore` is true, put the original buffer back.

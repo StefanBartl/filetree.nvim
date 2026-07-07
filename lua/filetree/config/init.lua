@@ -82,6 +82,52 @@ local function apply_autocmd_overrides(cfg)
   end
 end
 
+---Map of user-facing action names (what the confirmation is actually about)
+---to the feature + config field that action's prompt lives on.
+---@type table<string, { feature: string, field: string }>
+local CONFIRMATION_ACTIONS = {
+  paste        = { feature = "copy_move",   field = "confirm" },
+  delete       = { feature = "trash",       field = "confirm" },
+  rename_batch = { feature = "rename_batch", field = "confirm" },
+}
+
+---Translate top-level `confirmations` into the per-feature `confirm` fields
+---it controls.
+---  true / false → applies to every confirmable action
+---  table        → applies per action name, e.g. { paste = false, delete = true }
+--- Either way, a feature whose `confirm` the user already set explicitly
+--- (via `features.<name>.confirm`) keeps that value -- the top-level switch
+--- only fills in fields the user left unset.
+---@param cfg FiletreeConfig
+local function apply_confirmations(cfg)
+  local val = cfg.confirmations
+  if val == nil then return end
+  cfg.features = cfg.features or {}
+
+  local function set_if_unset(action, value)
+    local spec = CONFIRMATION_ACTIONS[action]
+    if not spec then return end
+    local fcfg = cfg.features[spec.feature]
+    if type(fcfg) ~= "table" then
+      fcfg = {}
+      cfg.features[spec.feature] = fcfg
+    end
+    if fcfg[spec.field] == nil then
+      fcfg[spec.field] = value
+    end
+  end
+
+  if type(val) == "table" then
+    for action, value in pairs(val) do
+      set_if_unset(action, value)
+    end
+  else
+    for action in pairs(CONFIRMATION_ACTIONS) do
+      set_if_unset(action, val)
+    end
+  end
+end
+
 ---Translate top-level `ignore_list` into `features.ignore_list`.
 ---  true / nil → enabled, no override (use built-in / lib.nvim names)
 ---  false      → disabled
@@ -114,6 +160,7 @@ function M.setup(user)
   end
   apply_keymap_remap(_active)
   apply_autocmd_overrides(_active)
+  apply_confirmations(_active)
   apply_ignore_list(_active)
 end
 

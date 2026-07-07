@@ -419,6 +419,124 @@ do
     recursive_reg:find("b.lua", 1, true) ~= nil, recursive_reg)
 end
 
+-- ── config.confirmations: boolean shorthand + per-action table ──────────────
+-- explicit per-feature `confirm` always wins over the top-level switch.
+do
+  local config = require("filetree.config")
+
+  config.setup({ adapter = "stub", confirmations = false })
+  local cfg = config.get()
+  check("confirmations=false: copy_move.confirm is false",
+    cfg.features.copy_move.confirm == false)
+  check("confirmations=false: trash.confirm is false",
+    cfg.features.trash.confirm == false)
+  check("confirmations=false: rename_batch.confirm is false",
+    cfg.features.rename_batch.confirm == false)
+
+  config.setup({ adapter = "stub", confirmations = { paste = false, delete = true } })
+  cfg = config.get()
+  check("confirmations table: paste -> copy_move.confirm false",
+    cfg.features.copy_move.confirm == false)
+  check("confirmations table: delete -> trash.confirm true",
+    cfg.features.trash.confirm == true)
+  check("confirmations table: rename_batch untouched (nil, not in table)",
+    cfg.features.rename_batch == nil or cfg.features.rename_batch.confirm == nil)
+
+  config.setup({
+    adapter = "stub",
+    confirmations = true,
+    features = { trash = { confirm = false } },
+  })
+  cfg = config.get()
+  check("explicit features.trash.confirm=false wins over confirmations=true",
+    cfg.features.trash.confirm == false)
+  check("confirmations=true still applies to copy_move (not explicitly set)",
+    cfg.features.copy_move.confirm == true)
+end
+
+-- ── trash.undo: Windows restore reports real failure, not silent success ────
+-- Regression for a bug where InvokeVerb('restore') is a *localized* verb
+-- caption (e.g. German "Wiederherstellen") -- on any non-English Windows it
+-- silently matched nothing, yet the script still exited 0, so restore_last()
+-- reported success and dropped the history entry despite restoring nothing.
+do
+  package.loaded["filetree.features.fileops.trash.undo"] = nil
+  local undo = require("filetree.features.fileops.trash.undo")
+
+  local orig_execute = os.execute
+  local captured_cmd
+
+  local function with_exit_code(code, fn)
+    os.execute = function(cmd) captured_cmd = cmd; return code end
+    local ok, err = fn()
+    os.execute = orig_execute
+    return ok, err
+  end
+
+  local entry = {
+    original_path = "C:/Users/x/project/victim.txt",
+    name           = "victim.txt",
+    trashed_at     = "2026-01-01 00:00:00",
+    platform       = "windows",
+  }
+
+  local ok1, err1 = with_exit_code(1, function() return undo.restore(entry) end)
+  check("trash.undo: exit 1 (not found) is reported as failure, not success",
+    ok1 == false and err1 ~= nil and err1:find("not found") ~= nil, tostring(err1))
+
+  local ok2, err2 = with_exit_code(2, function() return undo.restore(entry) end)
+  check("trash.undo: exit 2 (no verb matched) is reported as failure, not success",
+    ok2 == false and err2 ~= nil and err2:find("verb") ~= nil, tostring(err2))
+
+  local ok3 = with_exit_code(0, function() return undo.restore(entry) end)
+  check("trash.undo: exit 0 is reported as success", ok3 == true)
+
+  check("trash.undo: generated PowerShell command matches by DeletedFrom, not just Name",
+    captured_cmd ~= nil and captured_cmd:find("DeletedFrom", 1, true) ~= nil)
+  check("trash.undo: generated PowerShell command's restore-verb pattern includes German",
+    captured_cmd ~= nil and captured_cmd:find("Wiederherstellen", 1, true) ~= nil)
+  check("trash.undo: generated PowerShell command targets the original path",
+    captured_cmd ~= nil and captured_cmd:find("C:\\Users\\x\\project\\victim.txt", 1, true) ~= nil,
+    tostring(captured_cmd))
+end
+
+-- ── project_root: caches per-directory, populates intermediate dirs too ─────
+do
+  package.loaded["filetree.features.infra.project_root"] = nil
+  local proot = require("filetree.features.infra.project_root")
+
+  local tmp = (vim.env.TEMP .. "/units-projectroot"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/proj/.git", "p")
+  vim.fn.mkdir(tmp .. "/proj/src/deep/nested", "p")
+  vim.fn.writefile({ "x" }, tmp .. "/proj/src/deep/nested/file.lua")
+
+  proot.setup({ enabled = true }, { name = "stub" })
+  proot.clear_cache()
+
+  local root1 = proot.find(tmp .. "/proj/src/deep/nested/file.lua")
+  eq("project_root: finds .git root from a deeply nested file",
+    root1:gsub("\\", "/"), tmp .. "/proj")
+
+  -- An intermediate directory passed on the same walk should now be cached
+  -- too, without needing its own filesystem walk.
+  local root2 = proot.find(tmp .. "/proj/src/deep")
+  eq("project_root: intermediate directory resolves to the same cached root",
+    root2:gsub("\\", "/"), tmp .. "/proj")
+
+  -- Simulate a real cache hit: remove the .git dir on disk: if find() still
+  -- returns the project root, it proved the cached value was used rather
+  -- than a fresh (now-negative) filesystem walk.
+  vim.fn.delete(tmp .. "/proj/.git", "d")
+  local root3 = proot.find(tmp .. "/proj/src/deep/nested/file.lua")
+  eq("project_root: cache hit survives the marker being removed from disk",
+    root3:gsub("\\", "/"), tmp .. "/proj")
+
+  proot.clear_cache()
+  local root4 = proot.find(tmp .. "/proj/src/deep/nested/file.lua")
+  check("project_root: clear_cache() forces a fresh walk (marker now gone)",
+    root4:gsub("\\", "/") ~= tmp .. "/proj")
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end

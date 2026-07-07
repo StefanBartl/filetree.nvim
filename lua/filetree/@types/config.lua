@@ -22,6 +22,12 @@
 ---@field command          FiletreeCommandConfig|string|nil User command name (string) or config table. Default: "Filetree" + "Ft" alias.
 ---@field autocmds         table<string,false>?             Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
 ---@field ignore_list      boolean|string[]|nil             true (default) = hide common dirs (.git, node_modules…); false = show all; string[] = custom list.
+---@field confirmations    boolean|FiletreeConfirmationsConfig|nil  true/false applies to every confirmable action (paste, delete, rename_batch); a table applies per action, e.g. { paste = false, delete = true }. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
+
+---@class FiletreeConfirmationsConfig
+---@field paste        boolean?  copy_move's paste-staged-nodes prompt (default true).
+---@field delete       boolean?  trash's send-to-trash prompt (default true).
+---@field rename_batch boolean?  rename_batch's apply-plan prompt (default true).
 
 ---@class FiletreeFeaturesConfig
 ---@field ignore_list         FiletreeIgnoreListConfig?
@@ -148,6 +154,7 @@
 ---@field enabled   boolean
 ---@field markers   string[]          Files/dirs that signal a project root.
 ---@field fallback  "cwd"|"parent"    What to use when no root is found (default "parent").
+---@field cache     boolean           Cache resolved roots per directory for the session (default true).
 
 -- ── create_from_template ──────────────────────────────────────────────────────
 
@@ -289,6 +296,7 @@
 ---@class FiletreePreviewConfig
 ---@field enabled              boolean
 ---@field mode                 "buffer"|"float"         Preview target: "buffer" shows the file in the editor window (default); "float" uses a floating window.
+---@field highlight            boolean                  Syntax/treesitter highlighting in the preview (default true).
 ---@field keymap               string?                  Normal-mode key: toggle text preview; dispatch image/PDF (default "<Tab>").
 ---@field keymap_open          string?                  Normal-mode key: dispatch image/PDF; adapter default for other nodes (default "<CR>").
 ---@field max_lines            integer                  Max lines to read for text preview (default 40).
