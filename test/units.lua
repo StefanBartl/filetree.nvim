@@ -485,15 +485,21 @@ do
     ok1 == false and err1 ~= nil and err1:find("not found") ~= nil, tostring(err1))
 
   local ok2, err2 = with_exit_code(2, function() return undo.restore(entry) end)
-  check("trash.undo: exit 2 (no verb matched) is reported as failure, not success",
-    ok2 == false and err2 ~= nil and err2:find("verb") ~= nil, tostring(err2))
+  check("trash.undo: exit 2 (move and verb fallback both failed) is reported as failure, not success",
+    ok2 == false and err2 ~= nil and err2:find("could not move", 1, true) ~= nil, tostring(err2))
 
-  local ok3 = with_exit_code(0, function() return undo.restore(entry) end)
-  check("trash.undo: exit 0 is reported as success", ok3 == true)
+  local ok3, err3 = with_exit_code(3, function() return undo.restore(entry) end)
+  check("trash.undo: exit 3 (target already exists) is reported as failure, not success",
+    ok3 == false and err3 ~= nil and err3:find("already exists", 1, true) ~= nil, tostring(err3))
+
+  local ok4 = with_exit_code(0, function() return undo.restore(entry) end)
+  check("trash.undo: exit 0 is reported as success", ok4 == true)
 
   check("trash.undo: generated PowerShell command matches by DeletedFrom, not just Name",
     captured_cmd ~= nil and captured_cmd:find("DeletedFrom", 1, true) ~= nil)
-  check("trash.undo: generated PowerShell command's restore-verb pattern includes German",
+  check("trash.undo: generated PowerShell command restores via a locale-free Move-Item first",
+    captured_cmd ~= nil and captured_cmd:find("Move-Item", 1, true) ~= nil, tostring(captured_cmd))
+  check("trash.undo: generated PowerShell command still keeps the verb-caption fallback (incl. German)",
     captured_cmd ~= nil and captured_cmd:find("Wiederherstellen", 1, true) ~= nil)
   check("trash.undo: generated PowerShell command targets the original path",
     captured_cmd ~= nil and captured_cmd:find("C:\\Users\\x\\project\\victim.txt", 1, true) ~= nil,
