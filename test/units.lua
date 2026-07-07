@@ -454,6 +454,38 @@ do
     cfg.features.copy_move.confirm == true)
 end
 
+-- ── trash: default (no confirmations config at all) never prompts ──────────
+-- End-to-end check of the *actual* out-of-the-box default, not just what
+-- config.get() reports: with nothing set, delete_current() must not call
+-- vim.fn.confirm at all.
+do
+  local tmp = (vim.env.TEMP .. "/units-trash-noconfirm"):gsub("\\", "/")
+  vim.fn.mkdir(tmp, "p")
+  vim.fn.writefile({ "x" }, tmp .. "/victim2.txt")
+
+  local cur_node = { path = tmp .. "/victim2.txt", type = "file" }
+  local stub = setmetatable({
+    name = "units-stub6", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  -- No `confirm`/`confirmations` anywhere -- purely the shipped default.
+  ft.setup({ adapter = "units-stub6", features = { trash = { enabled = true, dry_run = true } } })
+
+  local confirm_called = false
+  local orig_confirm = vim.fn.confirm
+  vim.fn.confirm = function(...) confirm_called = true; return 1 end
+  ft.feature("trash").delete_current()
+  vim.fn.confirm = orig_confirm
+
+  check("trash: default (no confirmations config) never calls vim.fn.confirm",
+    not confirm_called)
+end
+
 -- ── trash.undo: Windows restore reports real failure, not silent success ────
 -- Regression for a bug where InvokeVerb('restore') is a *localized* verb
 -- caption (e.g. German "Wiederherstellen") -- on any non-English Windows it

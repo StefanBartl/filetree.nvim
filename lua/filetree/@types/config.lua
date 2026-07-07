@@ -22,12 +22,12 @@
 ---@field command          FiletreeCommandConfig|string|nil User command name (string) or config table. Default: "Filetree" + "Ft" alias.
 ---@field autocmds         table<string,false>?             Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
 ---@field ignore_list      boolean|string[]|nil             true (default) = hide common dirs (.git, node_modules…); false = show all; string[] = custom list.
----@field confirmations    boolean|FiletreeConfirmationsConfig|nil  true/false applies to every confirmable action (paste, delete, rename_batch); a table applies per action, e.g. { paste = false, delete = true }. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
+---@field confirmations    boolean|FiletreeConfirmationsConfig|nil  Every confirmable action (paste, delete, rename_batch) defaults to *no* prompt. true/false applies to all three at once; a table applies per action, e.g. { delete = true } to only confirm trashing. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
 
 ---@class FiletreeConfirmationsConfig
----@field paste        boolean?  copy_move's paste-staged-nodes prompt (default true).
----@field delete       boolean?  trash's send-to-trash prompt (default true).
----@field rename_batch boolean?  rename_batch's apply-plan prompt (default true).
+---@field paste        boolean?  copy_move's paste-staged-nodes prompt (default false).
+---@field delete       boolean?  trash's send-to-trash prompt (default false).
+---@field rename_batch boolean?  rename_batch's apply-plan prompt (default false).
 
 ---@class FiletreeFeaturesConfig
 ---@field ignore_list         FiletreeIgnoreListConfig?
@@ -115,7 +115,7 @@
 
 ---@class FiletreeTrashConfig
 ---@field enabled        boolean
----@field confirm        boolean  Ask before trashing (default true).
+---@field confirm        boolean  Ask before trashing (default false; see top-level `confirmations`).
 ---@field use_safety     boolean  Create a backup before trashing (default false).
 ---@field dry_run        boolean  Log without actually trashing (default false).
 ---@field keymap         string?  Trash current node / all marked (default "d").
@@ -228,7 +228,7 @@
 ---@class FiletreeCopyMoveConfig
 ---@field enabled     boolean
 ---@field keymaps     FiletreeCopyMoveKeymaps?
----@field confirm     boolean  Ask before paste (default true).
+---@field confirm     boolean  Ask before paste (default false; see top-level `confirmations`).
 ---@field use_safety  boolean  Create backup before move (default true).
 ---@field dry_run     boolean  Log without executing (default false).
 
@@ -258,7 +258,7 @@
 ---@class FiletreeRenameBatchConfig
 ---@field enabled     boolean
 ---@field keymap      string?  Normal-mode key inside tree (default "<leader>rb").
----@field confirm     boolean  Ask for confirmation before renaming (default true).
+---@field confirm     boolean  Ask for confirmation before renaming (default false; see top-level `confirmations`).
 ---@field use_safety  boolean  Create safety backup before renaming (default true).
 ---@field dry_run     boolean  Log plan without executing (default false).
 

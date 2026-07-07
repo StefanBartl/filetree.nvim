@@ -30,7 +30,7 @@ local M = {}
 local _cfg = {
   enabled     = false,
   keymap      = "<leader>rb",
-  confirm     = true,
+  confirm     = false,
   use_safety  = true,
   dry_run     = false,
 }

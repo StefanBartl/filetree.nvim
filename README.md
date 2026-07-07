@@ -291,13 +291,13 @@ require("filetree").setup({
   -- string[]       → custom list, overrides the built-in defaults
   ignore_list = true,
 
-  -- Confirmation prompts for destructive/bulk actions. nil (default) leaves
-  -- each feature's own default alone (all three prompt by default: paste,
-  -- delete, rename_batch). true/false applies to all three at once; a table
-  -- applies per action. A feature's own `features.<name>.confirm`, if you set
-  -- it explicitly, always wins over this switch.
-  --   confirmations = false                          -- never prompt for any of them
-  --   confirmations = { paste = false, delete = true } -- per action
+  -- Confirmation prompts for destructive/bulk actions (paste, delete,
+  -- rename_batch) — all three default to *no* prompt. nil (default) leaves
+  -- each feature's own default alone. true/false applies to all three at
+  -- once; a table applies per action. A feature's own `features.<name>.confirm`,
+  -- if you set it explicitly, always wins over this switch.
+  --   confirmations = true                             -- prompt for all of them
+  --   confirmations = { delete = true }                -- only confirm trashing
   confirmations = nil,
 
   features = {
