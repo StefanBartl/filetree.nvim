@@ -53,17 +53,26 @@ end
 -- terminating error was raised. That made restore_last() report success and
 -- drop the history entry despite never actually restoring anything.
 --
--- Fixed by: (1) matching the specific bin item via the
--- System.Recycle.DeletedFrom extended property (the item's original full
--- path) instead of just its bare filename, so a duplicate-named file trashed
--- earlier can't be restored by mistake; falling back to a name match only if
--- that property lookup is unavailable; and (2) enumerating the item's actual
--- .Verbs() collection and matching the restore verb by a small multi-language
--- caption list (stripping the "&" mnemonic-accelerator marker Windows menu
--- captions carry) instead of assuming the English string, then invoking that
--- verb object's .DoIt() directly. Exit codes are now distinct (0 = restored,
--- 1 = item not found in bin, 2 = found but no restore verb matched), so a
--- real failure is reported honestly instead of silently "succeeding".
+-- A hardcoded list of translated captions (an earlier version of this fix)
+-- only trades "broken on every non-English install" for "broken on every
+-- install whose language isn't in the list" -- Windows ships 100+ language
+-- packs, and no fixed list ever covers them all.
+--
+-- The actual fix avoids verb captions entirely: a "restore" is just moving
+-- the item's real backing file (Namespace(0xa) is a genuine filesystem
+-- folder, so FolderItem.Path is the real, physical "$R…" path inside
+-- `$Recycle.Bin\<SID>\`) back to its original location -- a plain
+-- Move-Item, which has no locale dependence at all since it never touches a
+-- menu/verb of any kind. The bin item itself is still located via the
+-- System.Recycle.DeletedFrom extended property (a stable internal property
+-- key, not a caption) matching the original full path, rather than just the
+-- bare filename, so a duplicate-named file trashed earlier can't get
+-- restored by mistake; falling back to a name match only if that property
+-- lookup is unavailable. The verb-caption approach is kept as a last-resort
+-- fallback only if the direct move itself fails for some reason.
+-- Exit codes: 0 = restored, 1 = item not found in bin, 2 = found but neither
+-- the move nor the verb fallback worked, 3 = target path already exists
+-- (refused, to avoid silently overwriting something now there).
 local RESTORE_VERB_PATTERN =
   [[^(Restore|Wiederherstellen|Restaurer|Restaurar|Ripristina|Herstellen|Gjenopprett|Återställ|Palauta)$]]
 
@@ -86,15 +95,27 @@ local function restore_windows(name, original_path)
     .. [[  foreach ($item in $bin.Items()) { if ($item.Name -eq '%s') { $target = $item; break } } ]]
     .. [[}; ]]
     .. [[if (-not $target) { exit 1 }; ]]
-    .. [[$verb = $target.Verbs() | Where-Object { ($_.Name -replace '&','') -match '%s' } | Select-Object -First 1; ]]
-    .. [[if (-not $verb) { exit 2 }; ]]
-    .. [[$verb.DoIt(); ]]
-    .. [[exit 0"]],
-    win_path, esc_name, RESTORE_VERB_PATTERN
+    .. [[$dst = '%s'; ]]
+    .. [[if (Test-Path -LiteralPath $dst) { exit 3 }; ]]
+    .. [[$moved = $false; ]]
+    .. [[try { ]]
+    .. [[  $src = $target.Path; ]]
+    .. [[  $dstDir = Split-Path -Parent $dst; ]]
+    .. [[  if ($dstDir -and -not (Test-Path -LiteralPath $dstDir)) { New-Item -ItemType Directory -Path $dstDir -Force | Out-Null }; ]]
+    .. [[  Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop; ]]
+    .. [[  $moved = $true ]]
+    .. [[} catch { $moved = $false }; ]]
+    .. [[if (-not $moved) { ]]
+    .. [[  $verb = $target.Verbs() | Where-Object { ($_.Name -replace '&','') -match '%s' } | Select-Object -First 1; ]]
+    .. [[  if ($verb) { $verb.DoIt(); $moved = (Test-Path -LiteralPath $dst) } ]]
+    .. [[}; ]]
+    .. [[if ($moved) { exit 0 } else { exit 2 }"]],
+    win_path, esc_name, win_path, RESTORE_VERB_PATTERN
   )
   local code = os.execute(ps)
   if code == 1 then return false, "Item not found in Recycle Bin (may already be restored, or bin was emptied)" end
-  if code == 2 then return false, "Found the item, but no localized \"restore\" verb matched -- restore it manually from the Recycle Bin" end
+  if code == 2 then return false, "Found the item, but could not move it back (and no restore verb matched either) -- restore it manually from the Recycle Bin" end
+  if code == 3 then return false, "A file already exists at the original location -- not overwriting it" end
   if code ~= 0 then return false, "PowerShell restore failed (exit " .. tostring(code) .. ")" end
   return true, nil
 end
