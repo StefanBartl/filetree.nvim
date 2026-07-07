@@ -46,17 +46,56 @@ end
 
 -- ── Platform restore ──────────────────────────────────────────────────────────
 
+-- The Recycle Bin's "restore" context-menu verb is a *localized caption*, not
+-- a stable canonical name -- InvokeVerb('restore') silently matches nothing
+-- (and calls nothing) on any non-English Windows install (e.g. German
+-- "Wiederherstellen"), yet the PowerShell script still exits 0 since no
+-- terminating error was raised. That made restore_last() report success and
+-- drop the history entry despite never actually restoring anything.
+--
+-- Fixed by: (1) matching the specific bin item via the
+-- System.Recycle.DeletedFrom extended property (the item's original full
+-- path) instead of just its bare filename, so a duplicate-named file trashed
+-- earlier can't be restored by mistake; falling back to a name match only if
+-- that property lookup is unavailable; and (2) enumerating the item's actual
+-- .Verbs() collection and matching the restore verb by a small multi-language
+-- caption list (stripping the "&" mnemonic-accelerator marker Windows menu
+-- captions carry) instead of assuming the English string, then invoking that
+-- verb object's .DoIt() directly. Exit codes are now distinct (0 = restored,
+-- 1 = item not found in bin, 2 = found but no restore verb matched), so a
+-- real failure is reported honestly instead of silently "succeeding".
+local RESTORE_VERB_PATTERN =
+  [[^(Restore|Wiederherstellen|Restaurer|Restaurar|Ripristina|Herstellen|Gjenopprett|Återställ|Palauta)$]]
+
 local function restore_windows(name, original_path)
+  -- PowerShell single-quoted strings escape an embedded quote by doubling it
+  -- ('' not \').
+  local win_path = original_path:gsub("/", "\\"):gsub("'", "''")
+  local esc_name = name:gsub("'", "''")
+
   local ps = string.format(
-    'powershell -NoProfile -NonInteractive -Command "'
-    .. '$sh = New-Object -ComObject Shell.Application; '
-    .. '$bin = $sh.Namespace(0xa); '
-    .. 'foreach ($item in $bin.Items()) { '
-    .. '  if ($item.Name -eq \'%s\') { $item.InvokeVerb(\'restore\'); break } }"',
-    name:gsub("'", "\\'")
+    [[powershell -NoProfile -NonInteractive -Command "]]
+    .. [[$sh = New-Object -ComObject Shell.Application; ]]
+    .. [[$bin = $sh.Namespace(0xa); ]]
+    .. [[$target = $null; ]]
+    .. [[foreach ($item in $bin.Items()) { ]]
+    .. [[  try { $df = $item.ExtendedProperty('System.Recycle.DeletedFrom') } catch { $df = $null }; ]]
+    .. [[  if ($df -and ($df -eq '%s')) { $target = $item; break } ]]
+    .. [[}; ]]
+    .. [[if (-not $target) { ]]
+    .. [[  foreach ($item in $bin.Items()) { if ($item.Name -eq '%s') { $target = $item; break } } ]]
+    .. [[}; ]]
+    .. [[if (-not $target) { exit 1 }; ]]
+    .. [[$verb = $target.Verbs() | Where-Object { ($_.Name -replace '&','') -match '%s' } | Select-Object -First 1; ]]
+    .. [[if (-not $verb) { exit 2 }; ]]
+    .. [[$verb.DoIt(); ]]
+    .. [[exit 0"]],
+    win_path, esc_name, RESTORE_VERB_PATTERN
   )
   local code = os.execute(ps)
-  if code ~= 0 then return false, "PowerShell restore failed" end
+  if code == 1 then return false, "Item not found in Recycle Bin (may already be restored, or bin was emptied)" end
+  if code == 2 then return false, "Found the item, but no localized \"restore\" verb matched -- restore it manually from the Recycle Bin" end
+  if code ~= 0 then return false, "PowerShell restore failed (exit " .. tostring(code) .. ")" end
   return true, nil
 end
 

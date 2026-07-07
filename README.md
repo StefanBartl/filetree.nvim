@@ -133,7 +133,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | Feature | What it does |
 |---|---|
 | `ignore_list` | Hide `.git`, `node_modules`, build artefacts, … |
-| `project_root` | Shared project-root detection used by other features |
+| `project_root` | Shared, cached project-root detection used by cwd_sync and other features |
 | `file_watcher` | Refresh the tree on external filesystem changes |
 | `watcher_quarantine` | Suppress watcher EPERM noise around file ops (Windows/WSL) |
 | `hooks_api` | Programmatic hooks for other code to react to tree events |
@@ -291,6 +291,15 @@ require("filetree").setup({
   -- string[]       → custom list, overrides the built-in defaults
   ignore_list = true,
 
+  -- Confirmation prompts for destructive/bulk actions. nil (default) leaves
+  -- each feature's own default alone (all three prompt by default: paste,
+  -- delete, rename_batch). true/false applies to all three at once; a table
+  -- applies per action. A feature's own `features.<name>.confirm`, if you set
+  -- it explicitly, always wins over this switch.
+  --   confirmations = false                          -- never prompt for any of them
+  --   confirmations = { paste = false, delete = true } -- per action
+  confirmations = nil,
+
   features = {
     -- ── On by default ──────────────────────────────────────────────────────
     layout_guard = {
@@ -302,6 +311,7 @@ require("filetree").setup({
       enabled     = true,      -- default: on
       mode        = "buffer",  -- "buffer": show file in the editor window (default)
                                -- "float":  floating window next to the tree
+      highlight   = true,      -- syntax/treesitter highlighting in the preview
       keymap      = "<Tab>",   -- text/dir: toggle preview; image/PDF: dispatch
       keymap_open = "<CR>",    -- image/PDF: dispatch; other: adapter default
       max_lines   = 40,        -- float mode: lines to read
@@ -377,6 +387,13 @@ require("filetree").setup({
       use_project_root = true,  -- target the detected project root, not just the file's dir
     },
 
+    project_root = {
+      enabled  = true,   -- default: on
+      markers  = { ".git", "package.json", "Cargo.toml", "go.mod", "*.rockspec", --[[ … ]] },
+      fallback = "parent",  -- "parent" (the file's own dir) | "cwd", used when no marker is found
+      cache    = true,      -- cache resolved roots per directory for the session (see below)
+    },
+
     current_hl = {
       enabled     = false,    -- default: off
       file_hl     = { fg = "#7aa2f7", bold = true },
@@ -437,6 +454,25 @@ seconds when the cursor enters the tree window (manual navigation).
 
 ```lua
 require("filetree").feature("cwd_sync").pause(5000)
+```
+
+### Project Root
+
+Walks up from a file/directory looking for any of `markers` (`.git`,
+`package.json`, `Cargo.toml`, `go.mod`, … — a broad default list covering most
+ecosystems), returning the deepest directory that has one. Falls back to the
+file's own parent directory (or cwd, if `fallback = "cwd"`) when nothing is
+found.
+
+Every directory resolved is cached for the session (not just the query
+directory — every intermediate directory walked past en route to a found
+root is cached too), so repeated lookups for files in the same project don't
+re-walk the filesystem. Disable with `cache = false`, or clear it manually if
+a `.git` gets added/removed under an already-visited directory:
+
+```lua
+require("filetree").feature("project_root").clear_cache()
+require("filetree").feature("project_root").add_markers({ ".myproject" })  -- also clears the cache
 ```
 
 ### Current Highlight
