@@ -110,40 +110,37 @@ local function target_dir(file)
   return path.parent(file)
 end
 
----Silently `chdir` to `file`'s target directory when it differs from the
----current cwd. Never prompts — that is the whole point of "sync".
----Deliberately does NOT call `_adapter.refresh()`: the reveal that follows in
----`do_reveal` re-roots and re-renders the tree anyway, so a separate full
----filesystem rescan here is redundant work (it was a major source of lag when
----opening files, since neo-tree's refresh re-scans the whole tree).
----@param file string
----@return boolean changed  true when the cwd was actually changed
-local function sync_cwd(file)
-  if _cfg.change_dir == false then return false end
-  local dir = target_dir(file)
-  if dir == "" or same_dir(dir, vim.fn.getcwd()) then return false end
-
-  local ok = pcall(vim.fn.chdir, dir)
-  if not ok then
-    notify.warn("could not change cwd to: " .. dir)
-    return false
-  end
-  return true
-end
-
 local function do_reveal(path_)
   if not _adapter then return end
   if paused() then return end
   if S.last_path == path_ then return end
 
   S.last_path = path_
-  local cwd_changed = sync_cwd(path_)
 
-  -- Fast path: the file is already rendered in the current tree and the root
-  -- did not change. Just move the tree cursor to its line instead of neo-tree's
-  -- heavy show/reveal round-trip (which rescans the filesystem and re-renders).
-  -- This is the common case — opening files within the same project — and is
-  -- what caused the "nvim hangs when opening files" lag.
+  -- Resolve the target root ONCE (git root / project root / parent) and use it
+  -- for BOTH the cwd and the tree root. Previously the reveal derived its own
+  -- root from the file's parent, so the tree showed the parent dir even though
+  -- the cwd had been chdir'd to the project root — that mismatch was the "tree
+  -- shows parent instead of project root" bug.
+  local root = target_dir(path_)
+
+  -- Silently chdir to the root when it differs. Never prompts. Deliberately no
+  -- _adapter.refresh() here: the reveal below re-roots/re-renders the tree, so a
+  -- separate full filesystem rescan would be redundant work (a big source of lag).
+  local cwd_changed = false
+  if _cfg.change_dir ~= false and root ~= "" and not same_dir(root, vim.fn.getcwd()) then
+    if pcall(vim.fn.chdir, root) then
+      cwd_changed = true
+    else
+      notify.warn("could not change cwd to: " .. root)
+    end
+  end
+
+  -- Fast path: the file is already rendered in the current tree and the root did
+  -- not change. Just move the tree cursor to its line instead of neo-tree's heavy
+  -- show/reveal round-trip (which rescans the filesystem and re-renders). This is
+  -- the common case — opening files within the same project — and is what caused
+  -- the "nvim hangs when opening files" lag.
   if not cwd_changed
     and type(_adapter.get_node_line) == "function"
     and type(_adapter.scroll_to_line) == "function" then
@@ -154,9 +151,10 @@ local function do_reveal(path_)
     end
   end
 
-  -- Slow path: the node is not currently visible (its parent dir is collapsed)
-  -- or the root changed — fall back to a full reveal so neo-tree expands to it.
-  local ok = _adapter.open_reveal(path_, _cfg.parent_levels or 0)
+  -- Slow path: the node is not currently visible (its parent dir is collapsed) or
+  -- the root changed — do a full reveal, rooting the tree at the resolved project
+  -- root so the tree matches the cwd.
+  local ok = _adapter.open_reveal(path_, _cfg.parent_levels or 0, root ~= "" and root or nil)
   if not ok then
     notify.warn("reveal failed for: " .. path_)
     return

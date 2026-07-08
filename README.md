@@ -57,7 +57,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `auto_reveal` | Scroll/highlight the current file in the tree on buffer switch |
 | `layout_guard` | Opens an editor window when the tree would be the only window |
 | `auto_resize` | Responsive tree width on `VimResized` _(opt-in)_ |
-| `cwd_sync` | Silently `chdir` to the project root of the current file + refresh the tree, then reveal it _(opt-in)_ |
+| `cwd_sync` | Silently `chdir` to the current file's project root (nearest `.git` ancestor by default) and root the tree there, then reveal the file _(opt-in)_ |
 
 **`ui` — display**
 | Feature | What it does |
@@ -182,7 +182,6 @@ declared dependency.
     "nvim-neo-tree/neo-tree.nvim", -- or: "nvim-tree/nvim-tree.lua"
   },
   config = function()
-    -- That's it — every feature is on by default.
     require("filetree").setup({ adapter = "neotree" })
   end,
 }

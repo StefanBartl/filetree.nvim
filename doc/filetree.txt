@@ -102,14 +102,17 @@ make the default state explicit — you can drop it): >lua
         delay_ms = 50,
       },
 
-      -- Silently chdir + refresh + reveal the current file  (opt-in)
+      -- Silently chdir to the project root + root the tree there + reveal  (opt-in)
       cwd_sync = {
         enabled          = false, -- default: off
         debounce_ms      = 150,
-        parent_levels    = 0,     -- parent dirs to ascend when revealing
+        parent_levels    = 0,     -- fallback: parent dirs to ascend when no root resolved
         keep_focus       = true,  -- keep focus in editor after reveal
         change_dir       = true,  -- actually chdir; never prompts
-        use_project_root = true,  -- target project root, not just the file's dir
+        use_project_root = true,  -- fallback: broad project_root marker set
+        root_markers     = { ".git" }, -- anchor cwd + tree root to nearest ancestor with
+                                       -- one of these (cached); false disables; list widens.
+                                       -- Takes priority over use_project_root.
       },
 
       -- Highlight the current file and its parent dir  (opt-in)
@@ -197,11 +200,24 @@ Triggers on: BufDelete, BufWipeout, WinClosed
 5.3 CWD SYNC                                            *filetree-cwd-sync*
 
 On BufEnter / WinEnter, when the current file is not under Neovim's cwd:
-silently `chdir` to its project root (or its own parent directory when
-use_project_root = false, or no root marker is found), refresh the tree
-adapter, then reveal the file. Never prompts. Auto-pauses for 2 seconds when
-the cursor moves inside the tree window to avoid interfering with manual
-navigation.
+silently `chdir` to its project root AND root the tree there, then reveal the
+file. Never prompts. Auto-pauses for 2 seconds when the cursor moves inside the
+tree window to avoid interfering with manual navigation.
+
+The project root is resolved in this order:
+  1. `root_markers` (default { ".git" }) — nearest ancestor directory holding
+     one of these markers, found via lib.nvim's cached `find_root` (results are
+     cached per directory, so opening many files in a project is cheap). This
+     keeps the cwd/tree anchored to a stable high-level root and avoids the
+     frequent cwd jumps you get when every file's parent becomes the root. Set
+     `root_markers = false` to disable it, or pass a wider list to broaden it.
+  2. `use_project_root` — the project_root feature's broader marker set.
+  3. The file's own parent directory.
+
+Both the cwd and the tree root use the same resolved directory, so the tree
+always shows the project root rather than the file's parent. No full tree
+refresh/rescan is issued (the reveal re-renders anyway) — a deliberate change
+to keep opening files fast.
 
 `cwd_sync.pause(ms)` pauses auto-reveal programmatically: >lua
   require("filetree").feature("cwd_sync").pause(5000)

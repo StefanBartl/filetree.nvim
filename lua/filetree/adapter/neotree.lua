@@ -323,17 +323,23 @@ function M.set_root(path)
   return ok
 end
 
-function M.open_reveal(path, parent_levels)
+function M.open_reveal(path, parent_levels, root_dir)
   local commands = get_commands()
   if not commands then return false end
-  local target = path
-  for _ = 1, (parent_levels or 0) do   -- fixed: was 0,n (ran n+1 times); now 1,n (runs n times)
-    target = vim.fn.fnamemodify(target, ":h")
+  -- Explicit root_dir (e.g. the project root resolved by cwd_sync) wins: the tree
+  -- is rooted there. Otherwise derive the root from the file by ascending
+  -- `parent_levels` (legacy behaviour).
+  local target = root_dir
+  if not target or target == "" then
+    target = path
+    for _ = 1, (parent_levels or 0) do   -- fixed: was 0,n (ran n+1 times); now 1,n (runs n times)
+      target = vim.fn.fnamemodify(target, ":h")
+    end
   end
   -- `dir` is the tree root neo-tree navigates/tcd's to, so it MUST be a
-  -- directory. With parent_levels = 0 (the default) `target` is still the file
-  -- itself — passing that made neo-tree run `tcd <file>` → E344/ENOTDIR. Ascend
-  -- to the containing directory whenever target is not one.
+  -- directory. With parent_levels = 0 (the default) and no root_dir, `target` is
+  -- still the file itself — passing that made neo-tree run `tcd <file>` →
+  -- E344/ENOTDIR. Ascend to the containing directory whenever target is not one.
   if vim.fn.isdirectory(target) ~= 1 then
     target = vim.fn.fnamemodify(target, ":h")
   end
