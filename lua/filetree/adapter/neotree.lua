@@ -222,12 +222,44 @@ function M.get_visible_nodes(filter)
   return nodes
 end
 
-function M.get_node_line(path)
-  local nodes = M.get_visible_nodes()
-  for _, node in ipairs(nodes) do
-    if node.path == path then return node.line_number end
+-- Cache the path→line map so repeated lookups (e.g. current_hl highlights the
+-- current file AND its parent per event, and cwd_sync/auto_reveal reveal on
+-- every buffer switch) don't each rebuild the full visible-node list. Keyed on
+-- the tree buffer's changedtick: neo-tree bumps it whenever the rendered tree
+-- changes (expand/collapse/refresh), which is exactly when the line map goes
+-- stale — so a cursor move or file open that leaves the tree untouched is a hit.
+---@type table<string, integer>?
+local _line_map = nil
+local _line_map_buf = -1
+local _line_map_tick = -1
+
+---Build (or reuse) the path→line map for the currently rendered tree.
+---@return table<string, integer>?
+local function line_map()
+  local _, bufnr = M.is_open()
+  if not bufnr then
+    _line_map, _line_map_buf, _line_map_tick = nil, -1, -1
+    return nil
   end
-  return nil
+  local tick = vim.api.nvim_buf_get_changedtick(bufnr)
+  if _line_map and _line_map_buf == bufnr and _line_map_tick == tick then
+    return _line_map
+  end
+
+  local map = {}
+  for _, node in ipairs(M.get_visible_nodes()) do
+    -- First occurrence wins (a path is rendered once); keep the earliest line.
+    if node.path and map[node.path] == nil then
+      map[node.path] = node.line_number
+    end
+  end
+  _line_map, _line_map_buf, _line_map_tick = map, bufnr, tick
+  return map
+end
+
+function M.get_node_line(path)
+  local map = line_map()
+  return map and map[path] or nil
 end
 
 function M.expand_node(node)
