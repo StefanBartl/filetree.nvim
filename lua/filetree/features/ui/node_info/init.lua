@@ -42,6 +42,56 @@ local function fmt_bytes(bytes)
   end
 end
 
+---Recursively walk a directory, counting files/subdirs and summing file sizes.
+---Bounded by `max_entries` so pressing `I` on a huge tree cannot freeze Neovim;
+---if the cap is hit, the result is flagged as truncated.
+---@param root string
+---@param max_entries integer
+---@return { files: integer, dirs: integer, bytes: integer, truncated: boolean }
+local function scan_dir(root, max_entries)
+  local uv = vim.uv or vim.loop
+  local files, dirs, bytes = 0, 0, 0
+  local visited = 0
+  local truncated = false
+  local stack = { root }
+
+  while #stack > 0 do
+    local dir = table.remove(stack)
+    local fd = uv.fs_scandir(dir)
+    if fd then
+      while true do
+        local name, typ = uv.fs_scandir_next(fd)
+        if not name then break end
+
+        visited = visited + 1
+        if visited > max_entries then
+          truncated = true
+          break
+        end
+
+        local full = dir .. "/" .. name
+        if typ == nil then
+          local st = uv.fs_stat(full)
+          typ = st and st.type or nil
+        end
+
+        if typ == "directory" then
+          dirs = dirs + 1
+          stack[#stack + 1] = full
+        else
+          -- files, symlinks and other entries count toward the file total
+          files = files + 1
+          local st = uv.fs_stat(full)
+          if st and st.size then bytes = bytes + st.size end
+        end
+      end
+    end
+    if truncated then break end
+  end
+
+  return { files = files, dirs = dirs, bytes = bytes, truncated = truncated }
+end
+
 ---Convert stat mode bits to rwxrwxrwx string.
 ---@param mode integer
 ---@return string
@@ -67,7 +117,21 @@ local function build_lines(path)
   local lines = {}
   lines[#lines + 1] = "  Path:     " .. path
   lines[#lines + 1] = "  Type:     " .. (stat.type or "unknown")
-  lines[#lines + 1] = "  Size:     " .. fmt_bytes(stat.size)
+
+  if stat.type == "directory" then
+    -- vim.uv.fs_stat().size is only the directory entry itself (0 on Windows),
+    -- so aggregate the real contents instead of showing a misleading size.
+    local info = scan_dir(path, _cfg.max_entries or 100000)
+    local plus = info.truncated and "+" or ""
+    lines[#lines + 1] = string.format(
+      "  Items:    %d file%s, %d folder%s%s",
+      info.files, info.files == 1 and "" or "s",
+      info.dirs,  info.dirs  == 1 and "" or "s",
+      info.truncated and "  (truncated)" or "")
+    lines[#lines + 1] = "  Size:     " .. fmt_bytes(info.bytes) .. plus
+  else
+    lines[#lines + 1] = "  Size:     " .. fmt_bytes(stat.size)
+  end
 
   -- Permissions (POSIX mode bits, lower 9 bits)
   if stat.mode then
@@ -175,8 +239,9 @@ end
 
 ---@type FiletreeNodeInfoConfig
 local DEFAULTS = {
-  keymap     = "I",
-  show_lines = true,
+  keymap      = "I",
+  show_lines  = true,
+  max_entries = 100000, -- cap for the recursive directory scan behind Items/Size
 }
 
 ---@param cfg FiletreeNodeInfoConfig

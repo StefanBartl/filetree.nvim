@@ -63,7 +63,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | Feature | What it does |
 |---|---|
 | `preview` | Toggle preview in the editor window (live-updates on cursor move) or a float; dispatch images / PDFs (`<Tab>`/`<CR>`) |
-| `node_info` | Node info float (`I`) |
+| `node_info` | Node info float (`I`): path, type, size, mode, mtime; line count for files, recursive item count + aggregate size for folders |
 | `breadcrumbs` | Path breadcrumbs for the current node |
 | `size_info` | Show file / directory sizes |
 | `window_size_cycler` | Cycle the tree width through presets (`w`) |
