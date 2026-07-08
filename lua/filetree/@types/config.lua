@@ -94,6 +94,11 @@
 ---                                  always applies silently, then refreshes the tree adapter.
 ---@field use_project_root boolean   Target the detected project root instead of the file's
 ---                                  immediate parent directory (default true; see project_root).
+---@field root_markers     string[]|false  Marker names to anchor the cwd to the nearest ancestor
+---                                  containing one (default { ".git" }), via a cached lib.nvim
+---                                  finder. Keeps the cwd at a stable high-level root to avoid
+---                                  frequent cwd jumps. `false` disables it (falls back to
+---                                  use_project_root / parent dir). Takes priority over use_project_root.
 
 -- ── current_hl ────────────────────────────────────────────────────────────────
 
@@ -369,12 +374,15 @@
 -- ── path_copy ────────────────────────────────────────────────────────────────
 
 ---@class FiletreePathCopyConfig
----@field enabled        boolean
----@field keymap_pick    string?  Opens format picker (default nil, off).
----@field keymap_abs     string?  Copy absolute path (default "[a").
----@field keymap_dirname string?  Copy absolute parent directory (default "]a").
----@field keymap_name    string?  Copy filename only (default nil, off).
----@field notify         boolean  Show notification after copy (default true).
+---@field enabled             boolean
+---@field keymap_pick         string?  Opens format picker (default nil, off).
+---@field keymap_abs          string?  Copy absolute path (default "[a").
+---@field keymap_dirname      string?  Copy absolute parent directory (default "]a").
+---@field keymap_name         string?  Copy filename only (default nil, off).
+---@field keymap_project_root string?  Copy absolute project root path (default "[R").
+---@field keymap_project_rel  string?  Copy path relative to project root (default "]R").
+---@field root_markers        string[]|false  Markers for project-root detection (default { ".git" }); false → use cwd.
+---@field notify              boolean  Show notification after copy (default true).
 
 -- ── live_search ──────────────────────────────────────────────────────────────
 

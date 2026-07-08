@@ -54,8 +54,10 @@ local SPEC = {
     { field = "keymap_show",       method = "show",               desc = "filetree: show marked nodes", default = "<leader>ms" },
   },
   path_copy = {
-    { field = "keymap_abs",     method = "copy_absolute", desc = "filetree: copy absolute path",            default = "[a" },
-    { field = "keymap_dirname", method = "copy_dirname",  desc = "filetree: copy absolute parent directory", default = "]a" },
+    { field = "keymap_abs",          method = "copy_absolute",         desc = "filetree: copy absolute path",            default = "[a" },
+    { field = "keymap_dirname",      method = "copy_dirname",          desc = "filetree: copy absolute parent directory", default = "]a" },
+    { field = "keymap_project_root", method = "copy_project_root",     desc = "filetree: copy absolute project root",    default = "[R" },
+    { field = "keymap_project_rel",  method = "copy_project_relative", desc = "filetree: copy path relative to project root", default = "]R" },
   },
   trash = {
     { field = "keymap",         method = "delete_current", desc = "filetree: trash current node",  default = "d" },

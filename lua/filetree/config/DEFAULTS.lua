@@ -24,6 +24,8 @@ return {
       keep_focus       = true,
       change_dir       = true,  -- actually chdir; never prompts
       use_project_root = true,  -- target the detected project root, not just the file's dir
+      root_markers     = { ".git" },  -- anchor cwd to nearest ancestor with one of these
+                                      -- (cached); false disables. Prevents frequent cwd jumps.
     },
     current_hl = {
       enabled     = false,

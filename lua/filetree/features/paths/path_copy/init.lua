@@ -32,16 +32,39 @@ local M = {}
 
 ---@type FiletreePathCopyConfig
 local _cfg = {
-  enabled        = false,
-  keymap_pick    = nil,
-  keymap_abs     = "[a",
-  keymap_dirname = "]a",
-  keymap_name    = nil,
-  notify         = true,
+  enabled             = false,
+  keymap_pick         = nil,
+  keymap_abs          = "[a",
+  keymap_dirname      = "]a",
+  keymap_name         = nil,
+  keymap_project_root = "[R",   -- copy absolute project root path
+  keymap_project_rel  = "]R",   -- copy node path relative to project root
+  root_markers        = { ".git" },
+  notify              = true,
 }
 
 ---@type FiletreeAdapter?
 local _adapter = nil
+
+---Cached marker-based root finder from lib.nvim.fs.find_root.
+---@class FiletreeRootFinder
+---@field find  fun(path: string): string?
+---@field clear fun()
+
+---nil when disabled via root_markers=false, or lib.nvim is unavailable
+---@type FiletreeRootFinder?
+local _root_finder = nil
+
+---Resolve the project root for `path` (falls back to cwd when unresolved).
+---@param path string
+---@return string
+local function resolve_root(path)
+  if _root_finder then
+    local ok, root = pcall(_root_finder.find, path)
+    if ok and root and root ~= "" then return root end
+  end
+  return vim.fn.getcwd()
+end
 
 -- ── Format builders ───────────────────────────────────────────────────────────
 
@@ -75,9 +98,31 @@ local FORMATS = {
     local rel = vim.fn.fnamemodify(path, ":.")
     return ln and (rel .. ":" .. ln) or rel
   end,
+  -- Absolute path of the detected project root ([R). cwd-independent.
+  project_root = function(path)
+    return resolve_root(path)
+  end,
+  -- Path relative to the project root (]R), independent of the current cwd.
+  project_relative = function(path)
+    local root = resolve_root(path)
+    local ok, relpath = pcall(require, "lib.nvim.fs.relpath")
+    if ok and type(relpath) == "function" then
+      return relpath(path, root)
+    end
+    -- Fallback: strip the root prefix manually.
+    local nroot = root:gsub("\\", "/"):gsub("/$", "")
+    local npath = path:gsub("\\", "/")
+    if npath:sub(1, #nroot + 1) == nroot .. "/" then
+      return npath:sub(#nroot + 2)
+    end
+    return npath
+  end,
 }
 
-local FORMAT_ORDER = { "absolute", "relative", "name", "dirname", "stem", "uri", "line" }
+local FORMAT_ORDER = {
+  "absolute", "relative", "name", "dirname", "stem", "uri", "line",
+  "project_root", "project_relative",
+}
 
 -- ── Copy helper ───────────────────────────────────────────────────────────────
 
@@ -157,6 +202,17 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
+  -- Build the cached project-root finder unless disabled (root_markers = false).
+  _root_finder = nil
+  local markers = _cfg.root_markers
+  if markers == nil then markers = { ".git" } end
+  if markers ~= false then
+    local ok, find_root = pcall(require, "lib.nvim.fs.find_root")
+    if ok and type(find_root) == "function" then
+      _root_finder = find_root({ markers = markers })
+    end
+  end
+
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_path_copy", true)
 
@@ -172,17 +228,20 @@ function M.setup(config, adapter)
             map("n", key, fn, { buffer = buf, silent = true, desc = desc })
           end
         end
-        kmap(_cfg.keymap_pick,    M.pick,          "Filetree: copy path (pick format)")
-        kmap(_cfg.keymap_abs,     M.copy_absolute, "Filetree: copy absolute path")
-        kmap(_cfg.keymap_dirname, M.copy_dirname,  "Filetree: copy absolute parent directory")
-        kmap(_cfg.keymap_name,    M.copy_name,     "Filetree: copy filename")
+        kmap(_cfg.keymap_pick,         M.pick,                  "Filetree: copy path (pick format)")
+        kmap(_cfg.keymap_abs,          M.copy_absolute,         "Filetree: copy absolute path")
+        kmap(_cfg.keymap_dirname,      M.copy_dirname,          "Filetree: copy absolute parent directory")
+        kmap(_cfg.keymap_name,         M.copy_name,             "Filetree: copy filename")
+        kmap(_cfg.keymap_project_root, M.copy_project_root,     "Filetree: copy absolute project root")
+        kmap(_cfg.keymap_project_rel,  M.copy_project_relative, "Filetree: copy path relative to project root")
       end)
     end,
   })
 end
 
 function M.teardown()
-  _adapter = nil
+  _adapter     = nil
+  _root_finder = nil
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil

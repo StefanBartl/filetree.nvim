@@ -44,6 +44,15 @@ local _cfg = {}
 ---@type FiletreeAdapter?
 local _adapter = nil
 
+---Cached marker-based root finder from lib.nvim.fs.find_root.
+---@class FiletreeRootFinder
+---@field find  fun(path: string): string?
+---@field clear fun()
+
+---nil when disabled via root_markers=false, or lib.nvim is unavailable
+---@type FiletreeRootFinder?
+local _root_finder = nil
+
 local function paused()
   local uv = vim.uv or vim.loop
   return uv.hrtime() < S.paused_until
@@ -75,11 +84,21 @@ local function same_dir(a, b)
   return na == nb
 end
 
----Resolve the directory `file` should put Neovim's cwd in: the detected
----project root (default), or just the file's own parent directory.
+---Resolve the directory `file` should put Neovim's cwd in.
+---Resolution order:
+---  1. Nearest ancestor containing a configured stable marker (default `.git`),
+---     via the cached lib.nvim finder. This keeps the cwd anchored to a stable
+---     high-level root so opening files across a project doesn't cause frequent
+---     cwd jumps. Disabled with `root_markers = false`.
+---  2. The project_root feature's broader marker set (when use_project_root).
+---  3. The file's own parent directory.
 ---@param file string
 ---@return string
 local function target_dir(file)
+  if _root_finder then
+    local ok, root = pcall(_root_finder.find, file)
+    if ok and root and root ~= "" then return root end
+  end
   if _cfg.use_project_root ~= false then
     local registry = require("filetree.features")
     local proot = registry.require("project_root")
@@ -174,6 +193,18 @@ function M.setup(config, adapter)
   _cfg     = config
   _adapter = adapter
 
+  -- Build the cached stable-root finder unless disabled (root_markers = false).
+  -- Default markers are { ".git" } so the cwd anchors to the git root.
+  _root_finder = nil
+  local markers = _cfg.root_markers
+  if markers == nil then markers = { ".git" } end
+  if markers ~= false then
+    local ok, find_root = pcall(require, "lib.nvim.fs.find_root")
+    if ok and type(find_root) == "function" then
+      _root_finder = find_root({ markers = markers })
+    end
+  end
+
   if _augroup then
     au.del_group(_augroup)
   end
@@ -195,6 +226,7 @@ end
 
 function M.teardown()
   cancel_timer()
+  _root_finder = nil
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil
