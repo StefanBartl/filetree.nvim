@@ -297,6 +297,7 @@
 ---@field enabled              boolean
 ---@field mode                 "buffer"|"float"         Preview target: "buffer" shows the file in the editor window (default); "float" uses a floating window.
 ---@field highlight            boolean                  Syntax/treesitter highlighting in the preview (default true).
+---@field cursor_debounce_ms   integer?                 Debounce (ms) for the live-update while scrolling the tree (default 80).
 ---@field keymap               string?                  Normal-mode key: toggle text preview; dispatch image/PDF (default "<Tab>").
 ---@field keymap_open          string?                  Normal-mode key: dispatch image/PDF; adapter default for other nodes (default "<CR>").
 ---@field max_lines            integer                  Max lines to read for text preview (default 40).

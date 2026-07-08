@@ -30,6 +30,7 @@ local _cfg = {
   enabled              = false,
   mode                 = "buffer",   -- "buffer" | "float"
   highlight            = true,       -- syntax/treesitter highlighting in the preview
+  cursor_debounce_ms   = 80,         -- delay live-update while scrolling the tree
   keymap               = "<Tab>",
   keymap_open          = "<CR>",
   max_lines            = 40,
@@ -55,6 +56,9 @@ local _adapter = nil
 local _win  = nil
 ---@type integer?  current float preview buffer
 local _bufnr = nil
+
+---@type any?  pending uv timer debouncing the CursorMoved live-update
+local _cm_timer = nil
 
 -- Buffer-mode state: preview shown inside an existing editor window.
 ---@type boolean
@@ -535,23 +539,41 @@ function M.setup(config, adapter)
     end,
   })
 
-  -- Live-update the preview as the cursor moves over tree nodes.
+  -- Live-update the preview as the cursor moves over tree nodes — debounced so
+  -- fast scrolling through the tree doesn't run a bufadd+bufload+treesitter (or a
+  -- full float rebuild) on every single line. The node is re-read when the timer
+  -- fires, so the update always reflects the cursor's final resting line.
   au.acmd("CursorMoved", {
     group   = _augroup,
     pattern = "*",
     callback = function()
       local ft = vim.bo.filetype
       if ft ~= "neo-tree" and ft ~= "NvimTree" then return end
-      local node = _adapter and _adapter.get_current_node()
-      if not node then return end
 
+      -- Nothing to update unless a preview is actually active.
       if _cfg.mode == "float" then
-        if _win and vim.api.nvim_win_is_valid(_win) then open_preview(node) end
-      elseif _buf_active then
-        if node.path and node.path ~= "" and vim.fn.isdirectory(node.path) ~= 1 then
-          buf_show(node.path)
-        end
+        if not (_win and vim.api.nvim_win_is_valid(_win)) then return end
+      elseif not _buf_active then
+        return
       end
+
+      local uv = vim.uv or vim.loop
+      if _cm_timer then pcall(function() _cm_timer:stop() end)
+      else _cm_timer = uv.new_timer() end
+      _cm_timer:start(_cfg.cursor_debounce_ms or 80, 0, vim.schedule_wrap(function()
+        -- Re-check state at fire time; the cursor/tree may have changed.
+        if vim.bo.filetype ~= "neo-tree" and vim.bo.filetype ~= "NvimTree" then return end
+        local node = _adapter and _adapter.get_current_node()
+        if not node then return end
+
+        if _cfg.mode == "float" then
+          if _win and vim.api.nvim_win_is_valid(_win) then open_preview(node) end
+        elseif _buf_active then
+          if node.path and node.path ~= "" and vim.fn.isdirectory(node.path) ~= 1 then
+            buf_show(node.path)
+          end
+        end
+      end))
     end,
   })
 end
@@ -559,6 +581,10 @@ end
 function M.teardown()
   close_preview()
   buf_stop(true)
+  if _cm_timer then
+    pcall(function() _cm_timer:stop(); _cm_timer:close() end)
+    _cm_timer = nil
+  end
   _adapter = nil
   if _augroup then
     au.del_group(_augroup)
