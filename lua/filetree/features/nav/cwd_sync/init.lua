@@ -92,23 +92,24 @@ local function target_dir(file)
 end
 
 ---Silently `chdir` to `file`'s target directory when it differs from the
----current cwd, then refresh the tree adapter so its cwd/root display updates.
----Never prompts — that is the whole point of "sync".
+---current cwd. Never prompts — that is the whole point of "sync".
+---Deliberately does NOT call `_adapter.refresh()`: the reveal that follows in
+---`do_reveal` re-roots and re-renders the tree anyway, so a separate full
+---filesystem rescan here is redundant work (it was a major source of lag when
+---opening files, since neo-tree's refresh re-scans the whole tree).
 ---@param file string
+---@return boolean changed  true when the cwd was actually changed
 local function sync_cwd(file)
-  if _cfg.change_dir == false then return end
+  if _cfg.change_dir == false then return false end
   local dir = target_dir(file)
-  if dir == "" or same_dir(dir, vim.fn.getcwd()) then return end
+  if dir == "" or same_dir(dir, vim.fn.getcwd()) then return false end
 
   local ok = pcall(vim.fn.chdir, dir)
   if not ok then
     notify.warn("could not change cwd to: " .. dir)
-    return
+    return false
   end
-
-  if _adapter and type(_adapter.refresh) == "function" then
-    pcall(_adapter.refresh)
-  end
+  return true
 end
 
 local function do_reveal(path_)
@@ -117,8 +118,25 @@ local function do_reveal(path_)
   if S.last_path == path_ then return end
 
   S.last_path = path_
-  sync_cwd(path_)
+  local cwd_changed = sync_cwd(path_)
 
+  -- Fast path: the file is already rendered in the current tree and the root
+  -- did not change. Just move the tree cursor to its line instead of neo-tree's
+  -- heavy show/reveal round-trip (which rescans the filesystem and re-renders).
+  -- This is the common case — opening files within the same project — and is
+  -- what caused the "nvim hangs when opening files" lag.
+  if not cwd_changed
+    and type(_adapter.get_node_line) == "function"
+    and type(_adapter.scroll_to_line) == "function" then
+    local line = _adapter.get_node_line(path_)
+    if line then
+      _adapter.scroll_to_line(line)
+      return
+    end
+  end
+
+  -- Slow path: the node is not currently visible (its parent dir is collapsed)
+  -- or the root changed — fall back to a full reveal so neo-tree expands to it.
   local ok = _adapter.open_reveal(path_, _cfg.parent_levels or 0)
   if not ok then
     notify.warn("reveal failed for: " .. path_)
