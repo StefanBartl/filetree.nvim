@@ -330,6 +330,13 @@ function M.open_reveal(path, parent_levels)
   for _ = 1, (parent_levels or 0) do   -- fixed: was 0,n (ran n+1 times); now 1,n (runs n times)
     target = vim.fn.fnamemodify(target, ":h")
   end
+  -- `dir` is the tree root neo-tree navigates/tcd's to, so it MUST be a
+  -- directory. With parent_levels = 0 (the default) `target` is still the file
+  -- itself — passing that made neo-tree run `tcd <file>` → E344/ENOTDIR. Ascend
+  -- to the containing directory whenever target is not one.
+  if vim.fn.isdirectory(target) ~= 1 then
+    target = vim.fn.fnamemodify(target, ":h")
+  end
   local ok = pcall(commands.execute, {
     action      = "show",
     source      = "filesystem",
