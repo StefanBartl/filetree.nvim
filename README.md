@@ -96,7 +96,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 **`paths` — paths & clipboard**
 | Feature | What it does |
 |---|---|
-| `path_copy` | Copy absolute path or absolute parent directory (`[a` `]a`) |
+| `path_copy` | Copy absolute path / parent dir (`[a` `]a`), or project root / path relative to it (`[R` `]R`) |
 | `lua_require_copy` | Copy the node as a `require("…")` string (`rq`) |
 | `copy_file_list` | Copy recursive file/dir lists (`[f` `]f` `[F` `]F`) |
 | `markdown_links` | Copy current/recursive/marked nodes as Markdown links (`ML` `MR` `MM`) |
@@ -385,6 +385,10 @@ require("filetree").setup({
       keep_focus       = true,  -- keep focus in the editor window after reveal
       change_dir       = true,  -- actually chdir to the target dir — never prompts
       use_project_root = true,  -- target the detected project root, not just the file's dir
+      root_markers     = { ".git" },  -- anchor the cwd to the nearest ancestor holding one
+                                      -- of these (cached per-dir); avoids frequent cwd jumps.
+                                      -- Pass a bigger list to widen it, or false to disable
+                                      -- (then falls back to use_project_root / parent dir).
     },
 
     project_root = {

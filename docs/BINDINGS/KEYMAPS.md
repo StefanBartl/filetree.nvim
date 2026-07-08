@@ -26,6 +26,8 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
 | `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard |
 | `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard |
+| `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard |
+| `]R` | path_copy | `keymap_project_rel` | Copy path relative to project root (cwd-independent) |
 | `d` | trash | `keymap` | Trash current node (or all marked) |
 | `U` | trash | `keymap_undo` | Undo last trash operation |
 | `<leader>th` | trash | `keymap_history` | Show trash history |
