@@ -84,23 +84,18 @@ local function do_reveal(path)
   if cursor_in_tree() then return end
   if _cfg.only_if_open and not tree_is_open() then return end
 
-  -- Fast path: if the file is already rendered, just move the tree cursor to it
-  -- (cheap; the adapter caches the path→line map). Fall back to the adapter's
-  -- full reveal only when the node is off-screen. NOTE: the old guard checked
-  -- `_adapter.reveal`, which the neo-tree adapter never defined (it exposes
-  -- `open_reveal`), so this was a silent no-op — it now actually reveals,
-  -- lightweight-first.
+  -- Scroll-only reveal: if the file is already rendered, move the tree cursor to
+  -- it (cheap; the adapter caches the path→line map). Per this feature's contract
+  -- it does NOT change the cwd or the tree's root, so it deliberately does not
+  -- fall back to open_reveal for off-screen nodes — that would re-root the tree to
+  -- the file's parent and fight cwd_sync (which anchors the root at the project
+  -- root). Revealing a collapsed file is cwd_sync's job.
   if type(_adapter.get_node_line) == "function"
     and type(_adapter.scroll_to_line) == "function" then
     local line = _adapter.get_node_line(path)
     if line then
       _adapter.scroll_to_line(line)
-      return
     end
-  end
-
-  if type(_adapter.open_reveal) == "function" then
-    pcall(_adapter.open_reveal, path, 0)
   end
 end
 
