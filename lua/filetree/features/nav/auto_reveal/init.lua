@@ -79,11 +79,29 @@ end
 -- ── Reveal logic ──────────────────────────────────────────────────────────────
 
 local function do_reveal(path)
-  if not _adapter or not _adapter.reveal then return end
+  if not _adapter then return end
   if is_paused() then return end
   if cursor_in_tree() then return end
   if _cfg.only_if_open and not tree_is_open() then return end
-  pcall(_adapter.reveal, path)
+
+  -- Fast path: if the file is already rendered, just move the tree cursor to it
+  -- (cheap; the adapter caches the path→line map). Fall back to the adapter's
+  -- full reveal only when the node is off-screen. NOTE: the old guard checked
+  -- `_adapter.reveal`, which the neo-tree adapter never defined (it exposes
+  -- `open_reveal`), so this was a silent no-op — it now actually reveals,
+  -- lightweight-first.
+  if type(_adapter.get_node_line) == "function"
+    and type(_adapter.scroll_to_line) == "function" then
+    local line = _adapter.get_node_line(path)
+    if line then
+      _adapter.scroll_to_line(line)
+      return
+    end
+  end
+
+  if type(_adapter.open_reveal) == "function" then
+    pcall(_adapter.open_reveal, path, 0)
+  end
 end
 
 local function schedule_reveal(path)
