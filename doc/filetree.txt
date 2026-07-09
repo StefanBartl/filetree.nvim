@@ -297,6 +297,24 @@ set `features = { cwd_sync = { enabled = true, reveal = false } }` there too.
 For netrw/oil/mini_files, just enable cwd_sync with its `reveal` default
 (true) — there is no competing native mechanism to defer to.
 
+NEO-TREE'S "FILE NOT IN CWD" PROMPT IS SUPPRESSED AUTOMATICALLY ~
+
+neo-tree has its own native confirm prompt ("File not in cwd. Change cwd to
+<dir>?") that fires whenever a reveal is requested — explicitly, or implicitly
+whenever `filesystem.follow_current_file.enabled` is on — without an explicit
+`dir`, and the file to reveal isn't under the tree's current root. This can be
+triggered by ANY code that calls neo-tree's command API, not just
+filetree.nvim itself — including your own custom keymaps that call
+`require("neo-tree.command").execute()` directly.
+
+As soon as `require("filetree").setup({ adapter = "neotree" })` runs,
+filetree.nvim wraps neo-tree's `command.execute` once so this prompt can never
+fire — any at-risk call (yours or filetree's own) gets neo-tree's
+`reveal_force_cwd = true` applied automatically. A call that already sets
+`dir`, `reveal_force_cwd`, or an explicit `reveal = false` is left completely
+alone. No configuration needed; this protects every entry point uniformly,
+including ones filetree.nvim has no other way to know about.
+
 `cwd_sync.pause(ms)` pauses auto-reveal programmatically: >lua
   require("filetree").feature("cwd_sync").pause(5000)
 <
