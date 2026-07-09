@@ -236,6 +236,28 @@ function M.setup(config, adapter)
       debounced_reveal()
     end,
   })
+
+  -- Startup catch-up: a session-restore plugin (or any code that opens/shows
+  -- the tree very early) can focus a buffer whose file is not under the
+  -- launch-time cwd BEFORE this BufEnter/WinEnter autocmd above ever gets a
+  -- chance to fire for it — there is no "buffer switch" event to react to if
+  -- the relevant buffer was already current when we registered. Run one sync
+  -- pass for whatever buffer ends up focused once startup settles, so the cwd
+  -- is correct by the time anything (ours or the user's own keymaps) shows
+  -- the tree. Mirrors the vim_did_enter check filetree/init.lua already uses
+  -- for its own neo-tree post-setup work: if VimEnter already fired by the
+  -- time setup() runs (the common case — filetree.nvim typically loads on a
+  -- lazy event well after VimEnter), run immediately instead of waiting for
+  -- an event that has already passed.
+  if vim.v.vim_did_enter == 1 then
+    vim.schedule(debounced_reveal)
+  else
+    au.acmd("VimEnter", {
+      group    = _augroup,
+      once     = true,
+      callback = debounced_reveal,
+    })
+  end
 end
 
 function M.teardown()
