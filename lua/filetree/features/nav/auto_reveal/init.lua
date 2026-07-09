@@ -76,6 +76,22 @@ local function should_ignore(bufnr)
   return false
 end
 
+---Whether `path` lives under `root` (prefers lib.nvim.fs.is_subpath; falls back
+---to a local forward-slash prefix comparison so this still works without it).
+---@param path string
+---@param root string
+---@return boolean
+local function under_root(path, root)
+  local ok, is_subpath = pcall(require, "lib.nvim.fs.is_subpath")
+  if ok and type(is_subpath) == "function" then
+    local ok2, result = pcall(is_subpath, path, root)
+    if ok2 then return result end
+  end
+  local p = path:gsub("\\", "/")
+  local r = root:gsub("\\", "/"):gsub("/$", "")
+  return p == r or p:sub(1, #r + 1) == r .. "/"
+end
+
 -- ── Reveal logic ──────────────────────────────────────────────────────────────
 
 local function do_reveal(path)
@@ -84,17 +100,29 @@ local function do_reveal(path)
   if cursor_in_tree() then return end
   if _cfg.only_if_open and not tree_is_open() then return end
 
-  -- Scroll-only reveal: if the file is already rendered, move the tree cursor to
-  -- it (cheap; the adapter caches the path→line map). Per this feature's contract
-  -- it does NOT change the cwd or the tree's root, so it deliberately does not
-  -- fall back to open_reveal for off-screen nodes — that would re-root the tree to
-  -- the file's parent and fight cwd_sync (which anchors the root at the project
-  -- root). Revealing a collapsed file is cwd_sync's job.
+  -- Fast path: the file is already rendered (its parent dirs are expanded) —
+  -- just move the tree cursor to it (cheap; the adapter caches the path→line map).
   if type(_adapter.get_node_line) == "function"
     and type(_adapter.scroll_to_line) == "function" then
     local line = _adapter.get_node_line(path)
     if line then
       _adapter.scroll_to_line(line)
+      return
+    end
+  end
+
+  -- Slow path: the node is not currently visible (a parent dir is collapsed).
+  -- Expand to reveal it, but ONLY within the tree's CURRENT root — never re-root
+  -- here. Re-rooting is cwd_sync's job (it anchors at the project root); if
+  -- auto_reveal also re-rooted (e.g. to the file's parent), the two would race on
+  -- every buffer switch and the tree could settle on the wrong directory. When the
+  -- file lives outside the current root, silently do nothing — cwd_sync (or the
+  -- tree plugin's own cwd-follow, e.g. neo-tree bind_to_cwd) is responsible for
+  -- getting the root there first.
+  if type(_adapter.get_root_path) == "function" and type(_adapter.open_reveal) == "function" then
+    local root = _adapter.get_root_path()
+    if root and root ~= "" and under_root(path, root) then
+      pcall(_adapter.open_reveal, path, 0, root)
     end
   end
 end
