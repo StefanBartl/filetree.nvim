@@ -28,7 +28,8 @@ local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
 local ui_select = require("filetree.util.select")
-local path = require("filetree.util.path")
+local path   = require("filetree.util.path")
+local buffer = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeSmartRenameConfig
@@ -92,25 +93,11 @@ local function lsp_did_rename(old_path, new_path)
   end
 end
 
--- ── Buffer update ─────────────────────────────────────────────────────────────
-
-local function update_buffers(old_path, new_path)
-  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
-    local name = vim.api.nvim_buf_get_name(bufnr)
-    if name == old_path then
-      -- Rename the buffer to the new path
-      vim.api.nvim_buf_set_name(bufnr, new_path)
-      -- Clear the "file has changed on disk" state
-      pcall(vim.api.nvim_buf_call, bufnr, function()
-        vim.cmd("edit!")
-      end)
-    elseif name:sub(1, #old_path + 1) == old_path .. "/" then
-      -- Buffer inside renamed directory
-      local new_name = new_path .. name:sub(#old_path + 1)
-      vim.api.nvim_buf_set_name(bufnr, new_name)
-    end
-  end
-end
+-- Buffer update: filetree.util.buffer.relocate() (shared with copy_move and
+-- rename_batch, which have the exact same "file moved on disk, repoint any
+-- open buffer" need) handles both the single-file and nested-directory cases,
+-- and normalizes path-separator style before comparing, and preserves
+-- unsaved changes on a modified buffer instead of force-reloading them away.
 
 -- ── Reference update (fallback) ────────────────────────────────────────────────
 -- LSP willRenameFiles/didRenameFiles (above) is the primary mechanism for
@@ -436,7 +423,7 @@ local function do_rename(old_path, new_path)
         lsp_did_rename(old_path, new_path)
 
         -- Update open buffers
-        update_buffers(old_path, new_path)
+        buffer.relocate(old_path, new_path)
 
         -- Fallback: textual require()/import rewrite across the project when
         -- no LSP client applied a workspace edit (or the file is Lua).

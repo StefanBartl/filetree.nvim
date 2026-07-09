@@ -1,6 +1,8 @@
 ---@module 'filetree.util.buffer'
 ---@brief Buffer validation and window-context utilities.
 
+local path = require("filetree.util.path")
+
 local M = {}
 
 ---Filetypes treated as tree/explorer windows — never valid editor targets.
@@ -113,5 +115,78 @@ vim.api.nvim_create_autocmd("BufDelete", {
   group = vim.api.nvim_create_augroup("FiletreeBufferCache", { clear = true }),
   callback = function(args) M.invalidate(args.buf) end,
 })
+
+---Repoint every open buffer whose name is `old_path` (or nested under it, for
+---a directory move/rename) to the corresponding path under `new_path`. Used
+---after any on-disk move/rename (copy_move's cut+paste, rename_batch,
+---smart_rename) so a stale buffer doesn't linger pointing at a path that no
+---longer exists while a second, disconnected buffer gets created for the file
+---at its new location.
+---
+---For an exact match: renames the buffer via `nvim_buf_set_name`. When the
+---buffer has no unsaved changes, also does a silent `:edit!` to clear the
+---"file changed on disk" state, matching what a normal external rename would
+---leave behind. When the buffer IS modified, the rename alone is enough --
+---content and undo history are untouched, and the next `:w` simply writes to
+---the new path. Forcing a reload here would silently discard the user's
+---unsaved edits.
+---
+---For a directory move/rename: any buffer nested under `old_path` (name
+---starts with `old_path .. "/"`) gets that prefix replaced with `new_path`,
+---preserving the relative sub-path -- covers every buffer open anywhere under
+---a moved directory tree, not just a single file.
+---
+---Both `old_path`/`new_path` and every buffer name are normalized
+---(forward-slash) before comparing: a path sourced from a tree adapter's
+---node.path can use a different separator convention than
+---`nvim_buf_get_name()` returns on Windows, which would otherwise make every
+---comparison silently miss (the same class of bug fixed across all 5 tree
+---adapters this session).
+---
+---Renaming onto a path that collides with an already-open, DIFFERENT buffer
+---(Neovim raises E95 "buffer already exists") is caught and skipped with a
+---warning rather than aborting the whole sweep.
+---@param old_path string
+---@param new_path string
+---@return integer  count of buffers relocated
+function M.relocate(old_path, new_path)
+  local old_key = path.slashify(old_path)
+  local new_key = path.slashify(new_path)
+  local prefix  = old_key .. "/"
+
+  local count = 0
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      if name ~= "" then
+        local key = path.slashify(name)
+        local target
+        if key == old_key then
+          target = new_key
+        elseif key:sub(1, #prefix) == prefix then
+          target = new_key .. "/" .. key:sub(#prefix + 1)
+        end
+
+        if target then
+          local was_modified = vim.bo[bufnr].modified
+          local ok = pcall(vim.api.nvim_buf_set_name, bufnr, target)
+          if ok then
+            count = count + 1
+            if not was_modified then
+              pcall(vim.api.nvim_buf_call, bufnr, function()
+                vim.cmd("edit!")
+              end)
+            end
+          else
+            local notify = require("filetree.util.notify").create("[filetree.buffer]")
+            notify.warn("could not relocate buffer to " .. target
+              .. " (a different open buffer already uses that name)")
+          end
+        end
+      end
+    end
+  end
+  return count
+end
 
 return M
