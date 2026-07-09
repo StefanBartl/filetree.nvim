@@ -1,6 +1,10 @@
 ---@module 'filetree.adapter.netrw'
 ---@brief netrw adapter — implements the FiletreeAdapter interface for Neovim's built-in netrw.
 
+-- Imported as `pathutil` (not `path`) because `path` is used pervasively below as
+-- a local parameter/variable name for a plain path string; importing under that
+-- same name would silently shadow the module in every such function.
+local pathutil = require("filetree.util.path")
 local registry = require("filetree.adapter")
 
 ---@class FiletreeNetrwAdapter : FiletreeAdapter
@@ -152,10 +156,16 @@ function M.get_visible_nodes(filter)
   return nodes
 end
 
-function M.get_node_line(path)
+-- netrw builds node.path as `root .. "/" .. name`, where root can come from
+-- vim.fn.getcwd() (native-separator, e.g. backslash on Windows) — while callers
+-- (cwd_sync/auto_reveal/current_hl) query with forward-slash paths sourced from
+-- vim.api.nvim_buf_get_name()/expand("%:p"). Normalize both sides before
+-- comparing, or the lookup silently misses on Windows.
+function M.get_node_line(node_path)
+  local query = pathutil.slashify(node_path)
   local nodes = M.get_visible_nodes()
   for _, node in ipairs(nodes) do
-    if node.path == path then return node.line_number end
+    if node.path and pathutil.slashify(node.path) == query then return node.line_number end
   end
   return nil
 end
@@ -177,20 +187,39 @@ function M.open_file(path, mode)
   return ok
 end
 
+---Run `:Explore <dir>`, targeting the existing netrw window when one is open
+---instead of whatever window happens to be current. `:Explore` reuses the
+---CURRENT window — unlike neo-tree/nvim-tree/oil/mini_files, which manage a
+---dedicated tree window internally regardless of focus, plain netrw has no such
+---concept. Without this, a reveal triggered while the user's focus is in the
+---editor (e.g. from cwd_sync/auto_reveal on BufEnter) would silently hijack the
+---EDITOR window into a directory listing instead of updating the netrw split.
+---@param dir string
+---@return boolean
+local function explore_in_tree_win(dir)
+  local cur_win = vim.api.nvim_get_current_win()
+  local tree_win = M.get_winid()
+  if tree_win and tree_win ~= cur_win and vim.api.nvim_win_is_valid(tree_win) then
+    vim.api.nvim_set_current_win(tree_win)
+  end
+  local ok = pcall(vim.cmd, "Explore " .. vim.fn.fnameescape(dir))
+  if tree_win and tree_win ~= cur_win and vim.api.nvim_win_is_valid(cur_win) then
+    vim.api.nvim_set_current_win(cur_win)
+  end
+  return ok
+end
+
 function M.open_reveal(path, _parent_levels)
   local dir = vim.fn.fnamemodify(path, ":h")
-  local ok  = pcall(vim.cmd, "Explore " .. vim.fn.fnameescape(dir))
-  return ok
+  return explore_in_tree_win(dir)
 end
 
 function M.set_root(path)
-  local ok = pcall(vim.cmd, "Explore " .. vim.fn.fnameescape(path))
-  return ok
+  return explore_in_tree_win(path)
 end
 
 function M.open_cwd()
-  local ok = pcall(vim.cmd, "Explore " .. vim.fn.fnameescape(vim.fn.getcwd()))
-  return ok
+  return explore_in_tree_win(vim.fn.getcwd())
 end
 
 function M.close()
