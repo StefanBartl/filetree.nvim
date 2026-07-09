@@ -1,9 +1,15 @@
 ---@module 'filetree.features.auto_reveal'
 ---@brief Automatically reveal the current editor buffer in the tree.
 ---@description
---- Unlike cwd_sync (which changes the working directory), auto_reveal only
---- calls adapter.reveal(path) to scroll and highlight the current file in
---- the tree without changing the cwd or the tree's root.
+--- Unlike cwd_sync (which changes the working directory), auto_reveal never
+--- changes the cwd or the tree's root. On every buffer switch it:
+---   1. Scrolls to the file's line if it is already rendered (cheap).
+---   2. Otherwise expands collapsed parent directories to reveal it, but only
+---      within the tree's CURRENT root (adapter.open_reveal is called with that
+---      root pinned) — so it can never re-root the tree itself.
+---   3. Does nothing when the file lives outside the current root; getting the
+---      root there first is cwd_sync's job (or the tree plugin's own cwd-follow,
+---      e.g. neo-tree's bind_to_cwd + follow_current_file).
 ---
 --- Debounced to avoid spam during rapid buffer switching. Automatically
 --- pauses when the cursor is inside the tree window to prevent feedback
@@ -19,8 +25,6 @@
 ---   :FiletreeAutoRevealPause [ms]   Pause for N ms (default 2000).
 ---   :FiletreeAutoRevealResume       Resume immediately.
 ---   :FiletreeRevealCurrent          Force reveal now.
-
-local notify = require("filetree.util.notify").create("[filetree.auto_reveal]")
 
 local au  = require("filetree.util.autocmd")
 local M = {}

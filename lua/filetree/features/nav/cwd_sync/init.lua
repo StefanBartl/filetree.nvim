@@ -1,16 +1,22 @@
 ---@module 'filetree.features.cwd_sync'
----@brief Keep Neovim's cwd (and the tree) in sync with the current buffer.
+---@brief Keep Neovim's cwd (and the tree root) in sync with the current buffer.
 ---@description
 --- Debounced BufEnter/WinEnter handler for the active buffer's file:
 ---
----   1. change_dir (default true): if the file is not under the current cwd,
----      silently `chdir` to its project root (via the project_root feature —
----      falls back to the file's own parent directory when no root marker is
----      found, or when use_project_root is false) — never prompts.
----   2. Refreshes the tree adapter so its cwd/root display updates.
----   3. Calls adapter.open_reveal() to scroll/highlight the file in the tree
----      (unchanged behaviour from before; parent_levels still governs how far
----      the reveal call itself ascends).
+---   1. Resolves the target root, in order: `root_markers` (default { ".git" },
+---      cached via lib.nvim's find_root) → `use_project_root` (the broader
+---      project_root marker set) → the file's own parent directory.
+---   2. change_dir (default true): if that root differs from the current cwd,
+---      silently `chdir` to it — never prompts.
+---   3. reveal (default true): also root the tree at the SAME resolved
+---      directory and reveal the file there (fast-path scroll when already
+---      visible, else adapter.open_reveal). Set `reveal = false` when the tree
+---      plugin already follows the cwd itself (e.g. neo-tree's `bind_to_cwd` +
+---      `follow_current_file`) so the two reveals don't race — cwd_sync then
+---      only manages the cwd. See doc/filetree.txt §5.3 for that setup.
+---
+--- No full tree refresh/rescan is issued — the reveal (or the tree plugin's own
+--- cwd-follow) re-renders anyway, so a separate rescan would be redundant work.
 ---
 --- Pauses automatically when the user navigates manually in the tree (detected
 --- via cursor movement inside the tree window).
