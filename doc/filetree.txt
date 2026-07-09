@@ -17,6 +17,7 @@ CONTENTS                                                    *filetree-contents*
      5.3 CWD Sync ......................... |filetree-cwd-sync|
      5.4 Current Highlight ................ |filetree-current-hl|
      5.5 Safety / Backup .................. |filetree-safety|
+     5.6 Auto Reveal ....................... |filetree-auto-reveal|
   6. Adapters ............................... |filetree-adapters|
   7. Public API ............................. |filetree-api|
   8. Health check ........................... |filetree-health|
@@ -206,6 +207,12 @@ silently `chdir` to its project root AND root the tree there, then reveal the
 file. Never prompts. Auto-pauses for 2 seconds when the cursor moves inside the
 tree window to avoid interfering with manual navigation.
 
+auto_reveal (|filetree-auto-reveal|, on by default) handles the common case —
+scrolling/expanding to reveal a file that is already under the current root —
+on every buffer switch, cheaply and without touching the cwd. cwd_sync only
+needs to act (chdir + reveal/reroot) when the file is OUTSIDE the current root,
+i.e. when you switch to a file in a different project.
+
 The project root is resolved in this order:
   1. `root_markers` (default { ".git" }) — nearest ancestor directory holding
      one of these markers, found via lib.nvim's cached `find_root` (results are
@@ -271,6 +278,38 @@ Methods:
   `before_move(src, dst)` → string? Create backup of src.
   `list_backups()` → string[]       List all existing backups.
   `toggle_dry_run()`                Toggle dry-run mode at runtime.
+
+------------------------------------------------------------------------------
+5.6 AUTO REVEAL                                        *filetree-auto-reveal*
+
+On BufEnter, scrolls or expands the tree to reveal the current file — but
+NEVER changes the cwd or the tree's root (that is cwd_sync's job; see
+|filetree-cwd-sync|). Debounced; auto-pauses for 500ms after the cursor enters
+the tree window so it doesn't fight manual navigation.
+
+Two-step reveal per buffer switch:
+  1. If the file is already rendered (its parent dirs are expanded), just
+     scroll the tree cursor to it — cheap, uses the adapter's cached
+     path→line map.
+  2. Otherwise expand collapsed parent directories to reveal it, but ONLY
+     within the tree's CURRENT root (`adapter.open_reveal` is called with
+     that root pinned) — it can never re-root the tree itself. When the file
+     lives outside the current root, this step is skipped silently; getting
+     the root there first is cwd_sync's job (or the tree plugin's own
+     cwd-follow, e.g. neo-tree's `bind_to_cwd` + `follow_current_file`).
+
+Config:
+  `enabled`        boolean
+  `debounce_ms`    integer   Delay after BufEnter (default 150ms).
+  `ignore_ft`      string[]  Filetypes that never trigger reveal.
+  `only_if_open`   boolean   Only reveal when tree window is visible
+                             (default true).
+
+Commands: >
+  :FiletreeAutoRevealPause [ms]   Pause for N ms (default 2000).
+  :FiletreeAutoRevealResume       Resume immediately.
+  :FiletreeRevealCurrent          Force reveal now.
+<
 
 ==============================================================================
 6. ADAPTERS                                               *filetree-adapters*

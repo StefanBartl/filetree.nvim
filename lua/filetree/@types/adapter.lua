@@ -5,6 +5,15 @@
 --- All methods are called from feature modules and from the adapter registry.
 --- Methods must not throw — return false/nil on failure and log internally.
 
+--- Path-separator note for implementers: callers (cwd_sync, auto_reveal,
+--- current_hl, …) source the `path` they pass in from `vim.api.nvim_buf_get_name`
+--- / `expand("%:p")`, which return forward-slash paths on some Windows Neovim
+--- builds — even though the underlying tree plugin's own node paths may be
+--- native-separator (backslash). Any path used as a cache/lookup key inside an
+--- adapter (e.g. for get_node_line) MUST be normalized to one consistent form
+--- before comparison, or lookups silently miss on Windows. See
+--- `key_of()` in adapter/neotree.lua for the reference implementation.
+---
 ---@class FiletreeAdapter
 ---@field name string                         Unique adapter identifier ("neotree", "nvimtree", …).
 ---@field is_available  fun(): boolean         True when the underlying plugin is installed and loaded.

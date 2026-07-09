@@ -54,7 +54,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 |---|---|
 | `tree_traverse` | `-` go to parent dir, `+` set dir under cursor as tree root |
 | `reveal_alt` | Reveal the alternate buffer `#` in the tree (`B`) |
-| `auto_reveal` | Scroll/highlight the current file in the tree on buffer switch |
+| `auto_reveal` | Scroll to (or expand+reveal) the current file in the tree on buffer switch, never changing cwd/root |
 | `layout_guard` | Opens an editor window when the tree would be the only window |
 | `auto_resize` | Responsive tree width on `VimResized` _(opt-in)_ |
 | `cwd_sync` | Silently `chdir` to the current file's project root (nearest `.git` ancestor by default) and root the tree there, then reveal the file _(opt-in)_ |
@@ -145,7 +145,7 @@ These stay **off** until you set `{ enabled = true }`, each for a concrete reaso
 
 | Feature | Why it's opt-in |
 |---|---|
-| `cwd_sync` | Changes the global cwd automatically on buffer switch — aggressive, and overlaps `auto_reveal` / `tree_traverse` |
+| `cwd_sync` | Changes the global cwd automatically on buffer switch — aggressive. Coexists with `auto_reveal` (both on by default) via `cwd_sync.reveal`; see [docs/filetree.txt](doc/filetree.txt) §5.3 |
 | `current_hl` | Purely cosmetic; ships hardcoded colours that only fit some colorschemes |
 | `safety` | A backup **API** with no keymaps — enabling it has no visible effect unless other code calls in |
 | `auto_resize` | Automatic width management fights the manual `window_size_cycler` (on by default) |
