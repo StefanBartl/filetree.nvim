@@ -85,6 +85,17 @@ make the default state explicit — you can drop it): >lua
     -- "auto" picks the first available adapter (neotree → nvimtree)
     adapter = "auto",
 
+    -- Confirmation prompts for destructive/bulk actions (paste, delete,
+    -- rename_batch). Shipped defaults: paste/rename_batch = no prompt,
+    -- delete = PROMPTS (trashing is harder to notice/undo than a move or
+    -- rename). nil (default) leaves each feature's own default alone;
+    -- true/false applies to all three at once; a table applies per action.
+    -- A feature's own features.<name>.confirm, if set explicitly, always
+    -- wins over this switch.
+    --   confirmations = false               -- no prompts at all
+    --   confirmations = { delete = false }  -- opt out of the delete prompt only
+    confirmations = nil,
+
     features = {
       -- Quick two-digit picker
       picker = {

@@ -22,7 +22,7 @@
 ---@field command          FiletreeCommandConfig|string|nil User command name (string) or config table. Default: "Filetree" + "Ft" alias.
 ---@field autocmds         table<string,false>?             Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
 ---@field ignore_list      boolean|string[]|nil             true (default) = hide common dirs (.git, node_modules…); false = show all; string[] = custom list.
----@field confirmations    boolean|FiletreeConfirmationsConfig|nil  Every confirmable action (paste, delete, rename_batch) defaults to *no* prompt. true/false applies to all three at once; a table applies per action, e.g. { delete = true } to only confirm trashing. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
+---@field confirmations    boolean|FiletreeConfirmationsConfig|nil  Confirmable actions: paste/rename_batch default to *no* prompt, delete defaults to *prompt*. true/false applies to all three at once; a table applies per action, e.g. { delete = false } to opt out of just the delete prompt. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
 
 ---@class FiletreeConfirmationsConfig
 ---@field paste        boolean?  copy_move's paste-staged-nodes prompt (default false).
@@ -124,7 +124,7 @@
 
 ---@class FiletreeTrashConfig
 ---@field enabled        boolean
----@field confirm        boolean  Ask before trashing (default false; see top-level `confirmations`).
+---@field confirm        boolean  Ask before trashing (default true, unlike paste/rename_batch; see top-level `confirmations`).
 ---@field use_safety     boolean  Create a backup before trashing (default false).
 ---@field dry_run        boolean  Log without actually trashing (default false).
 ---@field keymap         string?  Trash current node / all marked (default "d").
