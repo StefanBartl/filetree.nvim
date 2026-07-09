@@ -228,26 +228,48 @@ always shows the project root rather than the file's parent. No full tree
 refresh/rescan is issued (the reveal re-renders anyway) — a deliberate change
 to keep opening files fast.
 
-INTERACTION WITH neo-tree bind_to_cwd / follow_current_file ~
+INTERACTION WITH ADAPTER-NATIVE "FOLLOW CWD" FEATURES ~
 
-If your neo-tree config already follows the cwd:
->lua
-    filesystem = {
-      bind_to_cwd = true,
-      follow_current_file = { enabled = true },
-    }
-<
-then neo-tree ALREADY roots itself at the cwd and reveals the current file. In
-that case set `reveal = false`: cwd_sync then only sets the cwd (to the project
-root) and lets neo-tree do the rooting/revealing. With `reveal = true` (the
-default) both cwd_sync and neo-tree try to reveal at once; they race and the
-tree can settle on the file's parent instead of the project root. Recommended
-setup for that neo-tree config: >lua
+Whether `reveal` should be true or false depends entirely on whether your
+underlying tree PLUGIN (not filetree.nvim) has its own built-in feature that
+auto-follows the current buffer independently of filetree. When it does, that
+feature and cwd_sync's own reveal both try to act on the same BufEnter and
+race each other — the tree can settle on the file's parent instead of the
+project root. Set `reveal = false` there so cwd_sync only manages the cwd and
+lets the adapter's own plugin do the rooting/revealing. When the adapter has no
+such feature, cwd_sync's reveal IS the only thing that does this job — leave
+`reveal = true` (the default), or files switched into a different project
+would never get revealed at all.
+
+    Adapter       Native follow feature                       reveal
+    -----------   ------------------------------------------   ------
+    neotree       filesystem.follow_current_file.enabled +     false
+                  filesystem.bind_to_cwd = true
+    nvimtree      update_focused_file.enable (+ optionally      false
+                  update_focused_file.update_root.enable)
+    netrw         none                                          true (default)
+    oil           none                                          true (default)
+    mini_files    none                                          true (default)
+
+Example for neo-tree with both native options on: >lua
+    -- neo-tree.nvim setup:
+    require("neo-tree").setup({
+      filesystem = {
+        bind_to_cwd = true,
+        follow_current_file = { enabled = true },
+      },
+    })
+
+    -- filetree.nvim setup:
     require("filetree").setup({
       adapter = "neotree",
       features = { cwd_sync = { enabled = true, reveal = false } },
     })
 <
+Same principle for nvim-tree.lua with `update_focused_file.enable = true`:
+set `features = { cwd_sync = { enabled = true, reveal = false } }` there too.
+For netrw/oil/mini_files, just enable cwd_sync with its `reveal` default
+(true) — there is no competing native mechanism to defer to.
 
 `cwd_sync.pause(ms)` pauses auto-reveal programmatically: >lua
   require("filetree").feature("cwd_sync").pause(5000)

@@ -383,11 +383,13 @@ require("filetree").setup({
       parent_levels    = 0,     -- how far the tree-reveal call itself ascends
       keep_focus       = true,  -- keep focus in the editor window after reveal
       change_dir       = true,  -- actually chdir to the target dir — never prompts
-      reveal           = true,  -- also reveal/root the tree ourselves. Set to FALSE if your
-                                -- tree already follows the cwd (neo-tree `bind_to_cwd = true`
-                                -- + `follow_current_file`) — otherwise the two reveals fight
-                                -- and the tree lands on the file's parent. With reveal = false
-                                -- cwd_sync only sets the cwd and lets neo-tree root/reveal.
+      reveal           = true,  -- also reveal/root the tree ourselves. Set to FALSE only if
+                                -- your adapter's underlying plugin already follows the cwd on
+                                -- its own (neo-tree bind_to_cwd+follow_current_file, nvim-tree
+                                -- update_focused_file) — otherwise the two reveals fight and
+                                -- the tree lands on the file's parent. netrw/oil/mini_files have
+                                -- no such native feature — leave this true for them. See the
+                                -- per-adapter table below.
       use_project_root = true,  -- target the detected project root, not just the file's dir
       root_markers     = { ".git" },  -- anchor the cwd to the nearest ancestor holding one
                                       -- of these (cached per-dir); avoids frequent cwd jumps.
@@ -436,9 +438,31 @@ require("filetree").setup({
 |---|---|---|
 | `"neotree"` | neo-tree.nvim | Supported |
 | `"nvimtree"` | nvim-tree.lua | Supported |
-| `"auto"` | First available | Default |
-| `"netrw"` | Built-in | Planned |
-| `"oil"` | oil.nvim | Planned |
+| `"netrw"` | Built-in | Supported |
+| `"oil"` | oil.nvim | Supported |
+| `"mini_files"` | mini.files | Supported |
+| `"auto"` | First available, tried in the order above | Default |
+
+### cwd_sync `reveal` per adapter
+
+Whether `cwd_sync.reveal` should be `true` or `false` depends on whether the
+underlying tree **plugin** (not filetree.nvim) has its own built-in feature
+that follows the current buffer independently of filetree — when it does, that
+feature and cwd_sync's own reveal race each other on every buffer switch:
+
+| Adapter | Native "follow cwd" feature | `reveal` |
+|---|---|---|
+| `neotree` | `filesystem.follow_current_file.enabled` + `filesystem.bind_to_cwd = true` | `false` |
+| `nvimtree` | `update_focused_file.enable` (+ optionally `update_focused_file.update_root.enable`) | `false` |
+| `netrw` | none | `true` (default) |
+| `oil` | none | `true` (default) |
+| `mini_files` | none | `true` (default) |
+
+For `netrw`/`oil`/`mini_files` cwd_sync's own reveal is the only thing that
+does this job — leaving `reveal = false` there means switching to a file in a
+different project never gets revealed at all. See
+[docs/filetree.txt §5.3](doc/filetree.txt) for the full explanation and a
+worked neo-tree example.
 
 ---
 
@@ -454,11 +478,17 @@ When all editor windows close, opens a new one automatically. Fires on `BufDelet
 
 ### CWD Sync
 
-On `BufEnter` / `WinEnter`, when the current file is not under Neovim's cwd:
-silently `chdir` to its project root (or its own parent directory if
-`use_project_root = false` or no root marker is found — see [project_root](#infra--plumbing)),
-refresh the tree adapter, then reveal the file. Never prompts. Auto-pauses 2
-seconds when the cursor enters the tree window (manual navigation).
+On `BufEnter` / `WinEnter`: silently `chdir` to the current file's project
+root — resolved via `root_markers` (default `{ ".git" }`, cached), falling
+back to `use_project_root` (the broader [project_root](#infra--plumbing)
+marker set) and then the file's own parent directory. Never prompts.
+Auto-pauses 2 seconds when the cursor enters the tree window (manual
+navigation).
+
+With `reveal = true` (the default) the tree is also rooted at that same
+directory and the file revealed there. See
+[cwd_sync `reveal` per adapter](#cwd_sync-reveal-per-adapter) above for when to
+set `reveal = false` instead.
 
 ```lua
 require("filetree").feature("cwd_sync").pause(5000)

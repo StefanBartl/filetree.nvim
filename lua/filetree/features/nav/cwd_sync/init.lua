@@ -10,10 +10,14 @@
 ---      silently `chdir` to it — never prompts.
 ---   3. reveal (default true): also root the tree at the SAME resolved
 ---      directory and reveal the file there (fast-path scroll when already
----      visible, else adapter.open_reveal). Set `reveal = false` when the tree
----      plugin already follows the cwd itself (e.g. neo-tree's `bind_to_cwd` +
----      `follow_current_file`) so the two reveals don't race — cwd_sync then
----      only manages the cwd. See doc/filetree.txt §5.3 for that setup.
+---      visible, else adapter.open_reveal). Set `reveal = false` when the
+---      underlying tree PLUGIN already follows the cwd on its own (neo-tree's
+---      `bind_to_cwd` + `follow_current_file`; nvim-tree.lua's
+---      `update_focused_file`) so the two reveals don't race — cwd_sync then
+---      only manages the cwd. Adapters without such a native feature (netrw,
+---      oil, mini_files) need `reveal = true` (the default) — cwd_sync's own
+---      reveal is the only thing that does this job for them. See
+---      doc/filetree.txt §5.3 for the full per-adapter table.
 ---
 --- No full tree refresh/rescan is issued — the reveal (or the tree plugin's own
 --- cwd-follow) re-renders anyway, so a separate rescan would be redundant work.
