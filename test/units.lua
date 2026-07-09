@@ -365,6 +365,11 @@ end
 -- then created a second, disconnected buffer instead of reusing the original.
 do
   local tmp = (vim.env.TEMP .. "/units-copymove-relocate"):gsub("\\", "/")
+  -- Wipe any leftover state from a previous run first: do_move() deliberately
+  -- refuses to silently overwrite an existing destination, so a stale
+  -- docs/filetree/filetree.md from a prior run would make this test fail for
+  -- a reason that has nothing to do with the behavior under test.
+  vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp .. "/docs", "p")
   vim.fn.writefile({ "# filetree" }, tmp .. "/docs/filetree.md")
 
