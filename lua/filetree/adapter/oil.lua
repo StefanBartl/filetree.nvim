@@ -1,6 +1,10 @@
 ---@module 'filetree.adapter.oil'
 ---@brief oil.nvim adapter — implements the FiletreeAdapter interface for oil.nvim.
 
+-- Imported as `pathutil` (not `path`) because `path` is used pervasively below as
+-- a local parameter/variable name for a plain path string; importing under that
+-- same name would silently shadow the module in every such function.
+local pathutil = require("filetree.util.path")
 local registry = require("filetree.adapter")
 
 ---@class FiletreeOilAdapter : FiletreeAdapter
@@ -115,12 +119,21 @@ function M.get_visible_nodes(filter)
   local ok, current_dir = pcall(oil.get_current_dir)
   local dir = (ok and current_dir) or vim.fn.getcwd()
 
-  -- Try oil's entries API first
-  local entries_ok, entries = pcall(oil.get_entries_for_url or function() return nil end, dir)
-  if entries_ok and entries then
-    local nodes = {}
-    for i, entry in ipairs(entries) do
-      local ntype = (entry.type == "directory") and "directory" or "file"
+  -- Parse each rendered line via oil's own public parser (get_entry_on_line),
+  -- the same API get_current_node()/get_cursor_entry() already relies on.
+  -- oil buffers are NOT plain "one name per line" text: oil always prepends an
+  -- internal entry id to the real buffer line ("Id is automatically added at
+  -- the beginning" per oil's own config docs) — an earlier version of this
+  -- function tried a non-existent `oil.get_entries_for_url` API and then fell
+  -- back to naively trimming the raw line, which included that id prefix in
+  -- every parsed name (e.g. "/001 init.lua"), corrupting every path built from
+  -- it. get_entry_on_line strips the id correctly.
+  local line_count = vim.api.nvim_buf_line_count(buf)
+  local nodes = {}
+  for line_n = 1, line_count do
+    local ok_entry, entry = pcall(oil.get_entry_on_line, buf, line_n)
+    if ok_entry and entry and entry.name then
+      local ntype  = (entry.type == "directory") and "directory" or "file"
       local include = filter == nil or filter == "all"
         or (filter == "files"   and ntype == "file")
         or (filter == "folders" and ntype == "directory")
@@ -129,36 +142,6 @@ function M.get_visible_nodes(filter)
         nodes[#nodes + 1] = {
           id          = path,
           name        = entry.name,
-          path        = path,
-          type        = ntype,
-          depth       = 1,
-          line_number = i,
-          is_expanded = nil,
-        }
-      end
-    end
-    return nodes
-  end
-
-  -- Fallback: parse buffer lines
-  local lines  = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  local nodes  = {}
-  local line_n = 0
-  for _, line in ipairs(lines) do
-    line_n = line_n + 1
-    local name = line:match("^%s*(.-)%s*$")
-    if name and name ~= "" then
-      local is_dir = name:sub(-1) == "/"
-      local clean  = is_dir and name:sub(1, -2) or name
-      local ntype  = is_dir and "directory" or "file"
-      local include = filter == nil or filter == "all"
-        or (filter == "files"   and ntype == "file")
-        or (filter == "folders" and ntype == "directory")
-      if include then
-        local path = dir .. clean
-        nodes[#nodes + 1] = {
-          id          = path,
-          name        = clean,
           path        = path,
           type        = ntype,
           depth       = 1,
@@ -171,10 +154,16 @@ function M.get_visible_nodes(filter)
   return nodes
 end
 
-function M.get_node_line(path)
+-- oil builds node.path as `dir .. entry.name`, where dir comes from
+-- oil.get_current_dir() — while callers (cwd_sync/auto_reveal/current_hl) query
+-- with forward-slash paths sourced from
+-- vim.api.nvim_buf_get_name()/expand("%:p"). Normalize both sides before
+-- comparing, so a mismatched separator style can't cause a silent miss.
+function M.get_node_line(node_path)
+  local query = pathutil.slashify(node_path)
   local nodes = M.get_visible_nodes()
   for _, node in ipairs(nodes) do
-    if node.path == path then return node.line_number end
+    if node.path and pathutil.slashify(node.path) == query then return node.line_number end
   end
   return nil
 end
@@ -192,26 +181,48 @@ function M.open_file(path, mode)
   return ok
 end
 
+---Call `oil.open(dir)`, targeting the existing oil window when one is open
+---instead of whatever window happens to be current. `oil.open()` runs
+---`vim.cmd.edit()` internally, which acts on the CURRENT window — unlike
+---neo-tree/nvim-tree, which manage a dedicated tree window internally
+---regardless of focus, oil has no such concept (every oil buffer is a normal
+---buffer in whatever window you open it from). Without this, a reveal
+---triggered while the user's focus is in the editor (e.g. from
+---cwd_sync/auto_reveal on BufEnter) would silently hijack the EDITOR window
+---into a directory listing instead of updating the oil split.
+---@param oil table
+---@param dir string
+---@return boolean
+local function open_in_tree_win(oil, dir)
+  local cur_win = vim.api.nvim_get_current_win()
+  local tree_win = M.get_winid()
+  if tree_win and tree_win ~= cur_win and vim.api.nvim_win_is_valid(tree_win) then
+    vim.api.nvim_set_current_win(tree_win)
+  end
+  local ok = pcall(oil.open, dir)
+  if tree_win and tree_win ~= cur_win and vim.api.nvim_win_is_valid(cur_win) then
+    vim.api.nvim_set_current_win(cur_win)
+  end
+  return ok
+end
+
 function M.open_reveal(path, _parent_levels)
   local oil = get_oil()
   if not oil then return false end
   local dir = vim.fn.fnamemodify(path, ":h")
-  local ok  = pcall(oil.open, dir)
-  return ok
+  return open_in_tree_win(oil, dir)
 end
 
 function M.set_root(path)
   local oil = get_oil()
   if not oil then return false end
-  local ok = pcall(oil.open, path)
-  return ok
+  return open_in_tree_win(oil, path)
 end
 
 function M.open_cwd()
   local oil = get_oil()
   if not oil then return false end
-  local ok = pcall(oil.open, vim.fn.getcwd())
-  return ok
+  return open_in_tree_win(oil, vim.fn.getcwd())
 end
 
 function M.close()
