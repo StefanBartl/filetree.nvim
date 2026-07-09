@@ -2,6 +2,10 @@
 ---@brief nvim-tree adapter — implements FiletreeAdapter for nvim-tree.lua.
 
 local notify = require("filetree.util.notify").create("[filetree.adapter.nvimtree]")
+-- Imported as `pathutil` (not `path`) because `path` is used pervasively below as
+-- a local parameter/variable name for a plain path string; importing under that
+-- same name would silently shadow the module in every such function.
+local pathutil = require("filetree.util.path")
 local registry = require("filetree.adapter")
 
 ---@class FiletreeNvimtreeAdapter : FiletreeAdapter
@@ -65,12 +69,18 @@ function M.set_root(path)
 end
 
 function M.get_root_path()
-  local a = api()
-  if not a then return nil end
-  local ok, path = pcall(function() return a.tree.get_node_under_cursor().absolute_path end)
-  -- fallback: use cwd
-  if not ok then return vim.fn.getcwd() end
-  return path and vim.fn.fnamemodify(path, ":h") or vim.fn.getcwd()
+  -- The actual configured tree root, not "parent of whatever node the cursor
+  -- happens to be on" (an earlier version used get_node_under_cursor() for
+  -- this, which is a different — and largely meaningless — concept: it drifts
+  -- with cursor movement instead of reflecting nvim-tree's real root, breaking
+  -- any caller that uses get_root_path() to decide whether a file is "under
+  -- the current root", e.g. auto_reveal's re-root guard).
+  local ok, core = pcall(require, "nvim-tree.core")
+  if ok and core.get_cwd then
+    local root = core.get_cwd()
+    if root and root ~= "" then return root end
+  end
+  return vim.fn.getcwd()
 end
 
 function M.get_current_node()
@@ -131,10 +141,17 @@ function M.get_visible_nodes(filter)
   return all
 end
 
-function M.get_node_line(path)
+-- nvim-tree's node.absolute_path is native-separator (backslash on Windows),
+-- while callers (cwd_sync/auto_reveal/current_hl) query with paths sourced from
+-- vim.api.nvim_buf_get_name()/expand("%:p"), which return forward-slash paths on
+-- this platform's Neovim build. Normalize both sides before comparing, or the
+-- lookup silently misses on Windows. See adapter/neotree.lua's key_of() for the
+-- same fix in that adapter.
+function M.get_node_line(node_path)
+  local query = pathutil.slashify(node_path)
   local nodes = M.get_visible_nodes()
   for _, n in ipairs(nodes) do
-    if n.path == path then return n.line_number end
+    if n.path and pathutil.slashify(n.path) == query then return n.line_number end
   end
   return nil
 end
