@@ -195,10 +195,18 @@ function M.delete_current()
     return
   end
 
-  -- Multiple items → one chooser for the whole set.
+  -- Multiple items → one chooser for the whole set. It renders as a navigable
+  -- hover_select float (j/k or arrows to move, <CR> to pick, <Esc>/q to
+  -- cancel). Emoji prefixes (rather than nerd-font glyphs, which not everyone
+  -- has, or file-type devicons, which have no generic "action" icons) give each
+  -- option a distinct leading marker without a hard font dependency.
   ui_select(
-    { "Delete all at once", "Confirm each individually", "Cancel" },
-    { prompt = string.format("Move %d items to trash", #paths) },
+    {
+      "🗑  Delete all at once",
+      "❓  Confirm each individually",
+      "🚫  Cancel",
+    },
+    { prompt = string.format(" Move %d items to trash ", #paths) },
     function(_, idx)
       if idx == 1 then
         run_batch(paths, "all")
