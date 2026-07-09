@@ -22,8 +22,9 @@
 
 local notify = require("filetree.util.notify").create("[filetree.rename_batch]")
 
-local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local map    = require("filetree.util.map")
+local au     = require("filetree.util.autocmd")
+local buffer = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeRenameBatchConfig
@@ -132,17 +133,27 @@ local function execute_renames(entries, new_names)
   end
 
   -- Execute
-  local errors = 0
+  local errors    = 0
+  local relocated = 0
   for _, op in ipairs(plan) do
     local rc = vim.fn.rename(op.src, op.dst)
     if rc ~= 0 then
       notify.error("Failed: " .. op.src .. " → " .. op.dst)
       errors = errors + 1
+    else
+      -- Repoint any open buffer(s) at the old path (or nested under it, for a
+      -- renamed directory) so a stale buffer for the old name doesn't linger
+      -- alongside a second, disconnected buffer for the new one.
+      relocated = relocated + buffer.relocate(op.src, op.dst)
     end
   end
 
   local done = #plan - errors
-  notify.info(string.format("Renamed %d/%d item(s)", done, #plan))
+  local msg  = string.format("Renamed %d/%d item(s)", done, #plan)
+  if relocated > 0 then
+    msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
+  end
+  notify.info(msg)
 
   -- Refresh tree
   if _adapter and _adapter.refresh then

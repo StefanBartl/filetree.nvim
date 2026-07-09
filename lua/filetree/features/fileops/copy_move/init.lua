@@ -18,8 +18,9 @@
 
 local notify = require("filetree.util.notify").create("[filetree.copy_move]")
 
-local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local map    = require("filetree.util.map")
+local au     = require("filetree.util.autocmd")
+local buffer = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeCopyMoveConfig
@@ -186,6 +187,10 @@ local function do_copy(src, dst_dir)
   end
 end
 
+---@param src string
+---@param dst_dir string
+---@return integer rc   0 on success, 1 on failure
+---@return string? dst  the destination path actually used, when rc == 0
 local function do_move(src, dst_dir)
   local name = vim.fn.fnamemodify(src, ":t")
   local dst  = dst_dir .. "/" .. name
@@ -193,7 +198,8 @@ local function do_move(src, dst_dir)
     notify.error("Target exists, cannot move: " .. dst)
     return 1
   end
-  return vim.fn.rename(src, dst) == 0 and 0 or 1
+  if vim.fn.rename(src, dst) ~= 0 then return 1 end
+  return 0, dst
 end
 
 function M.paste()
@@ -237,20 +243,36 @@ function M.paste()
     end
   end
 
-  local errors = 0
-  local done   = 0
+  local errors  = 0
+  local done    = 0
+  local relocated = 0
   for _, e in ipairs(_clipboard) do
-    local rc
     if e.op == "copy" then
-      rc = do_copy(e.path, dst_dir)
+      local rc = do_copy(e.path, dst_dir)
+      if rc ~= 0 then errors = errors + 1 else done = done + 1 end
     else
-      rc = do_move(e.path, dst_dir)
+      local rc, dst = do_move(e.path, dst_dir)
+      if rc ~= 0 or not dst then
+        errors = errors + 1
+      else
+        done = done + 1
+        -- Repoint any open buffer(s) at the old path (or nested under it, for
+        -- a moved directory) so a stale buffer for the file's old location
+        -- doesn't linger alongside a second, disconnected buffer for its new
+        -- one. Per-item, right after that item's own move succeeds, so a
+        -- partial failure in a multi-item paste still fixes up the items that
+        -- did succeed.
+        relocated = relocated + buffer.relocate(e.path, dst)
+      end
     end
-    if rc ~= 0 then errors = errors + 1 else done = done + 1 end
   end
 
-  notify.info(string.format("Pasted %d/%d item(s) into %s",
-    done, #_clipboard, vim.fn.fnamemodify(dst_dir, ":t")))
+  local msg = string.format("Pasted %d/%d item(s) into %s",
+    done, #_clipboard, vim.fn.fnamemodify(dst_dir, ":t"))
+  if relocated > 0 then
+    msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
+  end
+  notify.info(msg)
 
   -- Clear cut items from clipboard (keep copy items for potential re-paste)
   local remaining = {}
