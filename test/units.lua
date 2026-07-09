@@ -204,6 +204,95 @@ do
     revealed_path and revealed_path:gsub("\\", "/") == tmp .. "/proj/sub/file.lua")
 end
 
+-- ── cwd_sync: startup catch-up syncs a buffer focused BEFORE setup() ran ─────
+-- Regression for: a session-restore plugin (or anything that focuses a buffer
+-- very early) can leave the cwd stale with no BufEnter/WinEnter left to fire
+-- for cwd_sync to react to, since the relevant buffer was already current
+-- by the time setup() registered its autocmds. In this headless test process,
+-- vim_did_enter is already 1 by the time the script runs, so this exercises
+-- the "VimEnter already happened" branch that filetree.nvim actually hits in
+-- practice (it typically loads on a lazy event well after VimEnter).
+do
+  local tmp = (vim.env.TEMP .. "/units-cwdsync-catchup"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/proj/.git", "p")
+  vim.fn.writefile({ "x" }, tmp .. "/proj/file.lua")
+
+  -- Focus the buffer and go to a stale cwd FIRST -- before setup() runs, so no
+  -- BufEnter/WinEnter for this buffer will ever reach cwd_sync's autocmds.
+  vim.cmd("edit " .. tmp .. "/proj/file.lua")
+  vim.fn.chdir(tmp)
+
+  local revealed_path
+  local stub = setmetatable({
+    name = "units-stub-catchup", is_available = function() return true end,
+    get_winid   = function() return nil end,
+    open_reveal = function(p) revealed_path = p; return true end,
+    refresh     = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-catchup", features = { cwd_sync = { enabled = true, debounce_ms = 0 } } })
+
+  vim.wait(500, function() return revealed_path ~= nil end, 10)
+
+  eq("cwd_sync startup catch-up: chdir's to the project root with no BufEnter",
+    vim.fn.getcwd():gsub("\\", "/"), tmp .. "/proj")
+  check("cwd_sync startup catch-up: reveals the already-focused file",
+    revealed_path and revealed_path:gsub("\\", "/") == tmp .. "/proj/file.lua")
+end
+
+-- ── neotree adapter: reveal-prompt guard ─────────────────────────────────────
+-- Regression for neo-tree's own "File not in cwd. Change cwd to ...?" confirm
+-- prompt (lua/neo-tree/command/init.lua's handle_reveal): it fires whenever a
+-- reveal is requested (explicitly, or implicitly via
+-- filesystem.follow_current_file.enabled) without an explicit `dir` and
+-- without `reveal_force_cwd` set. filetree.nvim can't control every call site
+-- that might trigger a reveal (a user's own custom keymaps calling neo-tree's
+-- command API directly are just as much at risk as filetree's own code), so
+-- install_reveal_guard() wraps neo-tree.command.execute ONCE to inject
+-- reveal_force_cwd=true on any at-risk call, protecting all callers uniformly.
+do
+  package.loaded["neo-tree"] = { config = {}, ensure_config = function() return {} end }
+  local captured = {}
+  package.loaded["neo-tree.command"] = {
+    execute = function(args) captured[#captured + 1] = vim.deepcopy(args); return true end,
+  }
+  package.loaded["neo-tree.sources.manager"] = { get_state = function() return nil end }
+  package.loaded["neo-tree.setup.mapping-helper"] = { normalize_map_key = function(k) return k end }
+
+  local ft = require("filetree")
+  ft.setup({ adapter = "neotree" })
+
+  local cmd = require("neo-tree.command")
+  cmd.execute({ action = "focus", reveal = true })                       -- explicit reveal, no dir
+  cmd.execute({ action = "show" })                                       -- reveal left nil (implicit-via-follow)
+  cmd.execute({ action = "show", reveal = false })                       -- explicit opt-out, must stay untouched
+  cmd.execute({ action = "show", dir = "E:/some/dir" })                  -- dir already given, already safe
+  cmd.execute({ action = "show", reveal = true, reveal_force_cwd = false }) -- caller's explicit choice, must win
+
+  eq("reveal guard: injects reveal_force_cwd for explicit reveal=true",
+    captured[1].reveal_force_cwd, true)
+  eq("reveal guard: injects reveal_force_cwd for implicit reveal (nil)",
+    captured[2].reveal_force_cwd, true)
+  eq("reveal guard: leaves an explicit reveal=false untouched",
+    captured[3].reveal_force_cwd, nil)
+  eq("reveal guard: does not inject when dir is already given",
+    captured[4].reveal_force_cwd, nil)
+  eq("reveal guard: respects an explicit reveal_force_cwd=false",
+    captured[5].reveal_force_cwd, false)
+
+  local before = cmd.execute
+  ft.setup({ adapter = "neotree" })
+  check("reveal guard: re-running setup() does not double-wrap execute",
+    before == require("neo-tree.command").execute)
+
+  package.loaded["neo-tree"] = nil
+  package.loaded["neo-tree.command"] = nil
+  package.loaded["neo-tree.sources.manager"] = nil
+  package.loaded["neo-tree.setup.mapping-helper"] = nil
+end
+
 -- ── ignore_list: hide_by_name must be dict-shaped, not array-shaped ─────────
 -- neo-tree's own filesystem.setup() converts hide_by_name from a user-facing
 -- string[] into a {name=true,...} dict (utils.list_to_dict) — its render-time

@@ -507,6 +507,18 @@ set `reveal = false` instead.
 require("filetree").feature("cwd_sync").pause(5000)
 ```
 
+**neo-tree's own "File not in cwd?" prompt is suppressed automatically.**
+neo-tree has a native confirm prompt that fires whenever a reveal is
+requested (explicitly, or implicitly via `filesystem.follow_current_file`)
+without an explicit `dir` and the target file isn't under the tree's current
+root — and this can be triggered by *any* code calling neo-tree's command API,
+not just filetree.nvim, including your own custom keymaps. As soon as
+`require("filetree").setup({ adapter = "neotree" })` runs, filetree.nvim wraps
+neo-tree's `command.execute` once so this prompt can never fire — every
+at-risk call gets `reveal_force_cwd = true` applied automatically, while a
+call that already sets `dir`, `reveal_force_cwd`, or an explicit
+`reveal = false` is left untouched. No configuration needed.
+
 ### Project Root
 
 Walks up from a file/directory looking for any of `markers` (`.git`,
