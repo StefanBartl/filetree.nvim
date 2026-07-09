@@ -206,6 +206,14 @@ function M.setup(user_config)
     end
     -- Give `/` back its native search inside neo-tree's `?` help popup.
     require("filetree.attach").native_search_in_help()
+    -- Prevent neo-tree's own "File not in cwd. Change cwd to ...?" prompt from
+    -- ever firing, regardless of which code calls neo-tree's command API (see
+    -- install_reveal_guard's own doc comment for the full mechanism). Run as
+    -- early as setup() itself so it protects any tree-opening keymap the user
+    -- may press before neo-tree finishes its own startup.
+    if type(adapter.install_reveal_guard) == "function" then
+      adapter.install_reveal_guard()
+    end
   end
 
   _initialized = true
