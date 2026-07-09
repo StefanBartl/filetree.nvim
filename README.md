@@ -80,7 +80,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `rename_batch` | Edit-buffer batch rename (`<leader>rb`) |
 | `smart_rename` | Rename with LSP reference updates (`r`) |
 | `create_from_template` | Create a file from a template (`t`) |
-| `trash` | Cross-platform trash + undo (`d` `U` `<leader>th`) |
+| `trash` | Cross-platform trash + undo (`d` `U` `<leader>th`); one batch chooser for multi-mark deletes, force-closes the deleted file's buffers |
 | `open_replace` | Open a file replacing the current editor buffer (`O`) |
 | `open_variants` | Open in split/vsplit/tab, or badd without switching focus (`sg` `sv` `st` `gb`/`<S-CR>`) |
 | `buffer_save` | Force-save adjacent / node buffer (`<C-s>`/`<M-s>`) |

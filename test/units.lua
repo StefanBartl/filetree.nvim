@@ -536,13 +536,126 @@ do
   check("trash: '<leader>th' bound", km[leader .. "th"] ~= nil)
 
   local trash = ft.feature("trash")
-  local captured
+  -- delete_current() now emits more than one message for a batch (the per-item
+  -- dry-run line + a single summary), so accumulate them all rather than only
+  -- keeping the last one.
+  local messages = {}
   local orig_notify = vim.notify
-  vim.notify = function(m) captured = m end
+  vim.notify = function(m) messages[#messages + 1] = m end
   trash.delete_current()
   vim.notify = orig_notify
+  local joined = table.concat(messages, "\n")
   check("trash: delete_current() (dry-run) targets the current node",
-    captured and captured:find("victim.txt", 1, true) ~= nil, tostring(captured))
+    joined:find("victim.txt", 1, true) ~= nil, joined)
+end
+
+-- ── trash: single delete closes the file's open buffer ──────────────────────
+-- Deleting a file must force-close any buffer still open for it, so a stale
+-- buffer doesn't linger pointing at a now-deleted path. Uses a stubbed trash
+-- backend (removes the file from disk, no real Recycle Bin side effects).
+do
+  local tmp = (vim.env.TEMP .. "/units-trash-bufclose"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local file = tmp .. "/doomed.txt"
+  vim.fn.writefile({ "x" }, file)
+
+  -- Stub the platform so no real trash happens; it just deletes on disk.
+  package.loaded["filetree.features.fileops.trash.platform"] = {
+    available = function() return true end,
+    send = function(p) os.remove(p); return { ok = true } end,
+  }
+  package.loaded["filetree.features.fileops.trash"] = nil -- reload with the stub
+
+  vim.cmd("edit " .. vim.fn.fnameescape(file))
+  local doomed_buf = vim.api.nvim_get_current_buf()
+
+  local cur_node = { path = file, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-bufclose", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  -- confirm = false → single item deletes straight away (no y/N to drive).
+  ft.setup({ adapter = "units-stub-bufclose",
+    features = { trash = { enabled = true, confirm = false } } })
+
+  ft.feature("trash").delete_current()
+
+  eq("trash: single delete removes the file", vim.fn.filereadable(file), 0)
+  check("trash: single delete force-closes the file's buffer",
+    not vim.api.nvim_buf_is_valid(doomed_buf) or vim.api.nvim_buf_get_name(doomed_buf) == "")
+
+  package.loaded["filetree.features.fileops.trash.platform"] = nil
+  package.loaded["filetree.features.fileops.trash"] = nil
+end
+
+-- ── trash: multi-mark batch chooser deletes all + clears marks ──────────────
+-- With >1 item, delete_current() shows ONE chooser (hover_select) instead of
+-- prompting per file. Stub the chooser to pick "Delete all at once" and stub
+-- the marks feature to report two marked paths; verify both are trashed, both
+-- buffers closed, and marks cleared once.
+do
+  local tmp = (vim.env.TEMP .. "/units-trash-batch"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local a, b = tmp .. "/a.txt", tmp .. "/b.txt"
+  vim.fn.writefile({ "a" }, a)
+  vim.fn.writefile({ "b" }, b)
+
+  package.loaded["filetree.features.fileops.trash.platform"] = {
+    available = function() return true end,
+    send = function(p) os.remove(p); return { ok = true } end,
+  }
+  -- Auto-drive the batch chooser: always pick option 1 ("Delete all at once").
+  package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
+    on_choice(items[1], 1)
+  end
+  -- Stub marks: report a + b as marked, track that clear_all was called.
+  local cleared = false
+  package.loaded["filetree.features.org.marks"] = {
+    setup = function() end, teardown = function() end,
+    count = function() return 2 end,
+    get_marked = function() return { a, b } end,
+    clear_all = function() cleared = true end,
+  }
+  package.loaded["filetree.features.fileops.trash"] = nil -- reload with stubs
+
+  vim.cmd("edit " .. vim.fn.fnameescape(a))
+  local buf_a = vim.api.nvim_get_current_buf()
+  vim.cmd("edit " .. vim.fn.fnameescape(b))
+  local buf_b = vim.api.nvim_get_current_buf()
+
+  local stub = setmetatable({
+    name = "units-stub-batch", is_available = function() return true end,
+    get_current_node = function() return nil end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-batch",
+    features = { trash = { enabled = true, confirm = true } } })
+
+  ft.feature("trash").delete_current()
+
+  eq("trash batch: file a removed", vim.fn.filereadable(a), 0)
+  eq("trash batch: file b removed", vim.fn.filereadable(b), 0)
+  check("trash batch: buffer a closed",
+    not vim.api.nvim_buf_is_valid(buf_a) or vim.api.nvim_buf_get_name(buf_a) == "")
+  check("trash batch: buffer b closed",
+    not vim.api.nvim_buf_is_valid(buf_b) or vim.api.nvim_buf_get_name(buf_b) == "")
+  check("trash batch: marks cleared after successful delete", cleared)
+
+  package.loaded["filetree.features.fileops.trash.platform"] = nil
+  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.features.org.marks"] = nil
+  package.loaded["filetree.features.fileops.trash"] = nil
 end
 
 -- ── open_variants: sg/sv/st/gb/<S-CR> are all bound ──────────────────────────
