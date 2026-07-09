@@ -245,11 +245,26 @@ would never get revealed at all.
     -----------   ------------------------------------------   ------
     neotree       filesystem.follow_current_file.enabled +     false
                   filesystem.bind_to_cwd = true
-    nvimtree      update_focused_file.enable (+ optionally      false
-                  update_focused_file.update_root.enable)
+    nvimtree      update_focused_file.enable = true             false
+                  (leave update_root at its default false —
+                  see caveat below)
     netrw         none                                          true (default)
     oil           none                                          true (default)
     mini_files    none                                          true (default)
+
+CAVEAT (tested): nvim-tree's `update_focused_file.update_root.enable` is NOT a
+drop-in equivalent of neo-tree's `bind_to_cwd`. neo-tree's bind_to_cwd is
+reactive — it just keeps the tree synced to whatever cwd already is, so
+cwd_sync's chdir (to the resolved `root_markers`/project root) is respected.
+nvim-tree's `update_root`, by contrast, actively DRIVES Neovim's cwd itself:
+per its own docs it "prefers vim's cwd and root_dirs, falling back to the
+directory containing the file" — i.e. the file's own parent, NOT a project
+root. With `update_root.enable = true`, nvim-tree overwrites cwd_sync's
+git-root-anchored cwd with the file's own directory on every switch,
+independent of `reveal`. If you want cwd_sync's `root_markers` anchoring to
+win, leave `update_root` at its default `false` (only `update_focused_file`
+follows/expands within whatever root is already set — this combines cleanly
+with `reveal = false`, verified against nvim-tree.lua directly).
 
 Example for neo-tree with both native options on: >lua
     -- neo-tree.nvim setup:
