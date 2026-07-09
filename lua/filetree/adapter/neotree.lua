@@ -228,6 +228,20 @@ end
 -- the tree buffer's changedtick: neo-tree bumps it whenever the rendered tree
 -- changes (expand/collapse/refresh), which is exactly when the line map goes
 -- stale — so a cursor move or file open that leaves the tree untouched is a hit.
+---Normalize a path to forward slashes for use as a line-map key. Neo-tree's own
+---node.path is native-separator (backslash on Windows), while callers querying
+---the map (cwd_sync/auto_reveal/current_hl) source their path from
+---`vim.api.nvim_buf_get_name()` / `vim.fn.expand("%:p")`, which return
+---forward-slash paths on this platform's Neovim build. Without normalizing both
+---sides to the same form, every lookup silently misses on Windows — the map
+---builds fine but `get_node_line()` never finds an entry, forcing the
+---(otherwise avoidable) slow reveal path on every call.
+---@param p string
+---@return string
+local function key_of(p)
+  return (p:gsub("\\", "/"))
+end
+
 ---@type table<string, integer>?
 local _line_map = nil
 local _line_map_buf = -1
@@ -249,8 +263,11 @@ local function line_map()
   local map = {}
   for _, node in ipairs(M.get_visible_nodes()) do
     -- First occurrence wins (a path is rendered once); keep the earliest line.
-    if node.path and map[node.path] == nil then
-      map[node.path] = node.line_number
+    if node.path then
+      local key = key_of(node.path)
+      if map[key] == nil then
+        map[key] = node.line_number
+      end
     end
   end
   _line_map, _line_map_buf, _line_map_tick = map, bufnr, tick
@@ -259,7 +276,7 @@ end
 
 function M.get_node_line(path)
   local map = line_map()
-  return map and map[path] or nil
+  return map and map[key_of(path)] or nil
 end
 
 function M.expand_node(node)
