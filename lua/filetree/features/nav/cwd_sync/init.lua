@@ -136,6 +136,12 @@ local function do_reveal(path_)
     end
   end
 
+  -- reveal = false: only manage the cwd; let the tree plugin's own cwd binding
+  -- and follow handle rooting/revealing (e.g. neo-tree `bind_to_cwd = true` +
+  -- `follow_current_file`). Doing our own reveal here would fight that — the two
+  -- reveals race and the tree can settle on the file's parent instead of the root.
+  if _cfg.reveal == false then return end
+
   -- Fast path: the file is already rendered in the current tree and the root did
   -- not change. Just move the tree cursor to its line instead of neo-tree's heavy
   -- show/reveal round-trip (which rescans the filesystem and re-renders). This is

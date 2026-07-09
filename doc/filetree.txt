@@ -109,6 +109,8 @@ make the default state explicit — you can drop it): >lua
         parent_levels    = 0,     -- fallback: parent dirs to ascend when no root resolved
         keep_focus       = true,  -- keep focus in editor after reveal
         change_dir       = true,  -- actually chdir; never prompts
+        reveal           = true,  -- set false if the tree already follows the cwd
+                                  -- (neo-tree bind_to_cwd + follow_current_file)
         use_project_root = true,  -- fallback: broad project_root marker set
         root_markers     = { ".git" }, -- anchor cwd + tree root to nearest ancestor with
                                        -- one of these (cached); false disables; list widens.
@@ -218,6 +220,27 @@ Both the cwd and the tree root use the same resolved directory, so the tree
 always shows the project root rather than the file's parent. No full tree
 refresh/rescan is issued (the reveal re-renders anyway) — a deliberate change
 to keep opening files fast.
+
+INTERACTION WITH neo-tree bind_to_cwd / follow_current_file ~
+
+If your neo-tree config already follows the cwd:
+>lua
+    filesystem = {
+      bind_to_cwd = true,
+      follow_current_file = { enabled = true },
+    }
+<
+then neo-tree ALREADY roots itself at the cwd and reveals the current file. In
+that case set `reveal = false`: cwd_sync then only sets the cwd (to the project
+root) and lets neo-tree do the rooting/revealing. With `reveal = true` (the
+default) both cwd_sync and neo-tree try to reveal at once; they race and the
+tree can settle on the file's parent instead of the project root. Recommended
+setup for that neo-tree config: >lua
+    require("filetree").setup({
+      adapter = "neotree",
+      features = { cwd_sync = { enabled = true, reveal = false } },
+    })
+<
 
 `cwd_sync.pause(ms)` pauses auto-reveal programmatically: >lua
   require("filetree").feature("cwd_sync").pause(5000)

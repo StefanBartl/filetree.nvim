@@ -23,6 +23,9 @@ return {
       parent_levels    = 0,
       keep_focus       = true,
       change_dir       = true,  -- actually chdir; never prompts
+      reveal           = true,  -- also reveal/root the tree ourselves. Set false when the
+                                -- tree plugin already follows the cwd (e.g. neo-tree
+                                -- bind_to_cwd + follow_current_file) so we don't fight it.
       use_project_root = true,  -- target the detected project root, not just the file's dir
       root_markers     = { ".git" },  -- anchor cwd to nearest ancestor with one of these
                                       -- (cached); false disables. Prevents frequent cwd jumps.

@@ -383,6 +383,11 @@ require("filetree").setup({
       parent_levels    = 0,     -- how far the tree-reveal call itself ascends
       keep_focus       = true,  -- keep focus in the editor window after reveal
       change_dir       = true,  -- actually chdir to the target dir — never prompts
+      reveal           = true,  -- also reveal/root the tree ourselves. Set to FALSE if your
+                                -- tree already follows the cwd (neo-tree `bind_to_cwd = true`
+                                -- + `follow_current_file`) — otherwise the two reveals fight
+                                -- and the tree lands on the file's parent. With reveal = false
+                                -- cwd_sync only sets the cwd and lets neo-tree root/reveal.
       use_project_root = true,  -- target the detected project root, not just the file's dir
       root_markers     = { ".git" },  -- anchor the cwd to the nearest ancestor holding one
                                       -- of these (cached per-dir); avoids frequent cwd jumps.
