@@ -63,6 +63,56 @@ do
   vim.cmd("edit " .. vim.fn.fnameescape(root .. "/README.md"))
   local ewin = buf.find_editor_win(nil)
   check("find_editor_win finds the README window", ewin ~= nil)
+
+  -- ── buffer.relocate ── repoint open buffers after a file/dir move or rename.
+  -- Regression for: cutting a node (x) and pasting it (p) into a new
+  -- directory left the original buffer pointing at a path that no longer
+  -- existed, so opening the file at its new location created a second,
+  -- disconnected buffer instead of reusing the original one.
+  local tmp = (vim.env.TEMP .. "/units-relocate"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/src/sub", "p")
+  vim.fn.mkdir(tmp .. "/dst", "p")
+
+  -- exact-match single file
+  vim.fn.writefile({ "a" }, tmp .. "/src/a.txt")
+  vim.cmd("edit " .. tmp .. "/src/a.txt")
+  local buf_a = vim.api.nvim_get_current_buf()
+  vim.fn.rename(tmp .. "/src/a.txt", tmp .. "/dst/a.txt")
+  local n1 = buf.relocate(tmp .. "/src/a.txt", tmp .. "/dst/a.txt")
+  eq("relocate: exact match repoints 1 buffer", n1, 1)
+  eq("relocate: exact match new buffer name",
+    vim.api.nvim_buf_get_name(buf_a):gsub("\\", "/"), tmp .. "/dst/a.txt")
+
+  -- directory move: a buffer nested under the moved dir is repointed too
+  vim.fn.writefile({ "b" }, tmp .. "/src/sub/b.txt")
+  vim.cmd("edit " .. tmp .. "/src/sub/b.txt")
+  local buf_b = vim.api.nvim_get_current_buf()
+  vim.fn.mkdir(tmp .. "/dst2", "p")
+  vim.fn.rename(tmp .. "/src/sub", tmp .. "/dst2/sub")
+  buf.relocate(tmp .. "/src/sub", tmp .. "/dst2/sub")
+  eq("relocate: directory move repoints nested buffer",
+    vim.api.nvim_buf_get_name(buf_b):gsub("\\", "/"), tmp .. "/dst2/sub/b.txt")
+
+  -- a MODIFIED buffer must not lose its unsaved changes
+  vim.fn.writefile({ "orig" }, tmp .. "/src/c.txt")
+  vim.cmd("edit " .. tmp .. "/src/c.txt")
+  local buf_c = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf_c, 0, -1, false, { "UNSAVED" })
+  vim.fn.rename(tmp .. "/src/c.txt", tmp .. "/dst/c.txt")
+  buf.relocate(tmp .. "/src/c.txt", tmp .. "/dst/c.txt")
+  check("relocate: modified buffer keeps its unsaved content",
+    vim.api.nvim_buf_get_lines(buf_c, 0, -1, false)[1] == "UNSAVED")
+  eq("relocate: modified buffer still gets the new name",
+    vim.api.nvim_buf_get_name(buf_c):gsub("\\", "/"), tmp .. "/dst/c.txt")
+
+  -- path-separator mismatch (backslash old/new vs forward-slash buffer name) --
+  -- regression for the class of bug this session found across all 5 adapters.
+  vim.fn.writefile({ "d" }, tmp .. "/src/d.txt")
+  vim.cmd("edit " .. tmp .. "/src/d.txt")
+  local buf_d = vim.api.nvim_get_current_buf()
+  vim.fn.rename(tmp .. "/src/d.txt", tmp .. "/dst/d.txt")
+  local n4 = buf.relocate((tmp .. "/src/d.txt"):gsub("/", "\\"), (tmp .. "/dst/d.txt"):gsub("/", "\\"))
+  eq("relocate: backslash old/new path still matches forward-slash buffer name", n4, 1)
 end
 
 -- ── util.line_count ───────────────────────────────────────────────────────────
@@ -146,7 +196,10 @@ do
   check("cwd_sync never prompts (no vim.ui.input)", not ui_input_called)
   eq("cwd_sync chdir's to the detected project root",
     vim.fn.getcwd():gsub("\\", "/"), tmp .. "/proj")
-  check("cwd_sync triggers adapter.refresh()", refreshed)
+  -- cwd_sync deliberately does NOT call adapter.refresh() itself (a full
+  -- filesystem rescan) -- the reveal call below re-renders the tree, so a
+  -- separate rescan would be redundant work. See cwd_sync/init.lua's do_reveal.
+  check("cwd_sync does not call adapter.refresh() itself", not refreshed)
   check("cwd_sync still reveals the file",
     revealed_path and revealed_path:gsub("\\", "/") == tmp .. "/proj/sub/file.lua")
 end
@@ -305,6 +358,53 @@ do
   check("copy_move (custom yy/xx): 'xx' still bound", km["xx"] ~= nil)
 end
 
+-- ── copy_move: cut+paste repoints the open buffer at the moved file ─────────
+-- End-to-end regression for the user-reported bug: cutting a node (x) and
+-- pasting (p) it into a new directory left the original buffer pointing at a
+-- path that no longer existed on disk; opening the file at its new location
+-- then created a second, disconnected buffer instead of reusing the original.
+do
+  local tmp = (vim.env.TEMP .. "/units-copymove-relocate"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/docs", "p")
+  vim.fn.writefile({ "# filetree" }, tmp .. "/docs/filetree.md")
+
+  vim.cmd("edit " .. tmp .. "/docs/filetree.md")
+  local orig_buf = vim.api.nvim_get_current_buf()
+
+  vim.fn.mkdir(tmp .. "/docs/filetree", "p")
+  local cur_node    = { path = tmp .. "/docs/filetree.md", type = "file" }
+  local target_node = { path = tmp .. "/docs/filetree",    type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub7", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub7",
+    features = { copy_move = { enabled = true, confirm = false, use_safety = false } } })
+
+  local copy_move = ft.feature("copy_move")
+  copy_move.stage_cut()
+  stub.get_current_node = function() return target_node end -- cursor now on the new dir
+  copy_move.paste()
+
+  eq("copy_move relocate: original path no longer readable",
+    vim.fn.filereadable(tmp .. "/docs/filetree.md"), 0)
+  eq("copy_move relocate: file exists at the new path",
+    vim.fn.filereadable(tmp .. "/docs/filetree/filetree.md"), 1)
+  eq("copy_move relocate: original buffer repointed to the new path",
+    vim.api.nvim_buf_get_name(orig_buf):gsub("\\", "/"), tmp .. "/docs/filetree/filetree.md")
+
+  local bufcount_before = #vim.api.nvim_list_bufs()
+  vim.cmd("edit " .. tmp .. "/docs/filetree/filetree.md")
+  check("copy_move relocate: opening the new-location file reuses the original buffer (no duplicate)",
+    vim.api.nvim_get_current_buf() == orig_buf
+      and #vim.api.nvim_list_bufs() == bufcount_before)
+end
+
 -- ── trash: delete_current binds d/U/<leader>th and trashes the right node ───
 do
   local tmp = (vim.env.TEMP .. "/units-trash"):gsub("\\", "/")
@@ -454,10 +554,12 @@ do
     cfg.features.copy_move.confirm == true)
 end
 
--- ── trash: default (no confirmations config at all) never prompts ──────────
+-- ── trash: default (no confirmations config at all) DOES prompt ────────────
 -- End-to-end check of the *actual* out-of-the-box default, not just what
--- config.get() reports: with nothing set, delete_current() must not call
--- vim.fn.confirm at all.
+-- config.get() reports: with nothing set, delete_current() must call
+-- vim.fn.confirm. trash is deliberately the one confirmable action that
+-- defaults to confirm=true (copy_move/rename_batch stay confirm=false) --
+-- see the comment on trash/init.lua's _cfg.confirm.
 do
   local tmp = (vim.env.TEMP .. "/units-trash-noconfirm"):gsub("\\", "/")
   vim.fn.mkdir(tmp, "p")
@@ -471,6 +573,14 @@ do
     refresh   = function() return true end,
   }, { __index = function() return function() return false end end })
 
+  -- Force a fresh module load: trash's `_cfg` is a module-level table that
+  -- earlier test blocks in this same process have already called setup() on
+  -- with an explicit `confirm = false`, and setup() merges onto the existing
+  -- _cfg rather than resetting to the module's literal default table -- so
+  -- without this, this test would silently inherit that earlier confirm=false
+  -- instead of exercising the actual shipped default.
+  package.loaded["filetree.features.fileops.trash"] = nil
+
   local ft = require("filetree")
   ft.register_adapter(stub)
   -- No `confirm`/`confirmations` anywhere -- purely the shipped default.
@@ -482,8 +592,8 @@ do
   ft.feature("trash").delete_current()
   vim.fn.confirm = orig_confirm
 
-  check("trash: default (no confirmations config) never calls vim.fn.confirm",
-    not confirm_called)
+  check("trash: default (no confirmations config) calls vim.fn.confirm",
+    confirm_called)
 end
 
 -- ── trash.undo: Windows restore reports real failure, not silent success ────
