@@ -453,15 +453,25 @@ feature and cwd_sync's own reveal race each other on every buffer switch:
 | Adapter | Native "follow cwd" feature | `reveal` |
 |---|---|---|
 | `neotree` | `filesystem.follow_current_file.enabled` + `filesystem.bind_to_cwd = true` | `false` |
-| `nvimtree` | `update_focused_file.enable` (+ optionally `update_focused_file.update_root.enable`) | `false` |
+| `nvimtree` | `update_focused_file.enable = true` (leave `update_root` at its default `false` — see caveat) | `false` |
 | `netrw` | none | `true` (default) |
 | `oil` | none | `true` (default) |
 | `mini_files` | none | `true` (default) |
 
 For `netrw`/`oil`/`mini_files` cwd_sync's own reveal is the only thing that
 does this job — leaving `reveal = false` there means switching to a file in a
-different project never gets revealed at all. See
-[docs/filetree.txt §5.3](doc/filetree.txt) for the full explanation and a
+different project never gets revealed at all.
+
+> **Caveat (tested):** nvim-tree's `update_focused_file.update_root.enable` is
+> *not* a drop-in equivalent of neo-tree's `bind_to_cwd`. neo-tree's
+> `bind_to_cwd` is reactive — it just follows whatever cwd cwd_sync already set.
+> nvim-tree's `update_root` actively drives the cwd itself, falling back to
+> **the file's own directory** (not a project root) when nothing else matches —
+> so with it enabled, nvim-tree overwrites cwd_sync's git-root-anchored cwd on
+> every switch, regardless of `reveal`. Leave `update_root` at its default
+> `false` if you want `root_markers` to win.
+
+See [docs/filetree.txt §5.3](doc/filetree.txt) for the full explanation and a
 worked neo-tree example.
 
 ---
