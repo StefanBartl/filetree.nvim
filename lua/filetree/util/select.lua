@@ -32,6 +32,11 @@ return function(items, opts, on_choice)
   hover.open({
     items     = display,
     title     = opts.prompt,
+    -- Size the float to its widest item instead of hover_select's fixed
+    -- min-width default (which is only ~22 cols and silently truncates longer
+    -- entries). Callers can still override via opts.auto_width ("wrap" to wrap
+    -- instead of widen).
+    auto_width = opts.auto_width ~= nil and opts.auto_width or true,
     on_select = function(_, index)
       local idx = type(index) == "table" and index[1] or index
       on_choice(items[idx], idx)
