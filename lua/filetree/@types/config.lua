@@ -91,7 +91,11 @@
 ---@field parent_levels    integer   How many parent dirs to ascend when revealing (default 0).
 ---@field keep_focus       boolean   Keep focus in the editor window after reveal (default true).
 ---@field change_dir       boolean   Actually change Neovim's cwd (default true). Never prompts —
----                                  always applies silently, then refreshes the tree adapter.
+---                                  always applies silently.
+---@field reveal           boolean   Also reveal/root the tree from cwd_sync (default true). Set
+---                                  false when the tree plugin already follows the cwd (e.g.
+---                                  neo-tree bind_to_cwd + follow_current_file) so the two
+---                                  reveals don't fight and land on the file's parent.
 ---@field use_project_root boolean   Target the detected project root instead of the file's
 ---                                  immediate parent directory (default true; see project_root).
 ---@field root_markers     string[]|false  Marker names to anchor the cwd to the nearest ancestor
