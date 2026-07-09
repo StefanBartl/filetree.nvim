@@ -22,7 +22,13 @@ local M = {}
 ---@type FiletreeTrashConfig
 local _cfg = {
   enabled        = false,
-  confirm        = false,
+  -- Deliberately true, unlike copy_move/rename_batch's confirm=false default:
+  -- trashing is the one destructive action here whose target files aren't
+  -- necessarily what the user thinks they are (mis-clicks on the wrong node,
+  -- accidental multi-mark deletes) and it's meaningfully harder to notice/
+  -- undo than a move or rename. Override with `confirmations = false` (or
+  -- `features.trash.confirm = false`) to opt back out.
+  confirm        = true,
   use_safety     = false,
   dry_run        = false,
   keymap         = "d",
