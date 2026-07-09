@@ -189,4 +189,47 @@ function M.relocate(old_path, new_path)
   return count
 end
 
+---Force-close every open buffer whose file is `path` (or, for a directory,
+---nested anywhere under it) after that path has been sent to trash / deleted
+---on disk, so no buffer lingers pointing at a file that no longer exists.
+---
+---Deliberately force-deletes (`force = true`), discarding any unsaved changes
+---in a modified buffer: the backing file is already gone, so there is nothing
+---left to save it back to, and leaving the buffer open just invites a confusing
+---"E211: File no longer available" write later. (This matches the behavior of
+---the neo-tree trash config this replaces.) Callers that want a softer policy
+---should check `vim.bo[bufnr].modified` before trashing and prompt/skip.
+---
+---Both `path` and every buffer name are normalized to forward slashes before
+---comparison — a path sourced from a tree adapter's node.path can use a
+---different separator convention than `nvim_buf_get_name()` returns on Windows,
+---which would otherwise make every comparison silently miss (the same
+---separator-mismatch class of bug fixed across the adapters and in relocate()).
+---
+---Buffer wipeout fires BufDelete/BufWipeout, which filetree's layout_guard
+---feature already listens for — so closing the last editor buffer this way
+---leaves a usable window automatically, no extra bookkeeping needed here.
+---@param path string  Absolute path of the trashed/deleted file or directory.
+---@return integer  count of buffers closed
+function M.close_for_path(path)
+  local key    = require("filetree.util.path").slashify(path)
+  local prefix = key .. "/"
+
+  local count = 0
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      local name = vim.api.nvim_buf_get_name(bufnr)
+      if name ~= "" then
+        local bkey = require("filetree.util.path").slashify(name)
+        if bkey == key or bkey:sub(1, #prefix) == prefix then
+          if pcall(vim.api.nvim_buf_delete, bufnr, { force = true }) then
+            count = count + 1
+          end
+        end
+      end
+    end
+  end
+  return count
+end
+
 return M
