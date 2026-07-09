@@ -455,6 +455,53 @@ function M.unhighlight_node(path)
   return ok
 end
 
+-- ── Reveal-prompt guard ───────────────────────────────────────────────────────
+
+---@type boolean
+local _reveal_guard_installed = false
+
+---Ensure `require("neo-tree.command").execute` never triggers neo-tree's own
+---"File not in cwd. Change cwd to <dir>?" confirm prompt (see neo-tree's
+---lua/neo-tree/command/init.lua, handle_reveal()).
+---
+---That prompt fires whenever a reveal is requested — explicitly via
+---`reveal = true`, or IMPLICITLY whenever `filesystem.follow_current_file.enabled`
+---is on and `reveal` was left unset — without an explicit `dir` and without
+---`reveal_force_cwd`, and the file to reveal isn't under the tree's current
+---(possibly stale) root. `reveal_force_cwd` is a per-call flag with no
+---persistent `filesystem.follow_current_file.*` config equivalent, so setting
+---it on every one of filetree.nvim's own calls isn't enough — ANY code that
+---calls neo-tree's command API directly (a user's own custom keymaps, a
+---plugin, neo-tree's own internals) can just as easily trigger it, and missing
+---even one call site (this is exactly how the original bug report happened —
+---several sites were correctly guarded, one was overlooked) brings the prompt
+---back. Since every caller shares the same `neo-tree.command` module table,
+---wrapping `execute` once here protects all of them, current and future,
+---without needing to audit every call site by hand.
+---
+---Only touches calls that would otherwise be at risk: an explicit
+---`reveal = false`, or a call that already sets `dir` or `reveal_force_cwd`
+---itself, is left completely alone — this never changes behavior for a call
+---that already knows what it wants.
+function M.install_reveal_guard()
+  if _reveal_guard_installed then return end
+  local ok, commands = pcall(require, "neo-tree.command")
+  if not ok or type(commands.execute) ~= "function" then return end
+
+  local original_execute = commands.execute
+  commands.execute = function(args, ...)
+    if type(args) == "table"
+      and args.dir == nil
+      and args.reveal_force_cwd == nil
+      and args.reveal ~= false then
+      args.reveal_force_cwd = true
+    end
+    return original_execute(args, ...)
+  end
+
+  _reveal_guard_installed = true
+end
+
 -- Self-register
 registry.register(M)
 
