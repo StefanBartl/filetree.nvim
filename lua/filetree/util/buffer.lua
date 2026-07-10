@@ -206,27 +206,81 @@ end
 ---which would otherwise make every comparison silently miss (the same
 ---separator-mismatch class of bug fixed across the adapters and in relocate()).
 ---
----Buffer wipeout fires BufDelete/BufWipeout, which filetree's layout_guard
----feature already listens for — so closing the last editor buffer this way
----leaves a usable window automatically, no extra bookkeeping needed here.
+---Before deleting a buffer that is displayed in one or more windows, each of
+---those windows is first switched to another real, listed file buffer (the
+---alternate `#` when suitable, else any other loaded listed buffer). Otherwise
+---Neovim, needing to keep the window open, would replace the deleted buffer
+---with a fresh empty [No Name] buffer — which is not only pointless when other
+---buffers exist, but also perturbs the window layout (e.g. a tree plugin
+---repositioning around the new buffer). Only when NO other suitable buffer
+---exists at all is the window left for Neovim's default [No Name] fallback.
 ---@param path string  Absolute path of the trashed/deleted file or directory.
 ---@return integer  count of buffers closed
 function M.close_for_path(path)
-  local key    = require("filetree.util.path").slashify(path)
+  local slashify = require("filetree.util.path").slashify
+  local key    = slashify(path)
   local prefix = key .. "/"
 
-  local count = 0
+  -- Collect the buffers to close.
+  local doomed, doomed_set = {}, {}
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(bufnr) then
       local name = vim.api.nvim_buf_get_name(bufnr)
       if name ~= "" then
-        local bkey = require("filetree.util.path").slashify(name)
+        local bkey = slashify(name)
         if bkey == key or bkey:sub(1, #prefix) == prefix then
-          if pcall(vim.api.nvim_buf_delete, bufnr, { force = true }) then
-            count = count + 1
-          end
+          doomed[#doomed + 1] = bufnr
+          doomed_set[bufnr] = true
         end
       end
+    end
+  end
+  if #doomed == 0 then return 0 end
+
+  ---A real, listed, loaded file buffer that is NOT itself being deleted — a safe
+  ---thing to show in a window whose buffer is about to go. Prefers a *named*
+  ---file (so the window lands on an actual next file, per "focus the next
+  ---available buffer"), trying the alternate `#` first, then any other named
+  ---buffer, and only as a last resort an unnamed-but-existing listed buffer —
+  ---which is still better than making Neovim spawn a brand-new [No Name].
+  ---@return integer?
+  local function replacement()
+    local function usable(b)
+      return b and b > 0
+        and not doomed_set[b]
+        and vim.api.nvim_buf_is_valid(b)
+        and vim.api.nvim_buf_is_loaded(b)
+        and vim.bo[b].buflisted
+        and vim.bo[b].buftype == ""
+    end
+    local function named(b)
+      return usable(b) and vim.api.nvim_buf_get_name(b) ~= ""
+    end
+    local alt = vim.fn.bufnr("#")
+    if named(alt) then return alt end
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if named(b) then return b end
+    end
+    -- No named file left — reuse any existing listed buffer rather than create one.
+    if usable(alt) then return alt end
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if usable(b) then return b end
+    end
+    return nil
+  end
+
+  local count = 0
+  for _, bufnr in ipairs(doomed) do
+    -- Re-point every window showing this buffer to a replacement first, so the
+    -- delete below doesn't spawn a [No Name] to fill the vacated window.
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) == bufnr then
+        local repl = replacement()
+        if repl then pcall(vim.api.nvim_win_set_buf, win, repl) end
+      end
+    end
+    if pcall(vim.api.nvim_buf_delete, bufnr, { force = true }) then
+      count = count + 1
     end
   end
   return count

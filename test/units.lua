@@ -113,6 +113,37 @@ do
   vim.fn.rename(tmp .. "/src/d.txt", tmp .. "/dst/d.txt")
   local n4 = buf.relocate((tmp .. "/src/d.txt"):gsub("/", "\\"), (tmp .. "/dst/d.txt"):gsub("/", "\\"))
   eq("relocate: backslash old/new path still matches forward-slash buffer name", n4, 1)
+
+  -- ── buffer.close_for_path ── closing a shown buffer must NOT spawn a fresh
+  -- [No Name]; the window is switched to another real (named) buffer first.
+  -- Regression for: deleting an open file left a blank buffer that reshuffled
+  -- the window layout, even though other buffers were open.
+  vim.fn.writefile({ "1" }, tmp .. "/f1.txt")
+  vim.fn.writefile({ "2" }, tmp .. "/f2.txt")
+  vim.cmd("only")
+  vim.cmd("edit " .. tmp .. "/f1.txt")   -- becomes the alternate
+  vim.cmd("edit " .. tmp .. "/f2.txt")   -- shown in the window, to be closed
+  local win  = vim.api.nvim_get_current_win()
+  local doomed = vim.api.nvim_get_current_buf()
+
+  local function noname_count()
+    local c = 0
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_is_loaded(b)
+         and vim.api.nvim_buf_get_name(b) == "" then c = c + 1 end
+    end
+    return c
+  end
+  local before_noname = noname_count()
+
+  local cn = buf.close_for_path(tmp .. "/f2.txt")
+  eq("close_for_path: closed the shown buffer", cn, 1)
+  check("close_for_path: doomed buffer is gone",
+    not vim.api.nvim_buf_is_valid(doomed) or vim.api.nvim_buf_get_name(doomed) == "")
+  local now_shown = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)):gsub("\\", "/")
+  eq("close_for_path: window switched to the alternate named buffer, not a blank",
+    now_shown, tmp .. "/f1.txt")
+  eq("close_for_path: no new [No Name] buffer was created", noname_count(), before_noname)
 end
 
 -- ── util.line_count ───────────────────────────────────────────────────────────

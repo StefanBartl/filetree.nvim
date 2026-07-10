@@ -197,14 +197,15 @@ function M.delete_current()
 
   -- Multiple items → one chooser for the whole set. It renders as a navigable
   -- hover_select float (j/k or arrows to move, <CR> to pick, <Esc>/q to
-  -- cancel). Emoji prefixes (rather than nerd-font glyphs, which not everyone
-  -- has, or file-type devicons, which have no generic "action" icons) give each
-  -- option a distinct leading marker without a hard font dependency.
+  -- cancel). Leading markers use plain dingbats (✓/•/✗) rather than emoji
+  -- (some, e.g. 🗑, don't render in every font/terminal) or nerd-font glyphs
+  -- (not everyone has them); ✓ is already used by the marks feature, so it's
+  -- known-good here.
   ui_select(
     {
-      "🗑  Delete all at once",
-      "❓  Confirm each individually",
-      "🚫  Cancel",
+      "✓  Delete all at once",
+      "•  Confirm each individually",
+      "✗  Cancel",
     },
     { prompt = string.format(" Move %d items to trash ", #paths) },
     function(_, idx)
