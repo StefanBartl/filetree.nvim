@@ -146,6 +146,48 @@ do
   eq("close_for_path: no new [No Name] buffer was created", noname_count(), before_noname)
 end
 
+-- ── util.confirm ── info popup with y/n, replacing native vim.fn.confirm ─────
+do
+  local confirm = require("filetree.util.confirm")
+
+  local got
+  confirm({ title = " T ", body = { "  info line" }, question = "Do it?",
+            on_choice = function(yes) got = yes end })
+  -- The popup floats and takes focus; feed 'y' to confirm.
+  local float_open = false
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(w).relative ~= "" then float_open = true end
+  end
+  check("confirm: opens a floating window", float_open)
+  vim.api.nvim_feedkeys("y", "x", false)
+  check("confirm: 'y' resolves to true", got == true)
+
+  got = nil
+  confirm({ body = {}, question = "Do it?", on_choice = function(yes) got = yes end })
+  vim.api.nvim_feedkeys("n", "x", false)
+  check("confirm: 'n' resolves to false", got == false)
+end
+
+-- ── opened_sync ── buffer open/close triggers a light adapter redraw ────────
+do
+  local redrew = 0
+  local stub = setmetatable({
+    name = "units-stub-opensync", is_available = function() return true end,
+    is_open = function() return true, 1 end,
+    redraw  = function() redrew = redrew + 1; return true end,
+  }, { __index = function() return function() return false end end })
+
+  package.loaded["filetree.features.ui.opened_sync"] = nil
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-opensync",
+    features = { opened_sync = { enabled = true, debounce_ms = 0 } } })
+
+  vim.api.nvim_exec_autocmds("BufAdd", {})
+  vim.wait(80, function() return redrew > 0 end, 10)
+  check("opened_sync: a buffer event triggers adapter.redraw()", redrew > 0)
+end
+
 -- ── util.line_count ───────────────────────────────────────────────────────────
 do
   local lc = require("filetree.util.line_count")
@@ -794,10 +836,11 @@ end
 
 -- ── trash: default (no confirmations config at all) DOES prompt ────────────
 -- End-to-end check of the *actual* out-of-the-box default, not just what
--- config.get() reports: with nothing set, delete_current() must call
--- vim.fn.confirm. trash is deliberately the one confirmable action that
--- defaults to confirm=true (copy_move/rename_batch stay confirm=false) --
--- see the comment on trash/init.lua's _cfg.confirm.
+-- config.get() reports: with nothing set, delete_current() must prompt before
+-- deleting (now via the util.confirm info popup, not native vim.fn.confirm).
+-- trash is deliberately the one confirmable action that defaults to
+-- confirm=true (copy_move/rename_batch stay confirm=false) -- see the comment
+-- on trash/init.lua's _cfg.confirm.
 do
   local tmp = (vim.env.TEMP .. "/units-trash-noconfirm"):gsub("\\", "/")
   vim.fn.mkdir(tmp, "p")
@@ -824,14 +867,27 @@ do
   -- No `confirm`/`confirmations` anywhere -- purely the shipped default.
   ft.setup({ adapter = "units-stub6", features = { trash = { enabled = true, dry_run = true } } })
 
+  -- The shipped default confirms; a single delete now opens the nice info
+  -- popup (util.confirm float) rather than the native vim.fn.confirm prompt.
   local confirm_called = false
   local orig_confirm = vim.fn.confirm
   vim.fn.confirm = function(...) confirm_called = true; return 1 end
+  local floats_before = 0
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(w).relative ~= "" then floats_before = floats_before + 1 end
+  end
   ft.feature("trash").delete_current()
   vim.fn.confirm = orig_confirm
 
-  check("trash: default (no confirmations config) calls vim.fn.confirm",
-    confirm_called)
+  local confirm_float = nil
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(w).relative ~= "" then confirm_float = w end
+  end
+  check("trash: default confirm opens a popup, not the native vim.fn.confirm",
+    confirm_float ~= nil and not confirm_called)
+  eq("trash: file not yet deleted while the confirm popup is open",
+    vim.fn.filereadable(tmp .. "/victim2.txt"), 1)
+  if confirm_float then pcall(vim.api.nvim_win_close, confirm_float, true) end
 end
 
 -- ── trash.undo: Windows restore reports real failure, not silent success ────
