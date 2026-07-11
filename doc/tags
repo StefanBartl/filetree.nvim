@@ -11,6 +11,7 @@ filetree-features	filetree.txt	/*filetree-features*
 filetree-health	filetree.txt	/*filetree-health*
 filetree-intro	filetree.txt	/*filetree-intro*
 filetree-layout-guard	filetree.txt	/*filetree-layout-guard*
+filetree-menu	filetree.txt	/*filetree-menu*
 filetree-picker	filetree.txt	/*filetree-picker*
 filetree-quickstart	filetree.txt	/*filetree-quickstart*
 filetree-requirements	filetree.txt	/*filetree-requirements*

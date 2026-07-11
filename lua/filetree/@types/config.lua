@@ -13,6 +13,16 @@
 ---@field name    string                             Name for the user command (default: "Filetree").
 ---@field aliases (FiletreeBuiltinAlias|string)[]?   Aliases to also register. Omit to keep the default :Ft alias.
 
+---@class FiletreeMenuConfig
+---@field enable    boolean?  Provide nvzone/menu entries at all (default true).
+---@field fileops   boolean?  create / rename / batch rename / template (default true).
+---@field clipboard boolean?  copy / cut / paste (default true).
+---@field delete    boolean?  trash (default true).
+---@field open      boolean?  vsplit / split / tab / system app / file manager (default true).
+---@field paths     boolean?  copy path / markdown link (default true).
+---@field search    boolean?  find files / grep in dir (default true).
+---@field info      boolean?  node info (default true).
+
 ---@class FiletreeConfig
 ---@field adapter          FiletreeAdapterName|"auto"       Which adapter to use. "auto" picks the first available one.
 ---@field debug            boolean?                         true → show notifier.debug(...) messages for troubleshooting (default false).
@@ -22,6 +32,7 @@
 ---@field command          FiletreeCommandConfig|string|nil User command name (string) or config table. Default: "Filetree" + "Ft" alias.
 ---@field autocmds         table<string,false>?             Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
 ---@field ignore_list      boolean|string[]|nil             true (default) = hide common dirs (.git, node_modules…); false = show all; string[] = custom list.
+---@field menu             FiletreeMenuConfig?              nvzone/menu integration entries (group-level opt-out; entries provided by filetree.integrations.menu).
 ---@field confirmations    boolean|FiletreeConfirmationsConfig|nil  Confirmable actions: paste/rename_batch default to *no* prompt, delete defaults to *prompt*. true/false applies to all three at once; a table applies per action, e.g. { delete = false } to opt out of just the delete prompt. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
 
 ---@class FiletreeConfirmationsConfig
