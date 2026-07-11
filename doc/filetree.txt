@@ -11,6 +11,7 @@ CONTENTS                                                    *filetree-contents*
   3. Quick start ............................ |filetree-quickstart|
   4. Configuration .......................... |filetree-config|
      4.1 Default-disabled features ......... |filetree-default-disabled|
+     4.2 Menu integration .................. |filetree-menu|
   5. Features ............................... |filetree-features|
      5.1 Picker ............................ |filetree-picker|
      5.2 Layout Guard ...................... |filetree-layout-guard|
@@ -182,6 +183,33 @@ reason:
 Everything else in the feature registry is on by default. For the full keymap
 reference see docs/BINDINGS/KEYMAPS.md.
 
+------------------------------------------------------------------------------
+4.2 MENU INTEGRATION                                            *filetree-menu*
+
+filetree.nvim ships context-menu entries for nvzone/menu but does not depend on
+it. The plugin owns the entries; a host composes them for the tree window: >
+
+    local ft = require("filetree.integrations.menu")
+    require("menu").open(ft.items(), { mouse = true })   -- inline entries
+    -- ft.submenu() → a single "  Filetree" fly-out entry, or nil
+<
+Entries are self-gating (an action whose feature is disabled is omitted). nvzone
+closes the menu before running an entry, so the node under the cursor in the
+tree is the active context. Opt out per group via `config.menu`: >
+
+    require("filetree").setup({
+      menu = {
+        enable    = true,
+        fileops   = true, -- create / rename / batch rename / template
+        clipboard = true, -- copy / cut / paste
+        delete    = true, -- trash
+        open      = true, -- vsplit / split / tab / system app / file manager
+        paths     = true, -- copy path / markdown link
+        search    = true, -- find files / grep in dir
+        info      = true, -- node info
+      },
+    })
+<
 ==============================================================================
 5. FEATURES                                                *filetree-features*
 

@@ -12,6 +12,20 @@ return {
   adapter     = "auto",
   debug       = false,  -- true → show notifier.debug(...) messages (troubleshooting)
   ignore_list = true,   -- hide .git, node_modules, etc. by default
+
+  -- nvzone/menu integration (opt-in on the host side; entries provided by
+  -- filetree.integrations.menu). Group-level opt-out; enable = false yields no
+  -- entries. Entries whose feature is disabled are omitted automatically.
+  menu = {
+    enable    = true,
+    fileops   = true, -- create / rename / batch rename / template
+    clipboard = true, -- copy / cut / paste
+    delete    = true, -- trash
+    open      = true, -- vsplit / split / tab / system app / file manager
+    paths     = true, -- copy path / markdown link
+    search    = true, -- find files / grep in dir
+    info      = true, -- node info
+  },
   features = {
     layout_guard = {
       enabled  = true,
