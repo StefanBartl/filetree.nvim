@@ -12,11 +12,18 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   defaults resolve, registry resolver + binding catalog work.
 - **[units.lua](units.lua)** — unit: the util layer (path, buffer, line_count,
   map/autocmd, select adapter) + neo-tree adapter helpers.
+- **[menu.lua](menu.lua)** — unit: `integrations/menu.lua` (nvzone/menu context
+  menu). Stubs the top-level `filetree` module (`feature()`/`config()`) so it
+  runs without a real adapter/tree window — the exact seam a host (RightMouse
+  dispatcher) uses. Covers entries building, self-gating on feature
+  availability, group-level opt-out (`config.menu`), the master `enable=false`
+  switch, `cmd()` calling through, and `submenu()`.
 
 ```
 cd e:/repos/filetree.nvim
 nvim --clean --headless -u NONE -l test/smoke.lua
 nvim --clean --headless -u NONE -l test/units.lua
+nvim --clean --headless -u NONE -l test/menu.lua
 ```
 
 ---
