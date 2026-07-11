@@ -62,7 +62,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 **`ui` — display**
 | Feature | What it does |
 |---|---|
-| `preview` | Toggle preview in the editor window (live-updates on cursor move) or a float; dispatch images / PDFs (`<Tab>`/`<CR>`) |
+| `preview` | Toggle preview in the editor window (live-updates on cursor move) or a float; dispatch images / PDFs (`<Tab>`/`<CR>`); `<PageUp>`/`<PageDown>` page the preview |
 | `node_info` | Node info float (`I`): path, type, size, mode, mtime; line count for files, recursive item count + aggregate size for folders |
 | `breadcrumbs` | Path breadcrumbs for the current node |
 | `size_info` | Show file / directory sizes |
@@ -70,7 +70,8 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `window_style` | Blank statusline + isolated tree highlights (adapter-agnostic; both effects off until configured) |
 | `cursor_hide` | Hide the block cursor inside the tree |
 | `tree_reset` | `<Esc>` clears preview + filter + live search |
-| `current_hl` | Highlight the current file + parent dir _(opt-in)_ |
+| `opened_sync` | Re-render the tree on buffer open/close so the tree plugin's opened-file highlights stay in sync |
+| `current_hl` | Highlight the current file + parent dir, optional sign-column icon on the focused file _(opt-in)_ |
 
 **`fileops` — create / edit / move**
 | Feature | What it does |
