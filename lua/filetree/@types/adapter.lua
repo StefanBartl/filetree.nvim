@@ -40,6 +40,9 @@
 ---@field filetypes? string[]                    Buffer filetypes this backend's tree uses (e.g. {"neo-tree"}).
 ---@field hl_groups? table<string, string>       Tree HL group → editor group, for `window_style.highlights_isolate`.
 ---@field toggle_at? fun(position: FiletreeTreePosition, opts?: FiletreeToggleOpts): boolean  Position-aware toggle; return false if unsupported.
+---@field redraw? fun(): boolean                 Re-render the current tree from existing state (no filesystem rescan); used by opened_sync.
+---@field sign_node? fun(path: string, text: string, hl_group: string): boolean  Place a sign-column marker on a node's line (used by current_hl's icon).
+---@field unsign_node? fun(path: string): boolean  Remove a previously placed sign marker.
 
 ---@alias FiletreeAdapterName "neotree"|"nvimtree"|string
 

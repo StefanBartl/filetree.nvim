@@ -60,6 +60,7 @@
 ---@field breadcrumbs         FiletreeBreadcrumbsConfig?
 ---@field lsp_diagnostics      FiletreeLspDiagnosticsConfig?
 ---@field size_info            FiletreeSizeInfoConfig?
+---@field opened_sync          FiletreeOpenedSyncConfig?
 ---@field create_from_template FiletreeCreateFromTemplateConfig?
 ---@field auto_reveal          FiletreeAutoRevealConfig?
 ---@field auto_resize          FiletreeAutoResizeConfig?
@@ -111,6 +112,13 @@
 ---@field file_hl     string|table  Highlight spec for the current file node.
 ---@field parent_hl   string|table  Highlight spec for the parent directory node.
 ---@field debounce_ms integer
+---@field icon        string?  Sign-column marker placed on the current file's line (nil = off). e.g. "▸".
+---@field icon_hl     string?  Highlight group for the icon (default: the file_hl group).
+
+--- ── opened_sync ───────────────────────────────────────────────────────────────
+---@class FiletreeOpenedSyncConfig
+---@field enabled     boolean
+---@field debounce_ms integer  Delay (ms) before re-rendering after a buffer open/close (default 60).
 
 -- ── safety ────────────────────────────────────────────────────────────────────
 

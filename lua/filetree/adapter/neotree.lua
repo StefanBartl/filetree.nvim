@@ -414,6 +414,19 @@ function M.refresh()
   return ok
 end
 
+---Re-render the CURRENT tree from its existing state, without rescanning the
+---filesystem (unlike refresh). Cheap enough to run on buffer open/close so
+---neo-tree's `highlight_opened_files` decoration re-evaluates and stays in sync
+---with which files are actually open. Returns false when the tree isn't open.
+---@return boolean
+function M.redraw()
+  local state = get_state()
+  if not state or not state.tree then return false end
+  local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
+  if not ok_r or type(renderer.redraw) ~= "function" then return false end
+  return (pcall(renderer.redraw, state))
+end
+
 function M.scroll_to_line(line)
   local winid = M.get_winid()
   if not winid then return false end
@@ -452,6 +465,42 @@ function M.unhighlight_node(path)
   if not bufnr then return false end
   local ok = pcall(vim.api.nvim_buf_del_extmark, bufnr, ns(), id)
   _hl_marks[path] = nil
+  return ok
+end
+
+-- Sign-column markers (a separate namespace + mark table from the line
+-- highlights above, so a node can carry both a line highlight AND a sign, and
+-- either can be cleared independently).
+---@type table<string, integer>   path → sign extmark id
+local _sign_marks = {}
+local _sign_ns = nil
+local function sign_ns()
+  if not _sign_ns then _sign_ns = vim.api.nvim_create_namespace("filetree_sign_neotree") end
+  return _sign_ns
+end
+
+function M.sign_node(path, text, hl_group)
+  local line = M.get_node_line(path)
+  if not line then return false end
+  local _, bufnr = M.is_open()
+  if not bufnr then return false end
+  M.unsign_node(path)
+  local ok, id = pcall(vim.api.nvim_buf_set_extmark, bufnr, sign_ns(), line - 1, 0, {
+    sign_text    = text,
+    sign_hl_group = hl_group,
+    priority     = 160,
+  })
+  if ok then _sign_marks[path] = id end
+  return ok
+end
+
+function M.unsign_node(path)
+  local id = _sign_marks[path]
+  if not id then return true end
+  local _, bufnr = M.is_open()
+  if not bufnr then return false end
+  local ok = pcall(vim.api.nvim_buf_del_extmark, bufnr, sign_ns(), id)
+  _sign_marks[path] = nil
   return ok
 end
 
