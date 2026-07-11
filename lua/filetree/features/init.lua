@@ -35,6 +35,7 @@ M.FEATURES = {
   node_info          = { mod = "filetree.features.ui.node_info",          category = "ui" },
   breadcrumbs        = { mod = "filetree.features.ui.breadcrumbs",        category = "ui" },
   size_info          = { mod = "filetree.features.ui.size_info",          category = "ui" },
+  opened_sync        = { mod = "filetree.features.ui.opened_sync",        category = "ui" },
 
   -- ── fileops: create / edit / move ──────────────────────────────────────────
   smart_create         = { mod = "filetree.features.fileops.smart_create",         category = "fileops" },

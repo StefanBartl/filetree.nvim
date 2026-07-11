@@ -24,10 +24,11 @@ local trash_platform = require("filetree.features.fileops.trash.platform")
 local undo           = require("filetree.features.fileops.trash.undo")
 local notify         = require("filetree.util.notify").create("[filetree.trash]")
 
-local map       = require("filetree.util.map")
-local au        = require("filetree.util.autocmd")
-local buffer    = require("filetree.util.buffer")
-local ui_select = require("filetree.util.select")
+local map        = require("filetree.util.map")
+local au         = require("filetree.util.autocmd")
+local buffer     = require("filetree.util.buffer")
+local ui_select  = require("filetree.util.select")
+local ui_confirm = require("filetree.util.confirm")
 
 local M = {}
 
@@ -101,31 +102,79 @@ local function do_trash(path)
   return true
 end
 
----Run a whole batch of already-decided deletions. In "individual" mode each
----item still gets its own y/N; in "all" mode none do. Clears marks and refreshes
----the tree ONCE at the end (only when something was actually deleted), and
----reports a single summary instead of one message per file.
----@param paths string[]
----@param mode "all"|"individual"
-local function run_batch(paths, mode)
-  local ok_count, cancelled = 0, 0
-  for _, path in ipairs(paths) do
-    if mode == "individual" and not confirm(path) then
-      cancelled = cancelled + 1
-    elseif do_trash(path) then
-      ok_count = ok_count + 1
-    end
+---Metadata lines for the confirm popup — reuses node_info's formatter so the
+---popup shows the same Path/Size/Modified/Lines info as the `I` keymap.
+---@param path string
+---@return string[]
+local function info_body(path)
+  local ok, ni = require("filetree.features").load("node_info")
+  if ok and ni and type(ni.info_lines) == "function" then
+    local ok2, lines = pcall(ni.info_lines, path)
+    if ok2 and type(lines) == "table" and #lines > 0 then return lines end
   end
+  return { "  " .. path }
+end
 
+---Show the nice info+yes/no popup for a single path.
+---@param path string
+---@param cb fun(yes: boolean)
+local function confirm_popup(path, cb)
+  ui_confirm({
+    title    = " Trash ",
+    body     = info_body(path),
+    question = "Send to trash?",
+    on_choice = cb,
+  })
+end
+
+---Finalize a batch: clear marks + refresh the tree once (only when something was
+---actually deleted), and report a single summary.
+---@param ok_count integer
+---@param total integer
+---@param cancelled integer
+local function finalize(ok_count, total, cancelled)
   if ok_count > 0 then
     local ok_m, marks = require("filetree.features").load("marks")
     if ok_m and marks then pcall(marks.clear_all) end
     if _adapter then pcall(_adapter.refresh) end
   end
-
-  local parts = { string.format("Moved %d/%d to trash", ok_count, #paths) }
+  local parts = { string.format("Moved %d/%d to trash", ok_count, total) }
   if cancelled > 0 then parts[#parts + 1] = string.format("(%d skipped)", cancelled) end
   notify.info(table.concat(parts, " "))
+end
+
+---Delete every path with no further prompting (the "all" decision).
+---@param paths string[]
+local function run_all(paths)
+  local ok_count = 0
+  for _, path in ipairs(paths) do
+    if do_trash(path) then ok_count = ok_count + 1 end
+  end
+  finalize(ok_count, #paths, 0)
+end
+
+---Delete each path after its own info+yes/no popup (the "individual" decision).
+---Async, chained one popup at a time so the flow stays modal-feeling.
+---@param paths string[]
+local function run_individual(paths)
+  local ok_count, cancelled = 0, 0
+  local i = 0
+  local function step()
+    i = i + 1
+    if i > #paths then
+      finalize(ok_count, #paths, cancelled)
+      return
+    end
+    confirm_popup(paths[i], function(yes)
+      if yes then
+        if do_trash(paths[i]) then ok_count = ok_count + 1 end
+      else
+        cancelled = cancelled + 1
+      end
+      step()
+    end)
+  end
+  step()
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -168,10 +217,11 @@ end
 ---Trash the current node, or all marked nodes if any are marked.
 ---
 --- - `confirm = false`: delete everything straight away, no prompt.
---- - a single item: one y/N.
+--- - a single item: one info+yes/no popup (util.confirm — a small float with the
+---   file's metadata, not the native "more" prompt).
 --- - multiple items: one batch chooser (hover_select float) offering
 ---   "delete all at once", "confirm each individually", or "cancel" — instead
----   of asking once per file.
+---   of asking once per file. "individual" then shows the info popup per file.
 function M.delete_current()
   if not _adapter then return end
 
@@ -183,15 +233,15 @@ function M.delete_current()
 
   -- No confirmation configured → just delete everything.
   if not _cfg.confirm then
-    run_batch(paths, "all")
+    run_all(paths)
     return
   end
 
-  -- Single item → a lightweight y/N (no need for the batch chooser).
+  -- Single item → the nice info+yes/no popup.
   if #paths == 1 then
-    if confirm(paths[1]) then
-      run_batch(paths, "all")
-    end
+    confirm_popup(paths[1], function(yes)
+      if yes then run_all(paths) end
+    end)
     return
   end
 
@@ -210,9 +260,9 @@ function M.delete_current()
     { prompt = string.format(" Move %d items to trash ", #paths) },
     function(_, idx)
       if idx == 1 then
-        run_batch(paths, "all")
+        run_all(paths)
       elseif idx == 2 then
-        run_batch(paths, "individual")
+        run_individual(paths)
       end
       -- idx == 3 (Cancel) or nil (dismissed) → do nothing, marks stay.
     end

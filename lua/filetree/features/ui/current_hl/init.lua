@@ -51,10 +51,14 @@ end
 
 local FILE_HL   = "FiletreeCurrentFile"
 local PARENT_HL = "FiletreeCurrentParent"
+local ICON_HL   = "FiletreeCurrentIcon"
 
 local function setup_hl_groups()
   ensure_hl_group(FILE_HL,   _cfg.file_hl   or { fg = "#7aa2f7", bold = true })
   ensure_hl_group(PARENT_HL, _cfg.parent_hl or { fg = "#565f89" })
+  -- The icon gets its own group so it can be coloured independently of the
+  -- line highlight; defaults to linking the file highlight.
+  ensure_hl_group(ICON_HL,   _cfg.icon_hl   or ("link:" .. FILE_HL))
 end
 
 -- ── Highlight application ─────────────────────────────────────────────────────
@@ -62,6 +66,9 @@ end
 local function clear_old()
   if _last_file and _adapter then
     _adapter.unhighlight_node(_last_file)
+    if _cfg.icon and type(_adapter.unsign_node) == "function" then
+      _adapter.unsign_node(_last_file)
+    end
   end
   if _last_parent and _adapter then
     _adapter.unhighlight_node(_last_parent)
@@ -83,6 +90,12 @@ local function apply()
 
   _adapter.highlight_node(path,   FILE_HL)
   _adapter.highlight_node(parent, PARENT_HL)
+
+  -- Optional sign-column marker on the current file's line (distinguishes the
+  -- focused buffer from the tree plugin's generic "opened files" colouring).
+  if _cfg.icon and _cfg.icon ~= "" and type(_adapter.sign_node) == "function" then
+    _adapter.sign_node(path, _cfg.icon, ICON_HL)
+  end
 
   _last_file   = path
   _last_parent = parent

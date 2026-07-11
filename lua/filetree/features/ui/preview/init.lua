@@ -314,6 +314,24 @@ local function scroll_preview(delta)
   pcall(vim.api.nvim_win_set_cursor, _win, { next, 0 })
 end
 
+---Scroll the BUFFER-mode preview (the file shown in the editor window) by a full
+---page, without leaving the tree. Returns false when buffer-mode preview isn't
+---active, so the caller can fall through to the tree's own native scroll.
+---@param dir integer  1 = down (<PageDown>/<C-f>), -1 = up (<PageUp>/<C-b>)
+---@return boolean handled
+local function scroll_buf_preview(dir)
+  if not (_buf_active and _editor_win and vim.api.nvim_win_is_valid(_editor_win)) then
+    return false
+  end
+  -- \6 = <C-f> (page down), \2 = <C-b> (page up); run in the preview window's
+  -- context so its own view scrolls while the cursor stays in the tree.
+  local key = dir > 0 and "\6" or "\2"
+  pcall(vim.api.nvim_win_call, _editor_win, function()
+    vim.cmd("normal! " .. key)
+  end)
+  return true
+end
+
 -- ── Buffer-mode preview (show file in the editor window) ────────────────────────
 
 ---Editor window to preview into: not the tree window, holds a normal buffer.
@@ -497,10 +515,8 @@ function M.setup(config, adapter)
           })
         end
 
-        -- Scroll keymaps — only in float mode (they'd shadow the tree's own
-        -- <C-b>/<C-f>/<PageUp>/<PageDown> otherwise, and buffer mode has no float
-        -- to scroll; focus the editor window to scroll a buffer preview).
         if _cfg.mode == "float" then
+          -- Float mode: the scroll keys move the float's cursor.
           local scroll_keys = {
             { _cfg.keymap_scroll_up,     1  },
             { _cfg.keymap_scroll_down,   -1 },
@@ -513,6 +529,29 @@ function M.setup(config, adapter)
               map("n", key, function() scroll_preview(delta) end, {
                 buffer = buf, silent = true,
                 desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down"),
+              })
+            end
+          end
+        else
+          -- Buffer mode: <PageUp>/<PageDown> page the previewed file in the
+          -- editor window while the cursor stays in the tree. When no preview is
+          -- active the key falls through to the tree's own native scroll (fed
+          -- back with noremap so this mapping doesn't re-trigger).
+          local page_keys = {
+            { _cfg.keymap_scroll_up10,   -1 },  -- <PageUp>  → page up
+            { _cfg.keymap_scroll_down10,  1 },  -- <PageDown> → page down
+          }
+          for _, pair in ipairs(page_keys) do
+            local key, dir = pair[1], pair[2]
+            if key then
+              map("n", key, function()
+                if not scroll_buf_preview(dir) then
+                  local k = vim.api.nvim_replace_termcodes(key, true, false, true)
+                  vim.api.nvim_feedkeys(k, "n", false)
+                end
+              end, {
+                buffer = buf, silent = true,
+                desc   = "Filetree: page preview " .. (dir > 0 and "down" or "up"),
               })
             end
           end

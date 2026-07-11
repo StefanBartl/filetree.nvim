@@ -105,10 +105,13 @@ local function fmt_permissions(mode)
   return table.concat(result)
 end
 
----Build content lines for the hover window.
+---Build human-readable metadata lines for a path (Path/Type/Size/Mode/Modified,
+---plus item counts for a directory and a line count for a file). Public so other
+---features (e.g. the trash confirm popup) can show the same info without
+---duplicating the formatting. Works standalone — no setup() required.
 ---@param path string
 ---@return string[]
-local function build_lines(path)
+function M.info_lines(path)
   local stat = vim.uv.fs_stat(path)
   if not stat then
     return { "  No stat info for:", "  " .. path }
@@ -145,7 +148,7 @@ local function build_lines(path)
   end
 
   -- Line count for files
-  if _cfg.show_lines and stat.type == "file" then
+  if _cfg.show_lines ~= false and stat.type == "file" then
     local e     = path:match("%.([^.]+)$") or ""
     local count = line_count.count(path, e)
     if count then
@@ -177,7 +180,7 @@ function M.show_current()
   -- Close any existing window first
   close_win()
 
-  local lines = build_lines(node.path)
+  local lines = M.info_lines(node.path)
 
   -- Compute width
   local width = 20
