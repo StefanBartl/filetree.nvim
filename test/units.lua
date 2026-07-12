@@ -214,12 +214,12 @@ end
 -- ── util.select (adapter) ─────────────────────────────────────────────────────
 do
   package.loaded["filetree.util.select"] = nil
-  package.loaded["lib.nvim.ui.hover_select"] = { open = function(o) o.on_select(o.items[2], 2) end }
+  package.loaded["lib.nvim.ui.kit"] = { select = function(o) o.on_select(o.items[2], 2) end }
   local ui_select = require("filetree.util.select")
   local chosen
   ui_select({ "a", "b", "c" }, { prompt = "p" }, function(item, idx) chosen = { item, idx } end)
   check("select passes original item + index", chosen and chosen[1] == "b" and chosen[2] == 2)
-  package.loaded["lib.nvim.ui.hover_select"] = nil
+  package.loaded["lib.nvim.ui.kit"] = nil
   package.loaded["filetree.util.select"] = nil
 end
 
@@ -731,6 +731,70 @@ do
   package.loaded["filetree.features.fileops.trash"] = nil
 end
 
+-- ── trash: markdown.nvim soft-dep — reference chooser + cleanup ─────────────
+-- When markdown.nvim is present and reports references to the file being
+-- trashed, delete_current() must show the 3-way chooser (not the plain y/N
+-- popup) and, on "delete + remove references", rewrite the reporting line's
+-- link target to "REF!" in the referencing file.
+do
+  local tmp = (vim.env.TEMP .. "/units-trash-mdrefs"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local victim  = tmp .. "/victim.md"
+  local linker  = tmp .. "/linker.md"
+  vim.fn.writefile({ "# Victim" }, victim)
+  vim.fn.writefile({ "intro", "See [victim](victim.md) here.", "outro" }, linker)
+
+  package.loaded["filetree.features.fileops.trash.platform"] = {
+    available = function() return true end,
+    send = function(p) os.remove(p); return { ok = true } end,
+  }
+  -- Auto-drive the chooser: always pick option 1 ("Delete + remove references").
+  local select_prompt = nil
+  package.loaded["filetree.util.select"] = function(items, opts, on_choice)
+    select_prompt = opts and opts.prompt
+    on_choice(items[1], 1)
+  end
+  package.loaded["markdown_nvim"] = {
+    find_references = function(target_path, _opts)
+      if target_path == victim then
+        return { { file = linker, line = 2, target = "victim.md", display = "[victim](victim.md)" } }
+      end
+      return {}
+    end,
+  }
+  package.loaded["filetree.features.fileops.trash"] = nil -- reload with stubs
+
+  local cur_node = { path = victim, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-mdrefs", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-mdrefs",
+    features = { trash = { enabled = true, confirm = true } } })
+
+  ft.feature("trash").delete_current()
+
+  check("trash+mdrefs: markdown reference triggers the chooser, not the plain y/N popup",
+    select_prompt ~= nil and select_prompt:find("ref", 1, true) ~= nil, tostring(select_prompt))
+  eq("trash+mdrefs: victim file removed", vim.fn.filereadable(victim), 0)
+  local linker_lines = vim.fn.readfile(linker)
+  check("trash+mdrefs: referencing line rewritten to REF!",
+    linker_lines[2] == "See [victim](REF!) here.", linker_lines[2])
+  check("trash+mdrefs: unrelated lines untouched",
+    linker_lines[1] == "intro" and linker_lines[3] == "outro")
+
+  package.loaded["filetree.features.fileops.trash.platform"] = nil
+  package.loaded["filetree.util.select"] = nil
+  package.loaded["markdown_nvim"] = nil
+  package.loaded["filetree.features.fileops.trash"] = nil
+end
+
 -- ── open_variants: sg/sv/st/gb/<S-CR> are all bound ──────────────────────────
 do
   local cur_node = { path = (vim.env.TEMP .. "/units-openvariants.txt"):gsub("\\", "/"), type = "file" }
@@ -977,6 +1041,86 @@ do
   local root4 = proot.find(tmp .. "/proj/src/deep/nested/file.lua")
   check("project_root: clear_cache() forces a fresh walk (marker now gone)",
     root4:gsub("\\", "/") ~= tmp .. "/proj")
+end
+
+-- ── cheatsheet: `?` opens a float listing active tree-scoped keymaps ────────
+-- Binds on a generic adapter (filetypes-driven, not hardcoded to neo-tree/
+-- NvimTree), skips entirely on the neotree adapter (native `?` already
+-- covers it), and degrades to a no-op when `filetypes` is missing/not a
+-- table (the "got Function" bug from a catch-all __index stub adapter).
+do
+  local stub = setmetatable({
+    name = "units-stub-cheatsheet", filetypes = { "units-cheatsheet-ft" },
+    is_available = function() return true end,
+    get_current_node = function() return nil end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-cheatsheet",
+    features = { cheatsheet = { enabled = true, keymap = "?" }, trash = { enabled = true } } })
+
+  local buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_set_current_buf(buf)
+  vim.bo[buf].filetype = "units-cheatsheet-ft"
+  vim.wait(200, function() return false end)
+
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do km[m.lhs] = m end
+  check("cheatsheet: '?' bound on the stub adapter's own filetype", km["?"] ~= nil)
+
+  ft.feature("cheatsheet").show()
+  local wins = vim.api.nvim_list_wins()
+  local float_win, float_buf
+  for _, w in ipairs(wins) do
+    if vim.api.nvim_win_get_config(w).relative ~= "" then float_win = w end
+  end
+  check("cheatsheet: show() opens a floating window", float_win ~= nil)
+  if float_win then
+    float_buf = vim.api.nvim_win_get_buf(float_win)
+    local lines = vim.api.nvim_buf_get_lines(float_buf, 0, -1, false)
+    local text = table.concat(lines, "\n")
+    check("cheatsheet: lists the fileops category header", text:find("%sfileops") ~= nil, text)
+    check("cheatsheet: lists trash's 'd' keymap (feature is enabled)", text:find("d%s+Trash") ~= nil, text)
+    check("cheatsheet: shows a close hint", text:find("close") ~= nil)
+  end
+
+  ft.feature("cheatsheet").show() -- second invocation toggles it closed
+  check("cheatsheet: second show() closes the float",
+    float_win == nil or not vim.api.nvim_win_is_valid(float_win))
+
+  -- neotree: must NOT bind '?' (native help already covers it) and must not
+  -- error even though the neotree adapter module isn't actually loadable here.
+  local neotree_stub = setmetatable({
+    name = "neotree", filetypes = { "neo-tree" },
+    is_available = function() return true end,
+  }, { __index = function() return function() return false end end })
+  ft.register_adapter(neotree_stub)
+  local setup_ok = pcall(ft.setup, { adapter = "neotree",
+    features = { cheatsheet = { enabled = true, keymap = "?" } } })
+  check("cheatsheet: setup() with the neotree adapter does not error", setup_ok)
+
+  local buf2 = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_set_current_buf(buf2)
+  vim.bo[buf2].filetype = "neo-tree"
+  vim.wait(200, function() return false end)
+  local has_q = false
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf2, "n")) do
+    if m.lhs == "?" then has_q = true end
+  end
+  check("cheatsheet: does NOT bind '?' on the neotree adapter", not has_q)
+
+  -- filetypes missing/wrong-shaped (catch-all __index stub) must not error.
+  local no_filetypes_stub = setmetatable({
+    name = "units-stub-cheatsheet-nofiletypes",
+    is_available = function() return true end,
+  }, { __index = function() return function() return false end end })
+  ft.register_adapter(no_filetypes_stub)
+  local setup_ok2 = pcall(ft.setup, { adapter = "units-stub-cheatsheet-nofiletypes",
+    features = { cheatsheet = { enabled = true, keymap = "?" } } })
+  check("cheatsheet: setup() does not error when adapter.filetypes is missing/not a table", setup_ok2)
 end
 
 -- ── Report ────────────────────────────────────────────────────────────────────

@@ -1,16 +1,16 @@
 ---@module 'filetree.util.select'
----@brief Selection prompt — routes vim.ui.select through lib.nvim.ui.hover_select.
+---@brief Selection prompt — routes vim.ui.select through lib.nvim.ui.kit.
 ---@description
 --- Drop-in for `vim.ui.select(items, opts, on_choice)`. When lib.nvim is present
---- it renders via `lib.nvim.ui.hover_select` for a consistent floating UI across
---- the author's plugins; otherwise it falls back to `vim.ui.select`. Call sites
---- keep the native signature:
+--- it renders via `lib.nvim.ui.kit` (`kit.select`) for a consistent floating UI
+--- across the author's plugins; otherwise it falls back to `vim.ui.select`. Call
+--- sites keep the native signature:
 ---
 ---   local ui_select = require("filetree.util.select")
 ---   ui_select(items, { prompt = "…", format_item = f }, function(choice, idx) … end)
 
-local _ok, hover = pcall(require, "lib.nvim.ui.hover_select")
-local has_hover = _ok and type(hover) == "table" and type(hover.open) == "function"
+local _ok, kit = pcall(require, "lib.nvim.ui.kit")
+local has_kit = _ok and type(kit) == "table" and type(kit.select) == "function"
 
 ---@param items any[]
 ---@param opts  table|nil   { prompt?, format_item? } (as vim.ui.select)
@@ -19,7 +19,7 @@ return function(items, opts, on_choice)
   opts = opts or {}
   on_choice = on_choice or function() end
 
-  if not has_hover then
+  if not has_kit then
     return vim.ui.select(items, opts, on_choice)
   end
 
@@ -29,14 +29,12 @@ return function(items, opts, on_choice)
     display[i] = format(item)
   end
 
-  hover.open({
+  -- kit.select sizes the float to its widest item by default, so the old
+  -- `auto_width` workaround for hover_select's fixed min-width is no longer
+  -- needed.
+  kit.select({
     items     = display,
     title     = opts.prompt,
-    -- Size the float to its widest item instead of hover_select's fixed
-    -- min-width default (which is only ~22 cols and silently truncates longer
-    -- entries). Callers can still override via opts.auto_width ("wrap" to wrap
-    -- instead of widen).
-    auto_width = opts.auto_width ~= nil and opts.auto_width or true,
     on_select = function(_, index)
       local idx = type(index) == "table" and index[1] or index
       on_choice(items[idx], idx)
