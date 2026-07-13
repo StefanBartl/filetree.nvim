@@ -181,11 +181,22 @@ local function execute_renames(entries, new_names)
     end
   end
 
+  -- Capture markdown references for every planned source BEFORE renaming,
+  -- while the files still exist on disk (so cwd-relative and every other link
+  -- style resolve correctly — resolution probes the filesystem). Keyed by plan
+  -- index so a source whose rename later fails contributes no stale refs.
+  local refs_by_idx = {}
+  if _cfg.check_markdown_refs then
+    for i, op in ipairs(plan) do
+      refs_by_idx[i] = refs_util.find(op.src)
+    end
+  end
+
   -- Execute
   local errors    = 0
   local relocated = 0
   local all_refs  = {}
-  for _, op in ipairs(plan) do
+  for i, op in ipairs(plan) do
     local rc = vim.fn.rename(op.src, op.dst)
     if rc ~= 0 then
       notify.error("Failed: " .. op.src .. " → " .. op.dst)
@@ -196,13 +207,9 @@ local function execute_renames(entries, new_names)
       -- alongside a second, disconnected buffer for the new one.
       relocated = relocated + buffer.relocate(op.src, op.dst)
 
-      if _cfg.check_markdown_refs then
-        local refs = refs_util.find(op.src)
-        local new_target = refs_util.relative_target(op.dst)
-        for _, r in ipairs(refs) do
-          r.new_target = new_target
-          all_refs[#all_refs + 1] = r
-        end
+      for _, r in ipairs(refs_by_idx[i] or {}) do
+        r.new_target = refs_util.retarget(r, op.dst)
+        all_refs[#all_refs + 1] = r
       end
     end
   end

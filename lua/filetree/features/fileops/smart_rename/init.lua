@@ -402,12 +402,15 @@ end
 
 ---@param old_path string
 ---@param new_path string
-local function handle_markdown_refs(old_path, new_path)
-  if not _cfg.check_markdown_refs then return end
-  local refs = refs_util.find(old_path)
-  if #refs == 0 then return end
+---@param refs table[]|nil  References captured BEFORE the rename (via prefetch).
+local function handle_markdown_refs(old_path, new_path, refs)
+  if not _cfg.check_markdown_refs or not refs or #refs == 0 then return end
 
-  local new_target = refs_util.relative_target(new_path)
+  -- Compute each ref's new target NOW, style-preserving (a `./x` link stays
+  -- `./x`, a cwd-relative one stays cwd-relative). update()/the picker then
+  -- just apply the per-ref new_target.
+  for _, r in ipairs(refs) do r.new_target = refs_util.retarget(r, new_path) end
+
   local files, seen = {}, {}
   for _, r in ipairs(refs) do
     if not seen[r.file] then
@@ -428,14 +431,12 @@ local function handle_markdown_refs(old_path, new_path)
     { prompt = string.format(" %d ref(s) to %s ", #refs, vim.fn.fnamemodify(old_path, ":t")) },
     function(_, idx)
       if idx == 1 then
-        for _, r in ipairs(refs) do r.new_target = new_target end
         refs_util.update(refs)
       elseif idx == 2 then
         refs_picker.pick(
           refs,
           { prefer = _cfg.refs_picker_prefer, title = string.format("References to %s", vim.fn.fnamemodify(old_path, ":t")) },
           function(selected)
-            for _, r in ipairs(selected) do r.new_target = new_target end
             if #selected > 0 then refs_util.update(selected) end
           end,
           function() end -- Esc: nothing further to do, the rename already happened
@@ -448,7 +449,10 @@ end
 
 -- ── Core rename ───────────────────────────────────────────────────────────────
 
-local function do_rename(old_path, new_path)
+---@param old_path string
+---@param new_path string
+---@param refs table[]|nil  Markdown refs captured before the rename (prefetch).
+local function do_rename(old_path, new_path, refs)
   if _cfg.dry_run then
     notify.info(string.format("[dry-run] %s → %s",
       vim.fn.fnamemodify(old_path, ":t"),
@@ -488,8 +492,10 @@ local function do_rename(old_path, new_path)
         update_references_fallback(old_path, new_path, workspace_edit ~= nil)
 
         -- Markdown `[text](path)` links pointing at the old path (separate
-        -- concern from the code-reference fallback above).
-        handle_markdown_refs(old_path, new_path)
+        -- concern from the code-reference fallback above). `refs` were captured
+        -- BEFORE the rename (while old_path still existed) so cwd-relative and
+        -- every other link style resolve correctly.
+        handle_markdown_refs(old_path, new_path, refs)
 
         -- Refresh tree
         if _adapter and _adapter.refresh then _adapter.refresh() end
@@ -513,16 +519,33 @@ function M.rename_current()
   local old_name = vim.fn.fnamemodify(old_path, ":t")
   local dir      = path.parent(old_path)
 
+  -- Start the markdown-reference search NOW, while old_path still exists on
+  -- disk, so it overlaps with the (potentially long) time the user spends
+  -- typing a new name. The rename only happens inside `await`, i.e. strictly
+  -- after this scan finishes, so old_path is always still present during the
+  -- scan — see refs_util.prefetch. (No-op handle when the check is disabled.)
+  local refs_handle = (_cfg.check_markdown_refs and refs_util.available())
+    and refs_util.prefetch(old_path) or nil
+
   vim.ui.input({ prompt = "Rename to: ", default = old_name }, function(new_name)
     if not new_name or new_name == "" or new_name == old_name then return end
     new_name = path.slashify(new_name)  -- accept "/" or "\" if renaming into a subdir
     local new_path = dir .. "/" .. new_name
+
+    local function proceed()
+      if refs_handle then
+        refs_handle.await(function(refs) do_rename(old_path, new_path, refs) end)
+      else
+        do_rename(old_path, new_path, nil)
+      end
+    end
+
     if vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1 then
       ui_select({ "Overwrite", "Cancel" }, { prompt = "'" .. new_name .. "' exists. " }, function(choice)
-        if choice == "Overwrite" then do_rename(old_path, new_path) end
+        if choice == "Overwrite" then proceed() end
       end)
     else
-      do_rename(old_path, new_path)
+      proceed()
     end
   end)
 end

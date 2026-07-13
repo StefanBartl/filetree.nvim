@@ -589,14 +589,16 @@ do
   package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
     on_choice(items[1], 1) -- "Update all references to their new paths"
   end
+  local function cm_refs(target_path)
+    if target_path == cut_src then
+      return { { file = linker, line = 1, target = "cut.md", display = "[cut](cut.md)" } }
+    end
+    return {} -- copy_src is never queried by a correct implementation, but
+              -- return {} regardless so a wrong one doesn't false-positive.
+  end
   package.loaded["markdown_nvim"] = {
-    find_references = function(target_path, _opts)
-      if target_path == cut_src then
-        return { { file = linker, line = 1, target = "cut.md", display = "[cut](cut.md)" } }
-      end
-      return {} -- copy_src is never queried by a correct implementation, but
-                -- return {} regardless so a wrong one doesn't false-positive.
-    end,
+    find_references       = function(tp, _o) return cm_refs(tp) end,
+    find_references_async = function(tp, _o, cb) cb(cm_refs(tp)) end,
   }
   package.loaded["filetree.features.fileops.copy_move"] = nil -- reload with stubs
 
@@ -801,6 +803,67 @@ do
   package.loaded["filetree.features.fileops.trash"] = nil
 end
 
+-- ── markdown_refs.update: patches a LIVE buffer, not just the file on disk ───
+-- Regression: writefile() alone doesn't reload an open buffer (only a later
+-- checktime/autoread does — hence "switch away and back" was needed). update()
+-- must patch the open buffer directly and, when it had no unsaved changes,
+-- persist + keep it unmodified.
+do
+  local refs_util = require("filetree.util.markdown_refs")
+  local tmp = (vim.env.TEMP .. "/units-mdrefs-livebuf"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+
+  -- Case 1: referencing file OPEN in an unmodified buffer.
+  local open_file = tmp .. "/open.md"
+  vim.fn.writefile({ "intro", "See [x](old.md) here.", "outro" }, open_file)
+  vim.cmd("edit " .. vim.fn.fnameescape(open_file))
+  local buf = vim.api.nvim_get_current_buf()
+
+  refs_util.update({
+    { file = open_file, line = 2, target = "old.md", display = "[x](old.md)", new_target = "new.md" },
+  })
+
+  local buf_line2 = vim.api.nvim_buf_get_lines(buf, 1, 2, false)[1]
+  check("mdrefs.update: open buffer patched live (no reload needed)",
+    buf_line2 == "See [x](new.md) here.", buf_line2)
+  check("mdrefs.update: buffer left unmodified (change persisted to disk)",
+    vim.bo[buf].modified == false)
+  local disk = vim.fn.readfile(open_file)
+  check("mdrefs.update: disk also updated for the open+unmodified buffer",
+    disk[2] == "See [x](new.md) here.", disk[2])
+
+  -- Case 2: referencing file NOT open anywhere -> disk edit as before.
+  local closed_file = tmp .. "/closed.md"
+  vim.fn.writefile({ "[y](old.md)" }, closed_file)
+  refs_util.update({
+    { file = closed_file, line = 1, target = "old.md", display = "[y](old.md)", new_target = "new.md" },
+  })
+  check("mdrefs.update: closed file edited on disk",
+    vim.fn.readfile(closed_file)[1] == "[y](new.md)")
+
+  -- Case 3: open buffer WITH unsaved changes -> patched live, left modified,
+  -- disk NOT written (user's edits win on their own save).
+  local dirty_file = tmp .. "/dirty.md"
+  vim.fn.writefile({ "[z](old.md)" }, dirty_file)
+  vim.cmd("edit " .. vim.fn.fnameescape(dirty_file))
+  local dbuf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(dbuf, 1, 1, false, { "unsaved tail" }) -- make it modified
+  refs_util.update({
+    { file = dirty_file, line = 1, target = "old.md", display = "[z](old.md)", new_target = "new.md" },
+  })
+  check("mdrefs.update: dirty buffer patched live",
+    vim.api.nvim_buf_get_lines(dbuf, 0, 1, false)[1] == "[z](new.md)")
+  check("mdrefs.update: dirty buffer stays modified (not force-saved)",
+    vim.bo[dbuf].modified == true)
+  check("mdrefs.update: disk left untouched while buffer is dirty",
+    vim.fn.readfile(dirty_file)[1] == "[z](old.md)")
+
+  -- cleanup buffers
+  pcall(vim.api.nvim_buf_delete, buf,  { force = true })
+  pcall(vim.api.nvim_buf_delete, dbuf, { force = true })
+end
+
 -- ── trash: markdown.nvim soft-dep — reference chooser + cleanup ─────────────
 -- When markdown.nvim is present and reports references to the file being
 -- trashed, delete_current() must show the 3-way chooser (not the plain y/N
@@ -958,13 +1021,17 @@ do
   package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
     on_choice(items[1], 1) -- "Update all references to the new path"
   end
+  local function sr_refs(target_path)
+    if target_path == old_path then
+      return { { file = linker, line = 1, target = "old.md", display = "[old](old.md)" } }
+    end
+    return {}
+  end
   package.loaded["markdown_nvim"] = {
-    find_references = function(target_path, _opts)
-      if target_path == old_path then
-        return { { file = linker, line = 1, target = "old.md", display = "[old](old.md)" } }
-      end
-      return {}
-    end,
+    find_references       = function(tp, _o) return sr_refs(tp) end,
+    find_references_async = function(tp, _o, cb) cb(sr_refs(tp)) end,
+    -- retarget left unstubbed on purpose: refs_util.retarget falls back to a
+    -- cwd-relative path, which still contains the new basename the test checks.
   }
   package.loaded["filetree.features.fileops.smart_rename"] = nil -- reload with stubs
 
@@ -1015,15 +1082,17 @@ do
   package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
     on_choice(items[1], 1) -- "Update all references to their new paths"
   end
+  local function rb_refs(target_path)
+    if target_path == a_old then
+      return { { file = linker, line = 1, target = "a.md", display = "[a](a.md)" } }
+    elseif target_path == b_old then
+      return { { file = linker, line = 1, target = "b.md", display = "[b](b.md)" } }
+    end
+    return {}
+  end
   package.loaded["markdown_nvim"] = {
-    find_references = function(target_path, _opts)
-      if target_path == a_old then
-        return { { file = linker, line = 1, target = "a.md", display = "[a](a.md)" } }
-      elseif target_path == b_old then
-        return { { file = linker, line = 1, target = "b.md", display = "[b](b.md)" } }
-      end
-      return {}
-    end,
+    find_references       = function(tp, _o) return rb_refs(tp) end,
+    find_references_async = function(tp, _o, cb) cb(rb_refs(tp)) end,
   }
   package.loaded["filetree.features.fileops.rename_batch"] = nil -- reload with stubs
 

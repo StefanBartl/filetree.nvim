@@ -58,6 +58,9 @@ local _ns = -1
 ---@type ClipboardEntry[]
 local _clipboard = {}
 
+---@type table<string, { await: fun(cb: fun(refs: table[])) }>  cut-path -> prefetch handle
+local _cut_prefetch = {}
+
 -- ── Clipboard state ───────────────────────────────────────────────────────────
 
 local function clear_marks()
@@ -123,6 +126,18 @@ function M.stage(op)
   for _, p in ipairs(paths) do
     _clipboard[#_clipboard + 1] = { path = p, op = op }
   end
+
+  -- For a cut (= move), start the markdown-reference scan NOW, while the
+  -- sources still exist, so it overlaps with the time the user spends
+  -- navigating to the paste target. Copies never break a reference (the
+  -- original stays put), so only cuts prefetch. See refs_util.prefetch.
+  _cut_prefetch = {}
+  if op == "cut" and _cfg.check_markdown_refs and refs_util.available() then
+    for _, p in ipairs(paths) do
+      _cut_prefetch[p] = refs_util.prefetch(p)
+    end
+  end
+
   clear_marks()
   render_clipboard()
   local verb = op == "copy" and "Copied" or "Cut"
@@ -289,60 +304,71 @@ function M.paste()
     end
   end
 
-  local errors  = 0
-  local done    = 0
-  local relocated = 0
-  local all_refs  = {}
-  for _, e in ipairs(_clipboard) do
-    if e.op == "copy" then
-      local rc = do_copy(e.path, dst_dir)
-      if rc ~= 0 then errors = errors + 1 else done = done + 1 end
-    else
-      local rc, dst = do_move(e.path, dst_dir)
-      if rc ~= 0 or not dst then
-        errors = errors + 1
-      else
-        done = done + 1
-        -- Repoint any open buffer(s) at the old path (or nested under it, for
-        -- a moved directory) so a stale buffer for the file's old location
-        -- doesn't linger alongside a second, disconnected buffer for its new
-        -- one. Per-item, right after that item's own move succeeds, so a
-        -- partial failure in a multi-item paste still fixes up the items that
-        -- did succeed.
-        relocated = relocated + buffer.relocate(e.path, dst)
+  -- Await the reference scans for cut items (started on stage_cut, so likely
+  -- already done after the user navigated here). Captured while the sources
+  -- still exist; the copy/move loop runs only inside the continuation, so no
+  -- move happens before its item's scan has finished. Copies aren't scanned —
+  -- the original stays put, so no reference breaks.
+  local cut_handles = {}
+  if _cfg.check_markdown_refs and refs_util.available() then
+    for _, e in ipairs(_clipboard) do
+      if e.op ~= "copy" then
+        cut_handles[e.path] = _cut_prefetch[e.path] or refs_util.prefetch(e.path)
+      end
+    end
+  end
 
-        -- Copies never break a reference (the original stays put); only cuts
-        -- (a real move) do, so this only runs in the "cut" branch.
-        if _cfg.check_markdown_refs then
-          local refs = refs_util.find(e.path)
-          local new_target = refs_util.relative_target(dst)
-          for _, r in ipairs(refs) do
-            r.new_target = new_target
+  refs_util.await_all(cut_handles, function(refs_by_path)
+    local errors  = 0
+    local done    = 0
+    local relocated = 0
+    local all_refs  = {}
+    for _, e in ipairs(_clipboard) do
+      if e.op == "copy" then
+        local rc = do_copy(e.path, dst_dir)
+        if rc ~= 0 then errors = errors + 1 else done = done + 1 end
+      else
+        local rc, dst = do_move(e.path, dst_dir)
+        if rc ~= 0 or not dst then
+          errors = errors + 1
+        else
+          done = done + 1
+          -- Repoint any open buffer(s) at the old path (or nested under it, for
+          -- a moved directory) so a stale buffer for the file's old location
+          -- doesn't linger alongside a second, disconnected buffer for its new
+          -- one. Per-item, right after that item's own move succeeds, so a
+          -- partial failure in a multi-item paste still fixes up the items that
+          -- did succeed.
+          relocated = relocated + buffer.relocate(e.path, dst)
+
+          for _, r in ipairs(refs_by_path[e.path] or {}) do
+            r.new_target = refs_util.retarget(r, dst)
             all_refs[#all_refs + 1] = r
           end
         end
       end
     end
-  end
 
-  local msg = string.format("Pasted %d/%d item(s) into %s",
-    done, #_clipboard, vim.fn.fnamemodify(dst_dir, ":t"))
-  if relocated > 0 then
-    msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
-  end
-  notify.info(msg)
+    local msg = string.format("Pasted %d/%d item(s) into %s",
+      done, #_clipboard, vim.fn.fnamemodify(dst_dir, ":t"))
+    if relocated > 0 then
+      msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
+    end
+    notify.info(msg)
 
-  handle_batch_markdown_refs(all_refs)
+    handle_batch_markdown_refs(all_refs)
 
-  -- Clear cut items from clipboard (keep copy items for potential re-paste)
-  local remaining = {}
-  for _, e in ipairs(_clipboard) do
-    if e.op == "copy" then remaining[#remaining + 1] = e end
-  end
-  _clipboard = remaining
+    -- Clear cut items from clipboard (keep copy items for potential re-paste)
+    local remaining = {}
+    for _, e in ipairs(_clipboard) do
+      if e.op == "copy" then remaining[#remaining + 1] = e end
+    end
+    _clipboard = remaining
+    _cut_prefetch = {}
 
-  render_clipboard()
-  if _adapter.refresh then pcall(_adapter.refresh) end
+    render_clipboard()
+    if _adapter.refresh then pcall(_adapter.refresh) end
+  end)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
