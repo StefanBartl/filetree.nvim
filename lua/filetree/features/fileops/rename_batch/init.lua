@@ -22,18 +22,23 @@
 
 local notify = require("filetree.util.notify").create("[filetree.rename_batch]")
 
-local map    = require("filetree.util.map")
-local au     = require("filetree.util.autocmd")
-local buffer = require("filetree.util.buffer")
+local map         = require("filetree.util.map")
+local au          = require("filetree.util.autocmd")
+local buffer      = require("filetree.util.buffer")
+local ui_select   = require("filetree.util.select")
+local refs_util   = require("filetree.util.markdown_refs")
+local refs_picker = require("filetree.util.refs_picker")
 local M = {}
 
 ---@type FiletreeRenameBatchConfig
 local _cfg = {
-  enabled     = false,
-  keymap      = "<leader>rb",
-  confirm     = false,
-  use_safety  = true,
-  dry_run     = false,
+  enabled             = false,
+  keymap              = "<leader>rb",
+  confirm             = false,
+  use_safety          = true,
+  dry_run             = false,
+  check_markdown_refs = true,
+  refs_picker_prefer  = "auto",
 }
 
 ---@type FiletreeAdapter?
@@ -63,6 +68,50 @@ local function snapshot_nodes()
     end
   end
   return entries
+end
+
+-- ── Markdown reference update (post-batch) ──────────────────────────────────────
+-- Same soft-dep + chooser UX as trash/smart_rename, but aggregated: refs from
+-- every renamed item in the batch are collected first, then offered as ONE
+-- chooser instead of one popup per file. Each ref already carries its own
+-- `.new_target` (computed against whichever item it was found for), so the
+-- "update all" and "inspect" paths both just call refs_util.update() directly.
+
+---@param all_refs table[]  MarkdownFileRef[], each with `.new_target` pre-set.
+local function handle_batch_markdown_refs(all_refs)
+  if not _cfg.check_markdown_refs or #all_refs == 0 then return end
+
+  local files, seen = {}, {}
+  for _, r in ipairs(all_refs) do
+    if not seen[r.file] then
+      seen[r.file] = true
+      files[#files + 1] = vim.fn.fnamemodify(r.file, ":.")
+    end
+  end
+  notify.info(string.format(
+    "%d markdown reference(s) found in: %s", #all_refs, table.concat(files, ", ")
+  ))
+
+  ui_select(
+    {
+      "✓  Update all references to their new paths",
+      "◐  Inspect references first",
+      "✗  Leave references as-is",
+    },
+    { prompt = string.format(" %d ref(s) across the renamed batch ", #all_refs) },
+    function(_, idx)
+      if idx == 1 then
+        refs_util.update(all_refs)
+      elseif idx == 2 then
+        refs_picker.pick(
+          all_refs,
+          { prefer = _cfg.refs_picker_prefer, title = "References across the renamed batch" },
+          function(selected) if #selected > 0 then refs_util.update(selected) end end,
+          function() end
+        )
+      end
+    end
+  )
 end
 
 -- ── Diff + execute ────────────────────────────────────────────────────────────
@@ -135,6 +184,7 @@ local function execute_renames(entries, new_names)
   -- Execute
   local errors    = 0
   local relocated = 0
+  local all_refs  = {}
   for _, op in ipairs(plan) do
     local rc = vim.fn.rename(op.src, op.dst)
     if rc ~= 0 then
@@ -145,6 +195,15 @@ local function execute_renames(entries, new_names)
       -- renamed directory) so a stale buffer for the old name doesn't linger
       -- alongside a second, disconnected buffer for the new one.
       relocated = relocated + buffer.relocate(op.src, op.dst)
+
+      if _cfg.check_markdown_refs then
+        local refs = refs_util.find(op.src)
+        local new_target = refs_util.relative_target(op.dst)
+        for _, r in ipairs(refs) do
+          r.new_target = new_target
+          all_refs[#all_refs + 1] = r
+        end
+      end
     end
   end
 
@@ -154,6 +213,8 @@ local function execute_renames(entries, new_names)
     msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
   end
   notify.info(msg)
+
+  handle_batch_markdown_refs(all_refs)
 
   -- Refresh tree
   if _adapter and _adapter.refresh then

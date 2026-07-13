@@ -72,6 +72,7 @@
 ---@field lsp_diagnostics      FiletreeLspDiagnosticsConfig?
 ---@field size_info            FiletreeSizeInfoConfig?
 ---@field opened_sync          FiletreeOpenedSyncConfig?
+---@field cheatsheet           FiletreeCheatsheetConfig?
 ---@field create_from_template FiletreeCreateFromTemplateConfig?
 ---@field auto_reveal          FiletreeAutoRevealConfig?
 ---@field auto_resize          FiletreeAutoResizeConfig?
@@ -142,13 +143,15 @@
 -- ── trash ─────────────────────────────────────────────────────────────────────
 
 ---@class FiletreeTrashConfig
----@field enabled        boolean
----@field confirm        boolean  Ask before trashing (default true, unlike paste/rename_batch; see top-level `confirmations`).
----@field use_safety     boolean  Create a backup before trashing (default false).
----@field dry_run        boolean  Log without actually trashing (default false).
----@field keymap         string?  Trash current node / all marked (default "d").
----@field keymap_undo    string?  Undo last trash operation (default "U").
----@field keymap_history string?  Show trash history (default "<leader>th").
+---@field enabled             boolean
+---@field confirm             boolean  Ask before trashing (default true, unlike paste/rename_batch; see top-level `confirmations`).
+---@field use_safety          boolean  Create a backup before trashing (default false).
+---@field dry_run             boolean  Log without actually trashing (default false).
+---@field check_markdown_refs boolean  Warn about markdown files linking to the target, via markdown.nvim's optional `find_references` (default true; no-op if markdown.nvim isn't installed).
+---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  Backend for the "Inspect references" chooser option (default "auto": telescope -> fzf-lua -> quickfix).
+---@field keymap              string?  Trash current node / all marked (default "d").
+---@field keymap_undo         string?  Undo last trash operation (default "U").
+---@field keymap_history      string?  Show trash history (default "<leader>th").
 
 -- ── watcher_quarantine ────────────────────────────────────────────────────────
 
@@ -254,11 +257,13 @@
 ---@field clear  string?  Clear clipboard (default "<C-c>")
 
 ---@class FiletreeCopyMoveConfig
----@field enabled     boolean
----@field keymaps     FiletreeCopyMoveKeymaps?
----@field confirm     boolean  Ask before paste (default false; see top-level `confirmations`).
----@field use_safety  boolean  Create backup before move (default true).
----@field dry_run     boolean  Log without executing (default false).
+---@field enabled             boolean
+---@field keymaps             FiletreeCopyMoveKeymaps?
+---@field confirm             boolean  Ask before paste (default false; see top-level `confirmations`).
+---@field use_safety          boolean  Create backup before move (default true).
+---@field dry_run             boolean  Log without executing (default false).
+---@field check_markdown_refs boolean  After a paste, offer to update markdown `[text](path)` links pointing at any **cut** (moved) item -- copies never break a reference -- via markdown.nvim's optional `find_references` (default true; no-op if markdown.nvim isn't installed).
+---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  Backend for the "Inspect references" chooser option (default "auto").
 
 -- ── find_files ────────────────────────────────────────────────────────────────
 
@@ -284,11 +289,13 @@
 -- ── rename_batch ──────────────────────────────────────────────────────────────
 
 ---@class FiletreeRenameBatchConfig
----@field enabled     boolean
----@field keymap      string?  Normal-mode key inside tree (default "<leader>rb").
----@field confirm     boolean  Ask for confirmation before renaming (default false; see top-level `confirmations`).
----@field use_safety  boolean  Create safety backup before renaming (default true).
----@field dry_run     boolean  Log plan without executing (default false).
+---@field enabled             boolean
+---@field keymap              string?  Normal-mode key inside tree (default "<leader>rb").
+---@field confirm             boolean  Ask for confirmation before renaming (default false; see top-level `confirmations`).
+---@field use_safety          boolean  Create safety backup before renaming (default true).
+---@field dry_run             boolean  Log plan without executing (default false).
+---@field check_markdown_refs boolean  After the batch, offer to update markdown `[text](path)` links pointing at any renamed item, via markdown.nvim's optional `find_references` (default true; no-op if markdown.nvim isn't installed).
+---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  Backend for the "Inspect references" chooser option (default "auto").
 
 -- ── session ───────────────────────────────────────────────────────────────────
 
@@ -386,13 +393,15 @@
 -- ── smart_rename ─────────────────────────────────────────────────────────────
 
 ---@class FiletreeSmartRenameConfig
----@field enabled            boolean
----@field keymap             string?   Key inside tree (default "r").
----@field use_safety         boolean   Create safety backup before rename (default true).
----@field dry_run            boolean   Log without executing (default false).
----@field update_references  boolean   Fallback require()/import rewrite across the
----                                    project when no LSP client applied a
----                                    workspace edit, or the file is Lua (default true).
+---@field enabled             boolean
+---@field keymap              string?   Key inside tree (default "r").
+---@field use_safety          boolean   Create safety backup before rename (default true).
+---@field dry_run             boolean   Log without executing (default false).
+---@field update_references   boolean   Fallback require()/import rewrite across the
+---                                     project when no LSP client applied a
+---                                     workspace edit, or the file is Lua (default true).
+---@field check_markdown_refs boolean   After a successful rename, offer to update markdown `[text](path)` links pointing at the old path, via markdown.nvim's optional `find_references` (default true; no-op if markdown.nvim isn't installed).
+---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  Backend for the "Inspect references" chooser option (default "auto").
 
 -- ── path_copy ────────────────────────────────────────────────────────────────
 
@@ -426,6 +435,12 @@
 ---@field show_lines       boolean   Show line count for files (default true).
 ---@field max_lines_size   integer   Skip line count for files larger than this in bytes (default 5MB).
 ---@field max_entries      integer?  Cap for the recursive directory scan behind Items/Size (default 100000).
+
+-- ── cheatsheet ────────────────────────────────────────────────────────────────
+
+---@class FiletreeCheatsheetConfig
+---@field enabled boolean
+---@field keymap  string?  Key inside tree (default "?"). No-op on the neotree adapter (native `?` already covers it via attach.lua).
 
 -- ── tree_traverse ─────────────────────────────────────────────────────────────
 

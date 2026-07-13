@@ -27,18 +27,22 @@ local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
-local ui_select = require("filetree.util.select")
-local path   = require("filetree.util.path")
-local buffer = require("filetree.util.buffer")
+local ui_select   = require("filetree.util.select")
+local path        = require("filetree.util.path")
+local buffer      = require("filetree.util.buffer")
+local refs_util   = require("filetree.util.markdown_refs")
+local refs_picker = require("filetree.util.refs_picker")
 local M = {}
 
 ---@type FiletreeSmartRenameConfig
 local _cfg = {
-  enabled           = false,
-  keymap            = "r",
-  use_safety        = true,
-  dry_run           = false,
-  update_references = true,
+  enabled             = false,
+  keymap              = "r",
+  use_safety          = true,
+  dry_run             = false,
+  update_references   = true,
+  check_markdown_refs = true,
+  refs_picker_prefer  = "auto",
 }
 
 ---@type FiletreeAdapter?
@@ -388,6 +392,60 @@ local function update_references_fallback(old_path, new_path, had_workspace_edit
   end
 end
 
+-- ── Markdown reference update (post-rename) ─────────────────────────────────────
+-- Separate from update_references_fallback above: that one rewrites
+-- require()/import statements (code); this rewrites markdown `[text](path)`
+-- links via the same markdown.nvim soft-dep + chooser UX as trash's delete
+-- flow. Runs after the rename already succeeded (unlike trash, where the
+-- check gates a still-pending delete) -- a rename is trivially reversible, so
+-- there's no "cancel" option here, just "fix the links up" or "leave them".
+
+---@param old_path string
+---@param new_path string
+local function handle_markdown_refs(old_path, new_path)
+  if not _cfg.check_markdown_refs then return end
+  local refs = refs_util.find(old_path)
+  if #refs == 0 then return end
+
+  local new_target = refs_util.relative_target(new_path)
+  local files, seen = {}, {}
+  for _, r in ipairs(refs) do
+    if not seen[r.file] then
+      seen[r.file] = true
+      files[#files + 1] = vim.fn.fnamemodify(r.file, ":.")
+    end
+  end
+  notify.info(string.format(
+    "%d markdown reference(s) found in: %s", #refs, table.concat(files, ", ")
+  ))
+
+  ui_select(
+    {
+      "✓  Update all references to the new path",
+      "◐  Inspect references first",
+      "✗  Leave references as-is",
+    },
+    { prompt = string.format(" %d ref(s) to %s ", #refs, vim.fn.fnamemodify(old_path, ":t")) },
+    function(_, idx)
+      if idx == 1 then
+        for _, r in ipairs(refs) do r.new_target = new_target end
+        refs_util.update(refs)
+      elseif idx == 2 then
+        refs_picker.pick(
+          refs,
+          { prefer = _cfg.refs_picker_prefer, title = string.format("References to %s", vim.fn.fnamemodify(old_path, ":t")) },
+          function(selected)
+            for _, r in ipairs(selected) do r.new_target = new_target end
+            if #selected > 0 then refs_util.update(selected) end
+          end,
+          function() end -- Esc: nothing further to do, the rename already happened
+        )
+      end
+      -- idx == 3 (leave as-is) or nil (dismissed): no-op
+    end
+  )
+end
+
 -- ── Core rename ───────────────────────────────────────────────────────────────
 
 local function do_rename(old_path, new_path)
@@ -428,6 +486,10 @@ local function do_rename(old_path, new_path)
         -- Fallback: textual require()/import rewrite across the project when
         -- no LSP client applied a workspace edit (or the file is Lua).
         update_references_fallback(old_path, new_path, workspace_edit ~= nil)
+
+        -- Markdown `[text](path)` links pointing at the old path (separate
+        -- concern from the code-reference fallback above).
+        handle_markdown_refs(old_path, new_path)
 
         -- Refresh tree
         if _adapter and _adapter.refresh then _adapter.refresh() end
