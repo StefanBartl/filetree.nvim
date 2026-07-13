@@ -168,6 +168,12 @@ local TREE = {
     badd   = function(_) local f = ft("open_variants"); if f then f.open_badd()   end end,
   },
 
+  -- ── mdrefs (trash's quickfix references-picker fallback) ────────────────────
+  mdrefs = {
+    confirm = function(_) require("filetree.util.refs_picker").qf_confirm() end,
+    cancel  = function(_) require("filetree.util.refs_picker").qf_cancel()  end,
+  },
+
   -- ── markdown_links ─────────────────────────────────────────────────────────────
   mdlink = {
     [""]      = function(_) local f = ft("markdown_links"); if f then f.link_current()    end end,
