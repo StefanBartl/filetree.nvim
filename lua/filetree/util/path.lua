@@ -116,12 +116,17 @@ function M.relative(p, base)
   local abs_p    = M.to_unix(p):gsub("/$", "")
   local abs_base = M.to_unix(base):gsub("/$", "")
 
-  if _has_lib_relpath then
-    local ok, rel = pcall(_lib_relpath, abs_p, abs_base)
-    if ok and type(rel) == "string" and rel ~= abs_p then
-      return rel == "" and "." or rel
+  -- Descendant check happens locally first (not by inspecting lib.nvim's
+  -- return value) so this stays correct regardless of what lib.nvim.fs.relpath
+  -- does for the non-descendant case — it only gets called for the exact case
+  -- both algorithms are known to agree on.
+  if abs_p:sub(1, #abs_base) == abs_base then
+    if _has_lib_relpath then
+      local ok, rel = pcall(_lib_relpath, abs_p, abs_base)
+      if ok and type(rel) == "string" then
+        return rel
+      end
     end
-  elseif abs_p:sub(1, #abs_base) == abs_base then
     local rel = abs_p:sub(#abs_base + 2)
     return rel == "" and "." or rel
   end
