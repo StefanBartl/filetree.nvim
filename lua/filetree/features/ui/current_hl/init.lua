@@ -7,6 +7,7 @@
 --- linked groups ("link:GroupName"), or named colors ("red", "darkred", etc.).
 
 local au  = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type integer?
@@ -18,8 +19,9 @@ local _cfg = {}
 ---@type FiletreeAdapter?
 local _adapter = nil
 
----@type any?   pending uv timer
-local _timer = nil
+---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _debounce = nil
 
 ---@type string?  last highlighted file path
 local _last_file = nil
@@ -102,19 +104,7 @@ local function apply()
 end
 
 local function debounced_apply()
-  if _timer then
-    pcall(function()
-      _timer:stop()
-      _timer:close()
-    end)
-    _timer = nil
-  end
-  local uv = vim.uv or vim.loop
-  _timer = uv.new_timer()
-  _timer:start(_cfg.debounce_ms or 100, 0, vim.schedule_wrap(function()
-    _timer = nil
-    apply()
-  end))
+  _debounce.call()
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -125,6 +115,9 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg     = config
   _adapter = adapter
+
+  if _debounce then _debounce.cancel() end
+  _debounce = lib_debounce.new(apply, _cfg.debounce_ms or 100)
 
   setup_hl_groups()
 
@@ -150,12 +143,9 @@ end
 
 function M.teardown()
   clear_old()
-  if _timer then
-    pcall(function()
-      _timer:stop()
-      _timer:close()
-    end)
-    _timer = nil
+  if _debounce then
+    _debounce.cancel()
+    _debounce = nil
   end
   if _augroup then
     au.del_group(_augroup)

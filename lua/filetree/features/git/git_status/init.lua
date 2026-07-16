@@ -21,6 +21,7 @@ local notify   = require("filetree.util.notify").create("[filetree.git_status]")
 local platform = require("filetree.util.platform")
 
 local au  = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeGitStatusConfig
@@ -48,8 +49,9 @@ local _ns = -1
 ---@type table<string, string>  abs_path → status_code ("M","A","D","R","?","!","C")
 local _status_map = {}
 
----@type any?  uv timer for debouncing
-local _timer = nil
+---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _debounce = nil
 
 -- ── Git query ─────────────────────────────────────────────────────────────────
 
@@ -140,15 +142,7 @@ end
 -- ── Refresh ───────────────────────────────────────────────────────────────────
 
 local function debounce_refresh()
-  local uv = vim.uv or vim.loop
-  if _timer then
-    pcall(function() _timer:stop() end)
-  else
-    _timer = uv.new_timer()
-  end
-  _timer:start(_cfg.debounce_ms, 0, vim.schedule_wrap(function()
-    M.refresh()
-  end))
+  _debounce.call()
 end
 
 ---Refresh git status for the current adapter root.
@@ -198,6 +192,9 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_git_status")
 
+  if _debounce then _debounce.cancel() end
+  _debounce = lib_debounce.new(M.refresh, _cfg.debounce_ms)
+
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_git_status", true)
 
@@ -232,9 +229,9 @@ end
 function M.teardown()
   M.clear()
   _adapter = nil
-  if _timer then
-    pcall(function() _timer:stop(); _timer:close() end)
-    _timer = nil
+  if _debounce then
+    _debounce.cancel()
+    _debounce = nil
   end
   if _augroup then
     au.del_group(_augroup)

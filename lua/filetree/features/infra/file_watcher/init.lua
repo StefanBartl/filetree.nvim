@@ -21,6 +21,7 @@
 local notify = require("filetree.util.notify").create("[filetree.file_watcher]")
 
 local au  = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeFileWatcherConfig
@@ -35,7 +36,7 @@ local _cfg = {
 local _adapter = nil
 
 local _handle  = nil   -- uv fs_event handle
-local _timer   = nil   -- debounce timer
+local _debounce = nil  -- lib.nvim.debounce handle, built in M.setup()
 local _watched = nil   -- current watched path
 
 -- ── uv helpers ────────────────────────────────────────────────────────────────
@@ -51,21 +52,19 @@ local function stop_handle()
 end
 
 local function stop_timer()
-  if _timer then
-    pcall(function() _timer:stop() end)
-    _timer = nil
+  if _debounce then
+    _debounce.cancel()
+  end
+end
+
+local function do_refresh()
+  if _adapter and _adapter.refresh then
+    pcall(_adapter.refresh)
   end
 end
 
 local function trigger_refresh()
-  stop_timer()
-  _timer = uv().new_timer()
-  _timer:start(_cfg.debounce_ms, 0, vim.schedule_wrap(function()
-    stop_timer()
-    if _adapter and _adapter.refresh then
-      pcall(_adapter.refresh)
-    end
-  end))
+  _debounce.call()
 end
 
 -- ── Watch ─────────────────────────────────────────────────────────────────────
@@ -143,6 +142,9 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
+
+  if _debounce then _debounce.cancel() end
+  _debounce = lib_debounce.new(do_refresh, _cfg.debounce_ms)
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_file_watcher", true)
