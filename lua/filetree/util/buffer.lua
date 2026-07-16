@@ -67,6 +67,49 @@ function M.context(bufnr)
   return { buf = bufnr, file = file, dir = vim.fn.fnamemodify(file, ":p:h") }
 end
 
+---True for a buffer that is exactly the shape of a stray, freshly-spawned
+---[No Name] buffer: normal buftype, unnamed, listed, unmodified, empty.
+---Deliberately state-based rather than tag-based, so it only ever matches the
+---shape Neovim itself creates as a fallback — a buffer a plugin creates on
+---purpose for scratch/temp input almost always sets `buftype` (e.g. "nofile",
+---"acwrite") or `nobuflisted`, so it never matches here.
+---@param bufnr integer
+---@return boolean
+function M.is_stray_no_name(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then return false end
+  if vim.bo[bufnr].buftype ~= "" then return false end
+  if not vim.bo[bufnr].buflisted then return false end
+  if vim.bo[bufnr].modified then return false end
+  if vim.api.nvim_buf_get_name(bufnr) ~= "" then return false end
+  if vim.api.nvim_buf_line_count(bufnr) > 1 then return false end
+  return (vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or "") == ""
+end
+
+---Find a real (named, listed, loaded, normal-buftype) buffer to redirect a
+---stray [No Name] window to. Prefers the alternate buffer (`#`) so the window
+---lands on "the next file", matching `close_for_path`'s own replacement
+---policy. Deliberately only ever returns a *named* buffer — swapping one
+---blank buffer for another blank one would defeat the point.
+---@param exclude table<integer, true>  Buffer numbers to skip (e.g. the one just deleted).
+---@return integer?
+function M.find_named_buffer(exclude)
+  local function usable(b)
+    return b and b > 0
+      and not exclude[b]
+      and vim.api.nvim_buf_is_valid(b)
+      and vim.api.nvim_buf_is_loaded(b)
+      and vim.bo[b].buflisted
+      and vim.bo[b].buftype == ""
+      and vim.api.nvim_buf_get_name(b) ~= ""
+  end
+  local alt = vim.fn.bufnr("#")
+  if usable(alt) then return alt end
+  for _, b in ipairs(vim.api.nvim_list_bufs()) do
+    if usable(b) then return b end
+  end
+  return nil
+end
+
 ---Find the last window in the current tabpage that holds a valid file buffer.
 ---`exclude_win` is skipped (pass the tree's winid to exclude it).
 ---@param exclude_win integer|nil

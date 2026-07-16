@@ -52,6 +52,7 @@
 ---@field open_in_fm          FiletreeOpenInFmConfig?
 ---@field shell_run           FiletreeShellRunConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
+---@field no_name_guard       FiletreeNoNameGuardConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
 ---@field current_hl          FiletreeCurrentHlConfig?
 ---@field safety              FiletreeSafetyConfig?
@@ -95,6 +96,11 @@
 ---@class FiletreeLayoutGuardConfig
 ---@field enabled    boolean
 ---@field delay_ms   integer   Milliseconds before guard fires after a window closes (default 50).
+
+-- ── no_name_guard ─────────────────────────────────────────────────────────────
+
+---@class FiletreeNoNameGuardConfig
+---@field enabled  boolean  Redirect stray [No Name] editor windows to a real buffer (default true).
 
 -- ── cwd_sync ──────────────────────────────────────────────────────────────────
 

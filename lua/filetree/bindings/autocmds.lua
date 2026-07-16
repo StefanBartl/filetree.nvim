@@ -24,6 +24,7 @@ return {
   { event = "ColorScheme",                 feature = "window_style", desc = "Re-isolate tree highlight groups" },
   { event = "VimResized",                  feature = "auto_resize",desc = "Adjust tree width to the new column count" },
   { event = { "BufDelete", "BufWipeout", "WinClosed" }, feature = "layout_guard", desc = "Open an editor window if the tree is left alone" },
+  { event = "BufWinEnter", feature = "no_name_guard", desc = "Redirect a stray [No Name] editor window to a real buffer, then wipe it" },
   { event = { "BufAdd", "BufDelete", "BufWipeout", "BufWinEnter", "BufWinLeave" }, feature = "opened_sync", desc = "Redraw the tree so opened-file highlights stay in sync" },
   { event = "BufDelete",                   feature = "*",          desc = "Invalidate the buffer-validation cache (util.buffer)" },
 }
