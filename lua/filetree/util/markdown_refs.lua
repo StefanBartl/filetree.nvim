@@ -188,6 +188,23 @@ end
 ---straight back to disk (so it stays unmodified and in sync); if it did have
 ---unsaved changes, the buffer is left modified for the user to save, and disk
 ---is not touched (their edits win). Files not open anywhere are edited on disk.
+---Display-friendly, deduplicated, cwd-relative list of the files a set of
+---refs point at — the ":.":modified path of each unique `r.file`, in order
+---of first appearance. Shared by every call site that reports "N markdown
+---reference(s) found in: <files>" (trash/smart_rename/rename_batch/copy_move).
+---@param refs table[]  MarkdownFileRef[]
+---@return string[]
+function M.unique_files(refs)
+  local seen, files = {}, {}
+  for _, r in ipairs(refs) do
+    if not seen[r.file] then
+      seen[r.file] = true
+      files[#files + 1] = vim.fn.fnamemodify(r.file, ":.")
+    end
+  end
+  return files
+end
+
 ---@param refs table[]  MarkdownFileRef[], each with `.new_target` set.
 ---@return integer files_changed
 function M.update(refs)

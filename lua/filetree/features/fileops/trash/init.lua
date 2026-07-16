@@ -154,13 +154,7 @@ local function confirm_popup(path, cb)
     return
   end
 
-  local files, seen = {}, {}
-  for _, r in ipairs(refs) do
-    if not seen[r.file] then
-      seen[r.file] = true
-      files[#files + 1] = vim.fn.fnamemodify(r.file, ":.")
-    end
-  end
+  local files = refs_util.unique_files(refs)
   notify.info(string.format(
     "%d markdown reference(s) found in: %s", #refs, table.concat(files, ", ")
   ))
