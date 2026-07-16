@@ -14,6 +14,14 @@ local platform = require("filetree.util.platform")
 local _ok_cross, _cross_unify = pcall(require, "lib.nvim.cross.fs.separators.unify_slashes")
 local _has_cross_unify = _ok_cross and type(_cross_unify) == "function"
 
+-- Optional: lib.nvim.fs.relpath implements the identical "strip base prefix"
+-- algorithm used below for the case where `p` lives under `base`. Prefer it
+-- when present (same reasoning as unify_slashes above); its behavior for the
+-- non-descendant case (return the path unchanged) is intentionally simpler
+-- than this module's `:~:.`-tildified fallback, so that fallback stays local.
+local _ok_relpath, _lib_relpath = pcall(require, "lib.nvim.fs.relpath")
+local _has_lib_relpath = _ok_relpath and type(_lib_relpath) == "function"
+
 local M = {}
 
 ---Expand to absolute path and strip surrounding quotes.
@@ -107,13 +115,21 @@ function M.relative(p, base)
   base = base or platform.get_cwd()
   local abs_p    = M.to_unix(p):gsub("/$", "")
   local abs_base = M.to_unix(base):gsub("/$", "")
-  if abs_p:sub(1, #abs_base) == abs_base then
+
+  if _has_lib_relpath then
+    local ok, rel = pcall(_lib_relpath, abs_p, abs_base)
+    if ok and type(rel) == "string" and rel ~= abs_p then
+      return rel == "" and "." or rel
+    end
+  elseif abs_p:sub(1, #abs_base) == abs_base then
     local rel = abs_p:sub(#abs_base + 2)
     return rel == "" and "." or rel
   end
-  -- fnamemodify's ":~:." returns OS-native separators (backslash on Windows);
-  -- slashify keeps this consistent with the rest of the plugin's forward-slash
-  -- display convention.
+
+  -- Not under base (or lib.nvim absent): fall back to fnamemodify's ":~:.",
+  -- which additionally tildifies the home directory — a UX nicety this
+  -- plugin's display convention wants that lib.nvim.fs.relpath doesn't do.
+  -- slashify keeps the result consistent with the forward-slash convention.
   return M.slashify(vim.fn.fnamemodify(abs_p, ":~:."))
 end
 
