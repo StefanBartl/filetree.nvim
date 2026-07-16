@@ -1,15 +1,40 @@
 ---@module 'filetree.util.platform'
 ---@brief Cross-platform detection utilities.
+---@description
+--- Base OS detectors (`is_windows`/`is_wsl`/`is_mac`/`is_linux`) delegate to
+--- `lib.nvim.cross.platform.*` when available, matching this repo's existing
+--- soft-dependency pattern (see `util/notify.lua`, `util/map.lua`). Falls
+--- back to the native `vim.fn.has`/`uv.os_uname` checks when lib.nvim is
+--- missing. `current()`/`has_executable()`/`get_cwd()` have no lib.nvim
+--- equivalent and stay local.
 
 local M = {}
 
+---@param name string
+---@return function|nil
+local function try_lib(name)
+  local ok, fn = pcall(require, "lib.nvim.cross.platform." .. name)
+  if ok and type(fn) == "function" then
+    return fn
+  end
+  return nil
+end
+
 ---@return boolean
 function M.is_windows()
+  local lib_fn = try_lib("is_windows")
+  if lib_fn then
+    return lib_fn()
+  end
   return vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
 end
 
 ---@return boolean
 function M.is_wsl()
+  local lib_fn = try_lib("is_wsl")
+  if lib_fn then
+    return lib_fn()
+  end
   local uv = vim.uv or vim.loop
   local version = (uv and uv.os_uname and uv.os_uname().version) or ""
   if version:match("[Mm]icrosoft") then return true end
@@ -18,11 +43,19 @@ end
 
 ---@return boolean
 function M.is_mac()
+  local lib_fn = try_lib("is_macos")
+  if lib_fn then
+    return lib_fn()
+  end
   return vim.fn.has("macunix") == 1
 end
 
 ---@return boolean
 function M.is_linux()
+  local lib_fn = try_lib("is_linux")
+  if lib_fn then
+    return lib_fn()
+  end
   return vim.fn.has("unix") == 1 and not M.is_mac() and not M.is_wsl()
 end
 
