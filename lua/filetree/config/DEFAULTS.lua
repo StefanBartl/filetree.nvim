@@ -31,6 +31,9 @@ return {
       enabled  = true,
       delay_ms = 50,
     },
+    no_name_guard = {
+      enabled = true,
+    },
     cwd_sync = {
       enabled          = false,
       debounce_ms      = 150,

@@ -24,6 +24,7 @@ M.FEATURES = {
   auto_resize       = { mod = "filetree.features.nav.auto_resize",       category = "nav" },
   cwd_sync          = { mod = "filetree.features.nav.cwd_sync",          category = "nav" },
   layout_guard      = { mod = "filetree.features.nav.layout_guard",      category = "nav" },
+  no_name_guard     = { mod = "filetree.features.nav.no_name_guard",     category = "nav" },
 
   -- ── ui: cosmetic / display ─────────────────────────────────────────────────
   window_style       = { mod = "filetree.features.ui.window_style",       category = "ui" },
