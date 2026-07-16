@@ -81,13 +81,7 @@ end
 local function handle_batch_markdown_refs(all_refs)
   if not _cfg.check_markdown_refs or #all_refs == 0 then return end
 
-  local files, seen = {}, {}
-  for _, r in ipairs(all_refs) do
-    if not seen[r.file] then
-      seen[r.file] = true
-      files[#files + 1] = vim.fn.fnamemodify(r.file, ":.")
-    end
-  end
+  local files = refs_util.unique_files(all_refs)
   notify.info(string.format(
     "%d markdown reference(s) found in: %s", #all_refs, table.concat(files, ", ")
   ))
