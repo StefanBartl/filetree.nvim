@@ -1,7 +1,20 @@
 ---@module 'filetree.util.fs'
----@brief Recursive filesystem traversal using libuv.
+---@brief Recursive filesystem traversal. Delegates the walk itself to
+--- lib.nvim.fs.collect_recursive (same libuv fs_scandir/fs_scandir_next
+--- approach, plus proper subtree pruning via its ignore predicate).
 
 local M = {}
+
+---Adapt this module's `ignore_fn(name)` (bare entry name) to lib.nvim's
+---`ignore(abs_path, is_dir)` (full path) shape.
+---@param ignore_fn fun(name: string): boolean
+---@return fun(abs_path: string, is_dir: boolean): boolean
+local function adapt_ignore(ignore_fn)
+  return function(abs_path)
+    local name = abs_path:match("([^/\\]+)$") or abs_path
+    return ignore_fn(name)
+  end
+end
 
 ---Collect files or folders recursively under root_path.
 ---@param root_path    string
@@ -9,41 +22,22 @@ local M = {}
 ---@param ignore_fn?   fun(name:string):boolean  Return true to skip an entry.
 ---@return string[]  Absolute paths.
 function M.collect_recursive(root_path, collect_type, ignore_fn)
-  local results = {}
-  local uv      = vim.uv or vim.loop
-  local stack   = { root_path }
+  local collect = require("lib.nvim.fs.collect_recursive")
+  local opts = ignore_fn and { ignore = adapt_ignore(ignore_fn) } or nil
 
-  if collect_type == "folders" and vim.fn.isdirectory(root_path) == 1 then
-    table.insert(results, root_path)
-  end
-
-  while #stack > 0 do
-    local path = table.remove(stack)
-    local stat = uv.fs_stat(path)
-    if stat then
-      if stat.type == "file" and collect_type == "files" then
-        table.insert(results, path)
-      elseif stat.type == "directory" then
-        local req = uv.fs_scandir(path)
-        if req then
-          while true do
-            local name, typ = uv.fs_scandir_next(req)
-            if not name then break end
-            if not (ignore_fn and ignore_fn(name)) then
-              local sep   = path:sub(-1) == "/" and "" or "/"
-              local child = path .. sep .. name
-              if collect_type == "folders" and typ == "directory" then
-                table.insert(results, child)
-              end
-              table.insert(stack, child)
-            end
-          end
-        end
-      end
+  if collect_type == "files" then
+    return collect.files(root_path, opts)
+  elseif collect_type == "folders" then
+    local dirs = collect.dirs(root_path, opts)
+    -- lib.nvim's dirs() only returns descendants; this module's own prior
+    -- version also included root_path itself in "folders" results.
+    if vim.fn.isdirectory(root_path) == 1 then
+      table.insert(dirs, 1, root_path)
     end
+    return dirs
   end
 
-  return results
+  return {}
 end
 
 ---Convenience wrapper: collect files only.

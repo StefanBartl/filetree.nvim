@@ -36,17 +36,11 @@ local _cache = {}
 
 -- ── Formatting ────────────────────────────────────────────────────────────────
 
+-- Delegates to lib.lua.strings.format.format_bytes, which also handles
+-- TB/PB (this module's own version capped out at GB, growing digits
+-- unbounded beyond that).
 local function fmt_bytes(n)
-  n = tonumber(n) or 0
-  if n < 1024 then
-    return string.format("%d B", n)
-  elseif n < 1024 * 1024 then
-    return string.format("%.1f KB", n / 1024)
-  elseif n < 1024 * 1024 * 1024 then
-    return string.format("%.1f MB", n / (1024 * 1024))
-  else
-    return string.format("%.2f GB", n / (1024 * 1024 * 1024))
-  end
+  return require("lib.lua.strings.format").format_bytes(tonumber(n) or 0)
 end
 
 -- ── Async dir size ────────────────────────────────────────────────────────────
