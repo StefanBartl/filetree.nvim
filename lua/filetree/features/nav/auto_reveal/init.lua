@@ -27,6 +27,7 @@
 ---   :FiletreeRevealCurrent          Force reveal now.
 
 local au  = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
@@ -49,8 +50,9 @@ local _adapter = nil
 ---@type integer  monotonic timestamp (vim.uv.hrtime) after which reveals are active
 local _paused_until = 0
 
----@type any?
-local _timer = nil
+---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _debounce = nil
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -132,12 +134,7 @@ local function do_reveal(path)
 end
 
 local function schedule_reveal(path)
-  local uv = vim.uv or vim.loop
-  if _timer then pcall(function() _timer:stop() end)
-  else _timer = uv.new_timer() end
-  _timer:start(_cfg.debounce_ms, 0, vim.schedule_wrap(function()
-    do_reveal(path)
-  end))
+  _debounce.call(path)
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -180,6 +177,9 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
+  if _debounce then _debounce.cancel() end
+  _debounce = lib_debounce.new(do_reveal, _cfg.debounce_ms)
+
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_auto_reveal", true)
 
@@ -212,9 +212,9 @@ end
 function M.teardown()
   _adapter = nil
   _paused_until = 0
-  if _timer then
-    pcall(function() _timer:stop(); _timer:close() end)
-    _timer = nil
+  if _debounce then
+    _debounce.cancel()
+    _debounce = nil
   end
   if _augroup then
     au.del_group(_augroup)

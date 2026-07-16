@@ -18,6 +18,7 @@ local notify = require("filetree.util.notify").create("[filetree.filter]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeFilterConfig
@@ -109,8 +110,9 @@ end
 
 -- ── Debounce ──────────────────────────────────────────────────────────────────
 
----@type any?
-local _timer = nil
+---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _debounce = nil
 
 local function apply(query)
   _query = query or ""
@@ -120,12 +122,7 @@ local function apply(query)
 end
 
 local function debounce_apply(query)
-  local uv = vim.uv or vim.loop
-  if _timer then pcall(function() _timer:stop() end)
-  else _timer = uv.new_timer() end
-  _timer:start(_cfg.debounce_ms, 0, vim.schedule_wrap(function()
-    apply(query)
-  end))
+  _debounce.call(query)
 end
 
 -- ── Floating input ────────────────────────────────────────────────────────────
@@ -251,6 +248,9 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_filter")
 
+  if _debounce then _debounce.cancel() end
+  _debounce = lib_debounce.new(apply, _cfg.debounce_ms)
+
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_filter", true)
 
@@ -287,7 +287,7 @@ function M.teardown()
   M.clear()
   close_input()
   _adapter = nil
-  if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
+  if _debounce then _debounce.cancel(); _debounce = nil end
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil

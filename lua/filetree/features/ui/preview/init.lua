@@ -23,6 +23,7 @@ local bufutil    = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreePreviewConfig
@@ -57,8 +58,10 @@ local _win  = nil
 ---@type integer?  current float preview buffer
 local _bufnr = nil
 
----@type any?  pending uv timer debouncing the CursorMoved live-update
-local _cm_timer = nil
+---Debounce handle for the CursorMoved live-update, built in M.setup() (needs
+---`_cfg.cursor_debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _cm_debounce = nil
 
 -- Buffer-mode state: preview shown inside an existing editor window.
 ---@type boolean
@@ -160,21 +163,15 @@ local function open_pdf(path)
   local backend = (_cfg.pdf or {}).backend or "pdfport"
   if backend == false then return false end
 
-  if backend == "pdfport" then
-    local ok, pp = pcall(require, "pdfport")
-    if ok and pp.open then
-      local opened, err = pcall(pp.open, path)
-      if opened then return true end
-      notify.warn("pdfport.open failed: " .. tostring(err) .. " — falling back to system app")
-    else
-      notify.warn("pdfport.nvim not installed — opening PDF in system app")
-    end
-    system_open(path)
-    return true
+  -- Route through the shared opener so the pdfport require + call signature live
+  -- in one place (filetree.util.pdf). `mode = "system"` there is dependency-free;
+  -- "buffer" dispatches to pdfport.nvim with an automatic system-viewer fallback.
+  local pdf = require("filetree.util.pdf")
+  if backend == "system" then
+    pdf.system_open(path)
+  else
+    pdf.open(path, { mode = "buffer", split = "vsplit", focus = true })
   end
-
-  -- "system"
-  system_open(path)
   return true
 end
 
@@ -381,6 +378,22 @@ local function buf_start(node)
   end
 end
 
+---Re-check state and refresh the live preview at CursorMoved-debounce fire
+---time (the cursor/tree may have changed since the event fired).
+local function do_cursor_update()
+  if vim.bo.filetype ~= "neo-tree" and vim.bo.filetype ~= "NvimTree" then return end
+  local node = _adapter and _adapter.get_current_node()
+  if not node then return end
+
+  if _cfg.mode == "float" then
+    if _win and vim.api.nvim_win_is_valid(_win) then open_preview(node) end
+  elseif _buf_active then
+    if node.path and node.path ~= "" and vim.fn.isdirectory(node.path) ~= 1 then
+      buf_show(node.path)
+    end
+  end
+end
+
 -- ── Public API ────────────────────────────────────────────────────────────────
 
 ---Toggle text/dir preview in the configured mode.
@@ -478,6 +491,9 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
+
+  if _cm_debounce then _cm_debounce.cancel() end
+  _cm_debounce = lib_debounce.new(do_cursor_update, _cfg.cursor_debounce_ms or 80)
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_preview", true)
@@ -596,23 +612,7 @@ function M.setup(config, adapter)
         return
       end
 
-      local uv = vim.uv or vim.loop
-      if _cm_timer then pcall(function() _cm_timer:stop() end)
-      else _cm_timer = uv.new_timer() end
-      _cm_timer:start(_cfg.cursor_debounce_ms or 80, 0, vim.schedule_wrap(function()
-        -- Re-check state at fire time; the cursor/tree may have changed.
-        if vim.bo.filetype ~= "neo-tree" and vim.bo.filetype ~= "NvimTree" then return end
-        local node = _adapter and _adapter.get_current_node()
-        if not node then return end
-
-        if _cfg.mode == "float" then
-          if _win and vim.api.nvim_win_is_valid(_win) then open_preview(node) end
-        elseif _buf_active then
-          if node.path and node.path ~= "" and vim.fn.isdirectory(node.path) ~= 1 then
-            buf_show(node.path)
-          end
-        end
-      end))
+      _cm_debounce.call()
     end,
   })
 end
@@ -620,9 +620,9 @@ end
 function M.teardown()
   close_preview()
   buf_stop(true)
-  if _cm_timer then
-    pcall(function() _cm_timer:stop(); _cm_timer:close() end)
-    _cm_timer = nil
+  if _cm_debounce then
+    _cm_debounce.cancel()
+    _cm_debounce = nil
   end
   _adapter = nil
   if _augroup then

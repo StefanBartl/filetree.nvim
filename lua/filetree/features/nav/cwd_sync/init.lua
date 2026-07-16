@@ -27,23 +27,26 @@
 
 local notify = require("filetree.util.notify").create("[filetree.cwd_sync]")
 local path = require("filetree.util.path")
+local lib_debounce = require("lib.nvim.debounce")
 
 local au  = require("filetree.util.autocmd")
 local M = {}
 
 ---@class CwdSyncState
----@field timer           any?     Pending uv timer handle.
 ---@field last_path       string?  Last file we revealed.
 ---@field paused_until    number   Timestamp (uv.hrtime) after which sync resumes.
 ---@field user_navigated  boolean  Set when the user moved inside the tree manually.
 
 ---@type CwdSyncState
 local S = {
-  timer          = nil,
   last_path      = nil,
   paused_until   = 0,
   user_navigated = false,
 }
+
+---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _debounce = nil
 
 ---@type integer?
 local _augroup = nil
@@ -71,16 +74,6 @@ end
 local function pause(ms)
   local uv = vim.uv or vim.loop
   S.paused_until = uv.hrtime() + (ms or 2000) * 1e6
-end
-
-local function cancel_timer()
-  if S.timer then
-    pcall(function()
-      S.timer:stop()
-      S.timer:close()
-    end)
-    S.timer = nil
-  end
 end
 
 ---Compare two directories for equality, ignoring separator style and a
@@ -188,16 +181,9 @@ local function do_reveal(path_)
 end
 
 local function debounced_reveal()
-  cancel_timer()
   local file = vim.fn.expand("%:p")
   if file == "" or vim.fn.filereadable(file) == 0 then return end
-
-  local uv = vim.uv or vim.loop
-  S.timer = uv.new_timer()
-  S.timer:start(_cfg.debounce_ms or 150, 0, vim.schedule_wrap(function()
-    cancel_timer()
-    do_reveal(file)
-  end))
+  _debounce.call(file)
 end
 
 ---@param config FiletreeCwdSyncConfig
@@ -206,6 +192,11 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg     = config
   _adapter = adapter
+
+  if _debounce then
+    _debounce.cancel()
+  end
+  _debounce = lib_debounce.new(do_reveal, _cfg.debounce_ms or 150)
 
   -- Build the cached stable-root finder unless disabled (root_markers = false).
   -- Default markers are { ".git" } so the cwd anchors to the git root.
@@ -261,7 +252,9 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
-  cancel_timer()
+  if _debounce then
+    _debounce.cancel()
+  end
   _root_finder = nil
   if _augroup then
     au.del_group(_augroup)

@@ -14,6 +14,7 @@
 
 local notify   = require("filetree.util.notify").create("[filetree.watcher_quarantine]")
 local platform = require("filetree.util.platform")
+local lib_debounce = require("lib.nvim.debounce")
 
 local M = {}
 
@@ -39,16 +40,26 @@ local S = {
   original_notify = nil,
 }
 
----@type any?
-local _timer = nil
+---One lib.nvim.debounce handle, rebuilt whenever M.enter() is called with a
+---different duration than the cached one (duration_ms is a per-call
+---override, so it can't be fixed once at construction).
+---@type table?
+local _debounce = nil
+---@type integer?
+local _debounce_ms = nil
 
 local function cancel_timer()
-  if _timer then
-    pcall(function()
-      _timer:stop()
-      _timer:close()
-    end)
-    _timer = nil
+  if _debounce then
+    _debounce.cancel()
+  end
+end
+
+---@param ms integer
+local function ensure_debounce(ms)
+  if not _debounce or _debounce_ms ~= ms then
+    if _debounce then _debounce.cancel() end
+    _debounce = lib_debounce.new(function() M.exit() end, ms)
+    _debounce_ms = ms
   end
 end
 
@@ -160,11 +171,9 @@ function M.enter(duration_ms, paths)
     notify.debug("quarantine entered (" .. (duration_ms or _cfg.duration_ms) .. "ms)")
   end
 
-  local uv = vim.uv or vim.loop
-  _timer = uv.new_timer()
-  _timer:start(duration_ms or _cfg.duration_ms, 0, vim.schedule_wrap(function()
-    M.exit()
-  end))
+  local ms = duration_ms or _cfg.duration_ms
+  ensure_debounce(ms)
+  _debounce.call()
 end
 
 ---End quarantine immediately.

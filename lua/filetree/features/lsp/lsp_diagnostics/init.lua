@@ -13,6 +13,7 @@
 local notify = require("filetree.util.notify").create("[filetree.lsp_diagnostics]")
 
 local au  = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeLspDiagnosticsConfig
@@ -149,17 +150,17 @@ end
 
 -- ── Debounce ──────────────────────────────────────────────────────────────────
 
----@type any?
-local _timer = nil
+---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _debounce = nil
+
+local function do_update()
+  recompute()
+  M._render()
+end
 
 local function schedule_update()
-  local uv = vim.uv or vim.loop
-  if _timer then pcall(function() _timer:stop() end)
-  else _timer = uv.new_timer() end
-  _timer:start(_cfg.debounce_ms, 0, vim.schedule_wrap(function()
-    recompute()
-    M._render()
-  end))
+  _debounce.call()
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -174,6 +175,9 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("keep", config, _cfg)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_lsp_diagnostics")
+
+  if _debounce then _debounce.cancel() end
+  _debounce = lib_debounce.new(do_update, _cfg.debounce_ms)
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_lsp_diagnostics", true)
@@ -210,7 +214,7 @@ function M.teardown()
   end
   _counts  = {}
   _adapter = nil
-  if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
+  if _debounce then _debounce.cancel(); _debounce = nil end
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil

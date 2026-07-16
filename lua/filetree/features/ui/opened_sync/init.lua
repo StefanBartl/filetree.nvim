@@ -15,6 +15,7 @@
 --- redraw cheaply.
 
 local au = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeAdapter?
@@ -23,18 +24,12 @@ local _adapter = nil
 ---@type integer?
 local _augroup = nil
 
----@type any?  pending uv debounce timer
-local _timer = nil
+---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _debounce = nil
 
 ---@type FiletreeOpenedSyncConfig
 local _cfg = {}
-
-local function cancel_timer()
-  if _timer then
-    pcall(function() _timer:stop(); _timer:close() end)
-    _timer = nil
-  end
-end
 
 local function redraw_now()
   if not _adapter then return end
@@ -45,13 +40,7 @@ local function redraw_now()
 end
 
 local function debounced_redraw()
-  cancel_timer()
-  local uv = vim.uv or vim.loop
-  _timer = uv.new_timer()
-  _timer:start(_cfg.debounce_ms or 60, 0, vim.schedule_wrap(function()
-    cancel_timer()
-    redraw_now()
-  end))
+  _debounce.call()
 end
 
 ---@param config FiletreeOpenedSyncConfig
@@ -62,6 +51,9 @@ function M.setup(config, adapter)
   if type(adapter.redraw) ~= "function" then return end
   _cfg     = config
   _adapter = adapter
+
+  if _debounce then _debounce.cancel() end
+  _debounce = lib_debounce.new(redraw_now, _cfg.debounce_ms or 60)
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_opened_sync", true)
@@ -77,7 +69,10 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
-  cancel_timer()
+  if _debounce then
+    _debounce.cancel()
+    _debounce = nil
+  end
   _adapter = nil
   if _augroup then
     au.del_group(_augroup)

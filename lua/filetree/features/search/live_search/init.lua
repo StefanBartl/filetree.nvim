@@ -26,6 +26,7 @@ local notify = require("filetree.util.notify").create("[filetree.live_search]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeLiveSearchConfig
@@ -42,10 +43,11 @@ local _cfg = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
-local _ns    = vim.api.nvim_create_namespace("filetree_live_search")
-local _timer = nil
+local _ns = vim.api.nvim_create_namespace("filetree_live_search")
 
-local function uv() return vim.uv or vim.loop end
+---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
+---@type table?
+local _debounce = nil
 
 -- ── Overlay helpers ───────────────────────────────────────────────────────────
 
@@ -129,12 +131,7 @@ local function open_input_bar(tree_winid, tree_bufnr)
       -- Strip prompt prefix if buftype=prompt added one
       local query = line:match("^%s*(.-)%s*$")
 
-      if _timer then pcall(function() _timer:stop() end) end
-      _timer = uv().new_timer()
-      _timer:start(_cfg.debounce_ms, 0, vim.schedule_wrap(function()
-        _timer = nil
-        apply_overlay(tree_bufnr, query)
-      end))
+      _debounce.call(tree_bufnr, query)
     end,
   })
 
@@ -224,6 +221,9 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
+  if _debounce then _debounce.cancel() end
+  _debounce = lib_debounce.new(apply_overlay, _cfg.debounce_ms)
+
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_live_search", true)
 
@@ -247,7 +247,7 @@ end
 
 function M.teardown()
   _adapter = nil
-  if _timer then pcall(function() _timer:stop(); _timer:close() end); _timer = nil end
+  if _debounce then _debounce.cancel(); _debounce = nil end
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil
