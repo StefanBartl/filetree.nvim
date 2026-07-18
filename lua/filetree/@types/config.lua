@@ -80,6 +80,7 @@
 ---@field file_watcher         FiletreeFileWatcherConfig?
 ---@field hooks_api            FiletreeHooksApiConfig?
 ---@field open_with               FiletreeOpenWithConfig?
+---@field pdf_open                FiletreePdfOpenConfig?
 ---@field smart_rename            FiletreeSmartRenameConfig?
 ---@field path_copy               FiletreePathCopyConfig?
 ---@field live_search             FiletreeLiveSearchConfig?
@@ -395,6 +396,22 @@
 ---@field enabled  boolean
 ---@field keymap   string?              System-default open key (default "<leader>sm").
 ---@field apps     FiletreeOpenWithApp[]  Custom application entries.
+
+-- ── pdf_open ──────────────────────────────────────────────────────────────────
+
+---@alias FiletreePdfOpenMode
+---| "buffer"    Extract PDF text into a buffer via pdfport.nvim.
+---| "float"     Show extracted text in a floating window via pdfport.nvim.
+---| "terminal"  Run pdfport.nvim's conversion in a terminal.
+---| "system"    Open in the OS default PDF viewer (no external deps).
+
+---@class FiletreePdfOpenConfig
+---@field enabled         boolean
+---@field default_mode    FiletreePdfOpenMode?  Mode for `keymap_open` (default "buffer"; falls back to system viewer when pdfport.nvim is absent).
+---@field keymap_open     string?  Open the PDF under the cursor with `default_mode` (default "gp").
+---@field keymap_text     string?  Force text extraction into a buffer (default nil, off).
+---@field keymap_system   string?  Force the OS default viewer (default nil, off).
+---@field keymap_terminal string?  Force pdfport's terminal mode (default nil, off).
 
 -- ── smart_rename ─────────────────────────────────────────────────────────────
 

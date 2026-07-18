@@ -113,6 +113,12 @@ local SPEC = {
   lua_require_copy = {
     { field = "keymap", method = "copy_require", desc = "filetree: copy as require()", default = "rq" },
   },
+  pdf_open = {
+    { field = "keymap_open",     method = "open_default",  desc = "filetree: open PDF (pdfport)",      default = "gp" },
+    { field = "keymap_text",     method = "open_text",     desc = "filetree: open PDF as text",        default = nil  },
+    { field = "keymap_system",   method = "open_system",   desc = "filetree: open PDF in system viewer", default = nil  },
+    { field = "keymap_terminal", method = "open_terminal", desc = "filetree: open PDF in terminal",    default = nil  },
+  },
 }
 
 -- ── Helpers ─────────────────────────────────────────────────────────────────────
