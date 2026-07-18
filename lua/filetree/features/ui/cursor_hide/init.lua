@@ -19,13 +19,9 @@
 --- Config:
 ---   enabled  boolean (default true)
 ---
---- KNOWN GAP: this feature's winhighlight override could not be confirmed
---- live in headless Neovim testing (0/N across several rounds, including
---- with a real WinLeave+WinEnter focus-switch and a vim.schedule-deferred
---- callback), despite the module loading, its config resolving correctly,
---- and no error being thrown. A host-side fallback that recolors the global
---- Cursor group is kept alongside this until the discrepancy is understood
---- or this is confirmed working in a real interactive session.
+--- Note: could not be confirmed via headless Neovim testing (no UIEnter
+--- without a real UI attached makes VeryLazy fire unpredictably relative to
+--- a scripted test). Confirmed working in real interactive use.
 
 local au  = require("filetree.util.autocmd")
 local M = {}

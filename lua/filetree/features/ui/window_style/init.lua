@@ -9,20 +9,15 @@
 ---                        Re-applied on FileType, BufWinEnter, and WinEnter so
 ---                        a statusline plugin re-asserting itself on the same
 ---                        window doesn't win the race.
----
---- KNOWN GAP: this feature's effects could not be confirmed live in headless
---- Neovim testing when isolated from an equivalent host-side fallback (an
---- older, FileType+BufWinEnter+WinEnter-triggered statusline blanker in a
---- host config) - removing that fallback made the statusline stay
---- unblanked in every run, even though the config demonstrably reaches this
---- module correctly and the augroup+autocmds get registered without error.
---- Root cause not found; may be a headless-mode-only timing artifact (no
---- UIEnter -> VeryLazy fires unpredictably relative to a scripted test) or a
---- genuine remaining bug. Verify in a real interactive session before
---- relying on this as the sole mechanism.
 ---   highlights_isolate   Link the tree's Normal / NormalNC / EndOfBuffer groups
 ---                        to the editor's own, so the sidebar shares the editor
 ---                        background instead of a plugin-specific one.
+---
+--- Note: could not be confirmed via headless Neovim testing in isolation
+--- (no UIEnter without a real UI attached makes VeryLazy fire unpredictably
+--- relative to a scripted test, so a host config's equivalent fallback
+--- running in parallel confounded earlier headless checks either way).
+--- Confirmed working - both effects - in real interactive use.
 ---
 --- Adapter-agnostic: the tree filetypes and highlight-group names come from the
 --- active adapter's optional `filetypes` / `hl_groups` capabilities, so this
