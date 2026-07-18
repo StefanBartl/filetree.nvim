@@ -1,11 +1,14 @@
 ---@module 'filetree.features.window_style'
 ---@brief Cosmetic tweaks for tree windows: blank statusline + isolated highlights.
 ---@description
---- Both effects are OFF by default, so enabling the feature changes nothing until
---- you opt into one of them:
+--- statusline is ON by default (set `statusline = false` to opt out);
+--- highlights_isolate stays OFF by default (opt in explicitly):
 ---
 ---   statusline           Blank the statusline inside tree windows (a single
 ---                        space), so the sidebar has no cluttered status text.
+---                        Re-applied on FileType, BufWinEnter, and WinEnter so
+---                        a statusline plugin re-asserting itself on the same
+---                        window doesn't win the race.
 ---   highlights_isolate   Link the tree's Normal / NormalNC / EndOfBuffer groups
 ---                        to the editor's own, so the sidebar shares the editor
 ---                        background instead of a plugin-specific one.
@@ -18,7 +21,7 @@
 ---
 --- Config:
 ---   enabled              boolean
----   statusline           boolean  Blank statusline in tree windows (default false).
+---   statusline           boolean  Blank statusline in tree windows (default true).
 ---   highlights_isolate   boolean  Link tree HL groups to editor groups (default false).
 
 local au  = require("filetree.util.autocmd")
@@ -32,7 +35,7 @@ local M = {}
 ---@type FiletreeWindowStyleConfig
 local _cfg = {
   enabled            = false,
-  statusline         = false,
+  statusline         = true,
   highlights_isolate = false,
 }
 
@@ -103,6 +106,13 @@ function M.setup(config, adapter)
     au.acmd("FileType", {
       group    = _augroup,
       pattern  = tree_filetypes(),
+      callback = function() vim.schedule(apply_statusline) end,
+    })
+    -- Fallback re-application: some statusline plugins (re)assert their own
+    -- value on BufWinEnter/WinEnter after FileType has already fired once for
+    -- a given buffer, which would otherwise win the last-write race.
+    au.acmd({ "BufWinEnter", "WinEnter" }, {
+      group    = _augroup,
       callback = function() vim.schedule(apply_statusline) end,
     })
   end

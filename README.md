@@ -67,8 +67,8 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](docs/BINDINGS/KEYMAPS.md).
 | `breadcrumbs` | Path breadcrumbs for the current node |
 | `size_info` | Show file / directory sizes |
 | `window_size_cycler` | Cycle the tree width through presets (`w`) |
-| `window_style` | Blank statusline + isolated tree highlights (adapter-agnostic; both effects off until configured) |
-| `cursor_hide` | Hide the block cursor inside the tree |
+| `window_style` | Blank statusline (adapter-agnostic, on by default) + isolated tree highlights (opt-in) |
+| `cursor_hide` | Hide the block cursor inside the tree (adapter-agnostic via adapter `filetypes`) |
 | `tree_reset` | `<Esc>` clears preview + filter + live search |
 | `opened_sync` | Re-render the tree on buffer open/close so the tree plugin's opened-file highlights stay in sync |
 | `current_hl` | Highlight the current file + parent dir, optional sign-column icon on the focused file _(opt-in)_ |
@@ -331,6 +331,9 @@ require("filetree").setup({
 
     cursor_hide = {
       enabled = true,   -- default: on — hide block cursor in tree window
+      -- Tree filetypes come from the active adapter's `filetypes` capability
+      -- when it declares one (neo-tree, nvim-tree ship it); otherwise a
+      -- superset covering all known trees is used as a fallback.
     },
 
     tree_reset = {
@@ -375,8 +378,11 @@ require("filetree").setup({
     },
 
     window_style = {
-      enabled            = true,   -- default: on, but both effects below default off
-      statusline         = false,  -- true → blank statusline in tree windows
+      enabled            = true,   -- default: on
+      statusline         = true,   -- default: on — blank statusline in tree windows;
+                                    -- re-applied on FileType, BufWinEnter, and WinEnter
+                                    -- so a statusline plugin re-asserting itself on the
+                                    -- same window doesn't win the race
       highlights_isolate = false,  -- true → link tree HL groups to editor's Normal/NormalNC
     },
 

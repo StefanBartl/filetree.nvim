@@ -20,6 +20,7 @@ filetree.nvim creates autocmds in two categories:
 | `cwd_sync` | `BufEnter`, `DirChanged` | Sync Vim cwd to current node's directory | `enabled = false` or `autocmds = { cwd_sync = false }` |
 | `current_hl` | `BufEnter`, `CursorMoved` | Highlight current-file node in tree | `enabled = false` or `autocmds = { current_hl = false }` |
 | `cursor_hide` | `BufEnter`, `WinEnter`, `BufLeave`, `WinLeave` | Hide block cursor in tree window; restore on leave | `enabled = false` |
+| `window_style` | `FileType`, `BufWinEnter`, `WinEnter` (statusline); `ColorScheme` (highlights_isolate) | Blank statusline (on by default) / isolate tree highlights (opt-in) in tree windows | `enabled = false` or `statusline = false` / `highlights_isolate = false` |
 | `preview` | `BufLeave`, `WinLeave`, `CursorMoved` | Auto-close preview float on leave; live-update on cursor move | `enabled = false` |
 | `git_status` | `BufWritePost`, `FocusGained` | Refresh git decorations after write | `enabled = false` |
 | `file_watcher` | `User FileWatcherEvent` | Refresh tree on filesystem change | `enabled = false` |
