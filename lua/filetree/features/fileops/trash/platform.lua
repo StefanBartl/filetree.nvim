@@ -11,6 +11,14 @@ local M = {}
 -- ── Windows ───────────────────────────────────────────────────────────────────
 
 local function trash_windows(path)
+  -- Shell.Application's ParseName resolves paths against the shell namespace,
+  -- which needs native backslash separators — a forward-slash path (the form
+  -- Neovim usually hands us) yields $null and the item is never trashed. And
+  -- PowerShell single-quoted strings escape an embedded quote by doubling it
+  -- ('' not \'), so a path containing ' breaks the script otherwise. Both are
+  -- handled the same way in trash/undo.lua's restore_windows.
+  local win_path = path:gsub("/", "\\"):gsub("'", "''")
+
   -- Shell.Application COM via PowerShell — moves item to Recycle Bin
   local ps = string.format(
     'powershell -NoProfile -NonInteractive -Command '
@@ -18,7 +26,7 @@ local function trash_windows(path)
     .. '$item = $sh.Namespace(0).ParseName(\'%s\'); '
     .. 'if ($item) { $item.InvokeVerb(\'delete\') } '
     .. 'else { exit 1 }"',
-    path:gsub("'", "\\'")
+    win_path
   )
   local code = os.execute(ps)
   return { ok = code == 0, err = code ~= 0 and "PowerShell trash failed (code " .. tostring(code) .. ")" or nil }
