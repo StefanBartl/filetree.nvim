@@ -17,11 +17,28 @@ local function adapt_ignore(ignore_fn)
 end
 
 ---Collect files or folders recursively under root_path.
+---
+---lib.nvim's walker assumes root_path is a directory (it fs_scandir's it
+---directly), so it can't recurse into a bare file -- fs_scandir on a file
+---handle just fails and yields zero results. This module's prior local
+---implementation handled that case (a file's own recursive "files" list is
+---itself; it has no "folders"), so it's restored here rather than in
+---lib.nvim, whose collect_recursive is documented as a directory walker.
 ---@param root_path    string
 ---@param collect_type "files"|"folders"
 ---@param ignore_fn?   fun(name:string):boolean  Return true to skip an entry.
 ---@return string[]  Absolute paths.
 function M.collect_recursive(root_path, collect_type, ignore_fn)
+  if vim.fn.isdirectory(root_path) ~= 1 then
+    if collect_type == "files" and vim.fn.filereadable(root_path) == 1 then
+      local name = root_path:match("([^/\\]+)$") or root_path
+      if not (ignore_fn and ignore_fn(name)) then
+        return { root_path }
+      end
+    end
+    return {}
+  end
+
   local collect = require("lib.nvim.fs.collect_recursive")
   local opts = ignore_fn and { ignore = adapt_ignore(ignore_fn) } or nil
 
@@ -31,9 +48,7 @@ function M.collect_recursive(root_path, collect_type, ignore_fn)
     local dirs = collect.dirs(root_path, opts)
     -- lib.nvim's dirs() only returns descendants; this module's own prior
     -- version also included root_path itself in "folders" results.
-    if vim.fn.isdirectory(root_path) == 1 then
-      table.insert(dirs, 1, root_path)
-    end
+    table.insert(dirs, 1, root_path)
     return dirs
   end
 
