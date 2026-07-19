@@ -24,8 +24,34 @@
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h:h")
 vim.opt.rtp:prepend(root)
-local sibling_lib = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
-if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) end
+
+-- lib.nvim resolution: $LIB_NVIM_PATH -> sibling checkout -> lazy.nvim's
+-- managed copy (see lib.nvim/nvim/templates/resolve_lib_nvim.lua for the
+-- canonical copy of this function and the other caller patterns).
+local function add_lib_nvim()
+	local candidates = {}
+	if vim.env.LIB_NVIM_PATH then
+		candidates[#candidates + 1] = vim.env.LIB_NVIM_PATH
+	end
+	candidates[#candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
+	candidates[#candidates + 1] = vim.fn.stdpath("data") .. "/lazy/lib.nvim"
+
+	for _, path in ipairs(candidates) do
+		local norm = vim.fs.normalize(path)
+		if vim.fn.isdirectory(norm .. "/lua/lib") == 1 then
+			vim.opt.rtp:prepend(norm)
+			package.path = table.concat({
+				norm .. "/lua/?.lua",
+				norm .. "/lua/?/init.lua",
+				package.path,
+			}, ";")
+			return norm
+		end
+	end
+	return nil
+end
+
+add_lib_nvim()
 
 local fixtures_root = vim.fn.fnamemodify(this, ":p:h") .. "/fixtures"
 local scratch_root = (vim.fn.has("win32") == 1 and vim.env.TEMP or "/tmp") .. "/filetree-smart-rename-test"
