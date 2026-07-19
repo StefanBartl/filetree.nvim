@@ -5,8 +5,10 @@
 --- `lib.nvim.cross.platform.*` when available, matching this repo's existing
 --- soft-dependency pattern (see `util/notify.lua`, `util/map.lua`). Falls
 --- back to the native `vim.fn.has`/`uv.os_uname` checks when lib.nvim is
---- missing. `current()`/`has_executable()`/`get_cwd()` have no lib.nvim
---- equivalent and stay local.
+--- missing. `has_executable()`/`get_cwd()` have no lib.nvim equivalent and
+--- stay local; `current()` delegates to `lib.nvim.cross.platform.is()` (its
+--- unified selector) when available, falling back to composing the booleans
+--- above otherwise.
 
 local M = {}
 
@@ -61,6 +63,15 @@ end
 
 ---@return "windows"|"wsl"|"mac"|"linux"
 function M.current()
+  local lib_is = try_lib("is")
+  if lib_is then
+    local platform = lib_is() ---@type string
+    if platform == "macos" then return "mac" end
+    if platform == "windows" or platform == "wsl" or platform == "linux" then
+      return platform
+    end
+  end
+
   if M.is_windows() then return "windows" end
   if M.is_wsl()     then return "wsl"     end
   if M.is_mac()     then return "mac"     end
