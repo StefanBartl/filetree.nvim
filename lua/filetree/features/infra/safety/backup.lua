@@ -34,19 +34,19 @@ local function backup_path(src)
 end
 
 ---Recursively copy a file or directory.
----Uses vim.fn.system("cp -r …") on POSIX and xcopy on Windows.
+---Uses `xcopy` on Windows, `cp -r` elsewhere.
 ---@param src string
 ---@param dst string
 ---@return boolean
 local function copy(src, dst)
   local platform = require("filetree.util.platform")
-  local ok, result
+  local run_argv = require("lib.nvim.cross.run_argv")
+  local ok
   if platform.is_windows() and not platform.is_wsl() then
     -- xcopy handles both files and directories
-    local cmd = string.format('xcopy /E /I /H /Y "%s" "%s"', src, dst)
-    ok = os.execute(cmd) == 0
+    ok = run_argv.run_blocking({ "xcopy", "/E", "/I", "/H", "/Y", src, dst })
   else
-    ok = os.execute(string.format("cp -r %s %s", vim.fn.shellescape(src), vim.fn.shellescape(dst))) == 0
+    ok = run_argv.run_blocking({ "cp", "-r", src, dst })
   end
   return ok or false
 end
