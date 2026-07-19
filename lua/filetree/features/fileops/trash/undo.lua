@@ -82,9 +82,10 @@ local function restore_windows(name, original_path)
   local win_path = original_path:gsub("/", "\\"):gsub("'", "''")
   local esc_name = name:gsub("'", "''")
 
-  local ps = string.format(
-    [[powershell -NoProfile -NonInteractive -Command "]]
-    .. [[$sh = New-Object -ComObject Shell.Application; ]]
+  -- Passed as a single argv element (not a shell command line), so the
+  -- outer OS shell never re-parses/re-quotes it.
+  local script = string.format(
+    [[$sh = New-Object -ComObject Shell.Application; ]]
     .. [[$bin = $sh.Namespace(0xa); ]]
     .. [[$target = $null; ]]
     .. [[foreach ($item in $bin.Items()) { ]]
@@ -109,18 +110,25 @@ local function restore_windows(name, original_path)
     .. [[  $verb = $target.Verbs() | Where-Object { ($_.Name -replace '&','') -match '%s' } | Select-Object -First 1; ]]
     .. [[  if ($verb) { $verb.DoIt(); $moved = (Test-Path -LiteralPath $dst) } ]]
     .. [[}; ]]
-    .. [[if ($moved) { exit 0 } else { exit 2 }"]],
+    .. [[if ($moved) { exit 0 } else { exit 2 }]],
     win_path, esc_name, win_path, RESTORE_VERB_PATTERN
   )
-  local code = os.execute(ps)
+  local ok, err = require("lib.nvim.cross.run_argv").run_blocking(
+    { "powershell", "-NoProfile", "-NonInteractive", "-Command", script }
+  )
+  if ok then return true, nil end
+  -- The script has no stderr output of its own, so on failure run_argv's
+  -- err is exactly "exit code N" -- recover our script's exit code from it
+  -- to keep the specific, actionable messages below.
+  local code = tonumber((err or ""):match("exit code (%d+)"))
   if code == 1 then return false, "Item not found in Recycle Bin (may already be restored, or bin was emptied)" end
   if code == 2 then return false, "Found the item, but could not move it back (and no restore verb matched either) -- restore it manually from the Recycle Bin" end
   if code == 3 then return false, "A file already exists at the original location -- not overwriting it" end
-  if code ~= 0 then return false, "PowerShell restore failed (exit " .. tostring(code) .. ")" end
-  return true, nil
+  return false, "PowerShell restore failed: " .. (err or "unknown error")
 end
 
 local function restore_linux_mac(original_path)
+  local run_argv = require("lib.nvim.cross.run_argv")
   -- gio restore by original path (Linux only; gio encodes original path in .trashinfo)
   if vim.fn.executable("gio") == 1 then
     -- gio restore uses the trash:// URI — we find the .trashinfo file by name
@@ -128,16 +136,14 @@ local function restore_linux_mac(original_path)
     local info_dir = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash/info"
     local info_file = info_dir .. "/" .. name .. ".trashinfo"
     if vim.fn.filereadable(info_file) == 1 then
-      local code = os.execute("gio trash --restore " .. vim.fn.shellescape("trash:///" .. vim.fn.fnameescape(name)))
-      if code == 0 then return true, nil end
+      local ok = run_argv.run_blocking({ "gio", "trash", "--restore", "trash:///" .. vim.fn.fnameescape(name) })
+      if ok then return true, nil end
     end
     -- Direct restore from files dir
     local trash_files = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash/files/" .. name
     if vim.fn.filereadable(trash_files) == 1 or vim.fn.isdirectory(trash_files) == 1 then
-      local code = os.execute(string.format("mv %s %s",
-        vim.fn.shellescape(trash_files),
-        vim.fn.shellescape(original_path)))
-      if code == 0 then return true, nil end
+      local ok = run_argv.run_blocking({ "mv", trash_files, original_path })
+      if ok then return true, nil end
     end
   end
   return false, "Could not restore — use your file manager's trash to restore manually"
