@@ -54,6 +54,7 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_cursor_hide", true)
 
   local function apply_hide(win, buf)
+    if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then return end
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
     local ok, cur = pcall(vim.api.nvim_get_option_value, "winhighlight", { win = win })
     local base = (ok and cur ~= "") and (cur .. ",") or ""
@@ -62,6 +63,7 @@ function M.setup(config, adapter)
   end
 
   local function apply_show(win, buf)
+    if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then return end
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
     local ok, cur = pcall(vim.api.nvim_get_option_value, "winhighlight", { win = win })
     if not ok then return end
