@@ -19,17 +19,20 @@ local function trash_windows(path)
   -- handled the same way in trash/undo.lua's restore_windows.
   local win_path = path:gsub("/", "\\"):gsub("'", "''")
 
-  -- Shell.Application COM via PowerShell — moves item to Recycle Bin
-  local ps = string.format(
-    'powershell -NoProfile -NonInteractive -Command '
-    .. '"$sh = New-Object -ComObject Shell.Application; '
-    .. '$item = $sh.Namespace(0).ParseName(\'%s\'); '
-    .. 'if ($item) { $item.InvokeVerb(\'delete\') } '
-    .. 'else { exit 1 }"',
+  -- Shell.Application COM via PowerShell — moves item to Recycle Bin.
+  -- Passed as a single argv element (not a shell command line), so the
+  -- outer OS shell never re-parses/re-quotes it.
+  local script = string.format(
+    "$sh = New-Object -ComObject Shell.Application; "
+    .. "$item = $sh.Namespace(0).ParseName('%s'); "
+    .. "if ($item) { $item.InvokeVerb('delete') } "
+    .. "else { exit 1 }",
     win_path
   )
-  local code = os.execute(ps)
-  return { ok = code == 0, err = code ~= 0 and "PowerShell trash failed (code " .. tostring(code) .. ")" or nil }
+  local ok = require("lib.nvim.cross.run_argv").run_blocking(
+    { "powershell", "-NoProfile", "-NonInteractive", "-Command", script }
+  )
+  return { ok = ok, err = not ok and "PowerShell trash failed" or nil }
 end
 
 -- ── macOS ─────────────────────────────────────────────────────────────────────
@@ -37,8 +40,8 @@ end
 local function trash_mac(path)
   -- `trash` CLI (brew install trash) preferred; AppleScript fallback
   if vim.fn.executable("trash") == 1 then
-    local code = os.execute("trash " .. vim.fn.shellescape(path))
-    return { ok = code == 0, err = code ~= 0 and "trash CLI failed" or nil }
+    local ok = require("lib.nvim.cross.run_argv").run_blocking({ "trash", path })
+    return { ok = ok, err = not ok and "trash CLI failed" or nil }
   end
   -- AppleScript fallback
   local script = string.format(
@@ -52,15 +55,16 @@ end
 -- ── Linux ─────────────────────────────────────────────────────────────────────
 
 local function trash_linux(path)
+  local run_argv = require("lib.nvim.cross.run_argv")
   -- Prefer gio (most widely available on modern desktops)
   if vim.fn.executable("gio") == 1 then
-    local code = os.execute("gio trash " .. vim.fn.shellescape(path))
-    return { ok = code == 0, err = code ~= 0 and "gio trash failed" or nil }
+    local ok = run_argv.run_blocking({ "gio", "trash", path })
+    return { ok = ok, err = not ok and "gio trash failed" or nil }
   end
   -- trash-cli fallback
   if vim.fn.executable("trash-put") == 1 then
-    local code = os.execute("trash-put " .. vim.fn.shellescape(path))
-    return { ok = code == 0, err = code ~= 0 and "trash-put failed" or nil }
+    local ok = run_argv.run_blocking({ "trash-put", path })
+    return { ok = ok, err = not ok and "trash-put failed" or nil }
   end
   -- Manual: move to XDG Trash
   local trash_dir = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash/files"
@@ -69,8 +73,8 @@ local function trash_linux(path)
   end
   local base = vim.fn.fnamemodify(path, ":t")
   local dst  = trash_dir .. "/" .. base
-  local code = os.execute(string.format("mv %s %s", vim.fn.shellescape(path), vim.fn.shellescape(dst)))
-  return { ok = code == 0, err = code ~= 0 and "mv to XDG Trash failed" or nil }
+  local ok = run_argv.run_blocking({ "mv", path, dst })
+  return { ok = ok, err = not ok and "mv to XDG Trash failed" or nil }
 end
 
 -- ── WSL ───────────────────────────────────────────────────────────────────────
