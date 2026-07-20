@@ -33,6 +33,8 @@
 ---   M.emit(event, data)  → called_count (integer)
 ---   M.clear(event?)      → remove all handlers for event (or all)
 
+local notify = require("filetree.util.notify").create("[filetree.hooks]")
+
 local M = {}
 
 -- ── Registry ──────────────────────────────────────────────────────────────────
@@ -112,10 +114,7 @@ function M.emit(event, data)
       local ok, err = pcall(h.fn, data)
       if not ok then
         vim.schedule(function()
-          vim.notify(
-            string.format("[filetree.hooks] handler %d for '%s' error: %s", id, event, tostring(err)),
-            vim.log.levels.WARN
-          )
+          notify.warn(string.format("handler %d for '%s' error: %s", id, event, tostring(err)))
         end)
       end
       if h.once then to_remove[#to_remove + 1] = id end

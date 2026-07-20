@@ -25,6 +25,7 @@
 --- caller) instead of being interactive here.
 
 local path = require("filetree.util.path")
+local notify = require("filetree.util.notify").create("[filetree]")
 
 local M = {}
 
@@ -153,11 +154,10 @@ local function via_quickfix(refs, title, on_confirm)
   vim.fn.setqflist({}, "a", { title = title })
   vim.cmd("copen")
   _qf_pending = { refs = refs, on_confirm = on_confirm }
-  vim.notify(
-    "[filetree] References in the quickfix list. Delete lines (e.g. `dd`) for "
+  notify.info(
+    "References in the quickfix list. Delete lines (e.g. `dd`) for "
       .. "references you do NOT want cleaned up, then run `:Filetree mdrefs confirm`.\n"
-      .. "To back out instead: `:Filetree mdrefs cancel`.",
-    vim.log.levels.INFO
+      .. "To back out instead: `:Filetree mdrefs cancel`."
   )
 end
 
@@ -212,13 +212,13 @@ function M.pick(refs, opts, on_confirm, on_cancel)
 
   if prefer == "telescope" then
     if not via_telescope(refs, title, on_confirm, on_cancel) then
-      vim.notify("[filetree] telescope.nvim not available", vim.log.levels.WARN)
+      notify.warn("telescope.nvim not available")
     end
     return
   end
   if prefer == "fzf-lua" then
     if not via_fzflua(refs, title, on_confirm, on_cancel) then
-      vim.notify("[filetree] fzf-lua not available", vim.log.levels.WARN)
+      notify.warn("fzf-lua not available")
     end
     return
   end

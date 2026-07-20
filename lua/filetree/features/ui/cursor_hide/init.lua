@@ -81,7 +81,8 @@ function M.setup(config, adapter)
   au.acmd({ "BufEnter", "WinEnter" }, {
     group = _augroup,
     callback = function(ev)
-      vim.schedule(function() apply_hide(vim.api.nvim_get_current_win(), ev.buf) end)
+      local win = vim.api.nvim_get_current_win()
+      vim.schedule(function() apply_hide(win, ev.buf) end)
     end,
   })
 

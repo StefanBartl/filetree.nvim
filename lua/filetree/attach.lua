@@ -25,6 +25,8 @@
 --- re-bind the same keys to the same functions, so behaviour is identical with or
 --- without this module — it only adds cheatsheet visibility.
 
+local au = require("filetree.util.autocmd")
+
 local M = {}
 
 -- ── Keymap spec ───────────────────────────────────────────────────────────────
@@ -288,23 +290,19 @@ local _popup_augroup = nil
 function M.native_search_in_help(keys)
   keys = keys or { "/" }
   if _popup_augroup then
-    pcall(vim.api.nvim_del_augroup_by_id, _popup_augroup)
+    au.del_group(_popup_augroup)
   end
-  _popup_augroup = vim.api.nvim_create_augroup("filetree_neotree_popup_search", { clear = true })
-  vim.api.nvim_create_autocmd("FileType", {
-    group   = _popup_augroup,
-    pattern = "neo-tree-popup",
-    callback = function(ev)
-      local buf = ev.buf
-      -- Defer past neo-tree's own popup:map() calls so our removal wins.
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        for _, key in ipairs(keys) do
-          pcall(vim.keymap.del, "n", key, { buffer = buf })
-        end
-      end)
-    end,
-  })
+  _popup_augroup = au.group("filetree_neotree_popup_search", true)
+  au.create("FileType", function(ev)
+    local buf = ev.buf
+    -- Defer past neo-tree's own popup:map() calls so our removal wins.
+    vim.schedule(function()
+      if not vim.api.nvim_buf_is_valid(buf) then return end
+      for _, key in ipairs(keys) do
+        pcall(vim.keymap.del, "n", key, { buffer = buf })
+      end
+    end)
+  end, { group = _popup_augroup, pattern = "neo-tree-popup" })
 end
 
 return M

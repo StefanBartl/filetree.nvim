@@ -17,6 +17,7 @@
 
 local usercmd = require("filetree.util.usercmd")
 local composer = require("lib.nvim.usercmd.composer")
+local notify = require("filetree.util.notify").create("[filetree]")
 
 local M = {}
 
@@ -185,17 +186,17 @@ local TREE = {
     events = function(_)
       local f = ft("hooks_api"); if not f then return end
       local evs = f.events()
-      if #evs == 0 then vim.notify("[filetree] No hooks registered", vim.log.levels.INFO)
+      if #evs == 0 then notify.info("No hooks registered")
       else
         local lines = {}
         for _, ev in ipairs(evs) do lines[#lines+1] = string.format("  %s (%d)", ev, f.count(ev)) end
-        vim.notify("[filetree] Hooks:\n" .. table.concat(lines, "\n"), vim.log.levels.INFO)
+        notify.info("Hooks:\n" .. table.concat(lines, "\n"))
       end
     end,
     clear = function(a)
       local f = ft("hooks_api"); if not f then return end
       f.clear(a[1])
-      vim.notify("[filetree] Hooks cleared" .. (a[1] and (" for: " .. a[1]) or ""), vim.log.levels.INFO)
+      notify.info("Hooks cleared" .. (a[1] and (" for: " .. a[1]) or ""))
     end,
   },
 

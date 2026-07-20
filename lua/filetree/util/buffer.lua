@@ -2,6 +2,7 @@
 ---@brief Buffer validation and window-context utilities.
 
 local path = require("filetree.util.path")
+local au   = require("filetree.util.autocmd")
 
 local M = {}
 
@@ -154,9 +155,8 @@ function M.find_editor_win(exclude_win)
 end
 
 -- Auto-invalidate cache when buffers are deleted
-vim.api.nvim_create_autocmd("BufDelete", {
-  group = vim.api.nvim_create_augroup("FiletreeBufferCache", { clear = true }),
-  callback = function(args) M.invalidate(args.buf) end,
+au.create("BufDelete", function(args) M.invalidate(args.buf) end, {
+  group = au.group("FiletreeBufferCache", true),
 })
 
 ---Repoint every open buffer whose name is `old_path` (or nested under it, for
