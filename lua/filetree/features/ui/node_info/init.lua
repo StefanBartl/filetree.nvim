@@ -5,6 +5,7 @@ local line_count = require("filetree.util.line_count")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local notify = require("filetree.util.notify").create("[filetree]")
 local M = {}
 
 ---@type FiletreeNodeInfoConfig
@@ -167,7 +168,7 @@ function M.show_current()
 
   local node = _adapter.get_current_node()
   if not node or not node.path then
-    vim.notify("[filetree] node_info: no current node", vim.log.levels.WARN)
+    notify.warn("node_info: no current node")
     return
   end
 

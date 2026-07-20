@@ -4,7 +4,7 @@
 local notify   = require("filetree.util.notify").create("[filetree.trash.undo]")
 local platform = require("filetree.util.platform")
 
-local map = require("filetree.util.map")
+local window = require("filetree.util.window")
 local M = {}
 
 local MAX_HISTORY = 50
@@ -204,7 +204,7 @@ function M.show_history()
   local width  = math.min(80, vim.o.columns - 4)
   local height = math.min(#lines, vim.o.lines - 6)
 
-  vim.api.nvim_open_win(buf, true, {
+  local win = vim.api.nvim_open_win(buf, true, {
     relative = "editor",
     width    = width,
     height   = height,
@@ -216,8 +216,7 @@ function M.show_history()
     title_pos = "center",
   })
 
-  map("n", "q",     "<cmd>close<cr>", { buffer = buf, silent = true })
-  map("n", "<Esc>", "<cmd>close<cr>", { buffer = buf, silent = true })
+  window.nice_quit(win)
 end
 
 return M

@@ -21,6 +21,9 @@
 ---@field question?  string      The yes/no question (default "Confirm?").
 ---@field on_choice  fun(yes: boolean)
 
+local map = require("filetree.util.map")
+local au  = require("filetree.util.autocmd")
+
 ---@param opts FiletreeConfirmOpts
 return function(opts)
   opts = opts or {}
@@ -71,17 +74,15 @@ return function(opts)
     on_choice(yes)
   end
 
-  local kopts = { buffer = buf, nowait = true, silent = true }
   for _, k in ipairs({ "y", "Y", "<CR>" }) do
-    vim.keymap.set("n", k, function() finish(true) end, kopts)
+    map("n", k, function() finish(true) end, { buffer = buf, nowait = true }, "Filetree: confirm yes")
   end
   for _, k in ipairs({ "n", "N", "q", "<Esc>" }) do
-    vim.keymap.set("n", k, function() finish(false) end, kopts)
+    map("n", k, function() finish(false) end, { buffer = buf, nowait = true }, "Filetree: confirm no")
   end
   -- Closing the window any other way (e.g. focus lost) counts as "no".
-  vim.api.nvim_create_autocmd("WinClosed", {
+  au.create("WinClosed", function() finish(false) end, {
     pattern = tostring(win),
     once    = true,
-    callback = function() finish(false) end,
   })
 end

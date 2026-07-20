@@ -10,6 +10,8 @@ local commands    = require("filetree.commands")
 local registry    = require("filetree.features")
 local tree_attach = require("filetree.util.tree_attach")
 local notify      = require("filetree.util.notify").create("[filetree]")
+local au          = require("filetree.util.autocmd")
+local map         = require("filetree.util.map")
 
 local M = {}
 
@@ -155,36 +157,25 @@ function M.setup(user_config)
   -- has set its own buffer-local keymaps.
   if type(cfg.adapter_keymaps) == "table" then
     if _adapter_keymaps_augroup then
-      pcall(vim.api.nvim_del_augroup_by_id, _adapter_keymaps_augroup)
+      au.del_group(_adapter_keymaps_augroup)
     end
-    _adapter_keymaps_augroup = vim.api.nvim_create_augroup(
-      "filetree_adapter_keymaps", { clear = true })
+    _adapter_keymaps_augroup = au.group("filetree_adapter_keymaps", true)
 
     local overrides = cfg.adapter_keymaps
-    vim.api.nvim_create_autocmd("FileType", {
-      group   = _adapter_keymaps_augroup,
-      pattern = { "neo-tree", "NvimTree" },
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          for key, target in pairs(overrides) do
-            if target == false then
-              vim.keymap.set("n", key, "<Nop>", {
-                buffer = buf, silent = true,
-                desc   = "Filetree: adapter keymap disabled",
-              })
-            elseif type(target) == "string" then
-              -- remap: forward to the target key
-              vim.keymap.set("n", key, target, {
-                buffer = buf, silent = true,
-                desc   = "Filetree: adapter keymap remapped",
-              })
-            end
+    au.create("FileType", function(ev)
+      local buf = ev.buf
+      vim.schedule(function()
+        if not vim.api.nvim_buf_is_valid(buf) then return end
+        for key, target in pairs(overrides) do
+          if target == false then
+            map("n", key, "<Nop>", { buffer = buf }, "Filetree: adapter keymap disabled")
+          elseif type(target) == "string" then
+            -- remap: forward to the target key
+            map("n", key, target, { buffer = buf }, "Filetree: adapter keymap remapped")
           end
-        end)
-      end,
-    })
+        end
+      end)
+    end, { group = _adapter_keymaps_augroup, pattern = { "neo-tree", "NvimTree" } })
   end
 
   -- Auto-inject filetree keymaps into neo-tree's window.mappings so they appear in
@@ -199,10 +190,7 @@ function M.setup(user_config)
     if vim.v.vim_did_enter == 1 then
       vim.schedule(function() vim.defer_fn(do_inject, 50) end)
     else
-      vim.api.nvim_create_autocmd("VimEnter", {
-        once     = true,
-        callback = function() vim.defer_fn(do_inject, 50) end,
-      })
+      au.create("VimEnter", function() vim.defer_fn(do_inject, 50) end, { once = true })
     end
     -- Give `/` back its native search inside neo-tree's `?` help popup.
     require("filetree.attach").native_search_in_help()

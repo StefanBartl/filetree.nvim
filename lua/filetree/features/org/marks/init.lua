@@ -9,6 +9,7 @@ local notify = require("filetree.util.notify").create("[filetree.marks]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local window = require("filetree.util.window")
 local M = {}
 
 ---@type FiletreeMarksConfig
@@ -160,7 +161,7 @@ function M.show()
   local width  = math.min(80, vim.o.columns - 4)
   local height = math.min(#lines + 1, vim.o.lines - 6)
 
-  vim.api.nvim_open_win(buf, true, {
+  local win = vim.api.nvim_open_win(buf, true, {
     relative  = "editor",
     width     = width,
     height    = height,
@@ -171,8 +172,7 @@ function M.show()
     title     = " Marked Nodes ",
     title_pos = "center",
   })
-  map("n", "q",     "<cmd>close<cr>", { buffer = buf, silent = true })
-  map("n", "<Esc>", "<cmd>close<cr>", { buffer = buf, silent = true })
+  window.nice_quit(win)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
