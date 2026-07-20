@@ -6,6 +6,17 @@ local M = {}
 function M.check()
   vim.health.start("filetree.nvim")
 
+  -- lib.nvim: required for the :Filetree/:Ft command layer
+  -- (lib.nvim.usercmd.composer), which registers unconditionally (no pcall).
+  if pcall(require, "lib.nvim.usercmd.composer") then
+    vim.health.ok("lib.nvim detected (:Filetree/:Ft command layer available)")
+  else
+    vim.health.error(
+      "lib.nvim not found — :Filetree/:Ft will fail to register",
+      { "Install \"StefanBartl/lib.nvim\" as a dependency" }
+    )
+  end
+
   -- ── Neovim version ────────────────────────────────────────────────────────
   local version = vim.version()
   if version.major == 0 and version.minor < 8 then

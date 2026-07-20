@@ -1,8 +1,9 @@
 # filetree.nvim — User Commands
 
-filetree.nvim registers a single unified command (default `:Filetree`) with
-sub-command dispatch and tab-completion at every level. Out of the box, the
-short alias `:Ft` also works — `:Ft marks show` is identical to
+filetree.nvim registers a single unified command (default `:Filetree`),
+built via [`lib.nvim.usercmd.composer`](https://github.com/StefanBartl/lib.nvim),
+with sub-command dispatch and tab-completion at every level. Out of the box,
+the short alias `:Ft` also works — `:Ft marks show` is identical to
 `:Filetree marks show`.
 
 ---
