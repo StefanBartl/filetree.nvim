@@ -1,8 +1,10 @@
 ---@module 'filetree.commands'
 ---@brief Central :Filetree command dispatcher with tab-completion.
 ---@description
---- Registers a single :Filetree command that dispatches to all feature
---- modules. Tab-completion is context-aware (depth-aware sub-command list).
+--- Registers a single :Filetree command (built via lib.nvim.usercmd.composer)
+--- that dispatches to all feature modules. TREE is the single source of
+--- truth for dispatch, <Tab> completion, and M.command_paths(); composer
+--- routes are derived from it, not duplicated.
 ---
 --- Usage:
 ---   :Filetree <subcommand> [sub-subcommand] [args...]
@@ -14,6 +16,7 @@
 ---   :Filetree reveal pause 2000
 
 local usercmd = require("filetree.util.usercmd")
+local composer = require("lib.nvim.usercmd.composer")
 
 local M = {}
 
@@ -23,10 +26,6 @@ local function ft(name)
   local ok, main = pcall(require, "filetree")
   if not ok then return nil end
   return main.feature(name)
-end
-
-local function warn(msg)
-  vim.notify("[filetree] " .. msg, vim.log.levels.WARN)
 end
 
 -- ── Command tree ──────────────────────────────────────────────────────────────
@@ -262,107 +261,60 @@ local TREE = {
   health = function(_) vim.cmd("checkhealth filetree") end,
 }
 
--- ── Dispatch ──────────────────────────────────────────────────────────────────
+-- ── TREE → composer routes ───────────────────────────────────────────────────
+-- TREE stays the single source of truth (also read by M.command_paths()
+-- below, unchanged); routes are derived from it fresh on every M.setup()
+-- rather than duplicated by hand, so the two can never drift.
+--
+-- Composer's tree.walk greedily consumes literal path tokens and stops at
+-- the deepest node reached; if that node has its OWN route (registered from
+-- a `[""]` default key here) it dispatches there with whatever tokens didn't
+-- match as ctx.rest — which is exactly the original dispatch()'s "unknown
+-- sub-command falls through to the default handler with all args" behavior
+-- for filter/reveal/mdlink/search/info/require (all `[""]`-bearing groups),
+-- reproduced for free by composer's own walk, not re-implemented here.
 
-local function dispatch(args_str)
-  local parts = {}
-  for w in (args_str or ""):gmatch("%S+") do parts[#parts + 1] = w end
-
-  if #parts == 0 then
-    warn(":Filetree <subcommand> — try :Filetree<Tab>")
-    return
-  end
-
-  local node = TREE[parts[1]]
-  if node == nil then
-    warn("Unknown command: " .. parts[1])
-    return
-  end
-
-  -- Leaf: call directly with rest args
-  if type(node) == "function" then
-    local rest = {}
-    for i = 2, #parts do rest[#rest + 1] = parts[i] end
-    node(rest)
-    return
-  end
-
-  -- Interior: look up sub-command
-  local sub_key = parts[2]
-  if sub_key == nil then
-    -- No sub-command: invoke default "" if present
-    if node[""] then
-      node[""]({})
-    else
-      local keys = {}
-      for k in pairs(node) do if k ~= "" then keys[#keys + 1] = k end end
-      table.sort(keys)
-      warn(string.format(":Filetree %s <%s>", parts[1], table.concat(keys, " | ")))
+---@param node table
+---@param path string[]
+---@param routes table[]
+local function walk_tree(node, path, routes)
+  for key, val in pairs(node) do
+    local child_path = path
+    if key ~= "" then
+      child_path = vim.deepcopy(path)
+      child_path[#child_path + 1] = key
     end
-    return
-  end
-
-  local sub = node[sub_key]
-  if sub == nil then
-    -- Unknown sub-command: fall through to default with all as args
-    if node[""] then
-      local rest = {}
-      for i = 2, #parts do rest[#rest + 1] = parts[i] end
-      node[""](rest)
-    else
-      warn(string.format("Unknown sub-command: %s %s", parts[1], sub_key))
+    if type(val) == "function" then
+      routes[#routes + 1] = { path = child_path, run = function(ctx) val(ctx.rest) end }
+    elseif type(val) == "table" then
+      walk_tree(val, child_path, routes)
     end
-    return
   end
-
-  local rest = {}
-  for i = 3, #parts do rest[#rest + 1] = parts[i] end
-  sub(rest)
 end
 
--- ── Completion ────────────────────────────────────────────────────────────────
+---Build the composer route list from TREE. "find" is special-cased for
+--- directory-typed <Tab> completion (the one spot the original completion
+--- special-cased beyond generic tree-key walking); every other leaf just
+--- forwards ctx.rest into the unchanged TREE function, exactly like before.
+---@return table[]
+local function build_routes()
+  local routes = {}
+  local tree_without_find = vim.tbl_extend("force", {}, TREE)
+  tree_without_find.find = nil
+  walk_tree(tree_without_find, {}, routes)
 
-local function complete(arglead, cmdline, _cursorpos)
-  -- Extract everything after ":Filetree " (or "Filetree ")
-  local after = cmdline:match("^%S*Filetree%s+(.*)$") or ""
-  local parts = {}
-  for w in after:gmatch("%S+") do parts[#parts + 1] = w end
-
-  -- Number of confirmed tokens (not counting arglead)
-  local confirmed = arglead == "" and #parts or (#parts - 1)
-
-  local function keys_of(tbl, prefix)
-    local out = {}
-    for k in pairs(tbl) do
-      if k ~= "" and k:sub(1, #prefix) == prefix then
-        out[#out + 1] = k
-      end
-    end
-    table.sort(out)
-    return out
-  end
-
-  if confirmed == 0 then
-    return keys_of(TREE, arglead)
-  end
-
-  -- Navigate the tree with confirmed tokens
-  local node = TREE[parts[1]]
-  for i = 2, confirmed do
-    if type(node) ~= "table" then return {} end
-    node = node[parts[i]]
-  end
-
-  if type(node) == "table" then
-    return keys_of(node, arglead)
-  end
-
-  -- For "find" and "resize", suggest directory/number
-  if parts[1] == "find" and confirmed == 1 then
-    return vim.fn.getcompletion(arglead, "dir")
-  end
-
-  return {}
+  routes[#routes + 1] = {
+    path = { "find" },
+    args = { { name = "dir", type = "DIR", optional = true } },
+    desc = "Find files (optionally scoped to a directory)",
+    run = function(ctx)
+      local args = {}
+      if ctx.args.dir ~= nil then args[1] = ctx.args.dir end
+      for _, t in ipairs(ctx.rest) do args[#args + 1] = t end
+      TREE.find(args)
+    end,
+  }
+  return routes
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -372,10 +324,12 @@ local _registered_commands = {}
 
 ---@param cfg FiletreeCommandConfig?
 function M.setup(cfg)
-  -- Re-setup is idempotent: nvim_create_user_command errors (E174) if the
-  -- command already exists, which a second require("filetree").setup() call
-  -- in the same session would otherwise hit — so drop any commands this
-  -- module registered before, then recreate.
+  -- Re-setup is idempotent: composer's usercmd.create overwrites an existing
+  -- command of the same name safely, but cfg can change the NAME between
+  -- calls (custom cfg.name/aliases) — without tearing down first, a renamed
+  -- setup() would leave the old name(s) registered and stale alongside the
+  -- new one. So: drop whatever this module registered last time, then
+  -- recreate under (possibly different) names.
   M.teardown()
 
   -- Determine name(s) to register.
@@ -395,17 +349,17 @@ function M.setup(cfg)
     names[2] = "Ft"
   end
 
+  -- One shared route list across every name (same pattern as replacer.nvim's
+  -- :Replace/:Replacer) — composer.verb() only reads the spec to build a
+  -- route tree, it doesn't mutate it, so reusing one table across multiple
+  -- verb registrations is safe.
+  local spec = { desc = "filetree.nvim — unified command interface", routes = build_routes() }
+
   local seen = {}
   for _, cmd_name in ipairs(names) do
     if not seen[cmd_name] then
       seen[cmd_name] = true
-      usercmd.create(cmd_name, function(opts)
-        dispatch(opts.args)
-      end, {
-        nargs    = "*",
-        complete = complete,
-        desc     = "filetree.nvim — unified command interface",
-      })
+      composer.verb(cmd_name, spec)
       _registered_commands[#_registered_commands + 1] = cmd_name
     end
   end

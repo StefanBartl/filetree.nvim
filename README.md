@@ -19,7 +19,7 @@
 ## Requirements
 
 - Neovim >= 0.8
-- [lib.nvim](https://github.com/StefanBartl/lib.nvim) — shared helper library (declared dependency; filetree degrades gracefully with local fallbacks if it is missing)
+- [lib.nvim](https://github.com/StefanBartl/lib.nvim) — shared helper library. **Required** for the `:Filetree`/`:Ft` command layer (`lib.nvim.usercmd.composer`); most other integrations (notify, `find_root`, ...) still degrade gracefully with local fallbacks if it's missing, but the commands themselves won't register without it.
 - **One** of [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) or [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua)
 
 ## Quick start
