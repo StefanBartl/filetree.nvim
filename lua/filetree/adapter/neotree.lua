@@ -44,6 +44,22 @@ local function get_commands()
   return commands
 end
 
+---@type table<string, true>
+local VALID_POSITIONS = { left = true, right = true, float = true, current = true }
+
+---Position the tree is currently at (or was last shown at), so system-triggered
+---actions (reveal, re-root) preserve it instead of snapping back to a hardcoded
+---default. Neo-tree keeps one shared state per source, not per position, so this
+---is the only source of truth for "where is/was the tree". Falls back to "left"
+---when there is no prior state (e.g. first show of the session) or an unexpected value.
+---@return FiletreeTreePosition
+local function get_current_position()
+  local state = get_state()
+  local pos = state and state.current_position
+  if type(pos) == "string" and VALID_POSITIONS[pos] then return pos end
+  return "left"
+end
+
 ---Resolve a neo-tree node's filesystem path robustly.
 ---Prefers the canonical `node.path`, falls back to the node id (which for the
 ---filesystem source is the path). Returns nil for nodes without a real path
@@ -334,7 +350,7 @@ function M.set_root(path)
   local ok = pcall(commands.execute, {
     action   = "show",
     source   = "filesystem",
-    position = "left",
+    position = get_current_position(),
     dir      = path,
   })
   return ok
@@ -363,7 +379,7 @@ function M.open_reveal(path, parent_levels, root_dir)
   local ok = pcall(commands.execute, {
     action      = "show",
     source      = "filesystem",
-    position    = "left",
+    position    = get_current_position(),
     dir         = target,
     reveal_file = path,
   })
@@ -376,7 +392,7 @@ function M.open_cwd()
   local ok = pcall(commands.execute, {
     action   = "show",
     source   = "filesystem",
-    position = "left",
+    position = get_current_position(),
   })
   return ok
 end
