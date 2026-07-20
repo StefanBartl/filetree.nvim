@@ -26,7 +26,7 @@ local root = vim.fn.fnamemodify(this, ":p:h:h:h")
 vim.opt.rtp:prepend(root)
 
 -- lib.nvim resolution: $LIB_NVIM_PATH -> sibling checkout -> lazy.nvim's
--- managed copy (see lib.nvim/nvim/templates/resolve_lib_nvim.lua for the
+-- managed copy (see lib.nvim/templates/resolve_lib_nvim.lua for the
 -- canonical copy of this function and the other caller patterns).
 local function add_lib_nvim()
 	local candidates = {}
