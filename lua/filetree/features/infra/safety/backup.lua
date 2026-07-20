@@ -17,6 +17,7 @@ local _dir = ""
 function M.init(config)
   _cfg = config
   _dir = config.backup_dir
+    and path.to_absolute(config.backup_dir)
     or (vim.fn.stdpath("data") .. "/filetree/backups")
   if vim.fn.isdirectory(_dir) == 0 then
     vim.fn.mkdir(_dir, "p")

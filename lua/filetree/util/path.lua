@@ -22,12 +22,25 @@ local _has_cross_unify = _ok_cross and type(_cross_unify) == "function"
 local _ok_relpath, _lib_relpath = pcall(require, "lib.nvim.fs.relpath")
 local _has_lib_relpath = _ok_relpath and type(_lib_relpath) == "function"
 
+-- Optional: lib.nvim.cross.fs.expand_path resolves ~/$VAR/${VAR}/%VAR% before
+-- fnamemodify runs. Prefer it when present (same reasoning as unify_slashes
+-- above); without it, fall back to vim.fn.expand, which covers ~/$VAR but
+-- never %VAR% on Windows.
+local _ok_expand, _lib_expand_path = pcall(require, "lib.nvim.cross.fs.expand_path")
+local _has_lib_expand_path = _ok_expand and type(_lib_expand_path) == "function"
+
 local M = {}
 
----Expand to absolute path and strip surrounding quotes.
+---Expand env references, resolve to absolute path and strip surrounding quotes.
 ---@param p string
 ---@return string
 function M.to_absolute(p)
+  if _has_lib_expand_path then
+    local ok, expanded = pcall(_lib_expand_path, p)
+    if ok and type(expanded) == "string" then p = expanded end
+  else
+    p = vim.fn.expand(p)
+  end
   p = vim.fn.fnamemodify(p, ":p")
   return (p:gsub('^"(.*)"$', "%1"):gsub("^'(.*)'$", "%1"))
 end
