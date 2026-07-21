@@ -24,6 +24,12 @@ local buffer      = require("filetree.util.buffer")
 local ui_select   = require("filetree.util.select")
 local refs_util   = require("filetree.util.markdown_refs")
 local refs_picker = require("filetree.util.refs_picker")
+
+-- Central FS-mutation chokepoint (libuv-based, no shell). Retries transient
+-- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_copyfile would
+-- surface as a hard failure — see the handle_guard plan.
+local fsops = require("lib.nvim.cross.fs.mutate")
+
 local M = {}
 
 ---@type FiletreeCopyMoveConfig
@@ -175,14 +181,13 @@ end
 ---@return integer  0 on success, 1 on any failure
 local function copy_dir(src, dst)
   if vim.fn.mkdir(dst, "p") == 0 then return 1 end
-  local uv = vim.uv or vim.loop
   for _, name in ipairs(vim.fn.readdir(src)) do
     local s = src .. "/" .. name
     local d = dst .. "/" .. name
     if vim.fn.isdirectory(s) == 1 then
       if copy_dir(s, d) ~= 0 then return 1 end
     else
-      local ok = uv.fs_copyfile(s, d)
+      local ok = fsops.copy_file(s, d)
       if not ok then return 1 end
     end
   end
@@ -201,8 +206,7 @@ local function do_copy(src, dst_dir)
   if vim.fn.isdirectory(src) == 1 then
     return copy_dir(src, dst)
   else
-    local uv = vim.uv or vim.loop
-    local ok = uv.fs_copyfile(src, dst)
+    local ok = fsops.copy_file(src, dst)
     return ok and 0 or 1
   end
 end

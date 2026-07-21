@@ -32,6 +32,12 @@ local path        = require("filetree.util.path")
 local buffer      = require("filetree.util.buffer")
 local refs_util   = require("filetree.util.markdown_refs")
 local refs_picker = require("filetree.util.refs_picker")
+
+-- Central FS-mutation chokepoint (libuv-based, no shell). Retries transient
+-- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_rename would
+-- surface as a hard failure — see the handle_guard plan.
+local fsops = require("lib.nvim.cross.fs.mutate")
+
 local M = {}
 
 ---@type FiletreeSmartRenameConfig
@@ -466,39 +472,43 @@ local function do_rename(old_path, new_path, refs)
       pcall(vim.lsp.util.apply_workspace_edit, workspace_edit, "utf-8")
     end
 
-    -- Perform the filesystem rename
-    local uv  = vim.uv or vim.loop
-    uv.fs_rename(old_path, new_path, function(err)
-      vim.schedule(function()
-        if err then
-          notify.error("Rename failed: " .. err)
-          return
-        end
+    -- Perform the filesystem rename through the central mutation chokepoint so a
+    -- transient Windows sharing error (EPERM/EACCES/EBUSY — an open directory
+    -- watcher / indexer / AV still holding the handle) is retried instead of
+    -- surfaced as a hard failure. Synchronous rather than the old async
+    -- uv.fs_rename callback form: we are already on the main loop here (the
+    -- un-scheduled apply_workspace_edit above depends on that), which is exactly
+    -- what the retry backoff's vim.wait needs — so the post-rename work can run
+    -- inline instead of hopping through vim.schedule (the old async callback ran
+    -- off-loop, which was the only reason that hop existed).
+    local ok, err = fsops.rename_file(old_path, new_path)
+    if not ok then
+      notify.error("Rename failed: " .. tostring(err))
+      return
+    end
 
-        -- Notify LSP servers
-        lsp_did_rename(old_path, new_path)
+    -- Notify LSP servers
+    lsp_did_rename(old_path, new_path)
 
-        -- Update open buffers
-        buffer.relocate(old_path, new_path)
+    -- Update open buffers
+    buffer.relocate(old_path, new_path)
 
-        -- Fallback: textual require()/import rewrite across the project when
-        -- no LSP client applied a workspace edit (or the file is Lua).
-        update_references_fallback(old_path, new_path, workspace_edit ~= nil)
+    -- Fallback: textual require()/import rewrite across the project when
+    -- no LSP client applied a workspace edit (or the file is Lua).
+    update_references_fallback(old_path, new_path, workspace_edit ~= nil)
 
-        -- Markdown `[text](path)` links pointing at the old path (separate
-        -- concern from the code-reference fallback above). `refs` were captured
-        -- BEFORE the rename (while old_path still existed) so cwd-relative and
-        -- every other link style resolve correctly.
-        handle_markdown_refs(old_path, new_path, refs)
+    -- Markdown `[text](path)` links pointing at the old path (separate
+    -- concern from the code-reference fallback above). `refs` were captured
+    -- BEFORE the rename (while old_path still existed) so cwd-relative and
+    -- every other link style resolve correctly.
+    handle_markdown_refs(old_path, new_path, refs)
 
-        -- Refresh tree
-        if _adapter and _adapter.refresh then _adapter.refresh() end
+    -- Refresh tree
+    if _adapter and _adapter.refresh then _adapter.refresh() end
 
-        notify.info(string.format("%s → %s",
-          vim.fn.fnamemodify(old_path, ":t"),
-          vim.fn.fnamemodify(new_path, ":t")))
-      end)
-    end)
+    notify.info(string.format("%s → %s",
+      vim.fn.fnamemodify(old_path, ":t"),
+      vim.fn.fnamemodify(new_path, ":t")))
   end)
 end
 
