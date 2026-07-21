@@ -258,6 +258,33 @@ local TREE = {
     close = function(_) local f = ft("node_info"); if f then f.close() end end,
   },
 
+  -- ── handle_guard ─────────────────────────────────────────────────────────────
+  handles = function(_)
+    local f = ft("handle_guard")
+    if not f then
+      notify.info("handle_guard is not enabled")
+      return
+    end
+    if not f.installed() then
+      notify.info("handle_guard enabled but not installed here "
+        .. "(needs the neo-tree adapter on Windows/WSL)")
+      return
+    end
+    local list = f.handles()
+    if #list == 0 then
+      notify.info("No neo-tree watcher handles currently tracked")
+      return
+    end
+    local lines = { string.format("Tracked watcher handles (%d):", #list) }
+    for _, h in ipairs(list) do
+      -- A watcher on a path that no longer exists is the leak signature.
+      local flag = h.exists and "" or "  ⚠ path gone (leaked watcher)"
+      lines[#lines + 1] = string.format("  %s %s%s",
+        h.active and "●" or "○", h.path, flag)
+    end
+    notify.info(table.concat(lines, "\n"))
+  end,
+
   -- ── health ───────────────────────────────────────────────────────────────────
   health = function(_) vim.cmd("checkhealth filetree") end,
 }
