@@ -221,7 +221,17 @@ function M.setup(config, adapter)
       -- Skip if cursor is inside the tree window
       local tree_winid = adapter.get_winid()
       if tree_winid and vim.api.nvim_get_current_win() == tree_winid then
-        pause(2000) -- user is navigating manually
+        -- Only pause when we do our own reveal: that's the only case where a
+        -- file opened from inside the tree (e.g. <CR> on a node) could race
+        -- our reveal against the tree plugin's native follow/reveal. With
+        -- reveal=false, do_reveal never touches the tree UI (chdir only), so
+        -- there is nothing to race — pausing here would just drop the chdir
+        -- for the file the tree is about to open, and (worse) for anything
+        -- else that happens to open within the pause window, e.g. a picker
+        -- invoked while the cursor was still in the tree.
+        if _cfg.reveal ~= false then
+          pause(2000) -- user is navigating manually
+        end
         return
       end
       debounced_reveal()
