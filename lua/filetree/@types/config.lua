@@ -58,6 +58,7 @@
 ---@field safety              FiletreeSafetyConfig?
 ---@field trash               FiletreeTrashConfig?
 ---@field watcher_quarantine  FiletreeWatcherQuarantineConfig?
+---@field handle_guard        FiletreeHandleGuardConfig?
 ---@field marks               FiletreeMarksConfig?
 ---@field diff                FiletreeDiffConfig?
 ---@field project_root        FiletreeProjectRootConfig?
@@ -166,6 +167,16 @@
 ---@field enabled     boolean
 ---@field duration_ms integer  Default quarantine duration in ms (default 500).
 ---@field silent      boolean  Suppress quarantine notifications (default true).
+
+-- ── handle_guard ──────────────────────────────────────────────────────────────
+
+---@class FiletreeHandleGuardConfig
+---@field enabled boolean  Install lib.nvim.neotree.watch so fileops can release
+---                        neo-tree's directory-watcher handles before a
+---                        rename/delete (fixes the Windows file-lock at the
+---                        source, unlike watcher_quarantine which only hides the
+---                        error). neo-tree adapter + Windows/WSL only; a no-op
+---                        elsewhere. Opt-in (default off).
 
 -- ── marks ─────────────────────────────────────────────────────────────────────
 

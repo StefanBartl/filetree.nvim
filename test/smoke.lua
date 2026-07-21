@@ -55,7 +55,7 @@ end
 
 -- 2) setup is clean and opt-out resolves (default-on minus the opt-in few)
 local DEFAULT_OFF = {
-  "cwd_sync", "current_hl", "safety", "auto_resize",
+  "cwd_sync", "current_hl", "safety", "auto_resize", "handle_guard",
 }
 do
   local warnings = 0

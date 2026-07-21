@@ -37,6 +37,10 @@ local refs_picker = require("filetree.util.refs_picker")
 -- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_rename would
 -- surface as a hard failure — see the handle_guard plan.
 local fsops = require("lib.nvim.cross.fs.mutate")
+-- On a transient lock, release neo-tree's watcher on the source path so the
+-- retry can proceed. No-op unless the handle_guard feature installed the
+-- registry (neo-tree + Windows), so it's always safe to pass.
+local watch = require("lib.nvim.neotree.watch")
 
 local M = {}
 
@@ -481,7 +485,9 @@ local function do_rename(old_path, new_path, refs)
     -- what the retry backoff's vim.wait needs — so the post-rename work can run
     -- inline instead of hopping through vim.schedule (the old async callback ran
     -- off-loop, which was the only reason that hop existed).
-    local ok, err = fsops.rename_file(old_path, new_path)
+    local ok, err = fsops.rename_file(old_path, new_path, {
+      on_retry = function() watch.release(old_path) end,
+    })
     if not ok then
       notify.error("Rename failed: " .. tostring(err))
       return

@@ -39,13 +39,17 @@ local FEATURES = registry.FEATURES
 --                         effect unless other code calls into it.
 --   auto_resize           Automatic width management fights the manual
 --                         window_size_cycler (kept on by default).
+--   handle_guard          Patches a neo-tree internal and closes libuv handles
+--                         to fix a Windows watcher-lock; opt-in until the user
+--                         wants that behaviour.
 --
 ---@type table<string, boolean>
 local DEFAULT_DISABLED = {
-  cwd_sync    = true,
-  current_hl  = true,
-  safety      = true,
-  auto_resize = true,
+  cwd_sync     = true,
+  current_hl   = true,
+  safety       = true,
+  auto_resize  = true,
+  handle_guard = true,   -- patches a neo-tree internal + closes uv handles; opt-in.
 }
 
 ---@type table<string, table>  name → loaded feature module

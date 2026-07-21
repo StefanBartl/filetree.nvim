@@ -28,6 +28,14 @@ local buffer      = require("filetree.util.buffer")
 local ui_select   = require("filetree.util.select")
 local refs_util   = require("filetree.util.markdown_refs")
 local refs_picker = require("filetree.util.refs_picker")
+
+-- Central FS-mutation chokepoint (libuv-based, no shell): retries transient
+-- Windows sharing locks. A batch rename touches many watched paths in a row, so
+-- it is a prime lock trigger. `watch.release` frees neo-tree's watcher on the
+-- source before each retry (no-op unless handle_guard installed the registry).
+local fsops = require("lib.nvim.cross.fs.mutate")
+local watch = require("lib.nvim.neotree.watch")
+
 local M = {}
 
 ---@type FiletreeRenameBatchConfig
@@ -191,8 +199,16 @@ local function execute_renames(entries, new_names)
   local relocated = 0
   local all_refs  = {}
   for i, op in ipairs(plan) do
-    local rc = vim.fn.rename(op.src, op.dst)
-    if rc ~= 0 then
+    local ok, err = fsops.rename_file(op.src, op.dst, {
+      on_retry = function() watch.release(op.src) end,
+    })
+    -- uv.fs_rename cannot cross filesystems/drives (EXDEV, not retried); fall
+    -- back to vim.fn.rename, which copies+deletes internally — same guard as
+    -- copy_move's do_move.
+    if not ok and type(err) == "string" and err:match("^EXDEV") then
+      ok = (vim.fn.rename(op.src, op.dst) == 0)
+    end
+    if not ok then
       notify.error("Failed: " .. op.src .. " → " .. op.dst)
       errors = errors + 1
     else
