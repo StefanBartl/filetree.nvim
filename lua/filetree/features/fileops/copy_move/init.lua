@@ -222,7 +222,21 @@ local function do_move(src, dst_dir)
     notify.error("Target exists, cannot move: " .. dst)
     return 1
   end
-  if vim.fn.rename(src, dst) ~= 0 then return 1 end
+  -- A move is the primary Windows lock trigger (an open neo-tree watcher on the
+  -- source dir holds the handle), so route it through the retrying mutation
+  -- chokepoint. But uv.fs_rename cannot cross filesystems/drives — it returns
+  -- EXDEV, which is not a transient error and so is not retried. vim.fn.rename
+  -- can (it copies+deletes internally), so fall back to it for exactly that
+  -- case: the cross-drive move keeps working (no retry protection, but a
+  -- cross-drive paste is rare), while the common same-drive move gets the
+  -- EPERM/EACCES/EBUSY retry it actually needs.
+  local ok, err = fsops.rename_file(src, dst)
+  if not ok then
+    if type(err) == "string" and err:match("^EXDEV") then
+      if vim.fn.rename(src, dst) == 0 then return 0, dst end
+    end
+    return 1
+  end
   return 0, dst
 end
 
