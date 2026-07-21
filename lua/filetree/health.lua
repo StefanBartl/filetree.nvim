@@ -125,6 +125,35 @@ function M.check()
     end
   end
 
+  -- handle_guard: report install state + flag leaked watchers (a tracked handle
+  -- still pointing at a path that no longer exists = neo-tree left it behind).
+  if is_enabled("handle_guard") then
+    local ok_hg, hg = registry.load("handle_guard")
+    if ok_hg and hg then
+      if hg.installed() then
+        local list = hg.handles()
+        local leaked = 0
+        for _, h in ipairs(list) do
+          if not h.exists then leaked = leaked + 1 end
+        end
+        if leaked > 0 then
+          vim.health.warn(("handle_guard: %d of %d tracked watcher(s) point at a "
+            .. "gone path (see :Filetree handles)"):format(leaked, #list))
+        else
+          vim.health.ok(("handle_guard installed (%d watcher(s) tracked)"):format(#list))
+        end
+      else
+        local plat_ok, plat = pcall(require, "filetree.util.platform")
+        if plat_ok and not plat.is_windows() and not plat.is_wsl() then
+          vim.health.info("handle_guard: no-op on non-Windows platforms")
+        else
+          vim.health.info("handle_guard enabled but not installed "
+            .. "(needs the neo-tree adapter; fs_watch not reachable yet)")
+        end
+      end
+    end
+  end
+
   -- Human-readable category headings + feature names.
   local CATEGORY_LABELS = {
     nav = "navigation & reveal", ui = "display / UI", fileops = "file operations",

@@ -44,6 +44,24 @@ function M.release(paths)
   return ok and n or 0
 end
 
+---Whether the watch registry patch is actually installed (feature on, neo-tree,
+---Windows/WSL, and neo-tree's fs_watch was reachable).
+---@return boolean
+function M.installed()
+  local watch = watch_mod()
+  return watch ~= nil and watch.installed() == true
+end
+
+---Snapshot of the currently tracked watcher handles, for `:Filetree handles`
+---and the healthcheck. Empty when nothing is installed/tracked.
+---@return { path: string, active: boolean, exists: boolean }[]
+function M.handles()
+  local watch = watch_mod()
+  if not watch then return {} end
+  local ok, list = pcall(watch.list)
+  return ok and list or {}
+end
+
 ---@param config FiletreeHandleGuardConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
