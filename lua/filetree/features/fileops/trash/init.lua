@@ -31,6 +31,9 @@ local ui_select   = require("filetree.util.select")
 local ui_confirm  = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
 local refs_util   = require("filetree.util.markdown_refs")
+-- Release neo-tree's directory-watcher handle before the external trash command
+-- touches the path. No-op unless the handle_guard feature installed the registry.
+local watch       = require("lib.nvim.neotree.watch")
 
 local M = {}
 
@@ -93,6 +96,17 @@ local function do_trash(path)
   if _cfg.use_safety then
     local ok_sf, safety = require("filetree.features").load("safety")
     if ok_sf then pcall(safety.before_delete, path) end
+  end
+
+  -- The trash command runs in a SEPARATE process (mv / trash / gio), so unlike
+  -- cross.fs.mutate it has no on_retry retry seam. Instead, proactively release
+  -- any neo-tree watcher holding `path` (or a subpath) open before spawning it —
+  -- otherwise our own libuv handle causes the very Windows sharing violation the
+  -- external move would then fail on. libuv closes handles asynchronously, so
+  -- pump the loop briefly (only when something was actually released) to let the
+  -- close land before the external process runs.
+  if watch.release(path) > 0 then
+    vim.wait(20)
   end
 
   local result = trash_platform.send(path)
