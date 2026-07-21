@@ -29,6 +29,9 @@ local refs_picker = require("filetree.util.refs_picker")
 -- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_copyfile would
 -- surface as a hard failure — see the handle_guard plan.
 local fsops = require("lib.nvim.cross.fs.mutate")
+-- On a transient lock during a move, release neo-tree's watcher on the source
+-- so the retry can proceed. No-op unless handle_guard installed the registry.
+local watch = require("lib.nvim.neotree.watch")
 
 local M = {}
 
@@ -230,7 +233,9 @@ local function do_move(src, dst_dir)
   -- case: the cross-drive move keeps working (no retry protection, but a
   -- cross-drive paste is rare), while the common same-drive move gets the
   -- EPERM/EACCES/EBUSY retry it actually needs.
-  local ok, err = fsops.rename_file(src, dst)
+  local ok, err = fsops.rename_file(src, dst, {
+    on_retry = function() watch.release(src) end,
+  })
   if not ok then
     if type(err) == "string" and err:match("^EXDEV") then
       if vim.fn.rename(src, dst) == 0 then return 0, dst end
