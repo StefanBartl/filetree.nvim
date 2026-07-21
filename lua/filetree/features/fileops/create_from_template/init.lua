@@ -29,8 +29,9 @@ local notify  = require("filetree.util.notify").create("[filetree.create_from_te
 local path_u  = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
 
-local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local map    = require("filetree.util.map")
+local au     = require("filetree.util.autocmd")
+local window = require("filetree.util.window")
 local M = {}
 
 ---@type FiletreeCreateFromTemplateConfig
@@ -166,6 +167,7 @@ local function pick_template(templates, on_select)
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
   vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
   vim.api.nvim_set_option_value("buftype",    "nofile", { buf = bufnr })
+  vim.api.nvim_set_option_value("bufhidden",  "wipe",   { buf = bufnr })
 
   local win = vim.api.nvim_open_win(bufnr, true, {
     relative  = "editor",
@@ -176,7 +178,6 @@ local function pick_template(templates, on_select)
 
   local close = function()
     pcall(vim.api.nvim_win_close, win, true)
-    pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
   end
 
   local opts = { buffer = bufnr, nowait = true, silent = true }
@@ -185,8 +186,7 @@ local function pick_template(templates, on_select)
     local tmpl = templates[idx]
     if tmpl then close(); on_select(tmpl) end
   end, opts)
-  map("n", "q",     close, opts)
-  map("n", "<Esc>", close, opts)
+  window.nice_quit(win)
 
   -- Number shortcuts
   for i = 1, math.min(9, #templates) do
