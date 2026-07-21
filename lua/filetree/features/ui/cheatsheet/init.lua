@@ -20,8 +20,9 @@
 --- whose native help is already complete.
 
 local bindings_mod = require("filetree.bindings")
-local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local map    = require("filetree.util.map")
+local au     = require("filetree.util.autocmd")
+local window = require("filetree.util.window")
 
 local M = {}
 
@@ -125,10 +126,9 @@ function M.show()
     title_pos = "center",
   })
 
-  local close_fn = function() close_win() end
-  for _, k in ipairs({ "q", "<Esc>", _cfg.keymap }) do
-    map("n", k, close_fn, { buffer = bufnr, nowait = true, silent = true })
-  end
+  local keys = { "q", "<Esc>" }
+  if _cfg.keymap then keys[#keys + 1] = _cfg.keymap end
+  window.nice_quit(_win, { keys = keys })
   au.acmd({ "BufLeave", "WinLeave" }, {
     buffer   = bufnr,
     once     = true,

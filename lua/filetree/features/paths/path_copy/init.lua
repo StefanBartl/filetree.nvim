@@ -26,8 +26,9 @@
 
 local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 
-local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local map    = require("filetree.util.map")
+local au     = require("filetree.util.autocmd")
+local window = require("filetree.util.window")
 local M = {}
 
 ---@type FiletreePathCopyConfig
@@ -185,9 +186,8 @@ function M.pick()
   end
 
   local opts = { buffer = buf, nowait = true, silent = true }
-  map("n", "<CR>",  choose, opts)
-  map("n", "q",     function() vim.api.nvim_win_close(win, true) end, opts)
-  map("n", "<Esc>", function() vim.api.nvim_win_close(win, true) end, opts)
+  map("n", "<CR>", choose, opts)
+  window.nice_quit(win)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
