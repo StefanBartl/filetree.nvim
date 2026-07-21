@@ -338,6 +338,24 @@ local function editor_target()
   return bufutil.find_editor_win(tree_win)
 end
 
+-- A preview is a transient display, not a navigation — but bufload() and
+-- nvim_win_set_buf() fire BufEnter/BufWinEnter/WinEnter in the TARGET (editor)
+-- window's context, with the previewed file as `%`. Features that follow the
+-- current file then wrongly treat the preview as a real buffer switch:
+-- cwd_sync chdir's to the previewed file's project root (very visible when
+-- Neovim was started above the project, e.g. in a repos parent dir), neo-tree's
+-- own follow_current_file re-roots, auto_reveal jumps. Suppress exactly those
+-- navigation events around the buffer swap — not FileType/BufReadPost, so the
+-- previewed buffer's syntax still attaches.
+local NAV_EVENTS = "BufEnter,BufWinEnter,WinEnter,BufLeave,WinLeave,BufWinLeave"
+local function without_nav_events(fn)
+  local save = vim.o.eventignore
+  vim.o.eventignore = NAV_EVENTS
+  local ok, err = pcall(fn)
+  vim.o.eventignore = save
+  if not ok then error(err) end
+end
+
 ---Display `path` in the buffer-mode editor window without stealing focus.
 ---@param path string
 local function buf_show(path)
@@ -345,8 +363,10 @@ local function buf_show(path)
   if not (win and vim.api.nvim_win_is_valid(win)) then return end
   if vim.fn.filereadable(path) ~= 1 then return end
   local b = vim.fn.bufadd(path)
-  vim.fn.bufload(b)                              -- triggers filetype/syntax
-  pcall(vim.api.nvim_win_set_buf, win, b)        -- set buffer, focus stays in tree
+  without_nav_events(function()
+    vim.fn.bufload(b)                            -- triggers filetype/syntax
+    pcall(vim.api.nvim_win_set_buf, win, b)      -- set buffer, focus stays in tree
+  end)
   apply_highlight(b, vim.bo[b].filetype)
 end
 
@@ -355,7 +375,12 @@ end
 local function buf_stop(restore)
   if restore and _editor_win and vim.api.nvim_win_is_valid(_editor_win)
      and _saved_buf and vim.api.nvim_buf_is_valid(_saved_buf) then
-    pcall(vim.api.nvim_win_set_buf, _editor_win, _saved_buf)
+    -- Restoring the original buffer is just as much a non-navigation as showing
+    -- the preview was, so suppress the same follow-the-file events (otherwise
+    -- ending a preview would itself trigger a spurious cwd_sync chdir).
+    without_nav_events(function()
+      pcall(vim.api.nvim_win_set_buf, _editor_win, _saved_buf)
+    end)
   end
   _buf_active = false
   _editor_win = nil
