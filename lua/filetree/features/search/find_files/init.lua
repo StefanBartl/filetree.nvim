@@ -25,6 +25,16 @@ local au  = require("filetree.util.autocmd")
 local ui_select = require("filetree.util.select")
 local M = {}
 
+-- Optional: shows a "scanning…" indicator for the builtin backend's
+-- vim.fn.globpath() walk, which can take a while under a large root and has
+-- no other feedback otherwise. No-op (returns nil) when lib.nvim isn't
+-- installed — the scan still runs, just without the indicator.
+local ok_progress, progress_mod = pcall(require, "lib.nvim.progress")
+local function new_progress()
+  if not ok_progress then return nil end
+  return progress_mod.create({ title = "[filetree.find_files]" })
+end
+
 ---@type FiletreeFindFilesConfig
 local _cfg = {
   enabled          = false,
@@ -125,17 +135,27 @@ end
 
 local function via_builtin(root)
   -- vim.fn.glob all files, present via vim.ui.select
+  local prog = new_progress()
+  if prog then prog:update({ text = "scanning " .. root .. "…" }) end
+
   local pattern = _cfg.hidden and root .. "/**/*" or root .. "/**/*"
   local ok_g, files = pcall(vim.fn.globpath, root, "**/*", false, true)
   if not ok_g then files = {} end
   -- filter to files only, limit to 10000
   local filtered = {}
-  for _, f in ipairs(files) do
+  local total = #files
+  for i, f in ipairs(files) do
     if vim.fn.filereadable(f) == 1 then
       filtered[#filtered + 1] = f
       if #filtered >= 10000 then break end
     end
+    if prog and i % 500 == 0 then
+      prog:update({ current = i, total = total })
+    end
   end
+
+  if prog then prog:finish(string.format("%d file(s) found under %s", #filtered, root)) end
+
   if #filtered == 0 then
     notify.warn("No files found in: " .. root)
     return true

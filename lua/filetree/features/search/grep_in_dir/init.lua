@@ -23,6 +23,15 @@ local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
 local M = {}
 
+-- Optional: shows a "searching…" indicator around the builtin backend's
+-- blocking rg/grep process, which can take a while under a large directory.
+-- No-op (returns nil) when lib.nvim isn't installed.
+local ok_progress, progress_mod = pcall(require, "lib.nvim.progress")
+local function new_progress()
+  if not ok_progress then return nil end
+  return progress_mod.create({ title = "[filetree.grep_in_dir]" })
+end
+
 ---@type FiletreeGrepInDirConfig
 local _cfg = {
   enabled          = false,
@@ -93,6 +102,9 @@ local function via_builtin(dir, pattern)
   local has_rg = vim.fn.executable("rg") == 1
   local output, exit_code
 
+  local prog = new_progress()
+  if prog then prog:update({ text = "searching " .. dir .. "…" }) end
+
   if has_rg then
     -- vim.system with an argv list (not a shell string) on purpose: it execs
     -- rg directly with no shell in between, so there's nothing to quote/escape
@@ -114,6 +126,8 @@ local function via_builtin(dir, pattern)
     output = vim.fn.systemlist(cmd)
     exit_code = vim.v.shell_error
   end
+
+  if prog then prog:finish(string.format("%d line(s) matched", #output)) end
 
   if exit_code ~= 0 and #output == 0 then
     notify.info("No matches for: " .. pattern)
