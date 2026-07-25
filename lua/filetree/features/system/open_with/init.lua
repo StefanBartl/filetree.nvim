@@ -43,7 +43,11 @@ local _adapter = nil
 ---Per-OS "open with default handler" command (fallback for Neovim < 0.10).
 ---@return string[]
 local function system_open_cmd()
-  if platform.is_windows() then return { "cmd", "/c", "start", "" } end
+  -- explorer.exe hands the target straight to the registered file handler
+  -- with no cmd.exe re-tokenizing in between; `cmd /c start` silently
+  -- truncates a path containing an unescaped `&` (cmd.exe treats a bare
+  -- `&` outside quotes as a command separator).
+  if platform.is_windows() then return { "explorer.exe" } end
   if platform.is_mac()     then return { "open" } end
   if platform.is_wsl() or platform.has_executable("wslview") then return { "wslview" } end
   return { "xdg-open" }

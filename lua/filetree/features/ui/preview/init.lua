@@ -108,7 +108,11 @@ local function is_pdf(path)   return _PDF_EXTS[ext(path)]   == 1 end
 local function system_open(path)
   local args
   if platform.is_windows() then
-    args = { "cmd", "/c", "start", "", path:gsub("/", "\\") }
+    -- explorer.exe hands the target straight to the registered file handler
+    -- with no cmd.exe re-tokenizing in between; `cmd /c start` silently
+    -- truncates a path containing an unescaped `&` (cmd.exe treats a bare
+    -- `&` outside quotes as a command separator).
+    args = { "explorer.exe", path:gsub("/", "\\") }
   elseif platform.is_mac() then
     args = { "open", path }
   elseif platform.is_wsl() or platform.has_executable("wslview") then
