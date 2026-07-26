@@ -23,6 +23,7 @@ local bufutil    = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
@@ -527,83 +528,74 @@ function M.setup(config, adapter)
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_preview", true)
 
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = "neo-tree,NvimTree",
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
+  tree_attach.on_attach(function(buf)
+    -- <Tab>: toggle text preview, or dispatch image/PDF
+    if _cfg.keymap then
+      map("n", _cfg.keymap, M.toggle_or_open, {
+        buffer = buf, silent = true, desc = "Filetree: preview / open image or PDF",
+      })
+    end
 
-        -- <Tab>: toggle text preview, or dispatch image/PDF
-        if _cfg.keymap then
-          map("n", _cfg.keymap, M.toggle_or_open, {
-            buffer = buf, silent = true, desc = "Filetree: preview / open image or PDF",
+    -- <CR>: image/PDF dispatch; save and call neotree's original <CR> for other nodes
+    if _cfg.keymap_open then
+      local original_cr_cb = nil
+      for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+        if m.lhs == _cfg.keymap_open then
+          original_cr_cb = m.callback
+          break
+        end
+      end
+
+      map("n", _cfg.keymap_open, function()
+        M.open_or_fallback(original_cr_cb)
+      end, {
+        buffer = buf, silent = true,
+        desc   = "Filetree: open image/PDF, or adapter default",
+      })
+    end
+
+    if _cfg.mode == "float" then
+      -- Float mode: the scroll keys move the float's cursor.
+      local scroll_keys = {
+        { _cfg.keymap_scroll_up,     1  },
+        { _cfg.keymap_scroll_down,   -1 },
+        { _cfg.keymap_scroll_up10,   10 },
+        { _cfg.keymap_scroll_down10, -10 },
+      }
+      for _, pair in ipairs(scroll_keys) do
+        local key, delta = pair[1], pair[2]
+        if key then
+          map("n", key, function() scroll_preview(delta) end, {
+            buffer = buf, silent = true,
+            desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down"),
           })
         end
-
-        -- <CR>: image/PDF dispatch; save and call neotree's original <CR> for other nodes
-        if _cfg.keymap_open then
-          local original_cr_cb = nil
-          for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
-            if m.lhs == _cfg.keymap_open then
-              original_cr_cb = m.callback
-              break
+      end
+    else
+      -- Buffer mode: <PageUp>/<PageDown> page the previewed file in the
+      -- editor window while the cursor stays in the tree. When no preview is
+      -- active the key falls through to the tree's own native scroll (fed
+      -- back with noremap so this mapping doesn't re-trigger).
+      local page_keys = {
+        { _cfg.keymap_scroll_up10,   -1 },  -- <PageUp>  → page up
+        { _cfg.keymap_scroll_down10,  1 },  -- <PageDown> → page down
+      }
+      for _, pair in ipairs(page_keys) do
+        local key, dir = pair[1], pair[2]
+        if key then
+          map("n", key, function()
+            if not scroll_buf_preview(dir) then
+              local k = vim.api.nvim_replace_termcodes(key, true, false, true)
+              vim.api.nvim_feedkeys(k, "n", false)
             end
-          end
-
-          map("n", _cfg.keymap_open, function()
-            M.open_or_fallback(original_cr_cb)
           end, {
             buffer = buf, silent = true,
-            desc   = "Filetree: open image/PDF, or adapter default",
+            desc   = "Filetree: page preview " .. (dir > 0 and "down" or "up"),
           })
         end
-
-        if _cfg.mode == "float" then
-          -- Float mode: the scroll keys move the float's cursor.
-          local scroll_keys = {
-            { _cfg.keymap_scroll_up,     1  },
-            { _cfg.keymap_scroll_down,   -1 },
-            { _cfg.keymap_scroll_up10,   10 },
-            { _cfg.keymap_scroll_down10, -10 },
-          }
-          for _, pair in ipairs(scroll_keys) do
-            local key, delta = pair[1], pair[2]
-            if key then
-              map("n", key, function() scroll_preview(delta) end, {
-                buffer = buf, silent = true,
-                desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down"),
-              })
-            end
-          end
-        else
-          -- Buffer mode: <PageUp>/<PageDown> page the previewed file in the
-          -- editor window while the cursor stays in the tree. When no preview is
-          -- active the key falls through to the tree's own native scroll (fed
-          -- back with noremap so this mapping doesn't re-trigger).
-          local page_keys = {
-            { _cfg.keymap_scroll_up10,   -1 },  -- <PageUp>  → page up
-            { _cfg.keymap_scroll_down10,  1 },  -- <PageDown> → page down
-          }
-          for _, pair in ipairs(page_keys) do
-            local key, dir = pair[1], pair[2]
-            if key then
-              map("n", key, function()
-                if not scroll_buf_preview(dir) then
-                  local k = vim.api.nvim_replace_termcodes(key, true, false, true)
-                  vim.api.nvim_feedkeys(k, "n", false)
-                end
-              end, {
-                buffer = buf, silent = true,
-                desc   = "Filetree: page preview " .. (dir > 0 and "down" or "up"),
-              })
-            end
-          end
-        end
-      end)
-    end,
-  })
+      end
+    end
+  end)
 
   -- Leaving the tree ends the preview. Float: close it. Buffer: deactivate but
   -- keep the shown file (the user is moving into the editor to use it); toggling

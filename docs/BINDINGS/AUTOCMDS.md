@@ -2,10 +2,12 @@
 
 filetree.nvim creates autocmds in two categories:
 
-1. **Keymap setup** — `FileType` callbacks that install tree-buffer keymaps.
-   Every enabled feature with a `keymap*` config field registers one of these.
-   They are deferred with `vim.schedule()` so they fire after the adapter
-   (e.g. neotree) finishes its own render-time keymap setup.
+1. **Keymap setup** — a single `FileType` autocmd (`util.tree_attach`, augroup
+   `filetree_tree_attach`) that dispatches to every enabled feature's
+   `on_attach(buf)` callback. Every feature with a `keymap*` config field
+   registers one of these instead of creating its own `FileType` autocmd.
+   Dispatch is deferred with `vim.schedule()` so callbacks fire after the
+   adapter (e.g. neotree) finishes its own render-time keymap setup.
 
 2. **Behavioral** — autocmds that drive feature logic (reveal, cwd sync, etc.).
    Listed in the table below.
@@ -20,7 +22,7 @@ filetree.nvim creates autocmds in two categories:
 | `cwd_sync` | `BufEnter`, `DirChanged` | Sync Vim cwd to current node's directory | `enabled = false` or `autocmds = { cwd_sync = false }` |
 | `current_hl` | `BufEnter`, `CursorMoved` | Highlight current-file node in tree | `enabled = false` or `autocmds = { current_hl = false }` |
 | `cursor_hide` | `BufEnter`, `WinEnter`, `BufLeave`, `WinLeave` | Hide block cursor in tree window; restore on leave | `enabled = false` |
-| `window_style` | `FileType`, `BufWinEnter`, `WinEnter` (statusline); `ColorScheme` (highlights_isolate) | Blank statusline (on by default) / isolate tree highlights (opt-in) in tree windows | `enabled = false` or `statusline = false` / `highlights_isolate = false` |
+| `window_style` | tree-attach, `BufWinEnter`, `WinEnter` (statusline); `ColorScheme` (highlights_isolate) | Blank statusline (on by default) / isolate tree highlights (opt-in) in tree windows | `enabled = false` or `statusline = false` / `highlights_isolate = false` |
 | `preview` | `BufLeave`, `WinLeave`, `CursorMoved` | Auto-close preview float on leave; live-update on cursor move | `enabled = false` |
 | `git_status` | `BufWritePost`, `FocusGained` | Refresh git decorations after write | `enabled = false` |
 | `file_watcher` | `User FileWatcherEvent` | Refresh tree on filesystem change | `enabled = false` |
@@ -67,8 +69,9 @@ require("filetree").setup({
 ### Delete autocmds after setup
 
 If you need to remove filetree autocmds at runtime (e.g. in a toggle function),
-use the Neovim API. All filetree keymap-setup autocmds fire once per buffer and
-are not persistent — only behavioral autocmds stay active.
+use the Neovim API. The tree-attach keymap-setup autocmd fires once per tree
+buffer and its per-feature callbacks are not persistent — only behavioral
+autocmds stay active.
 
 ```lua
 -- Example: disable auto_reveal at runtime
@@ -80,7 +83,8 @@ if ft and ft.teardown then ft.teardown() end
 
 ## FileType patterns
 
-Keymap-setup autocmds match the following `FileType` patterns:
+The tree-attach dispatcher matches the active adapter's declared `filetypes`
+(falling back to the full set below when an adapter doesn't declare any):
 
 | Adapter | FileType |
 |---------|---------|

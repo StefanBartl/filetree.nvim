@@ -25,6 +25,7 @@
 local notify = require("filetree.util.notify").create("[filetree.auto_resize]")
 
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeAutoResizeConfig
@@ -111,13 +112,7 @@ function M.setup(config, adapter)
   })
 
   -- Also apply when the tree window opens / gets focus
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function()
-      vim.schedule(M.apply)
-    end,
-  })
+  tree_attach.on_attach(function() M.apply() end)
 
   -- Apply immediately
   vim.schedule(M.apply)

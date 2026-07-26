@@ -20,6 +20,7 @@ local notify = require("filetree.util.notify").create("[filetree.copy_move]")
 
 local map         = require("filetree.util.map")
 local au          = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
 local ui_select   = require("filetree.util.select")
 local refs_util   = require("filetree.util.markdown_refs")
@@ -405,50 +406,42 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_copy_move", true)
 
   local km = _cfg.keymaps or {}
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = "neo-tree,NvimTree",
-    callback = function(ev)
-      render_clipboard()
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function bind(key, fn, desc)
-          if key then
-            map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-          end
-        end
+  tree_attach.on_attach(function(buf)
+    render_clipboard()
+    local function bind(key, fn, desc)
+      if key then
+        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+      end
+    end
 
-        -- neo-tree's own native keymaps (y/x/p/...) are registered with a
-        -- global `nowait = true`, which makes Vim resolve the ambiguity
-        -- between a single-char native mapping and our own longer "yy"/"xx"
-        -- sequence immediately in the native mapping's favour — the second
-        -- keypress never gets a chance to complete the double-tap. Re-binding
-        -- the bare prefix char to a plain <Nop> (no nowait) on this buffer
-        -- overrides neo-tree's mapping and restores Vim's normal
-        -- wait-for-more-input behaviour, making "yy"/"xx" reachable again.
-        local function unblock_prefix(key, desc)
-          if type(key) == "string" and #key == 2 and key:sub(1, 1) == key:sub(2, 2) then
-            local prefix = key:sub(1, 1)
-            if prefix ~= km.paste and prefix ~= km.show then
-              map("n", prefix, "<Nop>", {
-                buffer = buf, silent = true,
-                desc   = "Filetree: unblock " .. desc .. " (" .. key .. ")",
-              })
-            end
-          end
+    -- neo-tree's own native keymaps (y/x/p/...) are registered with a
+    -- global `nowait = true`, which makes Vim resolve the ambiguity
+    -- between a single-char native mapping and our own longer "yy"/"xx"
+    -- sequence immediately in the native mapping's favour — the second
+    -- keypress never gets a chance to complete the double-tap. Re-binding
+    -- the bare prefix char to a plain <Nop> (no nowait) on this buffer
+    -- overrides neo-tree's mapping and restores Vim's normal
+    -- wait-for-more-input behaviour, making "yy"/"xx" reachable again.
+    local function unblock_prefix(key, desc)
+      if type(key) == "string" and #key == 2 and key:sub(1, 1) == key:sub(2, 2) then
+        local prefix = key:sub(1, 1)
+        if prefix ~= km.paste and prefix ~= km.show then
+          map("n", prefix, "<Nop>", {
+            buffer = buf, silent = true,
+            desc   = "Filetree: unblock " .. desc .. " (" .. key .. ")",
+          })
         end
-        unblock_prefix(km.copy, "stage copy")
-        unblock_prefix(km.cut,  "stage cut")
+      end
+    end
+    unblock_prefix(km.copy, "stage copy")
+    unblock_prefix(km.cut,  "stage cut")
 
-        bind(km.copy,  M.stage_copy, "stage copy")
-        bind(km.cut,   M.stage_cut,  "stage cut")
-        bind(km.paste, M.paste,      "paste clipboard")
-        bind(km.show,  M.show,       "show clipboard")
-        bind(km.clear, M.clear,      "clear clipboard")
-      end)
-    end,
-  })
+    bind(km.copy,  M.stage_copy, "stage copy")
+    bind(km.cut,   M.stage_cut,  "stage cut")
+    bind(km.paste, M.paste,      "paste clipboard")
+    bind(km.show,  M.show,       "show clipboard")
+    bind(km.clear, M.clear,      "clear clipboard")
+  end)
 
   au.acmd("BufEnter", {
     group   = _augroup,

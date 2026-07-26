@@ -18,6 +18,7 @@ local notify = require("filetree.util.notify").create("[filetree.filter]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
@@ -237,9 +238,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeFilterConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -251,36 +249,24 @@ function M.setup(config, adapter)
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(apply, _cfg.debounce_ms)
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_filter", true)
-
   if _cfg.keymap or _cfg.keymap_clear then
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = "neo-tree,NvimTree",
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          if _cfg.keymap then
-            map("n", _cfg.keymap, M.enter, {
-              buffer = buf,
-              silent = true,
-              desc   = "Filetree: enter filter mode",
-            })
-          end
-          if _cfg.keymap_clear then
-            map("n", _cfg.keymap_clear, M.clear, {
-              buffer = buf,
-              silent = true,
-              desc   = "Filetree: clear filter",
-            })
-          end
-        end)
-      end,
-    })
+    tree_attach.on_attach(function(buf)
+      if _cfg.keymap then
+        map("n", _cfg.keymap, M.enter, {
+          buffer = buf,
+          silent = true,
+          desc   = "Filetree: enter filter mode",
+        })
+      end
+      if _cfg.keymap_clear then
+        map("n", _cfg.keymap_clear, M.clear, {
+          buffer = buf,
+          silent = true,
+          desc   = "Filetree: clear filter",
+        })
+      end
+    end)
   end
-
 end
 
 function M.teardown()
@@ -288,10 +274,6 @@ function M.teardown()
   close_input()
   _adapter = nil
   if _debounce then _debounce.cancel(); _debounce = nil end
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

@@ -2,7 +2,7 @@
 ---@brief Copy recursive file/directory lists of the current node to clipboard.
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeCopyFileListConfig
@@ -153,21 +153,7 @@ function M.setup(cfg, adapter)
     end
   end
 
-  local winid = adapter.get_winid and adapter.get_winid()
-  if winid then
-    set_keymaps(vim.api.nvim_win_get_buf(winid))
-  else
-    au.acmd("FileType", {
-      pattern  = { "neo-tree", "NvimTree" },
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          set_keymaps(buf)
-        end)
-      end,
-    })
-  end
+  tree_attach.on_attach(set_keymaps)
 end
 
 function M.teardown()

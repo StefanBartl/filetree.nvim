@@ -21,6 +21,7 @@
 local notify = require("filetree.util.notify").create("[filetree.file_watcher]")
 
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
@@ -150,14 +151,10 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_file_watcher", true)
 
   -- Start watching when the tree opens, re-watch when DirChanged
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function()
-      local root = vim.fn.getcwd()
-      if not _handle then watch(root) end
-    end,
-  })
+  tree_attach.on_attach(function()
+    local root = vim.fn.getcwd()
+    if not _handle then watch(root) end
+  end)
 
   au.acmd("DirChanged", {
     group    = _augroup,

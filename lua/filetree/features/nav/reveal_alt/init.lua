@@ -15,11 +15,8 @@
 local notify = require("filetree.util.notify").create("[filetree.reveal_alt]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
-
----@type integer?
-local _augroup = nil
 
 ---@param config FiletreeRevealAltConfig
 ---@param adapter FiletreeAdapter
@@ -28,47 +25,32 @@ function M.setup(config, adapter)
 
   local keymap = config.keymap or "B"
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_reveal_alt", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        map("n", keymap, function()
-          local alt = vim.fn.expand("#:p")
-          if not alt or alt == "" then
-            notify.warn("No alternate buffer")
-            return
-          end
-          if vim.fn.filereadable(alt) ~= 1 then
-            notify.warn("Alternate buffer is not a readable file: " .. alt)
-            return
-          end
-          if type(adapter.open_reveal) == "function" then
-            local ok, err = pcall(adapter.open_reveal, alt, 0)
-            if not ok then notify.warn("Reveal failed: " .. tostring(err)) end
-          else
-            notify.warn("Adapter does not support open_reveal")
-          end
-        end, {
-          buffer = buf,
-          silent = true,
-          desc   = "Filetree: reveal alternate buffer in tree",
-        })
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    map("n", keymap, function()
+      local alt = vim.fn.expand("#:p")
+      if not alt or alt == "" then
+        notify.warn("No alternate buffer")
+        return
+      end
+      if vim.fn.filereadable(alt) ~= 1 then
+        notify.warn("Alternate buffer is not a readable file: " .. alt)
+        return
+      end
+      if type(adapter.open_reveal) == "function" then
+        local ok, err = pcall(adapter.open_reveal, alt, 0)
+        if not ok then notify.warn("Reveal failed: " .. tostring(err)) end
+      else
+        notify.warn("Adapter does not support open_reveal")
+      end
+    end, {
+      buffer = buf,
+      silent = true,
+      desc   = "Filetree: reveal alternate buffer in tree",
+    })
+  end)
 end
 
 function M.teardown()
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

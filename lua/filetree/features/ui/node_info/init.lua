@@ -5,6 +5,7 @@ local line_count = require("filetree.util.line_count")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local notify = require("filetree.util.notify").create("[filetree]")
 local M = {}
 
@@ -256,25 +257,10 @@ function M.setup(cfg, adapter)
   _adapter = adapter
 
   if cfg.keymap then
-    local winid = adapter.get_winid and adapter.get_winid()
-    if winid then
-      local bufnr = vim.api.nvim_win_get_buf(winid)
+    tree_attach.on_attach(function(buf)
       map("n", cfg.keymap, function() M.show_current() end,
-        { buffer = bufnr, desc = "filetree: node info", silent = true })
-    else
-      -- Fallback: set up autocmd to set keymap when tree opens
-      au.acmd("FileType", {
-        pattern  = { "neo-tree", "NvimTree" },
-        callback = function(ev)
-          local buf = ev.buf
-          vim.schedule(function()
-            if not vim.api.nvim_buf_is_valid(buf) then return end
-            map("n", cfg.keymap, function() M.show_current() end,
-              { buffer = buf, desc = "filetree: node info", silent = true })
-          end)
-        end,
-      })
-    end
+        { buffer = buf, desc = "filetree: node info", silent = true })
+    end)
   end
 end
 

@@ -21,6 +21,7 @@ local notify   = require("filetree.util.notify").create("[filetree.git_status]")
 local platform = require("filetree.util.platform")
 
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
@@ -199,11 +200,7 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_git_status", true)
 
   -- Re-render when entering the tree buffer
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = "neo-tree,NvimTree",
-    callback = function() debounce_refresh() end,
-  })
+  tree_attach.on_attach(function() debounce_refresh() end)
 
   -- Re-query on file save or focus return
   au.acmd({ "BufWritePost", "FocusGained" }, {

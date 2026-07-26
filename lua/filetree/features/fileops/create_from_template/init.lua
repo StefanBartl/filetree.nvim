@@ -30,7 +30,7 @@ local path_u  = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
 
 local map    = require("filetree.util.map")
-local au     = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local window = require("filetree.util.window")
 local M = {}
 
@@ -260,9 +260,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeCreateFromTemplateConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -270,33 +267,17 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_create_from_template", true)
-
   if _cfg.keymap then
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = "neo-tree,NvimTree",
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          map("n", _cfg.keymap, M.open_current, {
-            buffer = buf, silent = true, desc = "Filetree: create from template",
-          })
-        end)
-      end,
-    })
+    tree_attach.on_attach(function(buf)
+      map("n", _cfg.keymap, M.open_current, {
+        buffer = buf, silent = true, desc = "Filetree: create from template",
+      })
+    end)
   end
-
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

@@ -22,6 +22,7 @@
 local bindings_mod = require("filetree.bindings")
 local map    = require("filetree.util.map")
 local au     = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local window = require("filetree.util.window")
 
 local M = {}
@@ -142,9 +143,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeCheatsheetConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -156,35 +154,16 @@ function M.setup(config, adapter)
   -- its own native `?`/show_help; don't shadow a working, richer solution.
   if adapter.name == "neotree" then return end
   if not _cfg.keymap then return end
-  -- Minimal/stub/test adapters may not declare `filetypes` (or route missing
-  -- fields through a catch-all __index that returns a function, not a table)
-  -- — nothing sane to attach a FileType autocmd to in that case, so no-op.
-  if type(adapter.filetypes) ~= "table" or #adapter.filetypes == 0 then return end
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_cheatsheet", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = adapter.filetypes,
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        map("n", _cfg.keymap, M.show,
-          { buffer = buf, desc = "filetree: keymap cheatsheet", silent = true })
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    map("n", _cfg.keymap, M.show,
+      { buffer = buf, desc = "filetree: keymap cheatsheet", silent = true })
+  end)
 end
 
 function M.teardown()
   close_win()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

@@ -24,7 +24,7 @@ local notify   = require("filetree.util.notify").create("[filetree.open_in_fm]")
 local platform = require("filetree.util.platform")
 local path     = require("filetree.util.path")
 local map      = require("filetree.util.map")
-local au       = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 
 local M = {}
 
@@ -80,8 +80,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
 ---@type FiletreeAdapter?
 local _adapter = nil
 ---@type string?
@@ -119,22 +117,13 @@ function M.setup(config, adapter)
   _adapter = adapter
   _cmd     = config.command   -- nil unless the user overrides the launcher
 
-  au.del_group(_augroup)
-  _augroup = au.group("filetree_open_in_fm", true)
-
-  au.create("FileType", function(ev)
-    local buf = ev.buf
-    vim.schedule(function()
-      if not vim.api.nvim_buf_is_valid(buf) then return end
-      map("n", keymap, M.open, { buffer = buf },
-        "Filetree: open node directory in system file manager")
-    end)
-  end, { group = _augroup, pattern = { "neo-tree", "NvimTree" } })
+  tree_attach.on_attach(function(buf)
+    map("n", keymap, M.open, { buffer = buf },
+      "Filetree: open node directory in system file manager")
+  end)
 end
 
 function M.teardown()
-  au.del_group(_augroup)
-  _augroup = nil
 end
 
 return M

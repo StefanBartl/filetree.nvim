@@ -67,7 +67,9 @@ stack, not recursion; catalogs are built once. *Action:* spot-check
 `get_visible_nodes` (recursive tree walk) for large trees.
 
 ## Concentrated action items
-1. **lib.nvim adoption** — `map` / `usercmd` / `autocmd` / `augroup` / `hover_select`
-   (biggest, touches every feature). See [Zentral-Prinzipien](Zentral-Prinzipien.md).
-2. **Centralize FileType keymap binding** (N autocmds → 1 dispatcher).
+1. ~~**lib.nvim adoption** — `map` / `usercmd` / `autocmd` / `augroup` / `hover_select`~~
+   — done. See [Zentral-Prinzipien](Zentral-Prinzipien.md).
+2. ~~**Centralize FileType keymap binding** (N autocmds → 1 dispatcher)~~ — done
+   (`lua/filetree/util/tree_attach.lua`); every feature registers an
+   `on_attach(buf)` callback instead of its own `FileType` autocmd.
 3. **Broaden automated tests** beyond the smoke test.

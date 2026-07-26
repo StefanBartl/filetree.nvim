@@ -23,7 +23,7 @@
 local notify   = require("filetree.util.notify").create("[filetree.open_with]")
 local platform = require("filetree.util.platform")
 local map      = require("filetree.util.map")
-local au       = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local window   = require("filetree.util.window")
 
 local M = {}
@@ -154,9 +154,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeOpenWithConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -164,33 +161,24 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  au.del_group(_augroup)
-  _augroup = au.group("filetree_open_with", true)
-
-  au.create("FileType", function(ev)
-    local buf = ev.buf
-    vim.schedule(function()
-      if not vim.api.nvim_buf_is_valid(buf) then return end
-      if _cfg.keymap then
-        map("n", _cfg.keymap, M.open_system, { buffer = buf },
-          "Filetree: open with system default")
+  tree_attach.on_attach(function(buf)
+    if _cfg.keymap then
+      map("n", _cfg.keymap, M.open_system, { buffer = buf },
+        "Filetree: open with system default")
+    end
+    -- Register per-app keymaps
+    for _, app in ipairs(_cfg.apps) do
+      if app.keymap then
+        local app_copy = app
+        map("n", app.keymap, function() M.open_app(app_copy.name) end,
+          { buffer = buf }, "Filetree: open with " .. app.name)
       end
-      -- Register per-app keymaps
-      for _, app in ipairs(_cfg.apps) do
-        if app.keymap then
-          local app_copy = app
-          map("n", app.keymap, function() M.open_app(app_copy.name) end,
-            { buffer = buf }, "Filetree: open with " .. app.name)
-        end
-      end
-    end)
-  end, { group = _augroup, pattern = { "neo-tree", "NvimTree" } })
+    end
+  end)
 end
 
 function M.teardown()
   _adapter = nil
-  au.del_group(_augroup)
-  _augroup = nil
 end
 
 return M

@@ -26,6 +26,7 @@ local notify = require("filetree.util.notify").create("[filetree.live_search]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
@@ -211,9 +212,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeLiveSearchConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -224,34 +222,19 @@ function M.setup(config, adapter)
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(apply_overlay, _cfg.debounce_ms)
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_live_search", true)
-
   if _cfg.keymap then
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = { "neo-tree", "NvimTree" },
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          map("n", _cfg.keymap, M.open, {
-            buffer = buf, silent = true,
-            desc   = "Filetree: live search",
-          })
-        end)
-      end,
-    })
+    tree_attach.on_attach(function(buf)
+      map("n", _cfg.keymap, M.open, {
+        buffer = buf, silent = true,
+        desc   = "Filetree: live search",
+      })
+    end)
   end
 end
 
 function M.teardown()
   _adapter = nil
   if _debounce then _debounce.cancel(); _debounce = nil end
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

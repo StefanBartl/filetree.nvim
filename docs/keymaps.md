@@ -14,8 +14,8 @@ individual tree keys carry a `desc` so which-key shows them out of the box.
 
 > **neo-tree `?` cheatsheet:** filetree keymaps appear there automatically —
 > `setup()` injects them into neo-tree's mapping registry, no extra wiring needed.
-> For **nvim-tree** (`g?`) and other adapters the keymaps are registered via
-> `vim.keymap.set()` in a FileType autocmd (outside their help registry), so their
+> For **nvim-tree** (`g?`) and other adapters the keymaps are registered via the
+> central tree-attach dispatcher (outside their help registry), so their
 > built-in help won't list them — they still work; check `:nmap` in the tree
 > buffer. See
 > [neo-tree `?` cheatsheet integration](BINDINGS/KEYMAPS.md#neo-tree--cheatsheet-integration).

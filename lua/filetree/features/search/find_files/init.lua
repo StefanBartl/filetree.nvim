@@ -21,7 +21,7 @@
 local notify = require("filetree.util.notify").create("[filetree.find_files]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
 local M = {}
 
@@ -207,9 +207,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeFindFilesConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -217,33 +214,22 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_find_files", true)
-
   -- Keymap inside tree
   if _cfg.keymap_tree then
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = "neo-tree,NvimTree",
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          map("n", _cfg.keymap_tree, M.find, {
-            buffer = buf,
-            silent = true,
-            desc   = "Filetree: find files from current node",
-          })
-          if _cfg.keymap_telescope then
-            map("n", _cfg.keymap_telescope, M.find_telescope, {
-              buffer = buf,
-              silent = true,
-              desc   = "Filetree: find files via telescope specifically",
-            })
-          end
-        end)
-      end,
-    })
+    tree_attach.on_attach(function(buf)
+      map("n", _cfg.keymap_tree, M.find, {
+        buffer = buf,
+        silent = true,
+        desc   = "Filetree: find files from current node",
+      })
+      if _cfg.keymap_telescope then
+        map("n", _cfg.keymap_telescope, M.find_telescope, {
+          buffer = buf,
+          silent = true,
+          desc   = "Filetree: find files via telescope specifically",
+        })
+      end
+    end)
   end
 
   -- Optional global keymap
@@ -258,10 +244,6 @@ end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
   if _cfg.keymap_global then
     pcall(vim.keymap.del, "n", _cfg.keymap_global)
   end

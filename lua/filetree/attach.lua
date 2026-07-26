@@ -1,8 +1,9 @@
 ---@module 'filetree.attach'
 ---@brief Inject filetree feature keymaps into neo-tree's `window.mappings`.
 ---@description
---- filetree normally binds its keymaps via a FileType autocmd + `vim.keymap.set`
---- AFTER the adapter has set up its own buffer-local keymaps.  Those keymaps work,
+--- filetree normally binds its keymaps via the central tree-attach dispatcher
+--- (`util.tree_attach`) AFTER the adapter has set up its own buffer-local
+--- keymaps.  Those keymaps work,
 --- but they are invisible to neo-tree's `?` cheatsheet, because that help screen is
 --- generated purely from `state.resolved_mappings` — which neo-tree builds from the
 --- `window.mappings` table (per source config and per live state).
@@ -21,9 +22,9 @@
 ---      post-setup config mutation.
 ---
 --- Either way neo-tree binds the key to `handler` (which calls the filetree feature
---- action) and lists it in `?` using `desc`.  The FileType autocmds still run and
---- re-bind the same keys to the same functions, so behaviour is identical with or
---- without this module — it only adds cheatsheet visibility.
+--- action) and lists it in `?` using `desc`.  The tree-attach dispatcher still runs
+--- and re-binds the same keys to the same functions, so behaviour is identical with
+--- or without this module — it only adds cheatsheet visibility.
 
 local au = require("filetree.util.autocmd")
 

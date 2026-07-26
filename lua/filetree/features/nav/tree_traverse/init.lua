@@ -2,15 +2,13 @@
 ---@brief Navigate up/down the directory tree with optional CWD sync.
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeTreeTraverseConfig
 local _cfg = {}
 ---@type FiletreeAdapter?
 local _adapter = nil
----@type integer?
-local _augroup = nil
 
 local notify = require("filetree.util.notify").create("[filetree.tree_traverse]")
 
@@ -87,35 +85,20 @@ function M.setup(cfg, adapter)
   cfg      = _cfg
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_tree_traverse", true)
-
-  au.acmd("FileType", {
-    group    = _augroup,
-    pattern  = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        if cfg.keymap_up and cfg.keymap_up ~= "" then
-          map("n", cfg.keymap_up, function() M.up() end,
-            { buffer = buf, desc = "filetree: traverse up", silent = true })
-        end
-        if cfg.keymap_down and cfg.keymap_down ~= "" then
-          map("n", cfg.keymap_down, function() M.down() end,
-            { buffer = buf, desc = "filetree: traverse down", silent = true })
-        end
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    if cfg.keymap_up and cfg.keymap_up ~= "" then
+      map("n", cfg.keymap_up, function() M.up() end,
+        { buffer = buf, desc = "filetree: traverse up", silent = true })
+    end
+    if cfg.keymap_down and cfg.keymap_down ~= "" then
+      map("n", cfg.keymap_down, function() M.down() end,
+        { buffer = buf, desc = "filetree: traverse down", silent = true })
+    end
+  end)
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

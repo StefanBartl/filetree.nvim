@@ -26,7 +26,7 @@
 local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local ui_select   = require("filetree.util.select")
 local path        = require("filetree.util.path")
 local buffer      = require("filetree.util.buffer")
@@ -562,9 +562,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeSmartRenameConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -572,32 +569,17 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_smart_rename", true)
-
   if _cfg.keymap then
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = { "neo-tree", "NvimTree" },
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          map("n", _cfg.keymap, M.rename_current, {
-            buffer = buf, silent = true, desc = "Filetree: LSP-aware rename",
-          })
-        end)
-      end,
-    })
+    tree_attach.on_attach(function(buf)
+      map("n", _cfg.keymap, M.rename_current, {
+        buffer = buf, silent = true, desc = "Filetree: LSP-aware rename",
+      })
+    end)
   end
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

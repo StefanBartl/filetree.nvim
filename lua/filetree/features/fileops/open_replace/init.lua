@@ -19,11 +19,9 @@ local notify  = require("filetree.util.notify").create("[filetree.open_replace]"
 local bufutil = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
----@type integer?
-local _augroup = nil
 ---@type FiletreeAdapter?
 local _adapter = nil
 ---@type boolean
@@ -65,31 +63,16 @@ function M.setup(config, adapter)
   _adapter    = adapter
   _close_tree = config.close_tree ~= false
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_open_replace", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        map("n", keymap, M.open_replace, {
-          buffer = buf,
-          silent = true,
-          desc   = "Filetree: open file replacing current editor buffer",
-        })
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    map("n", keymap, M.open_replace, {
+      buffer = buf,
+      silent = true,
+      desc   = "Filetree: open file replacing current editor buffer",
+    })
+  end)
 end
 
 function M.teardown()
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M
