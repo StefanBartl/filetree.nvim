@@ -84,10 +84,13 @@ function M.run()
   if not adapter then return end
   local dir = resolve_dir(adapter)
   local prompt = "$ (" .. vim.fn.fnamemodify(dir, ":~") .. ") "
-  vim.ui.input({ prompt = prompt }, function(cmd)
-    if not cmd or cmd == "" then return end
-    run_in_terminal(dir, cmd, _opts.close_on_ok, _opts.split, _opts.height)
-  end)
+  require("lib.nvim.ui.kit").input({
+    title = prompt,
+    on_submit = function(cmd)
+      if not cmd or cmd == "" then return end
+      run_in_terminal(dir, cmd, _opts.close_on_ok, _opts.split, _opts.height)
+    end,
+  })
 end
 
 ---@param config FiletreeShellRunConfig

@@ -92,12 +92,7 @@ local function via_fzflua(dir, pattern)
   return true
 end
 
-local function via_builtin(dir, pattern)
-  if not pattern or pattern == "" then
-    pattern = vim.fn.input("Grep pattern: ")
-    if pattern == "" then return true end
-  end
-
+local function run_builtin_search(dir, pattern)
   -- Prefer rg, then grep
   local has_rg = vim.fn.executable("rg") == 1
   local output, exit_code
@@ -159,6 +154,26 @@ local function via_builtin(dir, pattern)
   vim.cmd("copen")
   notify.info(string.format("Found %d match(es) in %s", #qf_items, vim.fn.fnamemodify(dir, ":t")))
   return true
+end
+
+---Grep via the builtin rg/grep backend. Prompts for a pattern first when none
+---is given (async via kit.input); the caller's return value is never
+---consulted (this is always the last fallback in M.grep's chain), so it's
+---fine for the prompt path to return before the actual search runs.
+---@return boolean
+local function via_builtin(dir, pattern)
+  if not pattern or pattern == "" then
+    require("lib.nvim.ui.kit").input({
+      title = "Grep pattern: ",
+      on_submit = function(input)
+        if input == "" then return end
+        run_builtin_search(dir, input)
+      end,
+    })
+    return true
+  end
+
+  return run_builtin_search(dir, pattern)
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────

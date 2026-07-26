@@ -152,9 +152,9 @@ function M.create()
   local display = path.relative(parent)
   if display == "" or display == "." then display = "./" else display = display .. "/" end
 
-  vim.ui.input(
-    { prompt = "Create in " .. display .. "  (append / for a directory): " },
-    function(input)
+  require("lib.nvim.ui.kit").input({
+    title = "Create in " .. display .. "  (append / for a directory): ",
+    on_submit = function(input)
       if not input or input == "" then return end
 
       -- Sanitize immediately: the user may type "/" or "\" — both are accepted,
@@ -223,8 +223,8 @@ function M.create()
       if _adapter and _adapter.refresh then
         pcall(_adapter.refresh)
       end
-    end
-  )
+    end,
+  })
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
