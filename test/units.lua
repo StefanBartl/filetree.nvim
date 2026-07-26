@@ -441,7 +441,11 @@ do
     features = { copy_move = { enabled = true, confirm = false, use_safety = false } },
   })
 
-  local buf = vim.api.nvim_create_buf(true, false)
+  -- unlisted+scratch (buftype=nofile), like a real neo-tree buffer -- an
+  -- ordinary listed buffer with no name is indistinguishable from a stray
+  -- [No Name] window, which the enabled-by-default no_name_guard feature
+  -- would wipe out from under this test during the vim.wait below.
+  local buf = vim.api.nvim_create_buf(false, true)
   -- Simulate the adapter's own native single-char mappings, set BEFORE
   -- filetree's FileType-driven keymaps get scheduled (mirrors real timing).
   vim.api.nvim_buf_set_keymap(buf, "n", "c", "", { callback = function() end, nowait = true })
@@ -504,7 +508,7 @@ do
     },
   })
 
-  local buf = vim.api.nvim_create_buf(true, false)
+  local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_keymap(buf, "n", "y", "", { callback = function() end, nowait = true })
   vim.api.nvim_buf_set_keymap(buf, "n", "x", "", { callback = function() end, nowait = true })
   vim.api.nvim_set_current_buf(buf)
@@ -666,7 +670,7 @@ do
     features = { trash = { enabled = true, confirm = false, dry_run = true } },
   })
 
-  local buf = vim.api.nvim_create_buf(true, false)
+  local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_set_current_buf(buf)
   vim.bo[buf].filetype = "neo-tree"
   vim.wait(200, function() return false end)
@@ -1017,8 +1021,9 @@ do
   vim.fn.writefile({ "See [old](old.md) here." }, linker)
 
   -- Auto-drive the "Rename to:" prompt and the resulting chooser.
-  local orig_ui_input = vim.ui.input
-  vim.ui.input = function(_opts, on_confirm) on_confirm("renamed.md") end
+  package.loaded["lib.nvim.ui.kit"] = {
+    input = function(opts) opts.on_submit("renamed.md") end,
+  }
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[1]) -- "Update all refs"
   end
@@ -1060,7 +1065,7 @@ do
   check("smart_rename+mdrefs: old target string no longer present",
     linker_lines[1]:find("old.md", 1, true) == nil, linker_lines[1])
 
-  vim.ui.input = orig_ui_input
+  package.loaded["lib.nvim.ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.smart_rename"] = nil
@@ -1144,8 +1149,9 @@ do
   vim.fn.writefile({ "old" }, old_path)
   vim.fn.writefile({ "existing" }, existing_path)
 
-  local orig_ui_input = vim.ui.input
-  vim.ui.input = function(_opts, on_confirm) on_confirm("existing.txt") end
+  package.loaded["lib.nvim.ui.kit"] = {
+    input = function(opts) opts.on_submit("existing.txt") end,
+  }
 
   local captured_question, captured_choices
   package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
@@ -1177,7 +1183,7 @@ do
   check("smart_rename overwrite: Cancel leaves the old file in place",
     vim.fn.filereadable(old_path) == 1, "old file should still exist")
 
-  vim.ui.input = orig_ui_input
+  package.loaded["lib.nvim.ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.fileops.smart_rename"] = nil
 end
@@ -1191,8 +1197,9 @@ do
   vim.fn.chdir(tmp)
   vim.fn.setreg("+", "clip content")
 
-  local orig_ui_input = vim.ui.input
-  vim.ui.input = function(_opts, on_confirm) on_confirm("new.txt") end
+  package.loaded["lib.nvim.ui.kit"] = {
+    input = function(opts) opts.on_submit("new.txt") end,
+  }
 
   local captured_question, captured_choices
   package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
@@ -1225,7 +1232,7 @@ do
     vim.fn.filereadable(tmp .. "/new.txt") == 1
       and table.concat(vim.fn.readfile(tmp .. "/new.txt"), "\n"):find("clip content", 1, true) ~= nil)
 
-  vim.ui.input = orig_ui_input
+  package.loaded["lib.nvim.ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.fileops.smart_create"] = nil
 end
@@ -1329,8 +1336,9 @@ do
   vim.fn.mkdir(dest_dir, "p")
   vim.fn.writefile({ "existing" }, dest_dir .. "/new.lua")
 
-  local orig_fn_input = vim.fn.input
-  vim.fn.input = function(_prompt) return "new.lua" end
+  package.loaded["lib.nvim.ui.kit"] = {
+    input = function(opts) opts.on_submit("new.lua") end,
+  }
 
   local captured_question
   package.loaded["filetree.util.confirm"] = function(opts)
@@ -1359,7 +1367,7 @@ do
   check("create_from_template overwrite: Cancel leaves existing content untouched",
     vim.fn.readfile(dest_dir .. "/new.lua")[1] == "existing")
 
-  vim.fn.input = orig_fn_input
+  package.loaded["lib.nvim.ui.kit"] = nil
   package.loaded["filetree.util.confirm"] = nil
   package.loaded["filetree.features.fileops.create_from_template"] = nil
 end
@@ -1379,7 +1387,7 @@ do
   ft.register_adapter(stub)
   ft.setup({ adapter = "units-stub4", features = { open_variants = { enabled = true } } })
 
-  local buf = vim.api.nvim_create_buf(true, false)
+  local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_set_current_buf(buf)
   vim.bo[buf].filetype = "neo-tree"
   vim.wait(200, function() return false end)
@@ -1631,7 +1639,7 @@ do
   ft.setup({ adapter = "units-stub-cheatsheet",
     features = { cheatsheet = { enabled = true, keymap = "?" }, trash = { enabled = true } } })
 
-  local buf = vim.api.nvim_create_buf(true, false)
+  local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_set_current_buf(buf)
   vim.bo[buf].filetype = "units-cheatsheet-ft"
   vim.wait(200, function() return false end)
@@ -1671,7 +1679,7 @@ do
     features = { cheatsheet = { enabled = true, keymap = "?" } } })
   check("cheatsheet: setup() with the neotree adapter does not error", setup_ok)
 
-  local buf2 = vim.api.nvim_create_buf(true, false)
+  local buf2 = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_set_current_buf(buf2)
   vim.bo[buf2].filetype = "neo-tree"
   vim.wait(200, function() return false end)

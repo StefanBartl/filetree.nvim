@@ -533,27 +533,31 @@ function M.rename_current()
   local refs_handle = (_cfg.check_markdown_refs and refs_util.available())
     and refs_util.prefetch(old_path) or nil
 
-  vim.ui.input({ prompt = "Rename to: ", default = old_name }, function(new_name)
-    if not new_name or new_name == "" or new_name == old_name then return end
-    new_name = path.slashify(new_name)  -- accept "/" or "\" if renaming into a subdir
-    local new_path = dir .. "/" .. new_name
+  require("lib.nvim.ui.kit").input({
+    title = "Rename to: ",
+    default = old_name,
+    on_submit = function(new_name)
+      if not new_name or new_name == "" or new_name == old_name then return end
+      new_name = path.slashify(new_name)  -- accept "/" or "\" if renaming into a subdir
+      local new_path = dir .. "/" .. new_name
 
-    local function proceed()
-      if refs_handle then
-        refs_handle.await(function(refs) do_rename(old_path, new_path, refs) end)
-      else
-        do_rename(old_path, new_path, nil)
+      local function proceed()
+        if refs_handle then
+          refs_handle.await(function(refs) do_rename(old_path, new_path, refs) end)
+        else
+          do_rename(old_path, new_path, nil)
+        end
       end
-    end
 
-    if vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1 then
-      confirm_choice("'" .. new_name .. "' exists.", { "Overwrite", "Cancel" }, function(choice)
-        if choice == "Overwrite" then proceed() end
-      end)
-    else
-      proceed()
-    end
-  end)
+      if vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1 then
+        confirm_choice("'" .. new_name .. "' exists.", { "Overwrite", "Cancel" }, function(choice)
+          if choice == "Overwrite" then proceed() end
+        end)
+      else
+        proceed()
+      end
+    end,
+  })
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
