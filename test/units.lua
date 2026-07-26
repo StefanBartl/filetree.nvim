@@ -1337,6 +1337,7 @@ do
   vim.fn.writefile({ "existing" }, dest_dir .. "/new.lua")
 
   package.loaded["lib.nvim.ui.kit"] = {
+    select = function(o) o.on_select(o.items[1], 1) end, -- pick template 1
     input = function(opts) opts.on_submit("new.lua") end,
   }
 
@@ -1345,6 +1346,7 @@ do
     captured_question = opts.question
     opts.on_choice(false) -- Cancel: do not overwrite
   end
+  package.loaded["filetree.util.select"] = nil -- reload so it picks up the stubbed kit
   package.loaded["filetree.features.fileops.create_from_template"] = nil -- reload with stub
 
   local stub = setmetatable({
@@ -1359,8 +1361,7 @@ do
     features = { create_from_template = { enabled = true, template_dir = tdir } } })
 
   local cft = ft.feature("create_from_template")
-  cft.open(dest_dir)
-  vim.api.nvim_feedkeys("1", "x", false) -- pick template 1 via number shortcut
+  cft.open(dest_dir) -- picker resolves synchronously via the stubbed kit.select above
 
   check("create_from_template overwrite: util.confirm asked instead of vim.fn.input",
     captured_question ~= nil, tostring(captured_question))
@@ -1369,6 +1370,7 @@ do
 
   package.loaded["lib.nvim.ui.kit"] = nil
   package.loaded["filetree.util.confirm"] = nil
+  package.loaded["filetree.util.select"] = nil
   package.loaded["filetree.features.fileops.create_from_template"] = nil
 end
 
