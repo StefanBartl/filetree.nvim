@@ -32,6 +32,7 @@ local bufutil = require("filetree.util.buffer")
 local map    = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local window = require("filetree.util.window")
+local ui_confirm = require("filetree.util.confirm")
 local M = {}
 
 ---@type FiletreeCreateFromTemplateConfig
@@ -209,23 +210,29 @@ function M.open(dest_dir)
     name = path_u.slashify(name)  -- accept "/" or "\" if creating into a subdir
     local dest = dest_dir .. "/" .. name
 
-    if vim.fn.filereadable(dest) == 1 then
-      local ans = vim.fn.input("File exists. Overwrite? [y/N] ")
-      if ans:lower() ~= "y" then return end
+    local function proceed()
+      if create_from(tmpl.path, dest) then
+        notify.info("Created: " .. name .. " (from " .. tmpl.name .. ")")
+        if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+        if _cfg.open_after then
+          -- Open in a real editor window, never the tree window itself (loading
+          -- a buffer into the tree's own window fights its window-management
+          -- autocmds and can hang Neovim — see smart_create/duplicate_node).
+          local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid()
+          local win = bufutil.find_editor_win(tree_win)
+          if win then vim.api.nvim_set_current_win(win) else vim.cmd("vsplit") end
+          vim.cmd("edit " .. vim.fn.fnameescape(dest))
+        end
+      end
     end
 
-    if create_from(tmpl.path, dest) then
-      notify.info("Created: " .. name .. " (from " .. tmpl.name .. ")")
-      if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
-      if _cfg.open_after then
-        -- Open in a real editor window, never the tree window itself (loading
-        -- a buffer into the tree's own window fights its window-management
-        -- autocmds and can hang Neovim — see smart_create/duplicate_node).
-        local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid()
-        local win = bufutil.find_editor_win(tree_win)
-        if win then vim.api.nvim_set_current_win(win) else vim.cmd("vsplit") end
-        vim.cmd("edit " .. vim.fn.fnameescape(dest))
-      end
+    if vim.fn.filereadable(dest) == 1 then
+      ui_confirm({
+        question = "File exists. Overwrite?",
+        on_choice = function(yes) if yes then proceed() end end,
+      })
+    else
+      proceed()
     end
   end)
 end

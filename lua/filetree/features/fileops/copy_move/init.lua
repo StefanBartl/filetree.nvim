@@ -23,6 +23,7 @@ local au          = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
+local ui_confirm  = require("filetree.util.confirm")
 local refs_util   = require("filetree.util.markdown_refs")
 local refs_picker = require("filetree.util.refs_picker")
 
@@ -277,38 +278,9 @@ local function handle_batch_markdown_refs(all_refs)
   )
 end
 
-function M.paste()
-  if #_clipboard == 0 then
-    notify.warn("Clipboard is empty")
-    return
-  end
-  if not _adapter then return end
-
-  local node = _adapter.get_current_node()
-  local dst_dir
-  if node then
-    dst_dir = node.type == "directory"
-      and node.path
-      or vim.fn.fnamemodify(node.path, ":h")
-  else
-    dst_dir = vim.fn.getcwd()
-  end
-
-  if _cfg.dry_run then
-    local lines = { "-- Paste plan (dry-run) --", "  → " .. dst_dir }
-    for _, e in ipairs(_clipboard) do
-      lines[#lines + 1] = "  [" .. e.op .. "] " .. vim.fn.fnamemodify(e.path, ":t")
-    end
-    notify.info(table.concat(lines, "\n"))
-    return
-  end
-
-  if _cfg.confirm then
-    local ans = vim.fn.input(string.format(
-      "Paste %d item(s) into %s? [y/N] ", #_clipboard, vim.fn.fnamemodify(dst_dir, ":~")))
-    if ans:lower() ~= "y" then notify.info("Cancelled"); return end
-  end
-
+---Actually perform an already-confirmed paste into `dst_dir`.
+---@param dst_dir string
+local function do_paste_impl(dst_dir)
   if _cfg.use_safety then
     local ok_s, safety = require("filetree.features").load("safety")
     if ok_s and safety then
@@ -383,6 +355,47 @@ function M.paste()
     render_clipboard()
     if _adapter.refresh then pcall(_adapter.refresh) end
   end)
+end
+
+function M.paste()
+  if #_clipboard == 0 then
+    notify.warn("Clipboard is empty")
+    return
+  end
+  if not _adapter then return end
+
+  local node = _adapter.get_current_node()
+  local dst_dir
+  if node then
+    dst_dir = node.type == "directory"
+      and node.path
+      or vim.fn.fnamemodify(node.path, ":h")
+  else
+    dst_dir = vim.fn.getcwd()
+  end
+
+  if _cfg.dry_run then
+    local lines = { "-- Paste plan (dry-run) --", "  → " .. dst_dir }
+    for _, e in ipairs(_clipboard) do
+      lines[#lines + 1] = "  [" .. e.op .. "] " .. vim.fn.fnamemodify(e.path, ":t")
+    end
+    notify.info(table.concat(lines, "\n"))
+    return
+  end
+
+  if _cfg.confirm then
+    ui_confirm({
+      question = string.format(
+        "Paste %d item(s) into %s?", #_clipboard, vim.fn.fnamemodify(dst_dir, ":~")),
+      on_choice = function(yes)
+        if not yes then notify.info("Cancelled"); return end
+        do_paste_impl(dst_dir)
+      end,
+    })
+    return
+  end
+
+  do_paste_impl(dst_dir)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
