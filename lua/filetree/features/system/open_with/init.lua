@@ -24,7 +24,7 @@ local notify   = require("filetree.util.notify").create("[filetree.open_with]")
 local platform = require("filetree.util.platform")
 local map      = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
-local window   = require("filetree.util.window")
+local ui_select = require("filetree.util.select")
 
 local M = {}
 
@@ -118,25 +118,11 @@ function M.pick()
   local apps = vim.list_slice(_cfg.apps)
   table.insert(apps, 1, { name = "System default", cmd = "_system" })
 
-  local labels = vim.tbl_map(function(a) return a.name end, apps)
-
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, labels)
-  vim.bo[buf].modifiable = false
-
-  local width  = math.min(40, vim.o.columns - 4)
-  local height = math.min(#labels, 10)
-  local win    = vim.api.nvim_open_win(buf, true, {
-    relative = "cursor", style = "minimal", border = "rounded",
-    width = width, height = height, row = 1, col = 0,
-    title = " Open with ", title_pos = "center",
-  })
-  vim.wo[win].cursorline = true
-
-  local function choose()
-    local row = vim.api.nvim_win_get_cursor(win)[1]
-    local app = apps[row]
-    vim.api.nvim_win_close(win, true)
+  ui_select(apps, {
+    prompt = "Open with",
+    format_item = function(a) return a.name end,
+  }, function(app)
+    if not app then return end
     if app.cmd == "_system" then
       system_open(path)
     else
@@ -145,11 +131,7 @@ function M.pick()
       open_with_cmd(cmd, path)
     end
     notify.info(string.format("Opening with %s: %s", app.name, vim.fn.fnamemodify(path, ":t")))
-  end
-
-  local opts = { buffer = buf, nowait = true, silent = true }
-  map("n", "<CR>", choose, opts)
-  window.nice_quit(win)
+  end)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────

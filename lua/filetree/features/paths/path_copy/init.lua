@@ -28,7 +28,7 @@ local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 
 local map    = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
-local window = require("filetree.util.window")
+local ui_select = require("filetree.util.select")
 local M = {}
 
 ---@type FiletreePathCopyConfig
@@ -153,41 +153,22 @@ function M.pick()
   local path = current_node_path()
   if not path then notify.warn("No node under cursor"); return end
 
-  local lines = {}
-  local built  = {}
+  local built = {}
   for _, fmt in ipairs(FORMAT_ORDER) do
-    local text = FORMATS[fmt](path)
-    lines[#lines + 1] = string.format("  %-10s %s", fmt, text)
-    built[#built + 1] = { fmt = fmt, text = text }
+    built[#built + 1] = { fmt = fmt, text = FORMATS[fmt](path) }
   end
 
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.bo[buf].modifiable = false
-
-  local width  = math.min(80, vim.o.columns - 4)
-  local height = #lines
-  local win    = vim.api.nvim_open_win(buf, true, {
-    relative = "cursor", style = "minimal", border = "rounded",
-    width = width, height = height, row = 1, col = 0,
-    title = " Copy path ", title_pos = "center",
-  })
-  vim.wo[win].cursorline = true
-
-  local function choose()
-    local row  = vim.api.nvim_win_get_cursor(win)[1]
-    local item = built[row]
-    vim.api.nvim_win_close(win, true)
+  ui_select(built, {
+    prompt = "Copy path",
+    format_item = function(item) return string.format("%-10s %s", item.fmt, item.text) end,
+  }, function(item)
+    if not item then return end
     vim.fn.setreg("+", item.text)
     vim.fn.setreg('"', item.text)
     if _cfg.notify then
       notify.info(string.format("[%s] %s", item.fmt, item.text))
     end
-  end
-
-  local opts = { buffer = buf, nowait = true, silent = true }
-  map("n", "<CR>", choose, opts)
-  window.nice_quit(win)
+  end)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ local bufutil = require("filetree.util.buffer")
 
 local map    = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
-local window = require("filetree.util.window")
+local ui_select = require("filetree.util.select")
 local ui_confirm = require("filetree.util.confirm")
 local M = {}
 
@@ -150,51 +150,12 @@ local function pick_template(templates, on_select)
     return
   end
 
-  local lines = {}
-  for i, t in ipairs(templates) do
-    lines[i] = string.format(" [%2d]  %s", i, t.name)
-  end
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = " <CR> select  |  q close"
-
-  local width  = 0
-  for _, l in ipairs(lines) do width = math.max(width, #l + 2) end
-  width  = math.min(width, 60)
-  local height = math.min(#lines, 20)
-  local row = math.floor((vim.o.lines   - height) / 2)
-  local col = math.floor((vim.o.columns - width)  / 2)
-
-  local bufnr = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-  vim.api.nvim_set_option_value("modifiable", false, { buf = bufnr })
-  vim.api.nvim_set_option_value("buftype",    "nofile", { buf = bufnr })
-  vim.api.nvim_set_option_value("bufhidden",  "wipe",   { buf = bufnr })
-
-  local win = vim.api.nvim_open_win(bufnr, true, {
-    relative  = "editor",
-    row = row, col = col, width = width, height = height,
-    style = "minimal", border = "rounded",
-    title = " Templates ", title_pos = "center",
-  })
-
-  local close = function()
-    pcall(vim.api.nvim_win_close, win, true)
-  end
-
-  local opts = { buffer = bufnr, nowait = true, silent = true }
-  map("n", "<CR>", function()
-    local idx  = vim.api.nvim_win_get_cursor(win)[1]
-    local tmpl = templates[idx]
-    if tmpl then close(); on_select(tmpl) end
-  end, opts)
-  window.nice_quit(win)
-
-  -- Number shortcuts
-  for i = 1, math.min(9, #templates) do
-    map("n", tostring(i), function()
-      close(); on_select(templates[i])
-    end, opts)
-  end
+  ui_select(templates, {
+    prompt = "Templates",
+    format_item = function(t) return t.name end,
+  }, function(tmpl)
+    if tmpl then on_select(tmpl) end
+  end)
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
