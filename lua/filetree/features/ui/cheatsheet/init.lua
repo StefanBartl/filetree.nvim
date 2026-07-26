@@ -21,9 +21,8 @@
 
 local bindings_mod = require("filetree.bindings")
 local map    = require("filetree.util.map")
-local au     = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
-local window = require("filetree.util.window")
+local kit    = require("lib.nvim.ui.kit")
 
 local M = {}
 
@@ -36,13 +35,11 @@ local _cfg = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
-local _win = nil
+---@type Lib.UI.Kit.Surface|nil
+local _surf = nil
 
 local function close_win()
-  if _win and vim.api.nvim_win_is_valid(_win) then
-    vim.api.nvim_win_close(_win, true)
-  end
-  _win = nil
+  if _surf then _surf:close() end
 end
 
 ---Build the display lines: one header per category, one row per active
@@ -95,46 +92,32 @@ end
 
 ---Show or toggle (any key closes; a second `?` closes too) the cheatsheet.
 function M.show()
-  if _win and vim.api.nvim_win_is_valid(_win) then
+  if _surf and _surf:is_valid() then
     close_win()
     return
   end
 
   local lines = build_lines()
+  local max_w = math.floor(vim.o.columns * 0.9)
+  local max_h = math.floor(vim.o.lines * 0.8)
+  local content_w = 20
+  for _, l in ipairs(lines) do content_w = math.max(content_w, vim.fn.strdisplaywidth(l)) end
 
-  local width = 20
-  for _, l in ipairs(lines) do width = math.max(width, vim.fn.strdisplaywidth(l)) end
-  width = math.min(width + 2, math.floor(vim.o.columns * 0.9))
-  local height = math.min(#lines, math.floor(vim.o.lines * 0.8))
-
-  local bufnr = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-  vim.bo[bufnr].modifiable = false
-  vim.bo[bufnr].filetype   = "filetree_cheatsheet"
-
-  local row = math.max(1, math.floor((vim.o.lines - height) / 2))
-  local col = math.max(1, math.floor((vim.o.columns - width) / 2))
-
-  _win = vim.api.nvim_open_win(bufnr, true, {
-    relative  = "editor",
-    row       = row,
-    col       = col,
-    width     = width,
-    height    = height,
-    border    = "rounded",
-    style     = "minimal",
-    title     = " filetree.nvim keymaps ",
-    title_pos = "center",
+  _surf = kit.viewer({
+    lines = lines,
+    title = "filetree.nvim keymaps",
+    filetype = "filetree_cheatsheet",
+    width = math.min(content_w + 2, max_w),
+    height = math.min(#lines, max_h),
   })
+  if not _surf then return end
+  _surf:on_close(function() _surf = nil end)
 
-  local keys = { "q", "<Esc>" }
-  if _cfg.keymap then keys[#keys + 1] = _cfg.keymap end
-  window.nice_quit(_win, { keys = keys })
-  au.acmd({ "BufLeave", "WinLeave" }, {
-    buffer   = bufnr,
-    once     = true,
-    callback = function() vim.schedule(close_win) end,
-  })
+  -- kit.viewer's own nice_quit only binds q/<Esc>; also close on a second
+  -- press of the toggle key itself (e.g. a second `?`).
+  if _cfg.keymap and _cfg.keymap ~= "q" and _cfg.keymap ~= "<Esc>" then
+    map("n", _cfg.keymap, close_win, { buffer = _surf.bufnr, nowait = true, silent = true })
+  end
 end
 
 function M.close()

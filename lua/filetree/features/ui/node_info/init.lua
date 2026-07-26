@@ -4,9 +4,9 @@
 local line_count = require("filetree.util.line_count")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local notify = require("filetree.util.notify").create("[filetree]")
+local kit = require("lib.nvim.ui.kit")
 local M = {}
 
 ---@type FiletreeNodeInfoConfig
@@ -14,7 +14,8 @@ local _cfg = {}
 ---@type FiletreeAdapter?
 local _adapter = nil
 
-local _win = nil
+---@type Lib.UI.Kit.Surface|nil
+local _surf = nil
 local _last_path = nil
 local _ns = nil
 
@@ -24,11 +25,7 @@ local function ns()
 end
 
 local function close_win()
-  if _win and vim.api.nvim_win_is_valid(_win) then
-    vim.api.nvim_win_close(_win, true)
-  end
-  _win = nil
-  _last_path = nil
+  if _surf then _surf:close() end
 end
 
 ---Format bytes into human-readable string.
@@ -183,56 +180,21 @@ function M.show_current()
   close_win()
 
   local lines = M.info_lines(node.path)
-
-  -- Compute width
-  local width = 20
-  for _, l in ipairs(lines) do
-    if #l > width then width = #l end
-  end
-  width = width + 2
-
-  local height = #lines
-
-  -- Open floating window relative to editor
-  local bufnr = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
-  vim.bo[bufnr].modifiable = false
-  vim.bo[bufnr].filetype = "filetree_node_info"
-
-  local win_w = vim.o.columns
-  local win_h = vim.o.lines
-  local row = math.max(1, math.floor((win_h - height) / 2))
-  local col = math.max(1, math.floor((win_w - width) / 2))
-
-  _win = vim.api.nvim_open_win(bufnr, true, {
-    relative = "editor",
-    row      = row,
-    col      = col,
-    width    = width,
-    height   = height,
-    border   = "rounded",
-    style    = "minimal",
-    title    = " Node Info ",
-    title_pos = "center",
-  })
-
   _last_path = node.path
 
-  -- Keymaps to close
-  local close_fn = function()
-    close_win()
-  end
-  map("n", "q",     close_fn, { buffer = bufnr, nowait = true, silent = true })
-  map("n", "<Esc>", close_fn, { buffer = bufnr, nowait = true, silent = true })
-
-  -- Auto-close when leaving
-  au.acmd({ "BufLeave", "WinLeave" }, {
-    buffer  = bufnr,
-    once    = true,
-    callback = function()
-      vim.schedule(close_win)
-    end,
+  _surf = kit.viewer({
+    lines = lines,
+    title = "Node Info",
+    filetype = "filetree_node_info",
   })
+  if not _surf then
+    _last_path = nil
+    return
+  end
+  _surf:on_close(function()
+    _surf = nil
+    _last_path = nil
+  end)
 end
 
 ---Close any open node_info hover window.

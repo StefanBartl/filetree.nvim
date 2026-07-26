@@ -10,7 +10,7 @@ local notify = require("filetree.util.notify").create("[filetree.marks]")
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
-local window = require("filetree.util.window")
+local kit = require("lib.nvim.ui.kit")
 local M = {}
 
 ---@type FiletreeMarksConfig
@@ -154,26 +154,15 @@ function M.show()
     lines[#lines + 1] = string.format("[%02d] %s", i, p)
   end
 
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.api.nvim_set_option_value("bufhidden", "wipe",     { buf = buf })
-  vim.api.nvim_set_option_value("modifiable", false,     { buf = buf })
-
   local width  = math.min(80, vim.o.columns - 4)
   local height = math.min(#lines + 1, vim.o.lines - 6)
 
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative  = "editor",
-    width     = width,
-    height    = height,
-    row       = math.floor((vim.o.lines - height) / 2),
-    col       = math.floor((vim.o.columns - width) / 2),
-    style     = "minimal",
-    border    = "rounded",
-    title     = " Marked Nodes ",
-    title_pos = "center",
+  kit.viewer({
+    lines = lines,
+    title = "Marked Nodes",
+    width = width,
+    height = height,
   })
-  window.nice_quit(win)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────

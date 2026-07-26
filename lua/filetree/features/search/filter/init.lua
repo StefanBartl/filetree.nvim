@@ -17,9 +17,8 @@
 local notify = require("filetree.util.notify").create("[filetree.filter]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
-local lib_debounce = require("lib.nvim.debounce")
+local kit = require("lib.nvim.ui.kit")
 local M = {}
 
 ---@type FiletreeFilterConfig
@@ -109,12 +108,6 @@ local function dim_non_matching(query)
   end
 end
 
--- ── Debounce ──────────────────────────────────────────────────────────────────
-
----Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
----@type table?
-local _debounce = nil
-
 local function apply(query)
   _query = query or ""
   if not try_native_filter(query) then
@@ -122,32 +115,14 @@ local function apply(query)
   end
 end
 
-local function debounce_apply(query)
-  _debounce.call(query)
-end
-
 -- ── Floating input ────────────────────────────────────────────────────────────
 
----@type integer?
-local _input_win = nil
----@type integer?
-local _input_buf = nil
-
-local function close_input()
-  if _input_win and vim.api.nvim_win_is_valid(_input_win) then
-    pcall(vim.api.nvim_win_close, _input_win, true)
-  end
-  if _input_buf and vim.api.nvim_buf_is_valid(_input_buf) then
-    pcall(vim.api.nvim_buf_delete, _input_buf, { force = true })
-  end
-  _input_win = nil
-  _input_buf = nil
-end
+---@type Lib.UI.Kit.Surface|nil
+local _surf = nil
 
 function M.enter()
-  if _input_win and vim.api.nvim_win_is_valid(_input_win) then
-    -- Focus existing input
-    vim.api.nvim_set_current_win(_input_win)
+  if _surf and _surf:is_valid() then
+    _surf:focus()
     return
   end
 
@@ -163,65 +138,33 @@ function M.enter()
     row, col, width = vim.o.lines - 3, 0, 30
   end
 
-  _input_buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(_input_buf, 0, -1, false, { _query })
-  vim.api.nvim_set_option_value("buftype",  "nofile", { buf = _input_buf })
-  vim.api.nvim_set_option_value("bufhidden","wipe",   { buf = _input_buf })
-
-  _input_win = vim.api.nvim_open_win(_input_buf, true, {
-    relative  = "editor",
-    row       = row,
-    col       = col,
-    width     = math.max(width, 20),
-    height    = 1,
-    style     = "minimal",
-    border    = "single",
-    title     = " Filter ",
-    title_pos = "left",
-  })
-
-  vim.cmd("startinsert!")
-
-  -- Live update on TextChangedI
-  local aug = au.group("filetree_filter_input_" .. _input_buf, true)
-  au.acmd({ "TextChangedI", "TextChanged" }, {
-    group  = aug,
-    buffer = _input_buf,
-    callback = function()
-      local lines = vim.api.nvim_buf_get_lines(_input_buf, 0, 1, false)
-      debounce_apply(lines[1] or "")
-    end,
-  })
-
-  -- Confirm / cancel keymaps
-  local opts = { buffer = _input_buf, nowait = true }
-  map({ "i", "n" }, "<CR>", function()
-    local lines = vim.api.nvim_buf_get_lines(_input_buf, 0, 1, false)
-    apply(lines[1] or "")
-    close_input()
-    -- Return focus to tree
+  local function return_to_tree()
     if tree_win > 0 and vim.api.nvim_win_is_valid(tree_win) then
       vim.api.nvim_set_current_win(tree_win)
     end
-  end, opts)
+  end
 
-  map({ "i", "n" }, "<Esc>", function()
-    M.clear()
-    close_input()
-    if tree_win > 0 and vim.api.nvim_win_is_valid(tree_win) then
-      vim.api.nvim_set_current_win(tree_win)
-    end
-  end, opts)
-
-  au.acmd("BufLeave", {
-    group  = aug,
-    buffer = _input_buf,
-    once   = true,
-    callback = function()
-      close_input()
-      au.del_group(aug)
+  _surf = kit.live_input({
+    title    = "Filter",
+    relative = "editor",
+    row      = row,
+    col      = col,
+    width    = math.max(width, 20),
+    default  = _query,
+    debounce = _cfg.debounce_ms,
+    on_change = apply,
+    on_submit = function(query)
+      apply(query)
+      return_to_tree()
+    end,
+    on_cancel = function()
+      M.clear()
+      return_to_tree()
     end,
   })
+  if _surf then
+    _surf:on_close(function() _surf = nil end)
+  end
 end
 
 ---Clear the current filter.
@@ -246,9 +189,6 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns      = vim.api.nvim_create_namespace("filetree_filter")
 
-  if _debounce then _debounce.cancel() end
-  _debounce = lib_debounce.new(apply, _cfg.debounce_ms)
-
   if _cfg.keymap or _cfg.keymap_clear then
     tree_attach.on_attach(function(buf)
       if _cfg.keymap then
@@ -271,9 +211,8 @@ end
 
 function M.teardown()
   M.clear()
-  close_input()
+  if _surf then _surf:close() end
   _adapter = nil
-  if _debounce then _debounce.cancel(); _debounce = nil end
 end
 
 return M
