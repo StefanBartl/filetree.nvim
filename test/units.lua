@@ -437,7 +437,14 @@ do
   ft.register_adapter(stub)
   ft.setup({
     adapter = "units-stub",
-    features = { copy_move = { enabled = true, confirm = false, use_safety = false } },
+    features = {
+      copy_move = { enabled = true, confirm = false, use_safety = false },
+      -- The scratch buffer below is deliberately unnamed at the moment it's
+      -- made current (name/filetype come after) so it looks exactly like a
+      -- stray [No Name] buffer to no_name_guard, which would otherwise wipe
+      -- it out from under this test before the keymap assertions below run.
+      no_name_guard = { enabled = false },
+    },
   })
 
   local buf = vim.api.nvim_create_buf(true, false)
@@ -500,6 +507,10 @@ do
         enabled = true, confirm = false, use_safety = false,
         keymaps = { copy = "yy", cut = "xx", paste = "p", show = "P" },
       },
+      -- See the identical note on the previous copy_move test block: this
+      -- scratch buffer is unnamed when it becomes current, which otherwise
+      -- makes no_name_guard mistake it for a stray [No Name] buffer and wipe it.
+      no_name_guard = { enabled = false },
     },
   })
 
@@ -662,7 +673,14 @@ do
   ft.register_adapter(stub)
   ft.setup({
     adapter = "units-stub3",
-    features = { trash = { enabled = true, confirm = false, dry_run = true } },
+    features = {
+      trash = { enabled = true, confirm = false, dry_run = true },
+      -- See the note on the copy_move keymap tests above: this scratch buffer
+      -- is unnamed when made current, which no_name_guard would otherwise
+      -- mistake for a stray [No Name] buffer and wipe before the keymap
+      -- assertions below run.
+      no_name_guard = { enabled = false },
+    },
   })
 
   local buf = vim.api.nvim_create_buf(true, false)
@@ -1143,7 +1161,10 @@ do
 
   local ft = require("filetree")
   ft.register_adapter(stub)
-  ft.setup({ adapter = "units-stub4", features = { open_variants = { enabled = true } } })
+  ft.setup({ adapter = "units-stub4", features = {
+    open_variants = { enabled = true },
+    no_name_guard = { enabled = false }, -- see note on earlier keymap tests
+  } })
 
   local buf = vim.api.nvim_create_buf(true, false)
   vim.api.nvim_set_current_buf(buf)
@@ -1298,13 +1319,20 @@ do
   package.loaded["filetree.features.fileops.trash.undo"] = nil
   local undo = require("filetree.features.fileops.trash.undo")
 
-  local orig_execute = os.execute
+  -- undo.restore() shells out via lib.nvim's run_argv.run_blocking, which on
+  -- any Neovim with vim.system (>=0.10) uses that, not os.execute -- so the
+  -- mock has to replace vim.system itself, or it silently never intercepts
+  -- anything and every call falls through to a real PowerShell invocation.
+  local orig_system = vim.system
   local captured_cmd
 
   local function with_exit_code(code, fn)
-    os.execute = function(cmd) captured_cmd = cmd; return code end
+    vim.system = function(cmd, _opts)
+      captured_cmd = cmd[#cmd] -- the "-Command" script argv element
+      return { wait = function() return { code = code, stdout = "", stderr = "" } end }
+    end
     local ok, err = fn()
-    os.execute = orig_execute
+    vim.system = orig_system
     return ok, err
   end
 
@@ -1395,7 +1423,10 @@ do
   local ft = require("filetree")
   ft.register_adapter(stub)
   ft.setup({ adapter = "units-stub-cheatsheet",
-    features = { cheatsheet = { enabled = true, keymap = "?" }, trash = { enabled = true } } })
+    features = {
+      cheatsheet = { enabled = true, keymap = "?" }, trash = { enabled = true },
+      no_name_guard = { enabled = false }, -- see note on earlier keymap tests
+    } })
 
   local buf = vim.api.nvim_create_buf(true, false)
   vim.api.nvim_set_current_buf(buf)
@@ -1434,7 +1465,10 @@ do
   }, { __index = function() return function() return false end end })
   ft.register_adapter(neotree_stub)
   local setup_ok = pcall(ft.setup, { adapter = "neotree",
-    features = { cheatsheet = { enabled = true, keymap = "?" } } })
+    features = {
+      cheatsheet = { enabled = true, keymap = "?" },
+      no_name_guard = { enabled = false }, -- see note on earlier keymap tests
+    } })
   check("cheatsheet: setup() with the neotree adapter does not error", setup_ok)
 
   local buf2 = vim.api.nvim_create_buf(true, false)
