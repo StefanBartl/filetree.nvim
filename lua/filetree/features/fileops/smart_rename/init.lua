@@ -27,7 +27,7 @@ local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 
 local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
-local ui_select   = require("filetree.util.select")
+local confirm_choice = require("filetree.util.confirm_choice")
 local path        = require("filetree.util.path")
 local buffer      = require("filetree.util.buffer")
 local refs_util   = require("filetree.util.markdown_refs")
@@ -426,17 +426,13 @@ local function handle_markdown_refs(old_path, new_path, refs)
     "%d markdown reference(s) found in: %s", #refs, table.concat(files, ", ")
   ))
 
-  ui_select(
-    {
-      "✓  Update all references to the new path",
-      "◐  Inspect references first",
-      "✗  Leave references as-is",
-    },
-    { prompt = string.format(" %d ref(s) to %s ", #refs, vim.fn.fnamemodify(old_path, ":t")) },
-    function(_, idx)
-      if idx == 1 then
+  confirm_choice(
+    string.format("%d ref(s) to %s", #refs, vim.fn.fnamemodify(old_path, ":t")),
+    { "Update all refs", "Inspect first", "Leave as-is" },
+    function(choice)
+      if choice == "Update all refs" then
         refs_util.update(refs)
-      elseif idx == 2 then
+      elseif choice == "Inspect first" then
         refs_picker.pick(
           refs,
           { prefer = _cfg.refs_picker_prefer, title = string.format("References to %s", vim.fn.fnamemodify(old_path, ":t")) },
@@ -446,7 +442,7 @@ local function handle_markdown_refs(old_path, new_path, refs)
           function() end -- Esc: nothing further to do, the rename already happened
         )
       end
-      -- idx == 3 (leave as-is) or nil (dismissed): no-op
+      -- "Leave as-is" or nil (dismissed): no-op
     end
   )
 end
@@ -551,7 +547,7 @@ function M.rename_current()
     end
 
     if vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1 then
-      ui_select({ "Overwrite", "Cancel" }, { prompt = "'" .. new_name .. "' exists. " }, function(choice)
+      confirm_choice("'" .. new_name .. "' exists.", { "Overwrite", "Cancel" }, function(choice)
         if choice == "Overwrite" then proceed() end
       end)
     else

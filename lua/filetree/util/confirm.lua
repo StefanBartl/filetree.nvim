@@ -1,10 +1,10 @@
 ---@module 'filetree.util.confirm'
----@brief Small yes/no confirmation float with an optional info body.
+---@brief Small yes/no confirmation dialog with an optional info body.
 ---@description
---- A nicer replacement for `vim.fn.confirm`'s native "press y/n" prompt (which
---- pushes a full-width message line and hijacks the command area). Renders a
---- rounded floating window showing an optional body (e.g. file metadata) and a
---- `[y]es / [n]o` line, then reports the choice through a callback.
+--- Routes through `lib.nvim.ui.kit`'s `kit.confirm` (horizontal Yes/No
+--- buttons) instead of hand-rolling a floating window. The optional `body`
+--- (e.g. file metadata) is folded into the question as leading lines, since
+--- kit.confirm centers and renders multi-line questions above the buttons.
 ---
 ---   require("filetree.util.confirm")({
 ---     title    = " Trash ",
@@ -13,16 +13,16 @@
 ---     on_choice = function(yes) ... end,
 ---   })
 ---
---- Keys inside the popup: y / <CR> confirm, n / <Esc> / q cancel.
+--- Keys inside the dialog: h/l (or arrows/<Tab>) move focus, <CR> confirms
+--- the focused button, <Esc>/q cancels (= No).
+
+local kit = require("lib.nvim.ui.kit")
 
 ---@class FiletreeConfirmOpts
 ---@field title?     string      Window title.
 ---@field body?      string[]    Info lines shown above the question.
 ---@field question?  string      The yes/no question (default "Confirm?").
 ---@field on_choice  fun(yes: boolean)
-
-local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
 
 ---@param opts FiletreeConfirmOpts
 return function(opts)
@@ -31,58 +31,13 @@ return function(opts)
   local body      = opts.body or {}
   local question  = opts.question or "Confirm?"
 
-  -- Assemble the buffer content: body, a blank spacer (only if there is a body),
-  -- then the prompt line.
   local lines = {}
   for _, l in ipairs(body) do lines[#lines + 1] = l end
-  if #body > 0 then lines[#lines + 1] = "" end
-  local prompt = "  " .. question .. "   [y]es / [n]o"
-  lines[#lines + 1] = prompt
+  lines[#lines + 1] = question
 
-  local width = 0
-  for _, l in ipairs(lines) do width = math.max(width, vim.fn.strdisplaywidth(l)) end
-  width = math.min(math.max(width + 2, 24), vim.o.columns - 4)
-  local height = #lines
-
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
-  vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = buf })
-
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative  = "cursor",
-    row       = 1,
-    col       = 0,
-    width     = width,
-    height    = height,
-    style     = "minimal",
-    border    = "rounded",
-    title     = opts.title,
-    title_pos = opts.title and "center" or nil,
-  })
-  vim.api.nvim_set_option_value("cursorline", false, { win = win })
-  -- Highlight the prompt line so the y/n choice stands out.
-  local ns = vim.api.nvim_create_namespace("filetree_confirm")
-  pcall(vim.api.nvim_buf_set_extmark, buf, ns, #lines - 1, 0,
-    { line_hl_group = "Question", end_row = #lines })
-
-  local answered = false
-  local function finish(yes)
-    if answered then return end
-    answered = true
-    if vim.api.nvim_win_is_valid(win) then pcall(vim.api.nvim_win_close, win, true) end
-    on_choice(yes)
-  end
-
-  for _, k in ipairs({ "y", "Y", "<CR>" }) do
-    map("n", k, function() finish(true) end, { buffer = buf, nowait = true }, "Filetree: confirm yes")
-  end
-  for _, k in ipairs({ "n", "N", "q", "<Esc>" }) do
-    map("n", k, function() finish(false) end, { buffer = buf, nowait = true }, "Filetree: confirm no")
-  end
-  -- Closing the window any other way (e.g. focus lost) counts as "no".
-  au.create("WinClosed", function() finish(false) end, {
-    pattern = tostring(win),
-    once    = true,
+  kit.confirm({
+    title = opts.title,
+    question = table.concat(lines, "\n"),
+    on_answer = on_choice,
   })
 end

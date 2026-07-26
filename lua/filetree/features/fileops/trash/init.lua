@@ -27,7 +27,7 @@ local notify         = require("filetree.util.notify").create("[filetree.trash]"
 local map         = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
-local ui_select   = require("filetree.util.select")
+local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm  = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
 local refs_util   = require("filetree.util.markdown_refs")
@@ -61,8 +61,14 @@ local _adapter = nil
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
----Single-item y/N confirm (used for a single node, and per-item in the batch
----chooser's "individual" mode).
+---Single-item y/N confirm for the SYNCHRONOUS `M.delete(path)` API path only
+---(direct/programmatic callers, not the interactive `d` keymap — that goes
+---through the nicer async `confirm_popup` below). Deliberately stays on the
+---blocking native `vim.fn.confirm` rather than `kit.confirm`: `M.delete`
+---returns a boolean synchronously, and kit.confirm is callback-based, so
+---switching here would turn `M.delete` async and break its documented
+---return contract for any external caller. Same category as the
+---`replacer.nvim`/`diff.nvim` kit-migration exceptions — not a quick win.
 ---@param path string
 ---@return boolean confirmed
 local function confirm(path)
@@ -173,19 +179,14 @@ local function confirm_popup(path, cb)
     "%d markdown reference(s) found in: %s", #refs, table.concat(files, ", ")
   ))
 
-  ui_select(
-    {
-      "✓  Delete + remove all references",
-      "◐  Inspect references first",
-      "•  Delete, keep references",
-      "✗  Cancel",
-    },
-    { prompt = string.format(" Trash %s (%d ref(s) found) ", vim.fn.fnamemodify(path, ":t"), #refs) },
-    function(_, idx)
-      if idx == 1 then
+  confirm_choice(
+    string.format("Trash %s (%d ref(s) found)", vim.fn.fnamemodify(path, ":t"), #refs),
+    { "Delete + remove refs", "Inspect first", "Delete, keep refs", "Cancel" },
+    function(choice)
+      if choice == "Delete + remove refs" then
         cleanup_references(refs)
         cb(true)
-      elseif idx == 2 then
+      elseif choice == "Inspect first" then
         refs_picker.pick(
           refs,
           { prefer = _cfg.refs_picker_prefer, title = string.format("References to %s", vim.fn.fnamemodify(path, ":t")) },
@@ -195,7 +196,7 @@ local function confirm_popup(path, cb)
           end,
           function() confirm_popup(path, cb) end -- Esc/cancel -> back to this same chooser
         )
-      elseif idx == 3 then
+      elseif choice == "Delete, keep refs" then
         cb(true)
       else
         cb(false)
@@ -322,26 +323,18 @@ function M.delete_current()
     return
   end
 
-  -- Multiple items → one chooser for the whole set. It renders as a navigable
-  -- hover_select float (j/k or arrows to move, <CR> to pick, <Esc>/q to
-  -- cancel). Leading markers use plain dingbats (✓/•/✗) rather than emoji
-  -- (some, e.g. 🗑, don't render in every font/terminal) or nerd-font glyphs
-  -- (not everyone has them); ✓ is already used by the marks feature, so it's
-  -- known-good here.
-  ui_select(
-    {
-      "✓  Delete all at once",
-      "•  Confirm each individually",
-      "✗  Cancel",
-    },
-    { prompt = string.format(" Move %d items to trash ", #paths) },
-    function(_, idx)
-      if idx == 1 then
+  -- Multiple items → one chooser for the whole set (h/l to move, <CR> to
+  -- pick, <Esc>/q to cancel).
+  confirm_choice(
+    string.format("Move %d items to trash", #paths),
+    { "Delete all at once", "Confirm individually", "Cancel" },
+    function(choice)
+      if choice == "Delete all at once" then
         run_all(paths)
-      elseif idx == 2 then
+      elseif choice == "Confirm individually" then
         run_individual(paths)
       end
-      -- idx == 3 (Cancel) or nil (dismissed) → do nothing, marks stay.
+      -- "Cancel" or nil (dismissed) → do nothing, marks stay.
     end
   )
 end

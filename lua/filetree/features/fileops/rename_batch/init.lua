@@ -26,7 +26,7 @@ local map         = require("filetree.util.map")
 local au          = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
-local ui_select   = require("filetree.util.select")
+local confirm_choice = require("filetree.util.confirm_choice")
 local refs_util   = require("filetree.util.markdown_refs")
 local refs_picker = require("filetree.util.refs_picker")
 
@@ -95,17 +95,13 @@ local function handle_batch_markdown_refs(all_refs)
     "%d markdown reference(s) found in: %s", #all_refs, table.concat(files, ", ")
   ))
 
-  ui_select(
-    {
-      "✓  Update all references to their new paths",
-      "◐  Inspect references first",
-      "✗  Leave references as-is",
-    },
-    { prompt = string.format(" %d ref(s) across the renamed batch ", #all_refs) },
-    function(_, idx)
-      if idx == 1 then
+  confirm_choice(
+    string.format("%d ref(s) across the renamed batch", #all_refs),
+    { "Update all refs", "Inspect first", "Leave as-is" },
+    function(choice)
+      if choice == "Update all refs" then
         refs_util.update(all_refs)
-      elseif idx == 2 then
+      elseif choice == "Inspect first" then
         refs_picker.pick(
           all_refs,
           { prefer = _cfg.refs_picker_prefer, title = "References across the renamed batch" },
