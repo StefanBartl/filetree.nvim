@@ -1230,6 +1230,140 @@ do
   package.loaded["filetree.features.fileops.smart_create"] = nil
 end
 
+-- ── rename_batch: confirm=true asks kit.confirm (async), not the old ────────
+-- blocking `vim.fn.input("...[y/N]...")` freetext prompt.
+do
+  local tmp = (vim.env.TEMP .. "/units-renamebatch-confirm"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local a_old, a_new = tmp .. "/a.txt", tmp .. "/a2.txt"
+  vim.fn.writefile({ "a" }, a_old)
+
+  local captured_question
+  package.loaded["filetree.util.confirm"] = function(opts)
+    captured_question = opts.question
+    opts.on_choice(true) -- confirm the rename
+  end
+  package.loaded["filetree.features.fileops.rename_batch"] = nil -- reload with stub
+
+  local nodes = { { path = a_old, type = "file" } }
+  local stub = setmetatable({
+    name = "units-stub-renamebatch-confirm", is_available = function() return true end,
+    get_visible_nodes = function() return nodes end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-renamebatch-confirm",
+    features = { rename_batch = { enabled = true, use_safety = false, confirm = true } } })
+
+  ft.feature("rename_batch").open()
+  local rb_buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(rb_buf, 2, 3, false, { "a2.txt" })
+  vim.cmd("write")
+
+  check("rename_batch confirm: util.confirm asked instead of vim.fn.input",
+    captured_question ~= nil, tostring(captured_question))
+  eq("rename_batch confirm: renamed on disk after Yes", vim.fn.filereadable(a_new), 1)
+
+  package.loaded["filetree.util.confirm"] = nil
+  package.loaded["filetree.features.fileops.rename_batch"] = nil
+end
+
+-- ── copy_move: paste confirm=true asks kit.confirm (async); Cancel pastes ───
+-- nothing. Regression for the old blocking `vim.fn.input("...[y/N]...")`.
+do
+  local tmp = (vim.env.TEMP .. "/units-copymove-confirm"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/dst", "p")
+  vim.fn.writefile({ "hi" }, tmp .. "/file1.txt")
+
+  local captured_question
+  package.loaded["filetree.util.confirm"] = function(opts)
+    captured_question = opts.question
+    opts.on_choice(false) -- Cancel
+  end
+  package.loaded["filetree.features.fileops.copy_move"] = nil -- reload with stub
+
+  local cur_node = { path = tmp .. "/file1.txt", type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-copymove-confirm", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    get_bufnr = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-copymove-confirm",
+    features = { copy_move = { enabled = true, confirm = true, use_safety = false } } })
+
+  local cm = ft.feature("copy_move")
+  cm.stage_copy()
+  cur_node = { path = tmp .. "/dst", type = "directory" }
+  cm.paste()
+
+  check("copy_move confirm: util.confirm asked instead of vim.fn.input",
+    captured_question ~= nil, tostring(captured_question))
+  check("copy_move confirm: Cancel means nothing was pasted",
+    vim.fn.filereadable(tmp .. "/dst/file1.txt") == 0)
+
+  package.loaded["filetree.util.confirm"] = nil
+  package.loaded["filetree.features.fileops.copy_move"] = nil
+end
+
+-- ── create_from_template: overwrite asks kit.confirm, Cancel keeps original ─
+-- Regression for the old blocking `vim.fn.input("...Overwrite? [y/N] ")`.
+do
+  local tmp = (vim.env.TEMP .. "/units-cft-overwrite"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local tdir = tmp .. "/templates"
+  vim.fn.mkdir(tdir, "p")
+  vim.fn.writefile({ "content" }, tdir .. "/basic.lua")
+
+  local dest_dir = tmp .. "/dest"
+  vim.fn.mkdir(dest_dir, "p")
+  vim.fn.writefile({ "existing" }, dest_dir .. "/new.lua")
+
+  local orig_fn_input = vim.fn.input
+  vim.fn.input = function(_prompt) return "new.lua" end
+
+  local captured_question
+  package.loaded["filetree.util.confirm"] = function(opts)
+    captured_question = opts.question
+    opts.on_choice(false) -- Cancel: do not overwrite
+  end
+  package.loaded["filetree.features.fileops.create_from_template"] = nil -- reload with stub
+
+  local stub = setmetatable({
+    name = "units-stub-cft", is_available = function() return true end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-cft",
+    features = { create_from_template = { enabled = true, template_dir = tdir } } })
+
+  local cft = ft.feature("create_from_template")
+  cft.open(dest_dir)
+  vim.api.nvim_feedkeys("1", "x", false) -- pick template 1 via number shortcut
+
+  check("create_from_template overwrite: util.confirm asked instead of vim.fn.input",
+    captured_question ~= nil, tostring(captured_question))
+  check("create_from_template overwrite: Cancel leaves existing content untouched",
+    vim.fn.readfile(dest_dir .. "/new.lua")[1] == "existing")
+
+  vim.fn.input = orig_fn_input
+  package.loaded["filetree.util.confirm"] = nil
+  package.loaded["filetree.features.fileops.create_from_template"] = nil
+end
+
 -- ── open_variants: sg/sv/st/gb/<S-CR> are all bound ──────────────────────────
 do
   local cur_node = { path = (vim.env.TEMP .. "/units-openvariants.txt"):gsub("\\", "/"), type = "file" }

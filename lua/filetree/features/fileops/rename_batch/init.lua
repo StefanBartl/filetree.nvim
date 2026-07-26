@@ -27,6 +27,7 @@ local au          = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
+local ui_confirm  = require("filetree.util.confirm")
 local refs_util   = require("filetree.util.markdown_refs")
 local refs_picker = require("filetree.util.refs_picker")
 
@@ -115,61 +116,10 @@ end
 
 -- ── Diff + execute ────────────────────────────────────────────────────────────
 
----@param entries RenameEntry[]
----@param new_names string[]  Edited lines from the scratch buffer.
+---Actually perform the renames for an already-confirmed plan.
+---@param plan {src:string, dst:string}[]
 ---@return boolean ok
-local function execute_renames(entries, new_names)
-  -- Pair up and collect changes
-  ---@type {src:string, dst:string}[]
-  local plan = {}
-
-  for i, entry in ipairs(entries) do
-    local new = new_names[i] and vim.trim(new_names[i]) or ""
-    if new == "" then
-      notify.warn(string.format("Line %d is blank — skipping %s", i, entry.old_name))
-    elseif new ~= entry.old_name then
-      local src = entry.abs_dir .. "/" .. entry.old_name
-      local dst = entry.abs_dir .. "/" .. new
-      plan[#plan + 1] = { src = src, dst = dst }
-    end
-  end
-
-  if #plan == 0 then
-    notify.info("Nothing to rename")
-    return true
-  end
-
-  -- Conflict check
-  local blocked = false
-  for _, op in ipairs(plan) do
-    if vim.fn.filereadable(op.dst) == 1 or vim.fn.isdirectory(op.dst) == 1 then
-      notify.error("Target already exists: " .. op.dst)
-      blocked = true
-    end
-  end
-  if blocked then return false end
-
-  -- Dry-run
-  if _cfg.dry_run then
-    local lines = { "-- Rename plan (dry-run) --" }
-    for _, op in ipairs(plan) do
-      lines[#lines + 1] = "  " .. vim.fn.fnamemodify(op.src, ":t")
-              .. " → " .. vim.fn.fnamemodify(op.dst, ":t")
-    end
-    notify.info(table.concat(lines, "\n"))
-    return true
-  end
-
-  -- Confirm
-  if _cfg.confirm then
-    local q = string.format("Rename %d item(s)? [y/N] ", #plan)
-    local answer = vim.fn.input(q)
-    if answer:lower() ~= "y" then
-      notify.info("Cancelled")
-      return false
-    end
-  end
-
+local function run_plan(plan)
   -- Safety backup
   if _cfg.use_safety then
     local ok_s, safety = require("filetree.features").load("safety")
@@ -238,6 +188,75 @@ local function execute_renames(entries, new_names)
   return errors == 0
 end
 
+---@param entries RenameEntry[]
+---@param new_names string[]  Edited lines from the scratch buffer.
+---@param on_done fun(ok: boolean)
+local function execute_renames(entries, new_names, on_done)
+  -- Pair up and collect changes
+  ---@type {src:string, dst:string}[]
+  local plan = {}
+
+  for i, entry in ipairs(entries) do
+    local new = new_names[i] and vim.trim(new_names[i]) or ""
+    if new == "" then
+      notify.warn(string.format("Line %d is blank — skipping %s", i, entry.old_name))
+    elseif new ~= entry.old_name then
+      local src = entry.abs_dir .. "/" .. entry.old_name
+      local dst = entry.abs_dir .. "/" .. new
+      plan[#plan + 1] = { src = src, dst = dst }
+    end
+  end
+
+  if #plan == 0 then
+    notify.info("Nothing to rename")
+    on_done(true)
+    return
+  end
+
+  -- Conflict check
+  local blocked = false
+  for _, op in ipairs(plan) do
+    if vim.fn.filereadable(op.dst) == 1 or vim.fn.isdirectory(op.dst) == 1 then
+      notify.error("Target already exists: " .. op.dst)
+      blocked = true
+    end
+  end
+  if blocked then
+    on_done(false)
+    return
+  end
+
+  -- Dry-run
+  if _cfg.dry_run then
+    local lines = { "-- Rename plan (dry-run) --" }
+    for _, op in ipairs(plan) do
+      lines[#lines + 1] = "  " .. vim.fn.fnamemodify(op.src, ":t")
+              .. " → " .. vim.fn.fnamemodify(op.dst, ":t")
+    end
+    notify.info(table.concat(lines, "\n"))
+    on_done(true)
+    return
+  end
+
+  -- Confirm
+  if _cfg.confirm then
+    ui_confirm({
+      question = string.format("Rename %d item(s)?", #plan),
+      on_choice = function(yes)
+        if not yes then
+          notify.info("Cancelled")
+          on_done(false)
+          return
+        end
+        on_done(run_plan(plan))
+      end,
+    })
+    return
+  end
+
+  on_done(run_plan(plan))
+end
+
 -- ── Scratch buffer ────────────────────────────────────────────────────────────
 
 function M.open()
@@ -267,12 +286,13 @@ function M.open()
     buffer = bufnr,
     callback = function()
       local new_names = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-      local ok = execute_renames(entries, new_names)
-      if ok then
-        vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
-        -- Close the scratch window
-        pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-      end
+      execute_renames(entries, new_names, function(ok)
+        if ok then
+          vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
+          -- Close the scratch window
+          pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+        end
+      end)
     end,
   })
 
@@ -309,11 +329,12 @@ function M.open()
       for i = 3, #all_lines do  -- skip 2-line header
         new_names[#new_names + 1] = all_lines[i]
       end
-      local ok = execute_renames(entries, new_names)
-      if ok then
-        vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
-        pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-      end
+      execute_renames(entries, new_names, function(ok)
+        if ok then
+          vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
+          pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
+        end
+      end)
     end,
   })
   au.acmd("BufDelete", {
