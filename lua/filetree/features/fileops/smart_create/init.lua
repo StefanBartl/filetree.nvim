@@ -3,7 +3,7 @@
 
 local map     = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
-local ui_select = require("filetree.util.select")
+local confirm_choice = require("filetree.util.confirm_choice")
 local path    = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
 local M = {}
@@ -197,9 +197,9 @@ function M.create()
         if _cfg.ask_clipboard then
           local clip = vim.fn.getreg("+")
           if clip and clip ~= "" then
-            ui_select(
+            confirm_choice(
+              "Create " .. vim.fn.fnamemodify(target, ":t") .. " with:",
               { "Empty", "Paste clipboard" },
-              { prompt = "Create " .. vim.fn.fnamemodify(target, ":t") .. " with:" },
               function(choice)
                 if not choice then return end
                 paste = choice == "Paste clipboard"

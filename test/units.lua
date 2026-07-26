@@ -146,26 +146,27 @@ do
   eq("close_for_path: no new [No Name] buffer was created", noname_count(), before_noname)
 end
 
--- ── util.confirm ── info popup with y/n, replacing native vim.fn.confirm ─────
+-- ── util.confirm ── kit.confirm button dialog, replacing native vim.fn.confirm ─
 do
   local confirm = require("filetree.util.confirm")
+  local function keys(s) return vim.api.nvim_replace_termcodes(s, true, false, true) end
 
   local got
   confirm({ title = " T ", body = { "  info line" }, question = "Do it?",
             on_choice = function(yes) got = yes end })
-  -- The popup floats and takes focus; feed 'y' to confirm.
+  -- The dialog floats and takes focus; default focus is "Yes" (button 1).
   local float_open = false
   for _, w in ipairs(vim.api.nvim_list_wins()) do
     if vim.api.nvim_win_get_config(w).relative ~= "" then float_open = true end
   end
   check("confirm: opens a floating window", float_open)
-  vim.api.nvim_feedkeys("y", "x", false)
-  check("confirm: 'y' resolves to true", got == true)
+  vim.api.nvim_feedkeys(keys("<CR>"), "x", false)
+  check("confirm: <CR> on the default-focused Yes resolves to true", got == true)
 
   got = nil
   confirm({ body = {}, question = "Do it?", on_choice = function(yes) got = yes end })
-  vim.api.nvim_feedkeys("n", "x", false)
-  check("confirm: 'n' resolves to false", got == false)
+  vim.api.nvim_feedkeys(keys("l<CR>"), "x", false)
+  check("confirm: l<CR> moves focus to No and resolves to false", got == false)
 end
 
 -- ── opened_sync ── buffer open/close triggers a light adapter redraw ────────
@@ -586,8 +587,8 @@ do
   vim.fn.writefile({ "# Copy" }, copy_src)
   vim.fn.writefile({ "Refs: [cut](cut.md) and [copy](copy.md)." }, linker)
 
-  package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
-    on_choice(items[1], 1) -- "Update all references to their new paths"
+  package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
+    on_choice(choices[1]) -- "Update all refs"
   end
   local function cm_refs(target_path)
     if target_path == cut_src then
@@ -639,7 +640,7 @@ do
   check("copy_move+mdrefs: copy reference left exactly as-is (original still valid)",
     linker_lines[1]:find("](copy.md)", 1, true) ~= nil, linker_lines[1])
 
-  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.copy_move"] = nil
 end
@@ -757,8 +758,8 @@ do
     send = function(p) os.remove(p); return { ok = true } end,
   }
   -- Auto-drive the batch chooser: always pick option 1 ("Delete all at once").
-  package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
-    on_choice(items[1], 1)
+  package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
+    on_choice(choices[1])
   end
   -- Stub marks: report a + b as marked, track that clear_all was called.
   local cleared = false
@@ -798,7 +799,7 @@ do
   check("trash batch: marks cleared after successful delete", cleared)
 
   package.loaded["filetree.features.fileops.trash.platform"] = nil
-  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.org.marks"] = nil
   package.loaded["filetree.features.fileops.trash"] = nil
 end
@@ -882,11 +883,11 @@ do
     available = function() return true end,
     send = function(p) os.remove(p); return { ok = true } end,
   }
-  -- Auto-drive the chooser: always pick option 1 ("Delete + remove references").
+  -- Auto-drive the chooser: always pick option 1 ("Delete + remove refs").
   local select_prompt = nil
-  package.loaded["filetree.util.select"] = function(items, opts, on_choice)
-    select_prompt = opts and opts.prompt
-    on_choice(items[1], 1)
+  package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
+    select_prompt = question
+    on_choice(choices[1])
   end
   package.loaded["markdown_nvim"] = {
     find_references = function(target_path, _opts)
@@ -923,7 +924,7 @@ do
     linker_lines[1] == "intro" and linker_lines[3] == "outro")
 
   package.loaded["filetree.features.fileops.trash.platform"] = nil
-  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.trash"] = nil
 end
@@ -949,9 +950,9 @@ do
     available = function() return true end,
     send = function(p) os.remove(p); return { ok = true } end,
   }
-  -- Auto-drive the chooser: always pick option 2 ("Inspect references first").
-  package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
-    on_choice(items[2], 2)
+  -- Auto-drive the chooser: always pick option 2 ("Inspect first").
+  package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
+    on_choice(choices[2])
   end
   package.loaded["markdown_nvim"] = {
     find_references = function(target_path, _opts)
@@ -996,7 +997,7 @@ do
     linker_lines[2] == "Again: [victim](victim.md) there.", linker_lines[2])
 
   package.loaded["filetree.features.fileops.trash.platform"] = nil
-  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.trash"] = nil
 end
@@ -1018,8 +1019,8 @@ do
   -- Auto-drive the "Rename to:" prompt and the resulting chooser.
   local orig_ui_input = vim.ui.input
   vim.ui.input = function(_opts, on_confirm) on_confirm("renamed.md") end
-  package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
-    on_choice(items[1], 1) -- "Update all references to the new path"
+  package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
+    on_choice(choices[1]) -- "Update all refs"
   end
   local function sr_refs(target_path)
     if target_path == old_path then
@@ -1060,7 +1061,7 @@ do
     linker_lines[1]:find("old.md", 1, true) == nil, linker_lines[1])
 
   vim.ui.input = orig_ui_input
-  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.smart_rename"] = nil
 end
@@ -1079,8 +1080,8 @@ do
   vim.fn.writefile({ "# B" }, b_old)
   vim.fn.writefile({ "See [a](a.md) and [b](b.md) here." }, linker)
 
-  package.loaded["filetree.util.select"] = function(items, _opts, on_choice)
-    on_choice(items[1], 1) -- "Update all references to their new paths"
+  package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
+    on_choice(choices[1]) -- "Update all refs"
   end
   local function rb_refs(target_path)
     if target_path == a_old then
@@ -1125,9 +1126,108 @@ do
     linker_lines[1]:find("a2.md", 1, true) ~= nil and linker_lines[1]:find("b2.md", 1, true) ~= nil,
     linker_lines[1])
 
-  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.rename_batch"] = nil
+end
+
+-- ── smart_rename: renaming onto an existing path asks confirm_choice ───────
+-- Regression for the kit.confirm migration (Overwrite/Cancel used to be a
+-- vim.ui.select list): the chooser must offer exactly Overwrite/Cancel, and
+-- picking Cancel must leave both files untouched.
+do
+  local tmp = (vim.env.TEMP .. "/units-smartrename-overwrite"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local old_path      = tmp .. "/old.txt"
+  local existing_path = tmp .. "/existing.txt"
+  vim.fn.writefile({ "old" }, old_path)
+  vim.fn.writefile({ "existing" }, existing_path)
+
+  local orig_ui_input = vim.ui.input
+  vim.ui.input = function(_opts, on_confirm) on_confirm("existing.txt") end
+
+  local captured_question, captured_choices
+  package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
+    captured_question, captured_choices = question, choices
+    on_choice("Cancel")
+  end
+  package.loaded["filetree.features.fileops.smart_rename"] = nil -- reload with stub
+
+  local cur_node = { path = old_path, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-smartrename-overwrite", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-smartrename-overwrite",
+    features = { smart_rename = { enabled = true, use_safety = false } } })
+
+  ft.feature("smart_rename").rename_current()
+
+  check("smart_rename overwrite: confirm_choice asked with Overwrite/Cancel",
+    captured_choices ~= nil and captured_choices[1] == "Overwrite" and captured_choices[2] == "Cancel",
+    vim.inspect(captured_choices))
+  check("smart_rename overwrite: question mentions the existing name",
+    captured_question ~= nil and captured_question:find("existing.txt", 1, true) ~= nil, tostring(captured_question))
+  check("smart_rename overwrite: Cancel leaves the old file in place",
+    vim.fn.filereadable(old_path) == 1, "old file should still exist")
+
+  vim.ui.input = orig_ui_input
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.features.fileops.smart_rename"] = nil
+end
+
+-- ── smart_create: non-empty clipboard asks confirm_choice (Empty/Paste) ─────
+-- Regression for the kit.confirm migration (used to be a vim.ui.select list).
+do
+  local tmp = (vim.env.TEMP .. "/units-smartcreate-paste"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  vim.fn.chdir(tmp)
+  vim.fn.setreg("+", "clip content")
+
+  local orig_ui_input = vim.ui.input
+  vim.ui.input = function(_opts, on_confirm) on_confirm("new.txt") end
+
+  local captured_question, captured_choices
+  package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
+    captured_question, captured_choices = question, choices
+    on_choice("Paste clipboard")
+  end
+  package.loaded["filetree.features.fileops.smart_create"] = nil -- reload with stub
+
+  local cur_node = { path = tmp, type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-smartcreate", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-smartcreate",
+    features = { smart_create = { enabled = true, ask_clipboard = true } } })
+
+  ft.feature("smart_create").create()
+
+  check("smart_create paste: confirm_choice asked with Empty/Paste clipboard",
+    captured_choices ~= nil and captured_choices[1] == "Empty" and captured_choices[2] == "Paste clipboard",
+    vim.inspect(captured_choices))
+  check("smart_create paste: question mentions the new file name",
+    captured_question ~= nil and captured_question:find("new.txt", 1, true) ~= nil, tostring(captured_question))
+  check("smart_create paste: file created with clipboard content",
+    vim.fn.filereadable(tmp .. "/new.txt") == 1
+      and table.concat(vim.fn.readfile(tmp .. "/new.txt"), "\n"):find("clip content", 1, true) ~= nil)
+
+  vim.ui.input = orig_ui_input
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.features.fileops.smart_create"] = nil
 end
 
 -- ── open_variants: sg/sv/st/gb/<S-CR> are all bound ──────────────────────────
