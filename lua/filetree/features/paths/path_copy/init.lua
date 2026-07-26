@@ -27,7 +27,7 @@
 local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 
 local map    = require("filetree.util.map")
-local au     = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local window = require("filetree.util.window")
 local M = {}
 
@@ -192,9 +192,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreePathCopyConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -213,39 +210,24 @@ function M.setup(config, adapter)
     end
   end
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_path_copy", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function kmap(key, fn, desc)
-          if key and key ~= "" then
-            map("n", key, fn, { buffer = buf, silent = true, desc = desc })
-          end
-        end
-        kmap(_cfg.keymap_pick,         M.pick,                  "Filetree: copy path (pick format)")
-        kmap(_cfg.keymap_abs,          M.copy_absolute,         "Filetree: copy absolute path")
-        kmap(_cfg.keymap_dirname,      M.copy_dirname,          "Filetree: copy absolute parent directory")
-        kmap(_cfg.keymap_name,         M.copy_name,             "Filetree: copy filename")
-        kmap(_cfg.keymap_project_root, M.copy_project_root,     "Filetree: copy absolute project root")
-        kmap(_cfg.keymap_project_rel,  M.copy_project_relative, "Filetree: copy path relative to project root")
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    local function kmap(key, fn, desc)
+      if key and key ~= "" then
+        map("n", key, fn, { buffer = buf, silent = true, desc = desc })
+      end
+    end
+    kmap(_cfg.keymap_pick,         M.pick,                  "Filetree: copy path (pick format)")
+    kmap(_cfg.keymap_abs,          M.copy_absolute,         "Filetree: copy absolute path")
+    kmap(_cfg.keymap_dirname,      M.copy_dirname,          "Filetree: copy absolute parent directory")
+    kmap(_cfg.keymap_name,         M.copy_name,             "Filetree: copy filename")
+    kmap(_cfg.keymap_project_root, M.copy_project_root,     "Filetree: copy absolute project root")
+    kmap(_cfg.keymap_project_rel,  M.copy_project_relative, "Filetree: copy path relative to project root")
+  end)
 end
 
 function M.teardown()
   _adapter     = nil
   _root_finder = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

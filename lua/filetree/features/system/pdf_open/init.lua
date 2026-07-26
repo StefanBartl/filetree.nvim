@@ -20,7 +20,7 @@
 local pdf    = require("filetree.util.pdf")
 local notify = require("filetree.util.notify").create("[filetree.pdf_open]")
 local map    = require("filetree.util.map")
-local au     = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 
 local M = {}
 
@@ -65,9 +65,6 @@ function M.open_terminal() open("terminal") end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreePdfOpenConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -75,36 +72,21 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_pdf_open", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function kmap(key, fn, desc)
-          if key and key ~= "" then
-            map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-          end
-        end
-        kmap(_cfg.keymap_open,     M.open_default,  "open PDF (pdfport)")
-        kmap(_cfg.keymap_text,     M.open_text,     "open PDF as text (pdfport)")
-        kmap(_cfg.keymap_system,   M.open_system,   "open PDF in system viewer")
-        kmap(_cfg.keymap_terminal, M.open_terminal, "open PDF in terminal (pdfport)")
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    local function kmap(key, fn, desc)
+      if key and key ~= "" then
+        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+      end
+    end
+    kmap(_cfg.keymap_open,     M.open_default,  "open PDF (pdfport)")
+    kmap(_cfg.keymap_text,     M.open_text,     "open PDF as text (pdfport)")
+    kmap(_cfg.keymap_system,   M.open_system,   "open PDF in system viewer")
+    kmap(_cfg.keymap_terminal, M.open_terminal, "open PDF in terminal (pdfport)")
+  end)
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

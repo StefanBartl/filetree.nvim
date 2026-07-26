@@ -31,6 +31,7 @@
 ---   highlights_isolate   boolean  Link tree HL groups to editor groups (default false).
 
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@class FiletreeWindowStyleConfig
@@ -109,11 +110,7 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_window_style", true)
 
   if _cfg.statusline then
-    au.acmd("FileType", {
-      group    = _augroup,
-      pattern  = tree_filetypes(),
-      callback = function() vim.schedule(apply_statusline) end,
-    })
+    tree_attach.on_attach(function() apply_statusline() end)
     -- Fallback re-application: some statusline plugins (re)assert their own
     -- value on BufWinEnter/WinEnter after FileType has already fired once for
     -- a given buffer, which would otherwise win the last-write race.

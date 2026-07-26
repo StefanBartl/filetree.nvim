@@ -13,7 +13,7 @@
 local notify = require("filetree.util.notify").create("[filetree.markdown_links]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local fs  = require("filetree.util.fs")
 local M = {}
 
@@ -100,9 +100,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeMarkdownLinksConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -110,35 +107,20 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_markdown_links", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function kmap(key, fn, desc)
-          if key and key ~= "" then
-            map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-          end
-        end
-        kmap(_cfg.keymap,             M.link_current,     "markdown link for current node")
-        kmap(_cfg.keymap_recursive,   M.link_recursive,    "markdown links recursively")
-        kmap(_cfg.keymap_from_marked, M.link_from_marked,  "markdown links from marked nodes")
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    local function kmap(key, fn, desc)
+      if key and key ~= "" then
+        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+      end
+    end
+    kmap(_cfg.keymap,             M.link_current,     "markdown link for current node")
+    kmap(_cfg.keymap_recursive,   M.link_recursive,    "markdown links recursively")
+    kmap(_cfg.keymap_from_marked, M.link_from_marked,  "markdown links from marked nodes")
+  end)
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

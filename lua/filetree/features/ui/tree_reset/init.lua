@@ -19,11 +19,8 @@
 ---   keymap   string?   Key in tree buffer (default "<Esc>").
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
-
----@type integer?
-local _augroup = nil
 
 local function do_reset()
   -- 1. Preview
@@ -52,31 +49,16 @@ function M.setup(config, _adapter)
 
   local keymap = config.keymap or "<Esc>"
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_tree_reset", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        map("n", keymap, do_reset, {
-          buffer = buf,
-          silent = true,
-          desc   = "Filetree: reset tree UI state (preview, filter, search)",
-        })
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    map("n", keymap, do_reset, {
+      buffer = buf,
+      silent = true,
+      desc   = "Filetree: reset tree UI state (preview, filter, search)",
+    })
+  end)
 end
 
 function M.teardown()
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

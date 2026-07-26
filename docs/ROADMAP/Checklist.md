@@ -30,10 +30,10 @@ Adapter interface isolates backends; feature registry is the single name→path
 source; util layer is dependency-free of features (no cycles). Cross-feature refs
 go through `registry.load` (no physical-path coupling).
 
-## Anti-Pattern-Check — ✅ / 🟡
+## Anti-Pattern-Check — ✅
 - No global mutable state leaking across features — ✅ (module-local `_cfg`/state).
 - No `require` of features by hard path outside the registry — ✅ (enforced this session).
-- 🟡 Per-feature FileType autocmds duplicate a pattern → candidate to centralize.
+- Per-feature FileType autocmds centralized into one dispatcher — ✅ (`util.tree_attach`; every feature registers `on_attach(buf)` instead of its own autocmd).
 
 ## Import- und Dateistruktur-Check — ✅
 `features/<category>/<name>/init.lua`; `@types/`, `util/`, `adapter/`, `bindings/`,
@@ -53,6 +53,6 @@ catalog sorts (built once). No custom sort/search hot loops to optimise.
 ## Reviewer-Notizen — ➖ (template)
 
 ## Concentrated action items
-Same three as [Arch&Coding](Arch&Coding.md): lib.nvim adoption · centralize
-FileType keymap binding · broaden tests. Plus: bound `get_visible_nodes` on huge
-trees.
+lib.nvim adoption and FileType keymap centralization are done (see
+[Arch&Coding](Arch&Coding.md)). Remaining: broaden tests, and bound
+`get_visible_nodes` on huge trees.

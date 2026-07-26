@@ -17,7 +17,7 @@
 local notify = require("filetree.util.notify").create("[filetree.window_size_cycler]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeWindowSizeCyclerConfig
@@ -79,9 +79,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeWindowSizeCyclerConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -92,33 +89,18 @@ function M.setup(config, adapter)
   -- Start at the preset closest to the current window width
   _idx = nearest_idx()
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_window_size_cycler", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        if _cfg.keymap then
-          map("n", _cfg.keymap, M.cycle, {
-            buffer = buf, silent = true,
-            desc   = "Filetree: cycle tree width",
-          })
-        end
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    if _cfg.keymap then
+      map("n", _cfg.keymap, M.cycle, {
+        buffer = buf, silent = true,
+        desc   = "Filetree: cycle tree width",
+      })
+    end
+  end)
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

@@ -23,7 +23,7 @@
 local notify = require("filetree.util.notify").create("[filetree.shell_run]")
 local path   = require("filetree.util.path")
 local map    = require("filetree.util.map")
-local au     = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 
 local M = {}
 
@@ -73,8 +73,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
 ---@type FiletreeAdapter?
 local _adapter = nil
 ---@type table
@@ -105,22 +103,13 @@ function M.setup(config, adapter)
     height      = config.height      or 12,
   }
 
-  au.del_group(_augroup)
-  _augroup = au.group("filetree_shell_run", true)
-
-  au.create("FileType", function(ev)
-    local buf = ev.buf
-    vim.schedule(function()
-      if not vim.api.nvim_buf_is_valid(buf) then return end
-      map("n", keymap, M.run, { buffer = buf },
-        "Filetree: run shell command in node directory")
-    end)
-  end, { group = _augroup, pattern = { "neo-tree", "NvimTree" } })
+  tree_attach.on_attach(function(buf)
+    map("n", keymap, M.run, { buffer = buf },
+      "Filetree: run shell command in node directory")
+  end)
 end
 
 function M.teardown()
-  au.del_group(_augroup)
-  _augroup = nil
 end
 
 return M

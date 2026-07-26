@@ -9,25 +9,25 @@ Status: ✅ good · 🟡 partial / improvable · ❌ gap (action item).
 | Helper | Status | Notes |
 |---|---|---|
 | `lib.notify` | ✅ | `util.notify` delegates to `lib.nvim.notify` (local fallback). |
-| `lib.map` | ❌ | features call `vim.keymap.set` directly — should route through `lib.nvim.map`. |
-| `lib.usercmd` | ❌ | `commands.lua` uses `nvim_create_user_command` directly. |
-| `lib.autocmd` / `lib.augroup` | ❌ | every feature uses raw `nvim_create_autocmd` / `nvim_create_augroup`. |
+| `lib.map` | ✅ | `util.map` delegates to `lib.nvim.map` (local `vim.keymap.set` fallback); every feature goes through it. |
+| `lib.usercmd` | ✅ | `commands.lua` builds `:Filetree`/`:Ft` via `lib.nvim.usercmd.composer`. |
+| `lib.autocmd` / `lib.augroup` | ✅ | `util.autocmd` delegates to `lib.nvim.autocmd`; every feature goes through it (native augroup API kept for idempotent re-setup, see the module's doc comment). |
 | `lib.cross` | 🟡 | `util.platform` mirrors it; system launchers now use `vim.ui.open`. Migrate to `lib.nvim.cross`. |
-| `lib.hover_select` | ❌ | pickers use `vim.ui.select` / custom floats directly. |
+| `lib.hover_select` | ✅ | `util.select` wraps it; batch choosers (trash, copy_move, etc.) go through it. |
 | `lib.lazy` | 🟡 | own registry resolver loads features lazily; could use `lib.lazy` proxy. |
 | `lib.memo` | ❌ | `util.buffer` hand-rolls a TTL cache; could use `lib.memo`. |
 
-**Action:** a `lib.map` / `lib.autocmd` / `lib.augroup` migration is the single
-biggest lib-adoption item (touches every feature). Track under
-[ROADMAP.md → lib.nvim adoption](../ROADMAP.md).
+**Action:** `lib.map` / `lib.usercmd` / `lib.autocmd` / `lib.augroup` /
+`lib.hover_select` adoption is done. Remaining: `lib.cross` (partial) and
+`lib.memo` (not started).
 
 ## The 10 principles
 
-**1. Events bündeln, Logik entkoppeln** — 🟡
-Each feature registers its own `FileType` autocmd to bind tree-buffer keymaps →
-N autocmds on the same event. `hooks_api` exists for decoupling but keymap
-binding is not centralized. *Action:* one FileType dispatcher that binds all
-enabled features' keymaps (N→1).
+**1. Events bündeln, Logik entkoppeln** — ✅
+A single central dispatcher (`util.tree_attach`) owns the one `FileType`
+autocmd; every feature registers an `on_attach(buf)` callback with it instead
+of its own autocmd (N→1). `hooks_api` remains for decoupling other
+cross-feature signals.
 
 **2. Eigene Logik lazy laden** — ✅
 `features/init.lua` resolver loads a module only when enabled; cross-feature refs
@@ -69,6 +69,8 @@ work is deferred (VimEnter, `vim.schedule`).
 
 ## Summary
 
-Structurally sound (augroups, lazy loading, event choice). The concentrated work
-is **lib.nvim adoption** (map/usercmd/autocmd/augroup/hover_select) and
-**centralizing the per-feature FileType keymap binding**.
+Structurally sound (augroups, lazy loading, event choice). **lib.nvim adoption**
+(map/usercmd/autocmd/augroup/hover_select) and **centralizing the per-feature
+FileType keymap binding** (`util.tree_attach`) are both done. Remaining
+concentrated work: `lib.cross`/`lib.memo` adoption and broader test coverage
+(see [Arch&Coding](Arch&Coding.md)).

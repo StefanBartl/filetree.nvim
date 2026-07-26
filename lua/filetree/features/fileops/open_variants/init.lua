@@ -19,7 +19,7 @@
 local notify = require("filetree.util.notify").create("[filetree.open_variants]")
 
 local map     = require("filetree.util.map")
-local au      = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local bufutil = require("filetree.util.buffer")
 local M = {}
 
@@ -82,9 +82,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeOpenVariantsConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -92,37 +89,22 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_open_variants", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function kmap(key, fn, desc)
-          if key and key ~= "" then
-            map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-          end
-        end
-        kmap(_cfg.keymap_vsplit,   M.open_vsplit, "open in vertical split")
-        kmap(_cfg.keymap_split,    M.open_split,  "open in horizontal split")
-        kmap(_cfg.keymap_tabnew,   M.open_tabnew, "open in new tab")
-        kmap(_cfg.keymap_badd,     M.open_badd,   "add to buffer list (no focus switch)")
-        kmap(_cfg.keymap_badd_alt, M.open_badd,   "add to buffer list (no focus switch)")
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    local function kmap(key, fn, desc)
+      if key and key ~= "" then
+        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+      end
+    end
+    kmap(_cfg.keymap_vsplit,   M.open_vsplit, "open in vertical split")
+    kmap(_cfg.keymap_split,    M.open_split,  "open in horizontal split")
+    kmap(_cfg.keymap_tabnew,   M.open_tabnew, "open in new tab")
+    kmap(_cfg.keymap_badd,     M.open_badd,   "add to buffer list (no focus switch)")
+    kmap(_cfg.keymap_badd_alt, M.open_badd,   "add to buffer list (no focus switch)")
+  end)
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

@@ -24,6 +24,7 @@ local notify = require("filetree.util.notify").create("[filetree.rename_batch]")
 
 local map         = require("filetree.util.map")
 local au          = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
 local ui_select   = require("filetree.util.select")
 local refs_util   = require("filetree.util.markdown_refs")
@@ -336,9 +337,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeRenameBatchConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -346,35 +344,19 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_rename_batch", true)
-
   if _cfg.keymap then
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = "neo-tree,NvimTree",
-      callback = function(ev)
-        local buf = ev.buf
-        vim.schedule(function()
-          if not vim.api.nvim_buf_is_valid(buf) then return end
-          map("n", _cfg.keymap, M.open, {
-            buffer = buf,
-            silent = true,
-            desc   = "Filetree: open batch rename buffer",
-          })
-        end)
-      end,
-    })
+    tree_attach.on_attach(function(buf)
+      map("n", _cfg.keymap, M.open, {
+        buffer = buf,
+        silent = true,
+        desc   = "Filetree: open batch rename buffer",
+      })
+    end)
   end
-
 end
 
 function M.teardown()
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

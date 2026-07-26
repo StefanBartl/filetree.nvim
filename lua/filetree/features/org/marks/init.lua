@@ -9,6 +9,7 @@ local notify = require("filetree.util.notify").create("[filetree.marks]")
 
 local map = require("filetree.util.map")
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local window = require("filetree.util.window")
 local M = {}
 
@@ -199,28 +200,19 @@ function M.setup(config, adapter)
     end,
   })
 
-  -- Keymaps inside tree buffer — vim.schedule defers past neotree's own keymap setup
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function km(key, fn, desc)
-          if key and key ~= "" then
-            map("n", key, fn, { buffer = buf, silent = true, desc = desc })
-          end
-        end
-        km(_cfg.keymap,            function() M.toggle_current() end,  "Filetree: toggle mark")
-        km(_cfg.keymap_all,        M.mark_all_visible,                 "Filetree: mark all visible")
-        km(_cfg.keymap_unmark_all, M.unmark_all_visible,               "Filetree: unmark all visible")
-        km(_cfg.keymap_clear,      function() M.clear_all() end,       "Filetree: clear all marks")
-        km(_cfg.keymap_show,       function() M.show() end,            "Filetree: show marked nodes")
-      end)
-    end,
-  })
-
+  -- Keymaps inside tree buffer
+  tree_attach.on_attach(function(buf)
+    local function km(key, fn, desc)
+      if key and key ~= "" then
+        map("n", key, fn, { buffer = buf, silent = true, desc = desc })
+      end
+    end
+    km(_cfg.keymap,            function() M.toggle_current() end,  "Filetree: toggle mark")
+    km(_cfg.keymap_all,        M.mark_all_visible,                 "Filetree: mark all visible")
+    km(_cfg.keymap_unmark_all, M.unmark_all_visible,               "Filetree: unmark all visible")
+    km(_cfg.keymap_clear,      function() M.clear_all() end,       "Filetree: clear all marks")
+    km(_cfg.keymap_show,       function() M.show() end,            "Filetree: show marked nodes")
+  end)
 end
 
 function M.teardown()

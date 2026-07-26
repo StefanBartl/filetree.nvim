@@ -5,8 +5,8 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 
 > **neo-tree `?` cheatsheet:** filetree keymaps are shown there automatically
 > (filetree injects them into neo-tree's mapping registry on `setup()`).
-> For **nvim-tree** (`g?`) and other adapters the keymaps are set via
-> `vim.keymap.set()` in a FileType autocmd, which is outside their help registry,
+> For **nvim-tree** (`g?`) and other adapters the keymaps are set via the
+> central tree-attach dispatcher, which is outside their help registry,
 > so their built-in help will not list them (the keymaps still work — check with
 > `:nmap` in the tree buffer). See
 > [neo-tree `?` cheatsheet integration](#neo-tree--cheatsheet-integration) for details.
@@ -138,8 +138,8 @@ require("filetree").setup({
 
 neo-tree builds its `?` help screen from its `window.mappings` config (via
 `state.resolved_mappings`) — it does **not** read the buffer's actual keymaps.
-Because filetree sets its keymaps via a FileType autocmd (after neo-tree's own
-setup), those keymaps work but would normally be invisible to `?`.
+Because filetree sets its keymaps via the central tree-attach dispatcher (after
+neo-tree's own setup), those keymaps work but would normally be invisible to `?`.
 
 ### Automatic (default)
 
@@ -189,8 +189,8 @@ end
 
 - Integration is neo-tree-specific. For other adapters the keymaps still work but
   won't appear in their native help; verify with `:nmap` in the tree buffer.
-- The FileType autocmds always run, so keymaps behave identically regardless —
-  the injection only adds cheatsheet visibility (and native `?` multi-key sub-menu
-  grouping for prefixes like `]m` / `[m`).
+- The tree-attach dispatcher always runs, so keymaps behave identically
+  regardless — the injection only adds cheatsheet visibility (and native `?`
+  multi-key sub-menu grouping for prefixes like `]m` / `[m`).
 - Keys resolve from your feature config; a field set to `false` is skipped, and
   omitted fields fall back to the feature's default key.

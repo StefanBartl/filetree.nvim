@@ -23,7 +23,7 @@ local notify  = require("filetree.util.notify").create("[filetree.buffer_save]")
 local bufutil = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---Save buffer `bufnr`.  Returns true on success.
@@ -56,8 +56,6 @@ local function save_buf(bufnr, force)
   end
 end
 
----@type integer?
-local _augroup = nil
 ---@type FiletreeAdapter?
 local _adapter = nil
 ---@type boolean
@@ -98,44 +96,28 @@ function M.setup(config, adapter)
   _adapter = adapter
   _force   = config.force ~= false  -- default true
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_buffer_save", true)
+  tree_attach.on_attach(function(buf)
+    -- <C-s>: save the last adjacent editor buffer
+    if keymap_adj then
+      map("n", keymap_adj, M.save_adjacent, {
+        buffer = buf,
+        silent = true,
+        desc   = "Filetree: force-save adjacent editor buffer",
+      })
+    end
 
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-
-        -- <C-s>: save the last adjacent editor buffer
-        if keymap_adj then
-          map("n", keymap_adj, M.save_adjacent, {
-            buffer = buf,
-            silent = true,
-            desc   = "Filetree: force-save adjacent editor buffer",
-          })
-        end
-
-        -- <M-s>: save the buffer whose path matches the node under cursor
-        if keymap_node then
-          map("n", keymap_node, M.save_node, {
-            buffer = buf,
-            silent = true,
-            desc   = "Filetree: force-save buffer matching node under cursor",
-          })
-        end
-      end)
-    end,
-  })
+    -- <M-s>: save the buffer whose path matches the node under cursor
+    if keymap_node then
+      map("n", keymap_node, M.save_node, {
+        buffer = buf,
+        silent = true,
+        desc   = "Filetree: force-save buffer matching node under cursor",
+      })
+    end
+  end)
 end
 
 function M.teardown()
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

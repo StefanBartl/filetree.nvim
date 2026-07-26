@@ -25,7 +25,7 @@ local undo           = require("filetree.features.fileops.trash.undo")
 local notify         = require("filetree.util.notify").create("[filetree.trash]")
 
 local map         = require("filetree.util.map")
-local au          = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
 local ui_select   = require("filetree.util.select")
 local ui_confirm  = require("filetree.util.confirm")
@@ -369,9 +369,6 @@ function M.available()
   return trash_platform.available()
 end
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeTrashConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -385,36 +382,21 @@ function M.setup(config, adapter)
     return
   end
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_trash", true)
-
-  au.acmd("FileType", {
-    group   = _augroup,
-    pattern = { "neo-tree", "NvimTree" },
-    callback = function(ev)
-      local buf = ev.buf
-      vim.schedule(function()
-        if not vim.api.nvim_buf_is_valid(buf) then return end
-        local function kmap(key, fn, desc)
-          if key and key ~= "" then
-            map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-          end
-        end
-        kmap(_cfg.keymap,         M.delete_current, "trash current node")
-        kmap(_cfg.keymap_undo,    M.undo_last,      "undo last trash")
-        kmap(_cfg.keymap_history, M.show_history,   "show trash history")
-      end)
-    end,
-  })
+  tree_attach.on_attach(function(buf)
+    local function kmap(key, fn, desc)
+      if key and key ~= "" then
+        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
+      end
+    end
+    kmap(_cfg.keymap,         M.delete_current, "trash current node")
+    kmap(_cfg.keymap_undo,    M.undo_last,      "undo last trash")
+    kmap(_cfg.keymap_history, M.show_history,   "show trash history")
+  end)
 end
 
 function M.teardown()
   _adapter = nil
   _cfg.enabled = false
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

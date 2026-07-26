@@ -20,6 +20,7 @@
 local notify = require("filetree.util.notify").create("[filetree.session]")
 
 local au  = require("filetree.util.autocmd")
+local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeSessionConfig
@@ -211,13 +212,13 @@ function M.setup(config, adapter)
   end
 
   if _cfg.auto_restore then
-    -- Restore after the tree is opened (FileType fires after buffer is set up)
-    au.acmd("FileType", {
-      group   = _augroup,
-      pattern = "neo-tree,NvimTree",
-      once    = true,
-      callback = function() M.restore() end,
-    })
+    -- Restore after the tree is opened, once per setup.
+    local restored = false
+    tree_attach.on_attach(function()
+      if restored then return end
+      restored = true
+      M.restore()
+    end)
   end
 
 end
