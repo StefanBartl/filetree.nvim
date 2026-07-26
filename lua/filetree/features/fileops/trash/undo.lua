@@ -4,7 +4,7 @@
 local notify   = require("filetree.util.notify").create("[filetree.trash.undo]")
 local platform = require("filetree.util.platform")
 
-local window = require("filetree.util.window")
+local kit = require("lib.nvim.ui.kit")
 local M = {}
 
 local MAX_HISTORY = 50
@@ -195,28 +195,16 @@ function M.show_history()
     lines[#lines + 1] = "      " .. e.original_path
   end
 
-  local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  vim.api.nvim_set_option_value("bufhidden", "wipe",     { buf = buf })
-  vim.api.nvim_set_option_value("modifiable", false,     { buf = buf })
-  vim.api.nvim_set_option_value("filetype",  "filetree", { buf = buf })
-
   local width  = math.min(80, vim.o.columns - 4)
   local height = math.min(#lines, vim.o.lines - 6)
 
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor",
-    width    = width,
-    height   = height,
-    row      = math.floor((vim.o.lines - height) / 2),
-    col      = math.floor((vim.o.columns - width) / 2),
-    style    = "minimal",
-    border   = "rounded",
-    title    = " Trash History ",
-    title_pos = "center",
+  kit.viewer({
+    lines = lines,
+    title = "Trash History",
+    filetype = "filetree",
+    width = width,
+    height = height,
   })
-
-  window.nice_quit(win)
 end
 
 return M

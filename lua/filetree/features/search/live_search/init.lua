@@ -24,10 +24,9 @@
 
 local notify = require("filetree.util.notify").create("[filetree.live_search]")
 
-local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
-local lib_debounce = require("lib.nvim.debounce")
+local map = require("filetree.util.map")
+local kit = require("lib.nvim.ui.kit")
 local M = {}
 
 ---@type FiletreeLiveSearchConfig
@@ -45,10 +44,6 @@ local _cfg = {
 local _adapter = nil
 
 local _ns = vim.api.nvim_create_namespace("filetree_live_search")
-
----Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
----@type table?
-local _debounce = nil
 
 -- ── Overlay helpers ───────────────────────────────────────────────────────────
 
@@ -98,93 +93,38 @@ local function open_input_bar(tree_winid, tree_bufnr)
   local win_pos   = vim.api.nvim_win_get_position(tree_winid)
   local win_h     = vim.api.nvim_win_get_height(tree_winid)
 
-  local bar_buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(bar_buf, 0, -1, false, { "" })
-  vim.bo[bar_buf].buftype  = "prompt"
-  vim.bo[bar_buf].filetype = "filetree_search"
+  local function return_to_tree()
+    if vim.api.nvim_win_is_valid(tree_winid) then
+      vim.api.nvim_set_current_win(tree_winid)
+    end
+  end
 
-  local bar_win = vim.api.nvim_open_win(bar_buf, true, {
+  kit.live_input({
+    title    = "/ search",
     relative = "editor",
-    style    = "minimal",
-    border   = "rounded",
     width    = win_width - 2,
-    height   = 1,
     row      = win_pos[1] + win_h - 1,
     col      = win_pos[2] + 1,
-    title    = " / search ",
-    title_pos = "left",
-  })
-
-  local function close_bar(commit)
-    pcall(vim.api.nvim_win_close, bar_win, true)
-    if not commit then
+    filetype = "filetree_search",
+    debounce = _cfg.debounce_ms,
+    on_change = function(query)
+      apply_overlay(tree_bufnr, query)
+    end,
+    on_cancel = function()
       clear_overlay(tree_bufnr)
-    end
-  end
-
-  -- TextChangedI: debounced overlay
-  local group = au.group("filetree_live_search_input", true)
-  au.acmd({ "TextChangedI", "TextChanged" }, {
-    group  = group,
-    buffer = bar_buf,
-    callback = function()
-      local line = vim.api.nvim_buf_get_lines(bar_buf, 0, 1, false)[1] or ""
-      -- Strip prompt prefix if buftype=prompt added one
-      local query = line:match("^%s*(.-)%s*$")
-
-      _debounce.call(tree_bufnr, query)
+      return_to_tree()
     end,
-  })
-
-  au.acmd("BufLeave", {
-    group  = group,
-    buffer = bar_buf,
-    once   = true,
-    callback = function()
-      au.del_group(group)
-    end,
-  })
-
-  vim.fn.prompt_setprompt(bar_buf, "")
-
-  local km_opts = { buffer = bar_buf, nowait = true, silent = true }
-
-  -- <Esc> or <C-c>: cancel
-  local function cancel()
-    close_bar(false)
-    au.del_group(group)
-    -- Return focus to tree
-    if vim.api.nvim_win_is_valid(tree_winid) then
-      vim.api.nvim_set_current_win(tree_winid)
-    end
-  end
-
-  -- <CR>: commit pattern to filter feature
-  local function commit()
-    local line  = vim.api.nvim_buf_get_lines(bar_buf, 0, 1, false)[1] or ""
-    local query = line:match("^%s*(.-)%s*$")
-    close_bar(true)
-    au.del_group(group)
-
-    if _cfg.commit_to_filter and query ~= "" then
-      local ok, filter = require("filetree.features").load("filter")
-      if ok and filter and filter.set then
-        filter.set(query)
-        notify.info("Filter set: " .. query)
+    on_submit = function(query)
+      if _cfg.commit_to_filter and query ~= "" then
+        local ok, filter = require("filetree.features").load("filter")
+        if ok and filter and filter.set then
+          filter.set(query)
+          notify.info("Filter set: " .. query)
+        end
       end
-    end
-
-    if vim.api.nvim_win_is_valid(tree_winid) then
-      vim.api.nvim_set_current_win(tree_winid)
-    end
-  end
-
-  map({ "i", "n" }, "<Esc>",   cancel, km_opts)
-  map({ "i", "n" }, "<C-c>",   cancel, km_opts)
-  map({ "i", "n" }, "<CR>",    commit, km_opts)
-
-  -- Start insert so user can type immediately
-  vim.cmd("startinsert!")
+      return_to_tree()
+    end,
+  })
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -219,9 +159,6 @@ function M.setup(config, adapter)
   _cfg     = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _debounce then _debounce.cancel() end
-  _debounce = lib_debounce.new(apply_overlay, _cfg.debounce_ms)
-
   if _cfg.keymap then
     tree_attach.on_attach(function(buf)
       map("n", _cfg.keymap, M.open, {
@@ -234,7 +171,6 @@ end
 
 function M.teardown()
   _adapter = nil
-  if _debounce then _debounce.cancel(); _debounce = nil end
 end
 
 return M
