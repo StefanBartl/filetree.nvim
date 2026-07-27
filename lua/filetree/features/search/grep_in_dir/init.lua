@@ -49,9 +49,13 @@ local _adapter = nil
 -- ── Root ──────────────────────────────────────────────────────────────────────
 
 local function get_dir()
-  if not _adapter then return vim.fn.getcwd() end
+  -- No node under the cursor (or no tree at all): fall back to the root
+  -- cwd_mode holds, if any, before the plain cwd — a locked session must
+  -- grep in the locked project, not in whichever one the focused buffer
+  -- happens to belong to.
+  if not _adapter then return require("filetree.util.root").find() end
   local node = _adapter.get_current_node()
-  if not node then return vim.fn.getcwd() end
+  if not node then return require("filetree.util.root").find() end
   return node.type == "directory"
     and node.path
     or vim.fn.fnamemodify(node.path, ":h")

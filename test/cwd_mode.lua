@@ -207,6 +207,35 @@ do
   vim.o.laststatus = original_laststatus
 end
 
+-- ── util.root: the shared resolver every project-scoped feature asks ─────────
+do
+  local util_root = require("filetree.util.root")
+  cwd_mode.setup(vim.deepcopy(silent), stub_adapter(nil))
+
+  -- follow mode: no held root, so the buffer's own project root decides —
+  -- exactly the behaviour that existed before cwd_mode.
+  vim.cmd("noautocmd edit " .. vim.fn.fnameescape(base .. "/proj_b/three.lua"))
+  eq("follow: util.root resolves from the buffer",
+    normkey(util_root.find()), base .. "/proj_b")
+  eq("follow: an explicit path wins over the buffer",
+    normkey(util_root.find(base .. "/proj_a/src/one.lua")), base .. "/proj_a")
+
+  -- locked: the held root wins even though the focused buffer belongs to
+  -- another project. This is the case find_files/grep/git_status got wrong.
+  cwd_mode.lock(base .. "/proj_a")
+  eq("locked: util.root returns the lock, not the buffer's project",
+    normkey(util_root.find()), base .. "/proj_a")
+  eq("locked: an explicit path does not escape the lock either",
+    normkey(util_root.find(base .. "/proj_b/three.lua")), base .. "/proj_a")
+
+  cwd_mode.unlock()
+  eq("after unlock: back to the buffer's project",
+    normkey(util_root.find()), base .. "/proj_b")
+
+  cwd_mode.teardown()
+  vim.cmd("noautocmd enew")
+end
+
 -- ── command wiring ────────────────────────────────────────────────────────────
 do
   local commands = require("filetree.commands")
