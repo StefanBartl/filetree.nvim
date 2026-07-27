@@ -242,6 +242,76 @@ do
   vim.o.laststatus = original_laststatus
 end
 
+-- ── persistence ───────────────────────────────────────────────────────────────
+do
+  -- store.project keys by the project of the directory Neovim started in, which
+  -- cwd_mode captures at setup(). Sitting in proj_b for the whole block makes
+  -- that key stable while the lock moves the cwd elsewhere.
+  local function fresh(extra)
+    vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base .. "/proj_b"))
+    cwd_mode.setup(
+      vim.tbl_deep_extend("force", vim.deepcopy(silent), { persist = true }, extra or {}),
+      stub_adapter(nil))
+  end
+
+  fresh()
+  cwd_mode.forget() -- a leftover entry from an earlier run must not decide this
+  cwd_mode.lock(base .. "/proj_a")
+
+  -- A fresh setup() is what a restart looks like from the feature's side.
+  fresh()
+  eq("nothing is restored synchronously", cwd_mode.mode(), "follow")
+  vim.wait(200, function() return cwd_mode.mode() == "lock" end)
+  eq("the saved lock is restored", cwd_mode.mode(), "lock")
+  eq("the saved pin is restored", cwd_mode.root(), base .. "/proj_a")
+
+  -- The saved policy outranks a configured mode: it is the later, explicit
+  -- choice of the same user.
+  fresh({ mode = "project" })
+  vim.wait(200, function() return cwd_mode.mode() ~= "follow" end)
+  eq("a saved policy wins over the configured mode", cwd_mode.mode(), "lock")
+
+  -- A lock whose directory disappeared must not take the session hostage.
+  vim.fn.mkdir(base .. "/gone_soon", "p")
+  cwd_mode.lock(base .. "/gone_soon")
+  eq("locked onto the doomed directory", cwd_mode.root(), base .. "/gone_soon")
+  -- teardown() releases the guard without persisting, so the saved lock stays
+  -- while the directory it points at goes away underneath it.
+  cwd_mode.teardown()
+  vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base))
+  vim.fn.delete(base .. "/gone_soon", "d")
+  fresh({ mode = "project" })
+  vim.wait(200, function() return cwd_mode.mode() ~= "follow" end)
+  eq("a stale lock is declined, the configured mode applies", cwd_mode.mode(), "project")
+
+  -- Scope round-trips too.
+  cwd_mode.set_mode("follow")
+  cwd_mode.set_scope("tab")
+  fresh()
+  vim.wait(200, function() return cwd_mode.scope() == "tab" end)
+  eq("the saved scope is restored", cwd_mode.scope(), "tab")
+  cwd_mode.set_scope("global")
+
+  -- forget() drops the entry; the next start falls back to the config.
+  cwd_mode.lock(base .. "/proj_a")
+  cwd_mode.forget()
+  fresh({ mode = "manual" })
+  vim.wait(200, function() return cwd_mode.mode() ~= "follow" end)
+  eq("after forget the configured mode applies", cwd_mode.mode(), "manual")
+  cwd_mode.forget()
+
+  -- With persist = false nothing is written at all.
+  vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base .. "/proj_b"))
+  cwd_mode.setup(vim.deepcopy(silent), stub_adapter(nil))
+  cwd_mode.lock(base .. "/proj_a")
+  cwd_mode.setup(vim.deepcopy(silent), stub_adapter(nil))
+  vim.wait(100)
+  eq("persist=false leaves no trace", cwd_mode.mode(), "follow")
+
+  cwd_mode.teardown()
+  vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base))
+end
+
 -- ── util.root: the shared resolver every project-scoped feature asks ─────────
 do
   local util_root = require("filetree.util.root")
@@ -276,7 +346,7 @@ do
   local commands = require("filetree.commands")
   local paths = table.concat(commands.command_paths(), "\n")
   for _, want in ipairs({ "cwd mode", "cwd scope", "cwd lock", "cwd here",
-                          "cwd unlock", "cwd toggle", "cwd status" }) do
+                          "cwd unlock", "cwd toggle", "cwd status", "cwd forget" }) do
     check("command path registered: :Filetree " .. want, paths:find(want, 1, true) ~= nil)
   end
 

@@ -135,6 +135,7 @@ local TREE = {
     unlock = function(_) local f = ft("cwd_mode"); if f then f.unlock()     end end,
     toggle = function(_) local f = ft("cwd_mode"); if f then f.cycle()      end end,
     status = function(_) local f = ft("cwd_mode"); if f then f.status()     end end,
+    forget = function(_) local f = ft("cwd_mode"); if f then f.forget()     end end,
   },
 
   -- ── resize ──────────────────────────────────────────────────────────────────

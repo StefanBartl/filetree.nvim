@@ -64,6 +64,7 @@ return {
         follow_manual_root = true,  -- `+`/`-` moves the lock instead of fighting it
       },
       reveal_outside = "skip",      -- file outside the held root: leave the tree alone
+      persist        = false,       -- remember mode/scope/pin per project across restarts
       indicator = {
         enabled   = true,
         mode      = "auto",         -- statusline, or float under laststatus=3
