@@ -418,6 +418,102 @@ do
   package.loaded["filetree.features.infra.ignore_list"] = nil
 end
 
+-- ── ignore_list: predicate() feeds path-output actions (copy_file_list, ────
+-- markdown_links) the same basenames this feature hides in the tree, so
+-- recursive copies stop surfacing .git/node_modules/etc (see filetree.util.ignore).
+do
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+  local il = require("filetree.features.infra.ignore_list")
+
+  check("ignore_list: predicate() ignores nothing before setup()",
+    il.predicate()(".git") == false)
+
+  il.setup({ enabled = true }, { name = "stub" })
+  local pred = il.predicate()
+  check("ignore_list: predicate() ignores '.git'", pred(".git") == true)
+  check("ignore_list: predicate() ignores 'node_modules'", pred("node_modules") == true)
+  check("ignore_list: predicate() does not ignore ordinary names", pred("src") == false)
+
+  il.teardown()
+  check("ignore_list: predicate() ignores nothing after teardown()",
+    il.predicate()(".git") == false)
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+end
+
+-- ── copy_file_list: recursive collection skips ignored subtrees (.git) ──────
+-- Regression test for the bug this predicate wiring fixes: `[f`/`]f`/`[F`/`]F`
+-- used to walk fs.collect_files/collect_folders with no ignore_fn at all, so
+-- .git internals ended up in the copied path list.
+do
+  local tmp = (vim.env.TEMP .. "/units-copyfilelist"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/.git/objects", "p")
+  vim.fn.mkdir(tmp .. "/src", "p")
+  vim.fn.writefile({ "x" }, tmp .. "/.git/HEAD")
+  vim.fn.writefile({ "x" }, tmp .. "/src/main.lua")
+
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+  local il = require("filetree.features.infra.ignore_list")
+  il.setup({ enabled = true }, { name = "stub" })
+
+  local fs = require("filetree.util.fs")
+  local ignore = require("filetree.util.ignore")
+  local files = fs.collect_files(tmp, ignore.predicate())
+
+  local has_git = false
+  for _, f in ipairs(files) do
+    if f:find("/.git/", 1, true) then has_git = true end
+  end
+  check("copy_file_list: recursive collect skips .git subtree", not has_git)
+  check("copy_file_list: recursive collect still finds src/main.lua",
+    vim.tbl_contains(files, tmp .. "/src/main.lua"))
+
+  il.teardown()
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+end
+
+-- ── find_files: via_builtin fallback skips ignored subtrees (.git) too ──────
+-- Same category of bug as copy_file_list above: vim.fn.globpath expands
+-- everything, so without filtering the ignore predicate the picker would
+-- offer .git internals as "find files" candidates. telescope/fzf-lua/
+-- mini.pick aren't on rtp in this headless harness, so M.find() falls
+-- through to via_builtin exactly as it would for a real user without those
+-- plugins installed.
+do
+  local tmp = (vim.env.TEMP .. "/units-findfiles"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/.git/objects", "p")
+  vim.fn.mkdir(tmp .. "/src", "p")
+  vim.fn.writefile({ "x" }, tmp .. "/.git/HEAD")
+  vim.fn.writefile({ "x" }, tmp .. "/src/main.lua")
+
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+  local il = require("filetree.features.infra.ignore_list")
+  il.setup({ enabled = true }, { name = "stub" })
+
+  local shown
+  package.loaded["lib.nvim.ui.kit"] = {
+    select = function(o) shown = o.items end,
+  }
+  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.features.search.find_files"] = nil
+  local find_files = require("filetree.features.search.find_files")
+  find_files.find(tmp)
+
+  check("find_files: builtin fallback shown", shown ~= nil)
+  local has_git = false
+  for _, rel in ipairs(shown or {}) do
+    if rel:find(".git/", 1, true) or rel == ".git" then has_git = true end
+  end
+  check("find_files: builtin fallback skips .git subtree", not has_git)
+  check("find_files: builtin fallback still finds src/main.lua",
+    vim.tbl_contains(shown or {}, "src/main.lua") or vim.tbl_contains(shown or {}, "src\\main.lua"))
+
+  il.teardown()
+  package.loaded["filetree.features.infra.ignore_list"] = nil
+  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.features.search.find_files"] = nil
+end
+
 -- ── copy_move: default single-char "c"/"x" cleanly override the adapter's ───
 -- native "c"/"x" (exact same key, last-registration-wins -- no ambiguity).
 do
