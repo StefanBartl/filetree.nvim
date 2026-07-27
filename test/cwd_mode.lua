@@ -136,6 +136,41 @@ do
   eq("enforce=false: the pinned root is unchanged", cwd_mode.root(), base .. "/proj_a")
 end
 
+-- ── scope: global / tab / win ─────────────────────────────────────────────────
+do
+  local function global_cwd() return normkey(vim.fn.getcwd(-1, -1)) end
+  local function win_cwd()    return normkey(vim.fn.getcwd(0, 0)) end
+
+  vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base .. "/loose"))
+  cwd_mode.setup(
+    vim.tbl_deep_extend("force", vim.deepcopy(silent), { scope = "win" }),
+    stub_adapter(nil))
+  eq("scope is reported", cwd_mode.scope(), "win")
+
+  cwd_mode.lock(base .. "/proj_a")
+  eq("win scope: the window cwd moved", win_cwd(), base .. "/proj_a")
+  eq("win scope: the global cwd is untouched", global_cwd(), base .. "/loose")
+
+  -- The guard watches the scope it holds, so a window-local change is what it
+  -- reverts here.
+  vim.cmd("lcd " .. vim.fn.fnameescape(base .. "/proj_b"))
+  eq("win scope: the guard reverts a foreign :lcd", win_cwd(), base .. "/proj_a")
+
+  -- Switching scope re-anchors the held root in the new one.
+  cwd_mode.set_scope("global")
+  eq("scope switch is reported", cwd_mode.scope(), "global")
+  eq("scope switch re-applies the pin globally", global_cwd(), base .. "/proj_a")
+  check("scope switch keeps the lock", cwd_mode.mode() == "lock")
+  vim.cmd("cd " .. vim.fn.fnameescape(base .. "/proj_b"))
+  eq("the re-anchored guard still enforces", global_cwd(), base .. "/proj_a")
+
+  check("an unknown scope is rejected", cwd_mode.set_scope("nope") == false)
+  eq("a rejected scope changes nothing", cwd_mode.scope(), "global")
+
+  cwd_mode.teardown()
+  vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base))
+end
+
 -- ── manual ────────────────────────────────────────────────────────────────────
 do
   cwd_mode.setup(vim.deepcopy(silent), stub_adapter(nil))
@@ -240,7 +275,8 @@ end
 do
   local commands = require("filetree.commands")
   local paths = table.concat(commands.command_paths(), "\n")
-  for _, want in ipairs({ "cwd mode", "cwd lock", "cwd here", "cwd unlock", "cwd toggle", "cwd status" }) do
+  for _, want in ipairs({ "cwd mode", "cwd scope", "cwd lock", "cwd here",
+                          "cwd unlock", "cwd toggle", "cwd status" }) do
     check("command path registered: :Filetree " .. want, paths:find(want, 1, true) ~= nil)
   end
 

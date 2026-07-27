@@ -128,7 +128,8 @@ local TREE = {
   -- :Filetree cwd lock [dir]
   -- :Filetree cwd here | unlock | toggle | status
   cwd = {
-    mode   = function(a) local f = ft("cwd_mode"); if f then f.set_mode(a[1] or "") end end,
+    mode   = function(a) local f = ft("cwd_mode"); if f then f.set_mode(a[1] or "")  end end,
+    scope  = function(a) local f = ft("cwd_mode"); if f then f.set_scope(a[1] or "") end end,
     lock   = function(a) local f = ft("cwd_mode"); if f then f.lock(a[1]) end end,
     here   = function(_) local f = ft("cwd_mode"); if f then f.lock_here()  end end,
     unlock = function(_) local f = ft("cwd_mode"); if f then f.unlock()     end end,
@@ -348,6 +349,7 @@ local function build_routes()
   -- tbl_extend copies references, so deleting in place would mutate TREE.
   walked.cwd = vim.tbl_extend("force", {}, TREE.cwd)
   walked.cwd.mode = nil
+  walked.cwd.scope = nil
   walked.cwd.lock = nil
   walk_tree(walked, {}, routes)
 
@@ -368,6 +370,13 @@ local function build_routes()
     args = { { name = "name", type = "STRING", enum = { "follow", "project", "lock", "manual" } } },
     desc = "Set the cwd/root policy (follow | project | lock | manual)",
     run = function(ctx) TREE.cwd.mode({ ctx.args.name }) end,
+  }
+
+  routes[#routes + 1] = {
+    path = { "cwd", "scope" },
+    args = { { name = "name", type = "STRING", enum = { "global", "tab", "win" } } },
+    desc = "Set the directory scope of the cwd policy (:cd | :tcd | :lcd)",
+    run = function(ctx) TREE.cwd.scope({ ctx.args.name }) end,
   }
 
   routes[#routes + 1] = {

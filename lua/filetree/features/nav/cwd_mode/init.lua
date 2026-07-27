@@ -295,6 +295,47 @@ function M.pinned()
   return S.pinned
 end
 
+---The directory scope every change goes through: "global", "tab" or "win".
+---
+---Read by cwd_sync too, so its per-buffer chdir lands in the same scope as the
+---mode's own — a `tab`-scoped policy whose buffer switches still changed the
+---global cwd would only be half a policy.
+---@return Lib.Fs.Chdir.Scope
+function M.scope()
+  return _cfg.scope or "global"
+end
+
+---Change the directory scope, re-anchoring a held root in the new one.
+---
+---NOTE: leaving "tab"/"win" cannot undo a `:tcd`/`:lcd` that was set in some
+---*other* tab or window — Vim has no "clear everywhere" for those. The root is
+---re-applied in the new scope; stale local directories elsewhere stay until
+---something else changes them.
+---@param scope Lib.Fs.Chdir.Scope
+---@return boolean ok
+function M.set_scope(scope)
+  if scope ~= "global" and scope ~= "tab" and scope ~= "win" then
+    notify.error("unknown cwd scope: " .. tostring(scope))
+    return false
+  end
+  if scope == _cfg.scope then return true end
+
+  _cfg.scope = scope
+
+  -- A guard watches the scope it was created in, so it cannot simply be told
+  -- about the new one: drop it and re-hold, which also re-applies the pin.
+  if S.mode == "lock" and S.pinned then
+    drop_guard()
+    install_guard(S.pinned)
+  elseif S.pinned then
+    local ok, err = chdir(S.pinned, { scope = scope })
+    if not ok then notify.warn(err or ("could not change cwd to " .. S.pinned)) end
+  end
+
+  M.refresh_indicator()
+  return true
+end
+
 ---Switch modes.
 ---@param mode FiletreeCwdModeName
 ---@param dir string?  Directory to pin (lock mode; defaults to the current cwd).
@@ -394,6 +435,7 @@ function M.status()
   local label = _cfg.indicator.labels[S.mode]
   local lines = {
     ("mode:   %s%s"):format(S.mode, (label and label ~= "") and (" (" .. label .. ")") or ""),
+    ("scope:  %s"):format(M.scope()),
     ("root:   %s"):format(M.root()),
     ("cwd:    %s"):format(vim.fn.getcwd()),
   }
