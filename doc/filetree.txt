@@ -16,9 +16,10 @@ CONTENTS                                                    *filetree-contents*
      5.1 Picker ............................ |filetree-picker|
      5.2 Layout Guard ...................... |filetree-layout-guard|
      5.3 CWD Sync ......................... |filetree-cwd-sync|
-     5.4 Current Highlight ................ |filetree-current-hl|
-     5.5 Safety / Backup .................. |filetree-safety|
-     5.6 Auto Reveal ....................... |filetree-auto-reveal|
+     5.4 CWD Modes ......................... |filetree-cwd-mode|
+     5.5 Current Highlight ................ |filetree-current-hl|
+     5.6 Safety / Backup .................. |filetree-safety|
+     5.7 Auto Reveal ....................... |filetree-auto-reveal|
   6. Adapters ............................... |filetree-adapters|
   7. Public API ............................. |filetree-api|
   8. Health check ........................... |filetree-health|
@@ -350,7 +351,97 @@ including ones filetree.nvim has no other way to know about.
 <
 
 ------------------------------------------------------------------------------
-5.4 CURRENT HIGHLIGHT                                   *filetree-current-hl*
+5.4 CWD MODES                                            *filetree-cwd-mode*
+
+cwd_sync is stateless: on every buffer switch it re-resolves a root from the
+file. A *mode* is state — "keep the cwd here regardless of which buffer is
+focused" — so it lives in its own feature, `cwd_mode`, which cwd_sync asks
+before it changes anything.
+
+MODES ~
+
+  follow    No policy. cwd_sync's own resolution applies unchanged
+            (root_markers → project_root → the file's parent). This is the
+            default, and it makes the feature completely inert.
+  project   The cwd stays at the current project root as long as the focused
+            file lives inside it, and moves only when a file outside it is
+            opened. With `project.sticky` (default) a file with no root of
+            its own — a scratch note, something in /tmp — does not drag the
+            cwd along either.
+  lock      The cwd is pinned to one directory. Buffer switches never move
+            it, and with `lock.enforce` (default) neither does foreign code:
+            a `:cd` from a picker, a session restore or another plugin is
+            reverted (via lib.nvim.fs.dir_guard).
+  manual    Nothing automatic. The cwd and the tree root change only through
+            explicit action (`+`/`-`, `:Filetree cwd …`).
+
+Re-rooting the tree by hand is never fought: pressing `+` in lock mode moves
+the pin instead of being reverted (`lock.follow_manual_root`).
+
+COMMANDS ~
+
+  :Filetree cwd mode <name>    follow | project | lock | manual (<Tab> completes)
+  :Filetree cwd lock [dir]     pin to `dir` (default: the current cwd)
+  :Filetree cwd here           pin to the node under the cursor
+  :Filetree cwd unlock         back to the previous mode
+  :Filetree cwd toggle         cycle through `cycle`
+  :Filetree cwd status         active mode, its root, and the cwd
+
+Tree-buffer keymaps: `L` cycles modes, `gp` locks onto the node under the
+cursor.
+
+INDICATOR ~
+
+The active mode is shown bottom-left in the tree window: "PROJECT", "LOCK",
+"MANUAL" — and nothing at all in follow mode. In lock mode the pinned path is
+appended, elided to the tree's width.
+
+The badge uses the window's own statusline, and falls back to a one-line
+float over the tree's last row when `laststatus = 3` removes per-window
+statuslines (`indicator.mode = "auto"`; force one with "statusline"/"float").
+For a hand-built statusline, `indicator.enabled = false` plus: >lua
+  require("filetree").feature("cwd_mode").component()
+<
+
+CONFIGURATION ~
+>lua
+  features = {
+    cwd_mode = {
+      mode  = "follow",     -- follow | project | lock | manual
+      scope = "global",     -- global | tab | win
+      project = {
+        markers   = { ".git", ".hg", ".svn" },
+        skip_dirs = { "node_modules", ".venv", "vendor" },
+        sticky    = true,
+      },
+      lock = { enforce = true, follow_manual_root = true },
+      reveal_outside = "skip",   -- or "reveal"
+      indicator = { enabled = true, mode = "auto", show_path = "lock" },
+      cycle = { "follow", "project", "lock" },
+    },
+  }
+<
+`project.markers` is VCS-only on purpose: `project` mode answers "which
+repository am I in". Adding `package.json`/`Cargo.toml` turns it into
+nearest-package (monorepo) behaviour — a deliberate choice, not the default.
+`skip_dirs` is the counterpart: a file under `node_modules/pkg/` resolves to
+the project ABOVE the vendor directory, never to the vendored package.
+
+`reveal_outside` decides what happens when the focused file is outside the
+held root: "skip" (default) leaves the tree where it is — re-rooting it would
+break the very thing the mode holds — while "reveal" reveals the file anyway.
+
+OTHER FEATURES ~
+
+`cwd_mode.root()` is the authoritative answer to "which project are we in",
+and is preferable to `getcwd()` for anything project-scoped.
+
+NOTE: cwd_mode needs cwd_sync enabled to influence buffer-switch behaviour —
+cwd_sync is the executor and is default-disabled (|filetree-default-disabled|).
+Lock enforcement and the indicator work on their own regardless.
+
+------------------------------------------------------------------------------
+5.5 CURRENT HIGHLIGHT                                   *filetree-current-hl*
 
 Highlights the current file's line and its parent directory's line in the
 tree buffer using extmarks (priority 150). Re-applies on BufEnter,
@@ -361,7 +452,7 @@ Highlight groups created:
   FiletreeCurrentParent  — parent directory node
 
 ------------------------------------------------------------------------------
-5.5 SAFETY / BACKUP                                        *filetree-safety*
+5.6 SAFETY / BACKUP                                        *filetree-safety*
 
 Provides a backup API for use before destructive operations: >lua
   local safety = require("filetree").feature("safety")
@@ -376,7 +467,7 @@ Methods:
   `toggle_dry_run()`                Toggle dry-run mode at runtime.
 
 ------------------------------------------------------------------------------
-5.6 AUTO REVEAL                                        *filetree-auto-reveal*
+5.7 AUTO REVEAL                                        *filetree-auto-reveal*
 
 On BufEnter, scrolls or expands the tree to reveal the current file — but
 NEVER changes the cwd or the tree's root (that is cwd_sync's job; see

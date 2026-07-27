@@ -123,6 +123,19 @@ local TREE = {
     resume = function(_) local f = ft("auto_reveal"); if f then f.resume()                      end end,
   },
 
+  -- ── cwd_mode ────────────────────────────────────────────────────────────────
+  -- :Filetree cwd mode <name>   (completion comes from the enum route below)
+  -- :Filetree cwd lock [dir]
+  -- :Filetree cwd here | unlock | toggle | status
+  cwd = {
+    mode   = function(a) local f = ft("cwd_mode"); if f then f.set_mode(a[1] or "") end end,
+    lock   = function(a) local f = ft("cwd_mode"); if f then f.lock(a[1]) end end,
+    here   = function(_) local f = ft("cwd_mode"); if f then f.lock_here()  end end,
+    unlock = function(_) local f = ft("cwd_mode"); if f then f.unlock()     end end,
+    toggle = function(_) local f = ft("cwd_mode"); if f then f.cycle()      end end,
+    status = function(_) local f = ft("cwd_mode"); if f then f.status()     end end,
+  },
+
   -- ── resize ──────────────────────────────────────────────────────────────────
   -- :Filetree resize [width]
   resize = function(args)
@@ -320,16 +333,23 @@ local function walk_tree(node, path, routes)
   end
 end
 
----Build the composer route list from TREE. "find" is special-cased for
---- directory-typed <Tab> completion (the one spot the original completion
---- special-cased beyond generic tree-key walking); every other leaf just
+---Build the composer route list from TREE. A few leaves are special-cased so
+--- their arguments get types (directory completion, a closed set of mode
+--- names) instead of the generic tree-key walking; every other leaf just
 --- forwards ctx.rest into the unchanged TREE function, exactly like before.
+--- The typed routes still call the TREE function, so TREE stays the single
+--- source of truth for M.command_paths() and for what actually runs.
 ---@return table[]
 local function build_routes()
   local routes = {}
-  local tree_without_find = vim.tbl_extend("force", {}, TREE)
-  tree_without_find.find = nil
-  walk_tree(tree_without_find, {}, routes)
+  local walked = vim.tbl_extend("force", {}, TREE)
+  walked.find = nil
+  -- Shallow-copy the group before removing its typed leaves — the outer
+  -- tbl_extend copies references, so deleting in place would mutate TREE.
+  walked.cwd = vim.tbl_extend("force", {}, TREE.cwd)
+  walked.cwd.mode = nil
+  walked.cwd.lock = nil
+  walk_tree(walked, {}, routes)
 
   routes[#routes + 1] = {
     path = { "find" },
@@ -342,6 +362,21 @@ local function build_routes()
       TREE.find(args)
     end,
   }
+
+  routes[#routes + 1] = {
+    path = { "cwd", "mode" },
+    args = { { name = "name", type = "STRING", enum = { "follow", "project", "lock", "manual" } } },
+    desc = "Set the cwd/root policy (follow | project | lock | manual)",
+    run = function(ctx) TREE.cwd.mode({ ctx.args.name }) end,
+  }
+
+  routes[#routes + 1] = {
+    path = { "cwd", "lock" },
+    args = { { name = "dir", type = "DIR", optional = true } },
+    desc = "Lock the cwd to a directory (default: the current one)",
+    run = function(ctx) TREE.cwd.lock({ ctx.args.dir }) end,
+  }
+
   return routes
 end
 

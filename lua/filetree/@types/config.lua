@@ -54,6 +54,7 @@
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field no_name_guard       FiletreeNoNameGuardConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
+---@field cwd_mode            FiletreeCwdModeConfig?
 ---@field current_hl          FiletreeCurrentHlConfig?
 ---@field safety              FiletreeSafetyConfig?
 ---@field trash               FiletreeTrashConfig?
@@ -124,6 +125,61 @@
 ---                                  finder. Keeps the cwd at a stable high-level root to avoid
 ---                                  frequent cwd jumps. `false` disables it (falls back to
 ---                                  use_project_root / parent dir). Takes priority over use_project_root.
+
+-- ── cwd_mode ──────────────────────────────────────────────────────────────────
+
+---Which root policy is active. See features/nav/cwd_mode.
+---@alias FiletreeCwdModeName
+---| "follow"   No policy — cwd_sync's own resolution applies unchanged.
+---| "project"  Hold the current project root until a file outside it is opened.
+---| "lock"     Pin the cwd to one directory; buffer switches never move it.
+---| "manual"   Nothing automatic; explicit action only.
+
+---What cwd_mode wants cwd_sync to do for one buffer.
+---@class FiletreeCwdDecision
+---@field root   string?   Directory to use for BOTH the cwd and the tree root (nil = let cwd_sync resolve).
+---@field chdir  boolean   May the cwd be changed to `root`?
+---@field reveal boolean   May the tree be re-rooted / the file revealed?
+
+--- Every field below is optional: the feature deep-extends its own defaults
+--- with whatever the user passes, so a partial table is the normal case.
+
+---@class FiletreeCwdModeProjectConfig
+---@field markers   string[]? Root markers (default { ".git", ".hg", ".svn" }). Adding
+---                           package.json/Cargo.toml turns this into nearest-package
+---                           (monorepo) behaviour.
+---@field skip_dirs string[]? Directory names that can never hold a root
+---                           (default { "node_modules", ".venv", "vendor" }). A file inside
+---                           one resolves to the project *above* it.
+---@field max_depth integer?  Maximum levels to walk upward (default: unbounded).
+---@field sticky    boolean?  Keep the current root when a file has none of its own —
+---                           a scratch file in /tmp does not drag the session out (default true).
+
+---@class FiletreeCwdModeLockConfig
+---@field enforce            boolean?  Revert foreign cwd changes via lib.nvim.fs.dir_guard (default true).
+---@field follow_manual_root boolean?  Re-rooting the tree by hand (`+`/`-`) moves the lock
+---                                    instead of being reverted (default true).
+
+---@class FiletreeCwdModeIndicatorConfig
+---@field enabled   boolean? Show the mode badge in the tree window (default true).
+---@field mode      Lib.UI.Statusline.Mode?  "auto" (default), "statusline" or "float".
+---@field align     Lib.UI.Statusline.Align? Placement in the line (default "left").
+---@field show_path ("never"|"lock"|"always")?  Append the pinned path (default "lock").
+---@field labels    table<FiletreeCwdModeName, string>?  Badge text per mode; "" hides it.
+---@field hl        table<FiletreeCwdModeName, string>?  Highlight group per mode.
+
+---@class FiletreeCwdModeConfig
+---@field enabled        boolean
+---@field mode           FiletreeCwdModeName? Mode to start in (default "follow" — inert).
+---@field scope          Lib.Fs.Chdir.Scope?  Directory scope: "global" (default), "tab" or "win".
+---@field project        FiletreeCwdModeProjectConfig?
+---@field lock           FiletreeCwdModeLockConfig?
+---@field reveal_outside ("skip"|"reveal")?  What to do when the focused file is outside the held
+---                                          root: leave the tree alone (default) or reveal anyway.
+---@field indicator      FiletreeCwdModeIndicatorConfig?
+---@field cycle          FiletreeCwdModeName[]?  Order used by `:Filetree cwd toggle`.
+---@field keymap_cycle     string?  Tree-buffer key that cycles modes (default "L"; "" disables).
+---@field keymap_lock_here string?  Tree-buffer key that locks onto the node under the cursor (default "gp").
 
 -- ── current_hl ────────────────────────────────────────────────────────────────
 
