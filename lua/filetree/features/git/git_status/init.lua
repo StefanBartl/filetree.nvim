@@ -150,16 +150,11 @@ end
 function M.refresh()
   if not _adapter then return end
 
-  -- Try project_root first, fall back to cwd
-  local root_path
-  local ok_pr, pr = require("filetree.features").load("project_root")
-  if ok_pr and type(pr.find) == "function" then
-    local cur_buf = vim.api.nvim_get_current_buf()
-    local bname = vim.api.nvim_buf_get_name(cur_buf)
-    root_path = pr.find(bname ~= "" and bname or vim.fn.getcwd())
-  else
-    root_path = vim.fn.getcwd()
-  end
+  -- cwd_mode's held root first, then project_root, then the cwd. Resolving
+  -- from the current buffer alone was actively wrong under a lock: a tree
+  -- rooted at the locked project would get decorated with the git status of
+  -- whatever unrelated repository the focused buffer belongs to.
+  local root_path = require("filetree.util.root").find()
 
   -- Verify it is actually a git repo
   local git_dir = root_path .. "/.git"

@@ -9,8 +9,8 @@
 ---
 --- The search root is (in priority order):
 ---   - The directory of the current tree node
----   - The project root (if project_root feature is loaded)
----   - vim.fn.getcwd()
+---   - Whatever `filetree.util.root` resolves: cwd_mode's held root (lock /
+---     project), else the project root, else vim.fn.getcwd()
 ---
 --- After selection, the file is opened in the editor and optionally
 --- revealed in the tree via adapter.reveal().
@@ -58,13 +58,11 @@ local function get_root(from_node)
       and from_node.path
       or vim.fn.fnamemodify(from_node.path, ":h")
   end
-  local ok_pr, pr = require("filetree.features").load("project_root")
-  if ok_pr and type(pr.find) == "function" then
-    local buf  = vim.api.nvim_get_current_buf()
-    local name = vim.api.nvim_buf_get_name(buf)
-    return pr.find(name ~= "" and name or vim.fn.getcwd())
-  end
-  return vim.fn.getcwd()
+  -- util.root asks cwd_mode's held root first, then falls back to the same
+  -- project_root → getcwd() chain this used to spell out. Without that, a
+  -- locked session searching from a buffer that belongs to another project
+  -- would find files in that other project.
+  return require("filetree.util.root").find()
 end
 
 -- ── Post-select action ────────────────────────────────────────────────────────

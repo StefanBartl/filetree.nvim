@@ -433,8 +433,23 @@ break the very thing the mode holds — while "reveal" reveals the file anyway.
 
 OTHER FEATURES ~
 
-`cwd_mode.root()` is the authoritative answer to "which project are we in",
-and is preferable to `getcwd()` for anything project-scoped.
+A held root is not just cosmetic — the project-scoped features honour it:
+
+  find_files    searches the held root when no tree node is selected
+  grep_in_dir   greps the held root when no tree node is selected
+  git_status    decorates the tree from the held root's repository
+  breadcrumbs   count relative to the held root
+
+They all resolve through `filetree.util.root.find([path])`, which asks
+cwd_mode first, then project_root, then the cwd. Before that, each resolved
+from the CURRENT BUFFER — so opening a file from another project silently
+moved them there while the tree, the cwd and the badge still said otherwise
+(git_status would decorate a tree rooted at /notes with /repos/foo's status).
+In follow mode nothing changes: no root is held, and the buffer decides as
+before.
+
+`cwd_mode.root()` is the same answer for your own code, with the cwd as its
+fallback.
 
 NOTE: cwd_mode needs cwd_sync enabled to influence buffer-switch behaviour —
 cwd_sync is the executor and is default-disabled (|filetree-default-disabled|).

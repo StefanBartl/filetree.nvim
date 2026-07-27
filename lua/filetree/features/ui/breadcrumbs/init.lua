@@ -48,14 +48,11 @@ local _float_buf  = nil
 local function build(path)
   if not path or path == "" then return "", "" end
 
-  -- Get project root for relative base
-  local root
-  local ok_pr, pr = require("filetree.features").load("project_root")
-  if ok_pr and type(pr.find) == "function" then
-    root = pr.find(path)
-  else
-    root = vim.fn.getcwd()
-  end
+  -- Relative base: the root cwd_mode holds, if any, else the project root of
+  -- this very path. Under a lock the crumbs then count from the locked root —
+  -- the same directory the tree is showing — instead of from whatever marker
+  -- walk this individual file happens to sit under.
+  local root = require("filetree.util.root").find(path)
 
   -- Compute parts relative to root
   local rel = path
