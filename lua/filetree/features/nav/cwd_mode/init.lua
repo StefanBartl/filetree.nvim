@@ -72,6 +72,10 @@ local DEFAULTS = {
 
   reveal_outside = "skip",
 
+  -- Off by default: it writes to stdpath("cache") and makes a mode outlive the
+  -- session that set it, which should be asked for rather than assumed.
+  persist = false,
+
   indicator = {
     enabled   = true,
     mode      = "auto",
@@ -117,6 +121,16 @@ local _badge_win = nil
 
 ---@type integer?
 local _augroup = nil
+
+---Directory the persisted state is keyed by: where Neovim was started, taken
+---once at setup() before any mode can move the cwd. Keying by the *current*
+---cwd instead would make the key change with the very state being saved — lock
+---onto another project and the entry lands under that project, so the session
+---you were actually in never finds it again.
+---@type string?
+local _persist_path = nil
+
+local STORE_KEY = "filetree/cwd_mode"
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -271,6 +285,74 @@ local function unguarded(fn)
   end
 end
 
+-- ── Persistence ───────────────────────────────────────────────────────────────
+
+---The project store, or nil when persistence is off/unavailable.
+---@return Lib.Store.Project?
+local function store()
+  if not _cfg.persist or not _persist_path then return nil end
+  local ok, mod = pcall(require, "lib.nvim.store.project")
+  return ok and mod or nil
+end
+
+---Write the current policy for this project.
+---
+---Called only from explicit user actions, never from `decide()`. `project`
+---mode re-pins itself on every buffer switch, and persisting each of those
+---would mean a disk write per BufEnter for a value that is re-derived at
+---startup anyway.
+local function persist_save()
+  local s = store()
+  if not s then return end
+  pcall(s.save, STORE_KEY, {
+    version = 1,
+    mode    = S.mode,
+    scope   = _cfg.scope,
+    -- Only a lock's pin is worth keeping: project mode derives its root from
+    -- the buffer, follow and manual hold nothing that outlives the session.
+    pinned  = (S.mode == "lock") and S.pinned or nil,
+  }, { path = _persist_path })
+end
+
+---Apply the policy saved for this project, if any.
+---@return boolean restored
+local function persist_restore()
+  local s = store()
+  if not s then return false end
+
+  local ok, data = pcall(s.load, STORE_KEY, { path = _persist_path })
+  if not ok or type(data) ~= "table" or data.version ~= 1 then return false end
+
+  if data.scope then M.set_scope(data.scope) end
+
+  local mode = data.mode
+  if type(mode) ~= "string" or mode == "follow" then return false end
+
+  -- A stored lock whose directory has since been deleted or moved must not
+  -- take the session hostage: fall through to the configured mode instead.
+  if mode == "lock" then
+    if not data.pinned or vim.fn.isdirectory(data.pinned) == 0 then
+      return false
+    end
+    return M.set_mode("lock", data.pinned)
+  end
+
+  return M.set_mode(mode)
+end
+
+---Drop the policy saved for this project. The live mode is left alone.
+---@return boolean ok
+function M.forget()
+  local s = store()
+  if not s then
+    notify.info("persistence is off (features.cwd_mode.persist)")
+    return false
+  end
+  local ok = pcall(s.clear, STORE_KEY, { path = _persist_path })
+  if ok then notify.info("forgot the saved cwd policy for this project") end
+  return ok
+end
+
 -- ── Public API ────────────────────────────────────────────────────────────────
 
 ---The directory the active mode considers authoritative — the pinned lock, the
@@ -332,6 +414,7 @@ function M.set_scope(scope)
     if not ok then notify.warn(err or ("could not change cwd to " .. S.pinned)) end
   end
 
+  persist_save()
   M.refresh_indicator()
   return true
 end
@@ -375,6 +458,7 @@ function M.set_mode(mode, dir)
     end
   end
 
+  persist_save()
   M.refresh_indicator()
   return true
 end
@@ -461,6 +545,7 @@ function M.notify_manual_root(dir)
     if not _cfg.lock.follow_manual_root then return end
     S.pinned = target
     install_guard(target)
+    persist_save()
     M.refresh_indicator()
   elseif S.mode == "project" or S.mode == "manual" then
     S.pinned = target
@@ -570,6 +655,10 @@ function M.setup(config, adapter)
   S.prev_mode = "follow"
   S.pinned    = nil
 
+  -- Captured before anything can move the cwd, so the persistence key is the
+  -- workspace Neovim was opened in — not wherever a restored lock points.
+  _persist_path = vim.fn.getcwd()
+
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_cwd_mode", true)
 
@@ -591,11 +680,20 @@ function M.setup(config, adapter)
     end
   end)
 
-  if _cfg.mode and _cfg.mode ~= "follow" then
-    -- Deferred: the adapter's window (and the startup buffer) may not exist
-    -- yet, and both matter for seeding a project pin and for the badge.
-    vim.schedule(function() M.set_mode(_cfg.mode) end)
-  end
+  -- Deferred: the adapter's window (and the startup buffer) may not exist yet,
+  -- and both matter for seeding a project pin and for drawing the badge.
+  --
+  -- A saved policy wins over the configured `mode`: it is what the user chose
+  -- last, in this project, at runtime — the config value is the starting point
+  -- for a project that has no saved policy yet. When the restore declines (no
+  -- entry, or a stored lock whose directory is gone) the configured mode
+  -- applies as usual.
+  vim.schedule(function()
+    if persist_restore() then return end
+    if _cfg.mode and _cfg.mode ~= "follow" then
+      M.set_mode(_cfg.mode)
+    end
+  end)
 end
 
 function M.teardown()
@@ -603,6 +701,7 @@ function M.teardown()
   detach_badge()
   _finder = nil
   _adapter = nil
+  _persist_path = nil
   S.mode      = "follow"
   S.prev_mode = "follow"
   S.pinned    = nil

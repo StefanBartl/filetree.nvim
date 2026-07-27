@@ -176,6 +176,9 @@
 ---@field lock           FiletreeCwdModeLockConfig?
 ---@field reveal_outside ("skip"|"reveal")?  What to do when the focused file is outside the held
 ---                                          root: leave the tree alone (default) or reveal anyway.
+---@field persist        boolean?  Remember mode, scope and a lock's pin per project
+---                                 (lib.nvim.store.project), keyed by the directory
+---                                 Neovim was started in. Default false.
 ---@field indicator      FiletreeCwdModeIndicatorConfig?
 ---@field cycle          FiletreeCwdModeName[]?  Order used by `:Filetree cwd toggle`.
 ---@field keymap_cycle     string?  Tree-buffer key that cycles modes (default "L"; "" disables).

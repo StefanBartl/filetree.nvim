@@ -403,7 +403,30 @@ COMMANDS ~
   :Filetree cwd here           pin to the node under the cursor
   :Filetree cwd unlock         back to the previous mode
   :Filetree cwd toggle         cycle through `cycle`
-  :Filetree cwd status         active mode, its root, and the cwd
+  :Filetree cwd status         active mode, its scope, root, and the cwd
+  :Filetree cwd forget         drop the policy saved for this project
+
+PERSISTENCE ~
+
+With `persist = true` the mode, the scope and a lock's pinned directory are
+remembered per project (`lib.nvim.store.project`, under `stdpath("cache")`)
+and restored on the next start. Off by default: it writes to disk and makes a
+mode outlive the session that set it, which should be asked for.
+
+The entry is keyed by the project of the directory NEOVIM WAS STARTED IN,
+captured before anything can move the cwd. Keying by the current cwd would
+make the key change with the very state being saved — lock onto another
+project and the entry lands under that project, so the session you were
+actually in never finds it again.
+
+Only explicit actions write. `project` mode re-pins itself on every buffer
+switch, and persisting those would mean a disk write per |BufEnter| for a
+value that is re-derived at startup anyway — so only a lock's pin is stored.
+
+A restored policy outranks the configured `mode`: it is what you chose last,
+in this project, at runtime. When there is nothing saved — or the stored lock
+points at a directory that no longer exists — the configured mode applies as
+usual; a deleted directory can never take the session hostage.
 
 Tree-buffer keymaps: `L` cycles modes, `gp` locks onto the node under the
 cursor.
@@ -434,6 +457,7 @@ CONFIGURATION ~
       },
       lock = { enforce = true, follow_manual_root = true },
       reveal_outside = "skip",   -- or "reveal"
+      persist = false,           -- remember mode/scope/pin per project
       indicator = { enabled = true, mode = "auto", show_path = "lock" },
       cycle = { "follow", "project", "lock" },
     },

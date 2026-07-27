@@ -79,25 +79,31 @@ deliberate "no policy" answer — the feature is then completely inert.
       another project under a lock silently moved all four there.
 - [x] **Docs** — `:help filetree-cwd-mode`, `docs/BINDINGS/KEYMAPS.md`,
       `docs/BINDINGS/USERCOMMANDS.md`, defaults + `@types`.
-- [x] **Tests** — `test/cwd_mode.lua`, 64 checks. The suites accept
+- [x] **Persistence** (`persist`, off by default) — mode, scope and a lock's pin
+      per project via `lib.nvim.store.project`, plus `:Filetree cwd forget`.
+      Keyed by the project of the directory Neovim *started* in: keying by the
+      current cwd would make the key move along with the state being saved. Only
+      explicit actions write — project mode re-pins on every buffer switch, and
+      persisting those would be a disk write per `BufEnter` for a value that is
+      re-derived at startup anyway. A stored lock whose directory is gone is
+      declined rather than restored. Uncovered a real lib defect on the way:
+      `cache.disk` created only the cache root, so any namespace containing a
+      slash — the form `store.project`'s own docs use — silently failed to write.
+- [x] **Tests** — `test/cwd_mode.lua`, 74 checks. The suites accept
       `$FILETREE_LIB_NVIM` to run against a lib.nvim worktree before it is merged.
 
 ---
 
 ## Open
 
-### 1. Persistence
-- [ ] `persist` via `lib.nvim.store.project`: mode + pin survive a restart, keyed
-      per project. The lib side already exists and is unused here.
-
-### 2. More modes
+### 1. More modes
 - [ ] **`nearest`** — root at the nearest package boundary (`package.json`,
       `Cargo.toml`, `pyproject.toml`) instead of the VCS root. In a monorepo
       `.git` is too coarse. Mostly a `project.markers` preset plus a label.
 - [ ] **`tree_leads`** — direction reversal: whatever you root the tree at with
       `+` becomes the cwd, rather than the buffer deciding.
 
-### 3. Collapse the three root resolvers
+### 2. Collapse the three root resolvers
 `project_root`, `cwd_sync.root_markers` and `cwd_mode.project.markers` each walk
 for a root with their own marker set. `util.root` now puts one door in front of
 them, but they can still drift apart.
@@ -105,7 +111,7 @@ them, but they can still drift apart.
 - [ ] Make cwd_mode the single resolver; leave the others as the fallback used
       only when cwd_mode is disabled.
 
-### 4. Smaller follow-ups
+### 3. Smaller follow-ups
 - [ ] Move `breadcrumbs`' hand-rolled winbar/float handling onto
       `lib.nvim.ui.statusline` — the second consumer was the argument for
       building that module.
