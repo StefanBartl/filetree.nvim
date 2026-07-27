@@ -23,21 +23,19 @@ return function(items, opts, on_choice)
     return vim.ui.select(items, opts, on_choice)
   end
 
-  local format = type(opts.format_item) == "function" and opts.format_item or tostring
-  local display = {}
-  for i, item in ipairs(items) do
-    display[i] = format(item)
-  end
-
   -- kit.select sizes the float to its widest item by default, so the old
   -- `auto_width` workaround for hover_select's fixed min-width is no longer
-  -- needed.
+  -- needed. format_item/index-remapping is kit.select's own job now too.
   kit.select({
-    items     = display,
+    items     = items,
     title     = opts.prompt,
-    on_select = function(_, index)
-      local idx = type(index) == "table" and index[1] or index
-      on_choice(items[idx], idx)
+    format_item = opts.format_item,
+    on_select = on_choice,
+    -- kit.select reports cancellation through on_cancel rather than by
+    -- calling on_select with nil; translate back since this shim's whole
+    -- point is a vim.ui.select-shaped drop-in for its callers.
+    on_cancel = function()
+      on_choice(nil, nil)
     end,
   })
 end
