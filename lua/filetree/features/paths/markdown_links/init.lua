@@ -15,6 +15,7 @@ local notify = require("filetree.util.notify").create("[filetree.markdown_links]
 local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local fs  = require("filetree.util.fs")
+local ignore = require("filetree.util.ignore")
 local M = {}
 
 ---@type FiletreeMarkdownLinksConfig
@@ -76,7 +77,7 @@ function M.link_recursive()
     return
   end
 
-  local files = fs.collect_files((node.path:gsub("\\", "/")))
+  local files = fs.collect_files((node.path:gsub("\\", "/")), ignore.predicate())
   local lines = {}
   for _, f in ipairs(files) do
     lines[#lines + 1] = to_link(f)

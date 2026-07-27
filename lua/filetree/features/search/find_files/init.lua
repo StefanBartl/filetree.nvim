@@ -23,6 +23,7 @@ local notify = require("filetree.util.notify").create("[filetree.find_files]")
 local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
+local ignore = require("filetree.util.ignore")
 local M = {}
 
 -- Optional: shows a "scanning…" indicator for the builtin backend's
@@ -133,6 +134,21 @@ local function via_minipick(root)
   return true
 end
 
+---True if any path segment of `rel` (root-relative, "/"-separated) is on the
+---ignore list (`.git`, `node_modules`, …). globpath already expanded the
+---whole tree in one call, so this can't prune the walk itself the way
+---`fs.collect_recursive`'s `ignore_fn` does -- it only keeps ignored entries
+---out of the results shown to the user.
+---@param rel string
+---@param ignored fun(name: string): boolean
+---@return boolean
+local function path_is_ignored(rel, ignored)
+  for seg in rel:gmatch("[^/\\]+") do
+    if ignored(seg) then return true end
+  end
+  return false
+end
+
 local function via_builtin(root)
   -- vim.fn.glob all files, present via vim.ui.select
   local prog = new_progress()
@@ -141,11 +157,13 @@ local function via_builtin(root)
   local pattern = _cfg.hidden and root .. "/**/*" or root .. "/**/*"
   local ok_g, files = pcall(vim.fn.globpath, root, "**/*", false, true)
   if not ok_g then files = {} end
-  -- filter to files only, limit to 10000
+  -- filter to files only, skip ignored subtrees (.git, node_modules, …), limit to 10000
+  local ignored = ignore.predicate()
+  local root_len = #root + 2
   local filtered = {}
   local total = #files
   for i, f in ipairs(files) do
-    if vim.fn.filereadable(f) == 1 then
+    if vim.fn.filereadable(f) == 1 and not path_is_ignored(f:sub(root_len), ignored) then
       filtered[#filtered + 1] = f
       if #filtered >= 10000 then break end
     end
@@ -162,7 +180,6 @@ local function via_builtin(root)
   end
   -- Relativize for display
   local display = {}
-  local root_len = #root + 2
   for _, f in ipairs(filtered) do
     display[#display + 1] = f:sub(root_len)
   end

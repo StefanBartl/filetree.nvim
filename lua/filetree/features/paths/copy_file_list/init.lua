@@ -12,13 +12,15 @@ local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.copy_file_list]")
 local fs     = require("filetree.util.fs")
+local ignore = require("filetree.util.ignore")
 
----Recursively collect all file paths under a path.
+---Recursively collect all file paths under a path. Skips `.git`,
+---`node_modules`, etc. per the ignore_list feature (see filetree.util.ignore).
 ---@param path string
 ---@param relative boolean  If true, make paths relative to cwd.
 ---@return string[]
 local function collect_files(path, relative)
-  local raw = fs.collect_files((path:gsub("\\", "/")))
+  local raw = fs.collect_files((path:gsub("\\", "/")), ignore.predicate())
   if not relative then
     return vim.tbl_map(function(p) return p:gsub("\\", "/") end, raw)
   end
@@ -30,11 +32,12 @@ local function collect_files(path, relative)
 end
 
 ---Recursively collect all directory paths under a path (including root).
+---Skips ignored subtrees; see `collect_files` above.
 ---@param path string
 ---@param relative boolean
 ---@return string[]
 local function collect_dirs(path, relative)
-  local raw = fs.collect_folders((path:gsub("\\", "/")))
+  local raw = fs.collect_folders((path:gsub("\\", "/")), ignore.predicate())
   if not relative then
     return vim.tbl_map(function(p) return p:gsub("\\", "/") end, raw)
   end

@@ -50,6 +50,30 @@ local function resolve_names(user_names)
   return _BUILTIN
 end
 
+---Resolve Lua-pattern rules (file basenames like `.log`/`.pyc`, not covered by
+---exact basenames) from lib.nvim. No built-in fallback: `_BUILTIN` above is
+---basenames only, and these only matter to path-output actions, not the tree
+---display this feature otherwise drives.
+---@return string[]
+local function resolve_patterns()
+  local ok, lib_list = pcall(require, "lib.nvim.fs.ignore.list")
+  if ok and type(lib_list) == "table" and type(lib_list.patterns) == "table" then
+    return lib_list.patterns
+  end
+  return {}
+end
+
+-- ── Path-output predicate (copy_file_list, markdown_links, …) ───────────────
+-- Same resolved names/patterns this feature hides in the tree, exposed as a
+-- `filetree.util.fs`-shaped `ignore_fn(name): boolean` so recursive
+-- path-output actions skip `.git`, `node_modules`, etc. too, without a second
+-- copy of the ignore rules. nil while disabled (or before setup() runs) so
+-- `M.predicate()` correctly ignores nothing until this feature is live.
+---@type table<string, true>?
+local _names_set = nil
+---@type string[]
+local _patterns = {}
+
 -- ── Adapter-specific hide injection ──────────────────────────────────────────
 
 ---Merge `names` into a filtered_items hide_by_name value, in place, returning
@@ -178,6 +202,12 @@ function M.setup(config, adapter)
   local names = resolve_names(config.names)
   if #names == 0 then return end
 
+  _names_set = {}
+  for _, name in ipairs(names) do
+    _names_set[name] = true
+  end
+  _patterns = resolve_patterns()
+
   if adapter.name == "neotree" then
     apply_neotree(names, adapter)
   else
@@ -185,8 +215,30 @@ function M.setup(config, adapter)
   end
 end
 
+---Ignore predicate for `filetree.util.fs.collect_files`/`collect_folders`'s
+---`ignore_fn(name): boolean` parameter, built from the same resolved
+---basenames + patterns this feature hides in the tree. Ignores nothing when
+---the feature is disabled, so path-output actions transparently follow the
+---same on/off toggle as the tree display (one config knob, not two).
+---@return fun(name: string): boolean
+function M.predicate()
+  if not _names_set then
+    return function() return false end
+  end
+  local names, patterns = _names_set, _patterns
+  return function(name)
+    if names[name] then return true end
+    for _, pat in ipairs(patterns) do
+      if name:match(pat) then return true end
+    end
+    return false
+  end
+end
+
 function M.teardown()
   pcall(vim.api.nvim_del_augroup_by_name, "filetree_ignore_list_dim")
+  _names_set = nil
+  _patterns = {}
 end
 
 return M
