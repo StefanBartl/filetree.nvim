@@ -24,6 +24,8 @@ return {
     { lhs = "-",  desc = "Parent directory (up)",       feature = "tree_traverse", scope = "tree" },
     { lhs = "+",  desc = "Set dir under cursor as root", feature = "tree_traverse", scope = "tree" },
     { lhs = "B",  desc = "Reveal alternate buffer (#)", feature = "reveal_alt", scope = "tree" },
+    { lhs = "L",  desc = "Cycle cwd mode (follow/project/lock)", feature = "cwd_mode", scope = "tree" },
+    { lhs = "gp", desc = "Lock cwd to the node under the cursor", feature = "cwd_mode", scope = "tree" },
   },
   ui = {
     { lhs = "<Tab>", desc = "Preview toggle; image/PDF dispatch", feature = "preview", scope = "tree" },

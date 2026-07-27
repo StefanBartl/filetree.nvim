@@ -1,0 +1,573 @@
+---@module 'filetree.features.cwd_mode'
+---@brief Root policy: decide *where* the cwd and the tree root belong.
+---@description
+--- cwd_sync answers "the buffer changed, now what?" statelessly — it
+--- re-resolves a root from the file on every BufEnter. A *mode* is by
+--- definition state: "keep the cwd here regardless of which buffer is
+--- focused". This module holds that state; cwd_sync stays the executor and
+--- asks `decide()` before it changes anything.
+---
+--- Modes:
+---
+---   follow    No policy — cwd_sync's own resolution applies unchanged
+---             (root_markers → project_root → the file's parent). `decide()`
+---             deliberately returns nil here, so enabling this feature with
+---             the default mode changes no behaviour at all.
+---   project   The cwd stays at the current project root as long as the
+---             focused file lives inside it, and only moves when a file
+---             outside it is opened. With `project.sticky` (default) a file
+---             with no detectable root of its own — a scratch note, a file
+---             in /tmp — does not drag the cwd along either.
+---   lock      The cwd is pinned to one directory. Buffer switches never
+---             move it, and with `lock.enforce` (default) neither does
+---             foreign code: a `lib.nvim.fs.dir_guard` reverts a `:cd` from
+---             a picker, a session restore or another plugin.
+---   manual    Nothing automatic. The cwd and the tree root only change
+---             through explicit action (`+`/`-`, `:Filetree cwd …`).
+---
+--- The mode is shown as a badge in the bottom-left of the tree window
+--- ("PROJECT", "LOCK", "MANUAL"; nothing in follow mode) — see `indicator`.
+---
+--- Because the pinned root is real state, other features can read it instead
+--- of guessing from the cwd: `M.root()` is the authoritative answer to "which
+--- project are we in right now".
+
+local notify = require("filetree.util.notify").create("[filetree.cwd_mode]")
+local path_util = require("filetree.util.path")
+local au = require("filetree.util.autocmd")
+local map = require("filetree.util.map")
+local tree_attach = require("filetree.util.tree_attach")
+
+local chdir = require("lib.nvim.fs.chdir")
+local dir_guard = require("lib.nvim.fs.dir_guard")
+local find_root = require("lib.nvim.fs.find_root")
+local is_subpath = require("lib.nvim.fs.is_subpath")
+local normkey = require("lib.nvim.fs.normkey")
+local path_shorten = require("lib.nvim.fs.path_shorten")
+local ui_statusline = require("lib.nvim.ui.statusline")
+
+local M = {}
+
+---@type FiletreeCwdModeConfig
+local DEFAULTS = {
+  enabled = true,
+  mode    = "follow",
+  scope   = "global",
+
+  project = {
+    -- VCS markers only by default: `project` mode is about "which repository
+    -- am I in". Adding package.json / Cargo.toml here turns it into
+    -- nearest-package (monorepo) behaviour, which is a deliberate choice, not
+    -- the default one.
+    markers   = { ".git", ".hg", ".svn" },
+    skip_dirs = { "node_modules", ".venv", "vendor" },
+    max_depth = nil,
+    sticky    = true,
+  },
+
+  lock = {
+    enforce            = true,
+    follow_manual_root = true,
+  },
+
+  reveal_outside = "skip",
+
+  indicator = {
+    enabled   = true,
+    mode      = "auto",
+    align     = "left",
+    show_path = "lock",
+    labels    = { follow = "", project = "PROJECT", lock = "LOCK", manual = "MANUAL" },
+    hl        = { follow = "Comment", project = "DiagnosticInfo", lock = "DiagnosticWarn", manual = "Comment" },
+  },
+
+  cycle = { "follow", "project", "lock" },
+
+  keymap_cycle     = "L",
+  keymap_lock_here = "gp",
+}
+
+---@type FiletreeCwdModeConfig
+local _cfg = vim.deepcopy(DEFAULTS)
+
+---@type FiletreeAdapter?
+local _adapter = nil
+
+---@class FiletreeCwdModeState
+---@field mode      FiletreeCwdModeName
+---@field pinned    string?  Normalized directory the mode is holding, if any.
+---@field guard     table?   lib.nvim.fs.dir_guard handle (lock + enforce only).
+---@field prev_mode FiletreeCwdModeName  Mode to return to on `unlock`.
+
+---@type FiletreeCwdModeState
+local S = {
+  mode      = "follow",
+  pinned    = nil,
+  guard     = nil,
+  prev_mode = "follow",
+}
+
+---@type Lib.Fs.FindRoot?
+local _finder = nil
+
+---@type Lib.UI.Statusline.Segment?
+local _badge = nil
+---@type integer?  window the badge is currently attached to
+local _badge_win = nil
+
+---@type integer?
+local _augroup = nil
+
+-- ── Helpers ───────────────────────────────────────────────────────────────────
+
+---Canonical form for comparisons and storage. Everything kept in `S.pinned`
+---goes through here, so a Windows path that arrives as `E:\repos` compares
+---equal to the `E:/repos` the same directory produces elsewhere.
+---@param dir string?
+---@return string?
+local function canon(dir)
+  if type(dir) ~= "string" or dir == "" then return nil end
+  local out = normkey(dir)
+  return out ~= "" and out or nil
+end
+
+---Directory of a file path (or the path itself when it is a directory).
+---@param p string
+---@return string
+local function dir_of(p)
+  if vim.fn.isdirectory(p) == 1 then return p end
+  return path_util.parent(p)
+end
+
+---Project root for `file` per the configured markers, or nil.
+---@param file string
+---@return string?
+local function project_root_of(file)
+  if not _finder then return nil end
+  local ok, root = pcall(_finder.find, file)
+  if not ok then return nil end
+  return canon(root)
+end
+
+---True when `file` lives inside `root`.
+---@param file string
+---@param root string?
+---@return boolean
+local function inside(file, root)
+  if not root then return false end
+  return is_subpath(normkey(file), root)
+end
+
+-- ── Decision ──────────────────────────────────────────────────────────────────
+
+---What should happen for `file`, per the active mode.
+---
+---Returns nil in `follow` mode — that is the "no policy" answer, and it lets
+---cwd_sync keep its own resolution chain instead of this module quietly
+---replacing it.
+---@param file string  Absolute path of the buffer being entered.
+---@return FiletreeCwdDecision?
+function M.decide(file)
+  if not _cfg.enabled or type(file) ~= "string" or file == "" then return nil end
+
+  local mode = S.mode
+
+  if mode == "follow" then
+    return nil
+  end
+
+  if mode == "manual" then
+    -- Explicit action only: no chdir, no re-root, no reveal.
+    return { root = S.pinned, chdir = false, reveal = false }
+  end
+
+  if mode == "lock" then
+    local root = S.pinned
+    if not root then
+      return nil -- nothing pinned yet: behave like follow rather than freeze
+    end
+    if inside(file, root) then
+      -- Re-asserting the same root is a no-op for cwd_sync when the cwd
+      -- already matches; it only matters after something moved it.
+      return { root = root, chdir = true, reveal = true }
+    end
+    -- The file is outside the lock. Re-rooting the tree at it would break the
+    -- very thing the lock promises, so the tree stays put; `reveal_outside`
+    -- decides whether the file is revealed at all.
+    return { root = root, chdir = true, reveal = _cfg.reveal_outside == "reveal" }
+  end
+
+  if mode == "project" then
+    if inside(file, S.pinned) then
+      return { root = S.pinned, chdir = true, reveal = true }
+    end
+
+    local root = project_root_of(file)
+    if root then
+      S.pinned = root
+      M.refresh_indicator()
+      return { root = root, chdir = true, reveal = true }
+    end
+
+    -- No detectable project for this file.
+    if _cfg.project.sticky and S.pinned then
+      -- Stay where we are: a scratch file in /tmp should not drag a project
+      -- session out of its root. The tree keeps showing the project.
+      return { root = S.pinned, chdir = true, reveal = _cfg.reveal_outside == "reveal" }
+    end
+
+    local parent = canon(dir_of(file))
+    S.pinned = parent
+    M.refresh_indicator()
+    return { root = parent, chdir = true, reveal = true }
+  end
+
+  return nil
+end
+
+-- ── Enforcement ───────────────────────────────────────────────────────────────
+
+local function drop_guard()
+  if S.guard then
+    pcall(S.guard.release)
+    S.guard = nil
+  end
+end
+
+---Install (or move) the dir_guard that keeps a lock honest.
+---@param root string
+local function install_guard(root)
+  if not _cfg.lock.enforce then
+    drop_guard()
+    local ok, err = chdir(root, { scope = _cfg.scope })
+    if not ok then notify.warn(err or ("could not change cwd to " .. root)) end
+    return
+  end
+
+  if S.guard and S.guard.is_held() then
+    local ok, err = S.guard.update(root)
+    if not ok then notify.warn(err or ("could not move the lock to " .. root)) end
+    return
+  end
+
+  local handle, err = dir_guard.hold(root, {
+    scope = _cfg.scope,
+    on_error = function(e) notify.warn("lock could not be restored: " .. e) end,
+  })
+  if not handle then
+    notify.error(err or ("could not lock the cwd to " .. root))
+    return
+  end
+  S.guard = handle
+end
+
+---Run `fn` without the lock guard fighting it (used by deliberate moves).
+---@param fn fun()
+local function unguarded(fn)
+  if S.guard and S.guard.is_held() then
+    S.guard.bypass(fn)
+  else
+    fn()
+  end
+end
+
+-- ── Public API ────────────────────────────────────────────────────────────────
+
+---The directory the active mode considers authoritative — the pinned lock, the
+---current project, or the cwd when no mode holds one. Other features should
+---prefer this over `getcwd()` so a locked session greps the locked project.
+---@return string
+function M.root()
+  if S.pinned and (S.mode == "lock" or S.mode == "project") then
+    return S.pinned
+  end
+  return canon(vim.fn.getcwd()) or vim.fn.getcwd()
+end
+
+---@return FiletreeCwdModeName
+function M.mode()
+  return S.mode
+end
+
+---The pinned directory, or nil when the mode holds none.
+---@return string?
+function M.pinned()
+  return S.pinned
+end
+
+---Switch modes.
+---@param mode FiletreeCwdModeName
+---@param dir string?  Directory to pin (lock mode; defaults to the current cwd).
+---@return boolean ok
+function M.set_mode(mode, dir)
+  if mode ~= "follow" and mode ~= "project" and mode ~= "lock" and mode ~= "manual" then
+    notify.error("unknown cwd mode: " .. tostring(mode))
+    return false
+  end
+
+  if S.mode ~= mode then S.prev_mode = S.mode end
+
+  if mode == "lock" then
+    local target = canon(dir) or canon(M.root())
+    if not target then
+      notify.error("cannot lock: no usable directory")
+      return false
+    end
+    S.mode = "lock"
+    S.pinned = target
+    install_guard(target)
+  else
+    drop_guard()
+    S.mode = mode
+    if mode == "project" then
+      -- Seed the pin from the current buffer so the badge and `root()` are
+      -- meaningful immediately, not only after the next buffer switch.
+      local file = vim.api.nvim_buf_get_name(0)
+      local from = (file ~= "" and file) or vim.fn.getcwd()
+      S.pinned = project_root_of(from) or canon(dir_of(from))
+      if S.pinned then
+        local ok, err = chdir(S.pinned, { scope = _cfg.scope })
+        if not ok then notify.warn(err or ("could not change cwd to " .. S.pinned)) end
+      end
+    elseif mode == "follow" then
+      S.pinned = nil
+    end
+  end
+
+  M.refresh_indicator()
+  return true
+end
+
+---Pin the cwd to `dir` (default: the current cwd) and switch to lock mode.
+---@param dir string?
+---@return boolean ok
+function M.lock(dir)
+  return M.set_mode("lock", dir)
+end
+
+---Lock onto the directory of the node under the cursor in the tree.
+---@return boolean ok
+function M.lock_here()
+  if not _adapter then
+    notify.warn("no adapter available")
+    return false
+  end
+  local node = _adapter.get_current_node()
+  local target = node and node.path or (_adapter.get_root_path and _adapter.get_root_path())
+  if not target then
+    notify.warn("no node under the cursor")
+    return false
+  end
+  return M.lock(dir_of(target))
+end
+
+---Leave lock mode, returning to whatever mode preceded it.
+---@return boolean ok
+function M.unlock()
+  if S.mode ~= "lock" then
+    notify.info("not locked")
+    return false
+  end
+  local back = S.prev_mode ~= "lock" and S.prev_mode or "follow"
+  return M.set_mode(back)
+end
+
+---Advance to the next mode in `cycle`.
+---@return boolean ok
+function M.cycle()
+  local list = _cfg.cycle
+  if type(list) ~= "table" or #list == 0 then return false end
+  local index = 1
+  for i, name in ipairs(list) do
+    if name == S.mode then
+      index = i % #list + 1
+      break
+    end
+  end
+  local ok = M.set_mode(list[index])
+  if ok then notify.info("cwd mode: " .. S.mode) end
+  return ok
+end
+
+---Report the current policy.
+function M.status()
+  local label = _cfg.indicator.labels[S.mode]
+  local lines = {
+    ("mode:   %s%s"):format(S.mode, (label and label ~= "") and (" (" .. label .. ")") or ""),
+    ("root:   %s"):format(M.root()),
+    ("cwd:    %s"):format(vim.fn.getcwd()),
+  }
+  if S.mode == "lock" then
+    lines[#lines + 1] = ("enforce: %s"):format(S.guard and S.guard.is_held() and "on" or "off")
+    lines[#lines + 1] = ("outside: %s"):format(_cfg.reveal_outside)
+  end
+  notify.info(table.concat(lines, "\n"))
+end
+
+---Called by tree_traverse when the user re-roots the tree by hand.
+---
+---Without this a lock would fight its own user: pressing `+` on a directory
+---re-roots the tree, the lock reverts the cwd, and the tree and cwd disagree.
+---A deliberate re-root moves the pin instead.
+---@param dir string
+function M.notify_manual_root(dir)
+  if not _cfg.enabled then return end
+  local target = canon(dir_of(dir))
+  if not target then return end
+
+  if S.mode == "lock" then
+    if not _cfg.lock.follow_manual_root then return end
+    S.pinned = target
+    install_guard(target)
+    M.refresh_indicator()
+  elseif S.mode == "project" or S.mode == "manual" then
+    S.pinned = target
+    unguarded(function()
+      local ok, err = chdir(target, { scope = _cfg.scope })
+      if not ok then notify.warn(err or ("could not change cwd to " .. target)) end
+    end)
+    M.refresh_indicator()
+  end
+end
+
+-- ── Indicator ─────────────────────────────────────────────────────────────────
+
+---The badge text for the current mode, e.g. `LOCK  …/Notes`.
+---@return string text
+---@return string? hl
+local function badge_text()
+  local cfg = _cfg.indicator
+  local label = cfg.labels[S.mode] or ""
+  if label == "" then return "", nil end
+
+  local text = label
+  local show = cfg.show_path
+  if S.pinned and (show == "always" or (show == "lock" and S.mode == "lock")) then
+    -- The tree width is the budget: a badge that wraps is worse than one that
+    -- elides, and the trailing segments are the informative ones.
+    local width = 30
+    if _badge_win and vim.api.nvim_win_is_valid(_badge_win) then
+      width = vim.api.nvim_win_get_width(_badge_win)
+    end
+    local budget = width - #label - 3
+    if budget > 6 then
+      text = label .. "  " .. path_shorten(S.pinned, budget)
+    end
+  end
+  return text, cfg.hl[S.mode]
+end
+
+local function detach_badge()
+  if _badge then
+    pcall(_badge.detach)
+    _badge = nil
+  end
+  _badge_win = nil
+end
+
+---Re-attach (if the tree window changed) and redraw the badge.
+function M.refresh_indicator()
+  if not _cfg.enabled or not _cfg.indicator.enabled then
+    detach_badge()
+    return
+  end
+
+  local win = _adapter and _adapter.get_winid and _adapter.get_winid() or nil
+  if not win or not vim.api.nvim_win_is_valid(win) then
+    detach_badge()
+    return
+  end
+
+  if _badge_win ~= win then
+    detach_badge()
+    local segment, err = ui_statusline.attach(win, {
+      mode  = _cfg.indicator.mode,
+      align = _cfg.indicator.align,
+    })
+    if not segment then
+      notify.debug(err or "could not attach the cwd-mode badge")
+      return
+    end
+    _badge = segment
+    _badge_win = win
+  end
+
+  local text, hl = badge_text()
+  if text == "" then
+    _badge.clear()
+  else
+    _badge.set(text, hl)
+  end
+end
+
+---Badge text for a user's own statusline component.
+---@return string
+function M.component()
+  return (badge_text())
+end
+
+-- ── Setup ─────────────────────────────────────────────────────────────────────
+
+---@param config FiletreeCwdModeConfig
+---@param adapter FiletreeAdapter
+function M.setup(config, adapter)
+  if not config.enabled then return end
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config or {})
+  _adapter = adapter
+
+  _finder = find_root({
+    markers     = _cfg.project.markers,
+    skip_dirs   = _cfg.project.skip_dirs,
+    max_depth   = _cfg.project.max_depth,
+    cache_chain = true,
+  })
+
+  drop_guard()
+  detach_badge()
+  S.mode      = "follow"
+  S.prev_mode = "follow"
+  S.pinned    = nil
+
+  if _augroup then au.del_group(_augroup) end
+  _augroup = au.group("filetree_cwd_mode", true)
+
+  -- The tree window comes and goes; the badge follows it. These are the events
+  -- after which a different window (or none) may be the tree.
+  au.acmd({ "WinEnter", "BufWinEnter", "WinClosed", "TabEnter" }, {
+    group    = _augroup,
+    callback = function() vim.schedule(M.refresh_indicator) end,
+  })
+
+  tree_attach.on_attach(function(buf)
+    if _cfg.keymap_cycle and _cfg.keymap_cycle ~= "" then
+      map("n", _cfg.keymap_cycle, function() M.cycle() end,
+        { buffer = buf, desc = "filetree: cycle cwd mode", silent = true })
+    end
+    if _cfg.keymap_lock_here and _cfg.keymap_lock_here ~= "" then
+      map("n", _cfg.keymap_lock_here, function() M.lock_here() end,
+        { buffer = buf, desc = "filetree: lock cwd here", silent = true })
+    end
+  end)
+
+  if _cfg.mode and _cfg.mode ~= "follow" then
+    -- Deferred: the adapter's window (and the startup buffer) may not exist
+    -- yet, and both matter for seeding a project pin and for the badge.
+    vim.schedule(function() M.set_mode(_cfg.mode) end)
+  end
+end
+
+function M.teardown()
+  drop_guard()
+  detach_badge()
+  _finder = nil
+  _adapter = nil
+  S.mode      = "follow"
+  S.prev_mode = "follow"
+  S.pinned    = nil
+  if _augroup then
+    au.del_group(_augroup)
+    _augroup = nil
+  end
+end
+
+return M

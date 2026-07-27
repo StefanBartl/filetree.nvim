@@ -19,11 +19,27 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   availability, group-level opt-out (`config.menu`), the master `enable=false`
   switch, `cmd()` calling through, and `submenu()`.
 
+- **[cwd_mode.lua](cwd_mode.lua)** — unit: the cwd/root policy feature. Decision
+  logic per mode (follow/project/lock/manual), sticky project roots, lock
+  enforcement against a foreign `:cd`, manual re-rooting, the mode cycle, the
+  tree-window badge in both drawing strategies, and the `:Filetree cwd …`
+  command wiring incl. enum completion. Uses a stub adapter and a temp tree.
+
 ```
 cd e:/repos/filetree.nvim
 nvim --clean --headless -u NONE -l test/smoke.lua
 nvim --clean --headless -u NONE -l test/units.lua
 nvim --clean --headless -u NONE -l test/menu.lua
+nvim --clean --headless -u NONE -l test/cwd_mode.lua
+```
+
+**lib.nvim resolution:** the suites put a sibling `../lib.nvim` checkout on the
+runtimepath. Set `FILETREE_LIB_NVIM` to point somewhere else — e.g. a lib.nvim
+worktree carrying modules a new feature depends on that are not merged yet:
+
+```
+FILETREE_LIB_NVIM=e:/repos/lib.nvim/.claude/worktrees/<name> \
+  nvim --clean --headless -u NONE -l test/cwd_mode.lua
 ```
 
 ---

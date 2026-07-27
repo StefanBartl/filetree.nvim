@@ -30,6 +30,15 @@ local function go_to(path)
     pcall(vim.cmd, "cd " .. vim.fn.fnameescape(safe_path))
     notify.info("cwd → " .. safe_path)
   end
+
+  -- Re-rooting here is a deliberate act, and it is the one thing a cwd lock
+  -- must not fight: without this the lock would revert the cwd right after the
+  -- user pressed `+`, leaving the tree and the cwd pointing at different
+  -- directories. cwd_mode moves its pin instead (see lock.follow_manual_root).
+  local mode = require("filetree.features").require("cwd_mode")
+  if mode and type(mode.notify_manual_root) == "function" then
+    pcall(mode.notify_manual_root, path)
+  end
 end
 
 ---Navigate to the parent directory.

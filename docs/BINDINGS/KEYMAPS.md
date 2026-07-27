@@ -24,6 +24,8 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `<leader>ms` | marks | `keymap_show` | Show floating list of marked nodes |
 | `-` | tree_traverse | `keymap_up` | Navigate to parent directory |
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
+| `L` | cwd_mode | `keymap_cycle` | Cycle the cwd policy (follow → project → lock) |
+| `gp` | cwd_mode | `keymap_lock_here` | Lock the cwd to the node under the cursor |
 | `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard |
 | `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard |
 | `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard |

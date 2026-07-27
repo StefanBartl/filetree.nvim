@@ -23,6 +23,7 @@ M.FEATURES = {
   auto_reveal       = { mod = "filetree.features.nav.auto_reveal",       category = "nav" },
   auto_resize       = { mod = "filetree.features.nav.auto_resize",       category = "nav" },
   cwd_sync          = { mod = "filetree.features.nav.cwd_sync",          category = "nav" },
+  cwd_mode          = { mod = "filetree.features.nav.cwd_mode",          category = "nav" },
   layout_guard      = { mod = "filetree.features.nav.layout_guard",      category = "nav" },
   no_name_guard     = { mod = "filetree.features.nav.no_name_guard",     category = "nav" },
 

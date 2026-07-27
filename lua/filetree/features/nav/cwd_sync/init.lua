@@ -113,6 +113,21 @@ local function target_dir(file)
   return path.parent(file)
 end
 
+---Ask the cwd_mode feature what its active policy wants for this file.
+---
+---Returns nil when the feature is absent or in "follow" mode — the deliberate
+---"no policy" answer, which leaves the resolution below exactly as it was
+---before cwd_mode existed.
+---@param file string
+---@return FiletreeCwdDecision?
+local function policy(file)
+  local registry = require("filetree.features")
+  local mode = registry.require("cwd_mode")
+  if not mode or type(mode.decide) ~= "function" then return nil end
+  local ok, decision = pcall(mode.decide, file)
+  return ok and decision or nil
+end
+
 local function do_reveal(path_)
   if not _adapter then return end
   if paused() then return end
@@ -125,13 +140,31 @@ local function do_reveal(path_)
   -- root from the file's parent, so the tree showed the parent dir even though
   -- the cwd had been chdir'd to the project root — that mismatch was the "tree
   -- shows parent instead of project root" bug.
-  local root = target_dir(path_)
+  --
+  -- A cwd_mode policy (lock / project / manual) overrides that resolution: it
+  -- holds state this function cannot see — "stay in this directory no matter
+  -- which buffer is focused" — and it also decides whether the cwd and the
+  -- tree may move *at all*, which is why the two permissions are separate
+  -- below. cwd_sync stays the executor; the policy decides.
+  local decision = policy(path_)
+  local allow_chdir = true
+  local allow_reveal = true
+  local root
+
+  if decision then
+    allow_chdir = decision.chdir ~= false
+    allow_reveal = decision.reveal ~= false
+    if not allow_chdir and not allow_reveal then return end
+    root = decision.root
+  end
+
+  root = root or target_dir(path_)
 
   -- Silently chdir to the root when it differs. Never prompts. Deliberately no
   -- _adapter.refresh() here: the reveal below re-roots/re-renders the tree, so a
   -- separate full filesystem rescan would be redundant work (a big source of lag).
   local cwd_changed = false
-  if _cfg.change_dir ~= false and root ~= "" and not same_dir(root, vim.fn.getcwd()) then
+  if allow_chdir and _cfg.change_dir ~= false and root ~= "" and not same_dir(root, vim.fn.getcwd()) then
     if pcall(vim.fn.chdir, root) then
       cwd_changed = true
     else
@@ -144,6 +177,11 @@ local function do_reveal(path_)
   -- `follow_current_file`). Doing our own reveal here would fight that — the two
   -- reveals race and the tree can settle on the file's parent instead of the root.
   if _cfg.reveal == false then return end
+
+  -- The policy vetoed re-rooting: the buffer is outside the held root, and
+  -- revealing it would drag the tree out of the directory the mode exists to
+  -- hold. The cwd part above has already run (or been vetoed on its own).
+  if not allow_reveal then return end
 
   -- Fast path: the file is already rendered in the current tree and the root did
   -- not change. Just move the tree cursor to its line instead of neo-tree's heavy

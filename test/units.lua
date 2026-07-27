@@ -15,7 +15,12 @@
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h")
 vim.opt.rtp:prepend(root)
-local sibling_lib = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
+-- $FILETREE_LIB_NVIM overrides the sibling checkout, so this suite can run
+-- against a lib.nvim worktree/branch before it is merged.
+local sibling_lib = vim.env.FILETREE_LIB_NVIM
+if not sibling_lib or sibling_lib == "" then
+  sibling_lib = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
+end
 if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) end
 
 local passed, failed = 0, 0
