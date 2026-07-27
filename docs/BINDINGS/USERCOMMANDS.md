@@ -169,6 +169,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree reveal resume` | Resume auto-reveal |
 | `:Filetree resize [width]` | Set tree window width |
 | `:Filetree cwd mode <name>` | Set the cwd policy: `follow`, `project`, `lock` or `manual` |
+| `:Filetree cwd scope <name>` | Directory scope of the policy: `global`, `tab` or `win` |
 | `:Filetree cwd lock [dir]` | Pin the cwd to `dir` (default: the current one) |
 | `:Filetree cwd here` | Pin the cwd to the node under the cursor |
 | `:Filetree cwd unlock` | Leave lock mode, back to the previous one |

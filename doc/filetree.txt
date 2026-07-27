@@ -378,9 +378,27 @@ MODES ~
 Re-rooting the tree by hand is never fought: pressing `+` in lock mode moves
 the pin instead of being reverted (`lock.follow_manual_root`).
 
+SCOPE ~
+
+Orthogonal to the mode: how far a directory change reaches.
+
+  global   `:cd`  — the global cwd (default)
+  tab      `:tcd` — one project per tab
+  win      `:lcd` — window-local
+
+The scope applies to everything the policy does — the mode's own changes, the
+lock's enforcement, and cwd_sync's per-buffer change. Switching scope
+re-anchors a held root in the new one.
+
+NOTE: leaving "tab"/"win" cannot undo a `:tcd`/`:lcd` that was set in some
+OTHER tab or window — Vim has no "clear everywhere" for those. The root is
+re-applied in the new scope; stale local directories elsewhere stay until
+something else changes them.
+
 COMMANDS ~
 
   :Filetree cwd mode <name>    follow | project | lock | manual (<Tab> completes)
+  :Filetree cwd scope <name>   global | tab | win
   :Filetree cwd lock [dir]     pin to `dir` (default: the current cwd)
   :Filetree cwd here           pin to the node under the cursor
   :Filetree cwd unlock         back to the previous mode

@@ -28,6 +28,7 @@
 local notify = require("filetree.util.notify").create("[filetree.cwd_sync]")
 local path = require("filetree.util.path")
 local lib_debounce = require("lib.nvim.debounce")
+local chdir = require("lib.nvim.fs.chdir")
 
 local au  = require("filetree.util.autocmd")
 local M = {}
@@ -128,6 +129,23 @@ local function policy(file)
   return ok and decision or nil
 end
 
+---The directory scope cwd_sync's own chdir should use.
+---
+---Unlike `policy()` this is asked even in follow mode: the scope is a property
+---of the cwd policy as such, not of any one mode. A `tab`-scoped setup whose
+---buffer switches still moved the *global* cwd would only be half a policy.
+---Falls back to "global" — the historical behaviour — when cwd_mode is absent
+---or disabled.
+---@return Lib.Fs.Chdir.Scope
+local function chdir_scope()
+  local mode = require("filetree.features").require("cwd_mode")
+  if mode and type(mode.scope) == "function" then
+    local ok, scope = pcall(mode.scope)
+    if ok and scope then return scope end
+  end
+  return "global"
+end
+
 local function do_reveal(path_)
   if not _adapter then return end
   if paused() then return end
@@ -163,12 +181,18 @@ local function do_reveal(path_)
   -- Silently chdir to the root when it differs. Never prompts. Deliberately no
   -- _adapter.refresh() here: the reveal below re-roots/re-renders the tree, so a
   -- separate full filesystem rescan would be redundant work (a big source of lag).
+  -- lib.nvim.fs.chdir rather than vim.fn.chdir: the latter's scope is implicit
+  -- (it changes the global cwd, the tab's or the window's depending on what the
+  -- current window happens to carry), so a tab-scoped policy could not be
+  -- honoured here at all. It also validates the path and returns an error
+  -- instead of throwing.
   local cwd_changed = false
   if allow_chdir and _cfg.change_dir ~= false and root ~= "" and not same_dir(root, vim.fn.getcwd()) then
-    if pcall(vim.fn.chdir, root) then
+    local ok, err = chdir(root, { scope = chdir_scope() })
+    if ok then
       cwd_changed = true
     else
-      notify.warn("could not change cwd to: " .. root)
+      notify.warn(err or ("could not change cwd to: " .. root))
     end
   end
 
