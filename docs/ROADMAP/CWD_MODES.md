@@ -153,6 +153,6 @@ deliberate "no policy" answer — the feature is then completely inert.
 ## Open
 
 ### 1. Remaining
-- [ ] Pre-existing, unrelated: 7 failing `trash.undo` checks in `test/units.lua`
-      (Windows Recycle Bin, environment-dependent). Not touched by any work
-      in this document; noted here only so it isn't mistaken for a regression.
+
+Nothing — the last open item (the 7 `trash.undo` failures) turned out to be a
+stale test, not an environment flake, and is fixed. See "Done" below.
