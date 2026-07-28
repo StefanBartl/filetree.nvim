@@ -14,12 +14,18 @@
 ---
 --- So the mode gets asked first. Resolution order:
 ---
----   1. cwd_mode's held root, when a mode holds one (lock / project).
----   2. project_root's marker walk from `path` (or the current buffer).
----   3. `getcwd()`.
+---   1. cwd_mode's held root, when a mode holds one (lock / project / …).
+---   2. cwd_mode's marker walk from `path` (or the current buffer) — the same
+---      walk that decides where the cwd goes, so a search and the cwd cannot
+---      disagree about which directory is "the project".
+---   3. project_root's own (broader) marker walk, when cwd_mode is disabled.
+---   4. `getcwd()`.
 ---
---- In follow mode — the default — step 1 never fires and this behaves exactly
---- like the hand-rolled chain it replaces.
+--- Steps 2 and 3 are the same question asked of two different marker sets, and
+--- the older code asked only the second: cwd_sync would anchor the cwd to the
+--- git root while find_files scoped itself to the nearest `package.json` under
+--- it. One walk now governs both; `nearest` mode is how you ask for the
+--- package instead, deliberately.
 
 local M = {}
 
@@ -32,7 +38,7 @@ function M.find(path)
   local mode = registry.require("cwd_mode")
   if mode and type(mode.pinned) == "function" then
     -- `pinned()` rather than `root()`: root() falls back to the cwd, which
-    -- would swallow the project_root walk below in follow mode.
+    -- would swallow the marker walks below in follow mode.
     local ok, held = pcall(mode.pinned)
     if ok and held and held ~= "" then
       return held
@@ -45,6 +51,13 @@ function M.find(path)
   end
   if not target or target == "" then
     target = vim.fn.getcwd()
+  end
+
+  if mode and type(mode.resolve) == "function" then
+    local ok, root = pcall(mode.resolve, target)
+    if ok and root and root ~= "" then
+      return root
+    end
   end
 
   local ok_pr, pr = registry.load("project_root")

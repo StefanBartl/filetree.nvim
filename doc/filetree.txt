@@ -494,6 +494,19 @@ the project ABOVE the vendor directory, never to the vendored package.
 held root: "skip" (default) leaves the tree where it is — re-rooting it would
 break the very thing the mode holds — while "reveal" reveals the file anyway.
 
+ONE ROOT WALK ~
+
+cwd_mode owns the plugin's marker-based root walk. cwd_sync's `root_markers`
+and the `project_root` feature are the fallback for a setup where cwd_mode is
+disabled — configure `cwd_mode.project.markers` instead.
+
+Before this there were three walkers with three marker sets, and they
+disagreed: cwd_sync anchored the cwd to the git root while find_files scoped
+itself to the nearest `package.json` under it, with nothing to say which was
+right. One walk now answers for both. Asking for the package rather than the
+repository is what `nearest` mode is for — a deliberate choice, not an
+accident of which feature happened to answer.
+
 OTHER FEATURES ~
 
 A held root is not just cosmetic — the project-scoped features honour it:

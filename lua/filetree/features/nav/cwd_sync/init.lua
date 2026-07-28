@@ -90,15 +90,25 @@ end
 
 ---Resolve the directory `file` should put Neovim's cwd in.
 ---Resolution order:
----  1. Nearest ancestor containing a configured stable marker (default `.git`),
----     via the cached lib.nvim finder. This keeps the cwd anchored to a stable
----     high-level root so opening files across a project doesn't cause frequent
----     cwd jumps. Disabled with `root_markers = false`.
----  2. The project_root feature's broader marker set (when use_project_root).
----  3. The file's own parent directory.
+---  1. cwd_mode's marker walk — the plugin's one root walk, shared with
+---     `util.root` so the cwd and anything project-scoped (find_files, grep,
+---     git_status) cannot disagree about which directory is "the project".
+---     Skipped when cwd_mode is disabled or torn down.
+---  2. Nearest ancestor containing a configured stable marker (default `.git`),
+---     via the cached lib.nvim finder. This is now the fallback for a cwd_mode-
+---     less setup; it keeps the cwd anchored to a stable high-level root so
+---     opening files across a project doesn't cause frequent cwd jumps.
+---     Disabled with `root_markers = false`.
+---  3. The project_root feature's broader marker set (when use_project_root).
+---  4. The file's own parent directory.
 ---@param file string
 ---@return string
 local function target_dir(file)
+  local mode = require("filetree.features").require("cwd_mode")
+  if mode and type(mode.resolve) == "function" then
+    local ok, root = pcall(mode.resolve, file)
+    if ok and root and root ~= "" then return root end
+  end
   if _root_finder then
     local ok, root = pcall(_root_finder.find, file)
     if ok and root and root ~= "" then return root end

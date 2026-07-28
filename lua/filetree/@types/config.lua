@@ -122,9 +122,12 @@
 ---                                  immediate parent directory (default true; see project_root).
 ---@field root_markers     string[]|false  Marker names to anchor the cwd to the nearest ancestor
 ---                                  containing one (default { ".git" }), via a cached lib.nvim
----                                  finder. Keeps the cwd at a stable high-level root to avoid
----                                  frequent cwd jumps. `false` disables it (falls back to
----                                  use_project_root / parent dir). Takes priority over use_project_root.
+---                                  finder. FALLBACK ONLY: when the cwd_mode feature is enabled
+---                                  (the default) its marker walk decides, so that the cwd and
+---                                  every project-scoped feature agree on one root — configure
+---                                  `cwd_mode.project.markers` instead. This applies when cwd_mode
+---                                  is disabled. `false` disables it too (falls back to
+---                                  use_project_root / parent dir).
 
 -- ── cwd_mode ──────────────────────────────────────────────────────────────────
 
