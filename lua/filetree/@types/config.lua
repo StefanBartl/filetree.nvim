@@ -130,10 +130,12 @@
 
 ---Which root policy is active. See features/nav/cwd_mode.
 ---@alias FiletreeCwdModeName
----| "follow"   No policy — cwd_sync's own resolution applies unchanged.
----| "project"  Hold the current project root until a file outside it is opened.
----| "lock"     Pin the cwd to one directory; buffer switches never move it.
----| "manual"   Nothing automatic; explicit action only.
+---| "follow"     No policy — cwd_sync's own resolution applies unchanged.
+---| "project"    Hold the current project root until a file outside it is opened.
+---| "nearest"    Like "project", but the nearest package boundary instead of the VCS root.
+---| "lock"       Pin the cwd to one directory; buffer switches never move it.
+---| "manual"     Nothing automatic; explicit action only.
+---| "tree_leads" The tree root is the truth and the cwd follows it, not the buffer.
 
 ---What cwd_mode wants cwd_sync to do for one buffer.
 ---@class FiletreeCwdDecision
@@ -155,6 +157,13 @@
 ---@field sticky    boolean?  Keep the current root when a file has none of its own —
 ---                           a scratch file in /tmp does not drag the session out (default true).
 
+---@class FiletreeCwdModeNearestConfig
+---@field markers string[]? Package-boundary markers for `nearest` mode (default
+---                         package.json, Cargo.toml, go.mod, pyproject.toml,
+---                         setup.py, *.rockspec, mix.exs, build.zig,
+---                         CMakeLists.txt, and `.git` as a last resort).
+---                         `skip_dirs` and `max_depth` are shared with `project`.
+
 ---@class FiletreeCwdModeLockConfig
 ---@field enforce            boolean?  Revert foreign cwd changes via lib.nvim.fs.dir_guard (default true).
 ---@field follow_manual_root boolean?  Re-rooting the tree by hand (`+`/`-`) moves the lock
@@ -173,6 +182,7 @@
 ---@field mode           FiletreeCwdModeName? Mode to start in (default "follow" — inert).
 ---@field scope          Lib.Fs.Chdir.Scope?  Directory scope: "global" (default), "tab" or "win".
 ---@field project        FiletreeCwdModeProjectConfig?
+---@field nearest        FiletreeCwdModeNearestConfig?
 ---@field lock           FiletreeCwdModeLockConfig?
 ---@field reveal_outside ("skip"|"reveal")?  What to do when the focused file is outside the held
 ---                                          root: leave the tree alone (default) or reveal anyway.
