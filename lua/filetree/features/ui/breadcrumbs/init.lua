@@ -16,6 +16,7 @@
 local notify = require("filetree.util.notify").create("[filetree.breadcrumbs]")
 
 local au  = require("filetree.util.autocmd")
+local ui_statusline = require("lib.nvim.ui.statusline")
 local M = {}
 
 ---@type FiletreeBreadcrumbsConfig
@@ -36,10 +37,10 @@ local _adapter = nil
 ---@type string  last computed breadcrumb string (plain text)
 local _current = ""
 
----@type integer?  float window id
-local _float_win  = nil
----@type integer?  float buffer id
-local _float_buf  = nil
+---@type Lib.UI.Statusline.Segment?  float mode: managed via lib.nvim.ui.statusline
+local _float = nil
+---@type integer?  window the float is currently attached to
+local _float_win = nil
 
 -- ── Path → breadcrumb ─────────────────────────────────────────────────────────
 
@@ -124,58 +125,45 @@ local function update_winbar(highlighted, target_win)
 end
 
 local function close_float()
-  if _float_win and vim.api.nvim_win_is_valid(_float_win) then
-    pcall(vim.api.nvim_win_close, _float_win, true)
-  end
-  if _float_buf and vim.api.nvim_buf_is_valid(_float_buf) then
-    pcall(vim.api.nvim_buf_delete, _float_buf, { force = true })
+  if _float then
+    pcall(_float.detach)
+    _float = nil
   end
   _float_win = nil
-  _float_buf = nil
 end
 
+---Anchored at the tree window's TOP row — a header, not a status bar — so
+---this forces `mode = "float"` rather than "auto": "auto" would otherwise
+---alternate between an always-last-row statusline and a top-anchored float
+---depending on the user's `laststatus`, putting the crumbs in a different
+---place depending on config they have no business caring about. Highlighting
+---here was always a single `winbar_hl` for the whole line (unlike winbar
+---mode's per-segment colouring), which is exactly what a badge's one `hl`
+---already provides — nothing lost in the move.
 local function update_float(plain)
-  if not _adapter then return end
-  local tree_win = _adapter.get_winid and _adapter.get_winid() or -1
-  if tree_win < 0 or not vim.api.nvim_win_is_valid(tree_win) then
+  local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid() or nil
+  if not tree_win or not vim.api.nvim_win_is_valid(tree_win) then
     close_float()
     return
   end
 
-  local pos   = vim.api.nvim_win_get_position(tree_win)
-  local width = vim.api.nvim_win_get_width(tree_win)
-  local text  = " " .. plain
-
-  if not _float_buf or not vim.api.nvim_buf_is_valid(_float_buf) then
-    _float_buf = vim.api.nvim_create_buf(false, true)
-    vim.api.nvim_set_option_value("buftype",    "nofile", { buf = _float_buf })
-    vim.api.nvim_set_option_value("bufhidden",  "wipe",   { buf = _float_buf })
-    vim.api.nvim_set_option_value("modifiable", false,    { buf = _float_buf })
+  if _float_win ~= tree_win then
+    close_float()
+    local segment, err = ui_statusline.attach(tree_win, {
+      mode   = "float",
+      anchor = "top",
+      align  = "left",
+      zindex = 10,
+    })
+    if not segment then
+      notify.debug(err or "could not attach the breadcrumb float")
+      return
+    end
+    _float = segment
+    _float_win = tree_win
   end
 
-  vim.api.nvim_set_option_value("modifiable", true, { buf = _float_buf })
-  vim.api.nvim_buf_set_lines(_float_buf, 0, -1, false, { text })
-  vim.api.nvim_set_option_value("modifiable", false, { buf = _float_buf })
-
-  local float_cfg = {
-    relative  = "editor",
-    row       = pos[1],
-    col       = pos[2],
-    width     = math.max(width, #text + 1),
-    height    = 1,
-    style     = "minimal",
-    border    = "none",
-    focusable = false,
-    zindex    = 10,
-  }
-
-  if _float_win and vim.api.nvim_win_is_valid(_float_win) then
-    vim.api.nvim_win_set_config(_float_win, float_cfg)
-  else
-    _float_win = vim.api.nvim_open_win(_float_buf, false, float_cfg)
-    vim.api.nvim_set_option_value("winhl",
-      "Normal:" .. _cfg.winbar_hl, { win = _float_win })
-  end
+  _float.set(" " .. plain, _cfg.winbar_hl)
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
