@@ -410,7 +410,20 @@ do
   eq("after unlock: back to the buffer's project",
     normkey(util_root.find()), base .. "/proj_b")
 
+  -- One walk governs both the cwd and anything project-scoped. project_root's
+  -- broader marker set would answer "the package" here; cwd_mode's VCS set
+  -- answers "the repository", and that is what the cwd is anchored to too.
+  eq("follow: a vendored file resolves past node_modules",
+    normkey(util_root.find(mono .. "/packages/app/src/main.ts")), mono)
+
   cwd_mode.teardown()
+
+  -- With cwd_mode torn down, resolve() declines and the old chain applies —
+  -- project_root's own walk, which stops at the package.json.
+  eq("without cwd_mode: project_root decides again",
+    normkey(util_root.find(mono .. "/packages/app/src/main.ts")),
+    mono .. "/packages/app")
+
   vim.cmd("noautocmd enew")
 end
 

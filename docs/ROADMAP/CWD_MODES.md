@@ -99,22 +99,21 @@ deliberate "no policy" answer — the feature is then completely inert.
       the direction: buffer switches move nothing, `+`/`-` moves the cwd. Mode
       names now live in one `MODES` table that also validates a persisted value,
       so a mode can only be added in one place.
-- [x] **Tests** — `test/cwd_mode.lua`, 88 checks. The suites accept
+- [x] **One root walk** — `cwd_mode.resolve()` is now the plugin's only
+      marker-based walk; `cwd_sync.root_markers` and the `project_root` feature
+      are the fallback for a cwd_mode-less setup. The three used to disagree:
+      cwd_sync anchored the cwd to the git root while find_files scoped itself
+      to the nearest `package.json` under it, with nothing to say which was
+      right. Asking for the package instead of the repository is what `nearest`
+      mode is for — a choice, not an accident of which feature answered.
+- [x] **Tests** — `test/cwd_mode.lua`, 90 checks. The suites accept
       `$FILETREE_LIB_NVIM` to run against a lib.nvim worktree before it is merged.
 
 ---
 
 ## Open
 
-### 1. Collapse the three root resolvers
-`project_root`, `cwd_sync.root_markers` and `cwd_mode.project.markers` each walk
-for a root with their own marker set. `util.root` now puts one door in front of
-them, but they can still drift apart.
-
-- [ ] Make cwd_mode the single resolver; leave the others as the fallback used
-      only when cwd_mode is disabled.
-
-### 2. Smaller follow-ups
+### 1. Smaller follow-ups
 - [ ] Move `breadcrumbs`' hand-rolled winbar/float handling onto
       `lib.nvim.ui.statusline` — the second consumer was the argument for
       building that module.

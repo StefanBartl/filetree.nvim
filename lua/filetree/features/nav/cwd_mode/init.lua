@@ -433,6 +433,23 @@ function M.pinned()
   return S.pinned
 end
 
+---Walk up from `path` to its root, using this feature's marker set.
+---
+---This is the plugin's one marker-based root walk. `util.root` and cwd_sync
+---both call it rather than keeping their own: three walkers with three marker
+---sets meant the cwd could land on the git root while a search scoped itself
+---to the nearest package.json, with nothing to say which was right.
+---
+---Returns nil when the feature never ran (disabled, or torn down), which is
+---the signal for callers to fall back to their own chain.
+---@param path string     File or directory to resolve for.
+---@param mode FiletreeCwdModeName?  Marker set to use; defaults to the active mode's.
+---@return string?
+function M.resolve(path, mode)
+  if not _cfg.enabled or type(path) ~= "string" or path == "" then return nil end
+  return root_of(path, mode or S.mode)
+end
+
 ---The directory scope every change goes through: "global", "tab" or "win".
 ---
 ---Read by cwd_sync too, so its per-buffer chdir lands in the same scope as the
