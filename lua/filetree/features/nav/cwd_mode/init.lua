@@ -492,6 +492,33 @@ function M.set_scope(scope)
   return true
 end
 
+---`project`/`nearest` mode's whole promise — following the focused file as
+---it moves between projects/packages — runs through cwd_sync's BufEnter hook
+---calling `decide()`. cwd_sync defaults to disabled (see
+---|filetree-default-disabled|), and without it enabled, switching into either
+---mode only seeds the initial pin from the current buffer and then does
+---nothing on the next switch — which looks identical to a plain lock with no
+---enforcement until you notice files elsewhere no longer move the root.
+---`lock` and `tree_leads` do not have this dependency: dir_guard and
+---tree_traverse's manual re-root drive those directly, so this only warns for
+---the two modes that actually need cwd_sync to do anything beyond the seed.
+---@param mode FiletreeCwdModeName
+local function warn_if_cwd_sync_missing(mode)
+  if mode ~= "project" and mode ~= "nearest" then return end
+
+  -- `registry.require("cwd_sync")` (features.load/require) only tests that
+  -- the module file can be `require`d — true the moment anything, anywhere,
+  -- has loaded it, regardless of whether filetree.setup() actually turned it
+  -- on. Whether it is genuinely *active* lives in filetree.init's own
+  -- `_active_features`, reachable only via `require("filetree").feature(…)`.
+  local ok, filetree = pcall(require, "filetree")
+  if ok and filetree.feature("cwd_sync") then return end
+
+  notify.warn(("%s mode needs features.cwd_sync = { enabled = true } to follow "
+    .. "buffer switches — without it the root is set once now and will not "
+    .. "move again"):format(mode))
+end
+
 ---Switch modes.
 ---@param mode FiletreeCwdModeName
 ---@param dir string?  Directory to pin (lock mode; defaults to the current cwd).
@@ -541,6 +568,7 @@ function M.set_mode(mode, dir)
     end
   end
 
+  warn_if_cwd_sync_missing(mode)
   persist_save()
   M.refresh_indicator()
   return true
@@ -678,8 +706,40 @@ local function detach_badge()
   _badge_win = nil
 end
 
----Re-attach (if the tree window changed) and redraw the badge.
+-- Last text/hl a change was announced for, so a window-lifecycle-only refresh
+-- (WinEnter, TabEnter, …) — which calls refresh_indicator() without any mode/
+-- pin change — does not re-fire the event below on every such event.
+---@type string?
+local _last_text = nil
+---@type string?
+local _last_hl = nil
+
+---Tell the rest of the world the badge would render differently now.
+---
+---Fires unconditionally, independent of `indicator.enabled`: a host statusline
+---consuming `M.badge()`/`M.component()` directly (with the internal badge
+---turned off to avoid showing the mode twice) still needs to know when to
+---redraw. `redrawstatus` is scheduled rather than called inline because this
+---runs from inside command handlers and autocmd callbacks, where a raw
+---`:redrawstatus` can be a no-op or error depending on what is mid-flight.
+local function announce_change()
+  pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "FiletreeCwdModeChanged" })
+  vim.schedule(function() pcall(vim.cmd, "redrawstatus") end)
+end
+
+---Re-attach (if the tree window changed) and redraw the badge; announce the
+---change to external consumers when the rendered text/highlight actually
+---differs from last time.
 function M.refresh_indicator()
+  -- Computed unconditionally — an `indicator.enabled = false` setup (badge
+  -- rendering left entirely to the host's own statusline) must still notice
+  -- when there is something new to show.
+  local text, hl = badge_text()
+  if text ~= _last_text or hl ~= _last_hl then
+    _last_text, _last_hl = text, hl
+    announce_change()
+  end
+
   if not _cfg.enabled or not _cfg.indicator.enabled then
     detach_badge()
     return
@@ -705,7 +765,6 @@ function M.refresh_indicator()
     _badge_win = win
   end
 
-  local text, hl = badge_text()
   if text == "" then
     _badge.clear()
   else
@@ -713,10 +772,30 @@ function M.refresh_indicator()
   end
 end
 
----Badge text for a user's own statusline component.
+---Badge text only, for a one-line statusline function (e.g. lualine's
+---`sections.lualine_x = { function() return cwd_mode.component() end }`).
+---Set `indicator.enabled = false` first, or the mode shows up twice — once
+---here, once in the tree window.
 ---@return string
 function M.component()
   return (badge_text())
+end
+
+---Everything a hand-rolled statusline or heirline-style component needs to
+---render the badge itself: text, its highlight group, and the raw mode/root
+---for a consumer that wants to style or gate on them directly rather than
+---parsing the text. As with `component()`, set `indicator.enabled = false`
+---so filetree does not also draw its own copy in the tree window.
+---
+---A `User FiletreeCwdModeChanged` autocmd fires (plus a scheduled
+---`redrawstatus`) whenever the text or highlight this returns would change —
+---hook it to refresh a statusline plugin that does not already redraw on
+---every Neovim event (`autocmd User FiletreeCwdModeChanged lua
+---require("lualine").refresh()`, or heirline's equivalent).
+---@return { text: string, hl: string?, mode: FiletreeCwdModeName, root: string? }
+function M.badge()
+  local text, hl = badge_text()
+  return { text = text, hl = hl, mode = S.mode, root = S.pinned }
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -749,6 +828,8 @@ function M.setup(config, adapter)
   S.mode      = "follow"
   S.prev_mode = "follow"
   S.pinned    = nil
+  _last_text  = nil
+  _last_hl    = nil
 
   -- Captured before anything can move the cwd, so the persistence key is the
   -- workspace Neovim was opened in — not wherever a restored lock points.

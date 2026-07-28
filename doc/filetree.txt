@@ -368,12 +368,18 @@ MODES ~
             opened. With `project.sticky` (default) a file with no root of
             its own — a scratch note, something in /tmp — does not drag the
             cwd along either.
+            NEEDS cwd_sync enabled: following the focused file as it moves
+            between projects runs through cwd_sync's BufEnter hook. Without
+            it, switching into `project` only seeds the initial pin and then
+            does nothing on the next buffer switch — filetree warns once, on
+            the switch, if `cwd_sync` is not active.
   nearest   Like `project`, but the root is the nearest PACKAGE boundary
             (package.json, Cargo.toml, go.mod, …) rather than the VCS root.
             In a monorepo `.git` is too coarse: you want the package you are
             editing. Everything else — sticky, skip_dirs — is shared with
             `project`, and `.git` is the last-resort marker so a file outside
             any package lands on the repository instead of walking to /.
+            Same cwd_sync dependency and warning as `project`.
   lock      The cwd is pinned to one directory. Buffer switches never move
             it, and with `lock.enforce` (default) neither does foreign code:
             a `:cd` from a picker, a session restore or another plugin is
@@ -456,8 +462,41 @@ appended, elided to the tree's width.
 The badge uses the window's own statusline, and falls back to a one-line
 float over the tree's last row when `laststatus = 3` removes per-window
 statuslines (`indicator.mode = "auto"`; force one with "statusline"/"float").
-For a hand-built statusline, `indicator.enabled = false` plus: >lua
-  require("filetree").feature("cwd_mode").component()
+
+EXTERNAL STATUSLINE ~
+
+To render the mode yourself — in lualine, heirline, or a hand-rolled
+statusline — set `indicator.enabled = false` first. Skipping this shows the
+mode TWICE: once in your own statusline, once bottom-left in the tree window.
+
+Two ways to read it: >lua
+  local cwd_mode = require("filetree").feature("cwd_mode")
+
+  cwd_mode.component()  --> "LOCK  …/Notes"    (plain text, e.g. lualine)
+  cwd_mode.badge()      --> { text = "LOCK  …/Notes", hl = "DiagnosticWarn",
+                              mode = "lock", root = "/home/you/Notes" }
+<
+`badge()` is for a component that wants to style itself (heirline) or gate on
+the raw mode/root rather than parsing the text.
+
+A `User FiletreeCwdModeChanged` autocmd fires — with a scheduled
+`redrawstatus` — whenever the text or highlight `component()`/`badge()` would
+return actually changes. Most statusline plugins already redraw on common
+events (`CursorMoved`, `ModeChanged`, …) and pick the new value up on their
+own; the event exists for the gap a `:Filetree cwd lock` from a command line
+or a script would otherwise leave until the next unrelated redraw. Hook it
+if your plugin needs an explicit nudge: >lua
+  -- lualine
+  vim.api.nvim_create_autocmd("User", {
+    pattern  = "FiletreeCwdModeChanged",
+    callback = function() require("lualine").refresh() end,
+  })
+<
+Or, in a heirline component: >lua
+  {
+    provider = function() return require("filetree").feature("cwd_mode").badge().text end,
+    hl       = function() return require("filetree").feature("cwd_mode").badge().hl end,
+  }
 <
 
 CONFIGURATION ~

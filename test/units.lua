@@ -1803,6 +1803,51 @@ do
   check("cheatsheet: setup() does not error when adapter.filetypes is missing/not a table", setup_ok2)
 end
 
+-- ── breadcrumbs: float mode via lib.nvim.ui.statusline, anchored at the top ──
+-- Migrated off a hand-rolled float (position/buffer/lifecycle management) onto
+-- the shared primitive; anchor="top" is what makes it a header rather than a
+-- status bar, unlike cwd_mode's badge which sits at the bottom.
+do
+  vim.cmd("vsplit")
+  local tree_win = vim.api.nvim_get_current_win()
+  vim.cmd("wincmd p")
+
+  local function floats()
+    local out = {}
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(w).relative ~= "" then out[#out + 1] = w end
+    end
+    return out
+  end
+
+  local before = #floats()
+  local breadcrumbs = require("filetree.features.ui.breadcrumbs")
+  local adapter = {
+    name = "units-stub-breadcrumbs",
+    get_winid = function() return tree_win end,
+    get_current_node = function() return nil end,
+  }
+
+  breadcrumbs.setup({ enabled = true, mode = "float" }, adapter)
+  breadcrumbs.update(root .. "/lua/filetree/init.lua")
+
+  local open = floats()
+  check("breadcrumbs float: exactly one float opened", #open == before + 1)
+  if #open == before + 1 then
+    local win = open[#open]
+    local pos = vim.api.nvim_win_get_position(tree_win)
+    local cfg = vim.api.nvim_win_get_config(win)
+    check("breadcrumbs float: anchored at the tree window's TOP row",
+      cfg.row == pos[1])
+    local buf = vim.api.nvim_win_get_buf(win)
+    local text = vim.api.nvim_buf_get_lines(buf, 0, -1, false)[1] or ""
+    check("breadcrumbs float: shows the path", text:find("init%.lua") ~= nil, text)
+  end
+
+  breadcrumbs.teardown()
+  check("breadcrumbs float: teardown closes it", #floats() == before)
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end

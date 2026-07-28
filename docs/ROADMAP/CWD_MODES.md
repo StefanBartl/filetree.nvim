@@ -106,19 +106,53 @@ deliberate "no policy" answer — the feature is then completely inert.
       to the nearest `package.json` under it, with nothing to say which was
       right. Asking for the package instead of the repository is what `nearest`
       mode is for — a choice, not an accident of which feature answered.
-- [x] **Tests** — `test/cwd_mode.lua`, 90 checks. The suites accept
+- [x] **External statusline consumption** — `cwd_mode.badge()` returns
+      `{ text, hl, mode, root }` for a hand-rolled or heirline-style component;
+      `component()` stays the plain-text one-liner for lualine. Both are
+      independent of `indicator.enabled` — the whole point is to run with it
+      `false` (no internal badge, no double display) while still reading the
+      state. A `User FiletreeCwdModeChanged` autocmd plus a scheduled
+      `redrawstatus` fire whenever the rendered text/highlight would actually
+      change (diffed against the last announced value, so a window-lifecycle-
+      only refresh from `WinEnter`/`TabEnter` does not spam it), for a
+      statusline plugin that does not already redraw on its own.
+- [x] **`cwd_sync` dependency warning** — `project`/`nearest` mode's whole
+      promise (following the focused file as it moves between projects/
+      packages) runs through cwd_sync's `BufEnter` hook calling `decide()`.
+      cwd_sync defaults to disabled, and without it those two modes only seed
+      the initial pin and then silently do nothing on the next buffer switch —
+      indistinguishable from a plain lock until you notice files elsewhere no
+      longer move the root. `set_mode()` now warns once, on the switch, when
+      cwd_sync is not genuinely active. `lock` and `tree_leads` do not depend
+      on it (dir_guard and tree_traverse's manual re-root drive those
+      directly) and never warn. Caught a bug in the first version of this
+      check while writing its test: `registry.require("cwd_sync")` only tests
+      that the module *file* can be required — true the moment anything has
+      loaded it, regardless of whether `filetree.setup()` actually enabled it
+      — so it always returned truthy. Fixed to read `filetree.feature(name)`,
+      the `_active_features` table populated only by a real `setup()` run.
+- [x] **breadcrumbs migrated to `lib.nvim.ui.statusline`** — its hand-rolled
+      float (position/buffer/lifecycle management, ~50 lines) is now a call to
+      the shared primitive, which gained an `anchor = "top"|"bottom"` option
+      for the move (default `"bottom"`, unchanged for cwd_mode's badge).
+      Forces `mode = "float"` rather than `"auto"`: breadcrumbs must stay
+      pinned to the tree window's TOP row regardless of `laststatus`, and
+      `"auto"` would otherwise alternate between an always-last-row statusline
+      and a top-anchored float depending on the user's setting. Its `winbar`
+      mode (sets `&winbar` on the EDITOR windows, with per-segment
+      highlighting) is a different mechanism entirely and stays untouched.
+      lib tests: `statusline_spec.lua` +2 (anchor="top" placement, default
+      unchanged). filetree tests: 4 new checks in `test/units.lua`.
+- [x] **Tests** — `test/cwd_mode.lua`, 111 checks — including the real
+      `filetree.setup()` positive case the fix above hinges on: cwd_sync
+      genuinely enabled must not warn. The suites accept
       `$FILETREE_LIB_NVIM` to run against a lib.nvim worktree before it is merged.
 
 ---
 
 ## Open
 
-### 1. Smaller follow-ups
-- [ ] Move `breadcrumbs`' hand-rolled winbar/float handling onto
-      `lib.nvim.ui.statusline` — the second consumer was the argument for
-      building that module.
-- [ ] `cwd_sync` is default-off, so `project`/`lock` only affect buffer switches
-      once it is enabled. Documented, but still a stumbling block — consider
-      whether an active mode should imply it.
+### 1. Remaining
 - [ ] Pre-existing, unrelated: 7 failing `trash.undo` checks in `test/units.lua`
-      (Windows Recycle Bin, environment-dependent).
+      (Windows Recycle Bin, environment-dependent). Not touched by any work
+      in this document; noted here only so it isn't mistaken for a regression.

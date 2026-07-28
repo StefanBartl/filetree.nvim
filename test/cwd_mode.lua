@@ -427,6 +427,152 @@ do
   vim.cmd("noautocmd enew")
 end
 
+-- ── badge(): the object a hand-rolled/heirline-style statusline consumes ─────
+do
+  vim.cmd("vsplit")
+  local tree_win = vim.api.nvim_get_current_win()
+  vim.cmd("wincmd p")
+  local adapter = stub_adapter(tree_win)
+
+  -- indicator.enabled = false is the whole point of this API: the internal
+  -- badge stays off, but badge()/component() and the change event must still
+  -- work — otherwise there would be no way to consume the mode externally
+  -- without the tree window also showing it. show_path is covered by its own
+  -- test above; kept off here so the text assertions are just the label.
+  cwd_mode.setup(
+    { enabled = true, indicator = { enabled = false, show_path = "never" } },
+    adapter)
+
+  local b = cwd_mode.badge()
+  eq("badge(): follow has no text", b.text, "")
+  eq("badge(): follow mode is reported", b.mode, "follow")
+  eq("badge(): follow has no root", b.root, nil)
+
+  cwd_mode.lock(base .. "/proj_a")
+  b = cwd_mode.badge()
+  eq("badge(): text matches the internal label", b.text, "LOCK")
+  eq("badge(): hl matches the configured group", b.hl, "DiagnosticWarn")
+  eq("badge(): mode is reported", b.mode, "lock")
+  eq("badge(): root is reported", b.root, base .. "/proj_a")
+
+  eq("component() still returns text only", cwd_mode.component(), "LOCK")
+
+  -- No internal badge was ever attached with indicator.enabled = false.
+  local has_float = false
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(w).relative ~= "" then has_float = true end
+  end
+  check("indicator.enabled=false attaches no float", not has_float)
+  check("indicator.enabled=false sets no tree statusline",
+    vim.api.nvim_get_option_value("statusline", { win = tree_win, scope = "local" }) == "")
+
+  cwd_mode.teardown()
+end
+
+-- ── FiletreeCwdModeChanged: the event an external statusline hooks ───────────
+do
+  local fires = 0
+  local group = vim.api.nvim_create_augroup("cwd_mode_test_change_event", { clear = true })
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "FiletreeCwdModeChanged",
+    callback = function() fires = fires + 1 end,
+  })
+
+  cwd_mode.setup({ enabled = true, indicator = { enabled = false } }, stub_adapter(nil))
+  local after_setup = fires
+
+  cwd_mode.lock(base .. "/proj_a")
+  check("locking fires the change event", fires > after_setup)
+  local after_lock = fires
+
+  -- A window-lifecycle refresh with no state change must not re-fire it —
+  -- otherwise a busy tab-switching session would spam a plugin's refresh().
+  cwd_mode.refresh_indicator()
+  cwd_mode.refresh_indicator()
+  eq("an unchanged refresh does not re-fire the event", fires, after_lock)
+
+  cwd_mode.set_mode("follow")
+  check("leaving lock (text changes to empty) fires again", fires > after_lock)
+
+  vim.api.nvim_del_augroup_by_id(group)
+  cwd_mode.teardown()
+end
+
+-- ── warning when project/nearest cannot actually follow buffer switches ──────
+do
+  -- cwd_sync is disabled in this whole suite's process (never set up), so
+  -- switching into project/nearest must warn every time; lock/tree_leads/
+  -- manual/follow must never warn, since they do not depend on it.
+  -- cwd_mode's notifier ultimately calls vim.notify, so intercept there
+  -- rather than trying to reach the module-local notifier instance.
+  local captured = {}
+  local orig_vim_notify = vim.notify
+  vim.notify = function(msg, level, opts)
+    captured[#captured + 1] = msg
+    return orig_vim_notify(msg, level, opts)
+  end
+
+  cwd_mode.setup(vim.deepcopy(silent), stub_adapter(nil))
+
+  local function warned_about(mode)
+    for _, msg in ipairs(captured) do
+      if msg:find(mode .. " mode needs", 1, true) then return true end
+    end
+    return false
+  end
+
+  captured = {}
+  cwd_mode.set_mode("project")
+  check("project without cwd_sync warns", warned_about("project"))
+
+  captured = {}
+  cwd_mode.set_mode("nearest")
+  check("nearest without cwd_sync warns", warned_about("nearest"))
+
+  captured = {}
+  cwd_mode.lock(base .. "/proj_a")
+  check("lock never warns about cwd_sync", not warned_about("lock"))
+
+  captured = {}
+  cwd_mode.set_mode("tree_leads")
+  check("tree_leads never warns about cwd_sync", not warned_about("tree_leads"))
+
+  captured = {}
+  cwd_mode.set_mode("manual")
+  check("manual never warns", #captured == 0)
+
+  captured = {}
+  cwd_mode.set_mode("follow")
+  check("follow never warns", #captured == 0)
+
+  -- The positive case: a real filetree.setup() with cwd_sync genuinely
+  -- enabled must not warn. This is the case the fix above hinges on —
+  -- `filetree.feature("cwd_sync")` only returns non-nil once setup() actually
+  -- ran it, unlike the registry check that motivated the bug in the first
+  -- place (requiring the module file always "succeeds").
+  local real_ft = require("filetree")
+  real_ft.register_adapter(setmetatable({
+    name = "cwd-mode-warn-stub",
+    is_available = function() return true end,
+  }, { __index = function() return function() return false end end }))
+
+  captured = {}
+  real_ft.setup({
+    adapter = "cwd-mode-warn-stub",
+    features = { cwd_sync = { enabled = true } },
+  })
+  check("cwd_sync is genuinely active via filetree.feature()",
+    real_ft.feature("cwd_sync") ~= nil)
+
+  captured = {}
+  real_ft.feature("cwd_mode").set_mode("project")
+  check("project with cwd_sync truly enabled does not warn", not warned_about("project"))
+
+  vim.notify = orig_vim_notify
+  cwd_mode.teardown()
+end
+
 -- ── command wiring ────────────────────────────────────────────────────────────
 do
   local commands = require("filetree.commands")
