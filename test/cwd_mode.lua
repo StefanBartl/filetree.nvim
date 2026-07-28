@@ -59,6 +59,9 @@ local function stub_adapter(winid)
   }
 end
 
+-- A separate monorepo tree for `nearest`: one .git at the top, packages below.
+local mono = normkey(vim.fn.tempname())
+
 local silent = { enabled = true, indicator = { enabled = false } }
 
 -- ── follow: no policy at all ──────────────────────────────────────────────────
@@ -95,6 +98,76 @@ do
   cwd_mode.set_mode("project")
   d = cwd_mode.decide(base .. "/loose/four.md")
   eq("sticky=false: a rootless file roots at its own directory", d.root, base .. "/loose")
+end
+
+-- ── nearest: package boundary instead of the VCS root ─────────────────────────
+do
+  -- A monorepo: one .git at the top, two packages below it.
+  vim.fn.mkdir(mono .. "/.git", "p")
+  vim.fn.mkdir(mono .. "/packages/app/src", "p")
+  vim.fn.mkdir(mono .. "/packages/lib", "p")
+  for _, rel in ipairs({ ".git/HEAD", "package.json", "packages/app/package.json",
+                         "packages/app/src/main.ts", "packages/lib/package.json" }) do
+    local h = assert(io.open(mono .. "/" .. rel, "w"), "could not create " .. rel)
+    h:write("x")
+    h:close()
+  end
+
+  cwd_mode.setup(vim.deepcopy(silent), stub_adapter(nil))
+  vim.cmd("noautocmd cd " .. vim.fn.fnameescape(mono .. "/packages/app"))
+
+  cwd_mode.set_mode("project")
+  local d = cwd_mode.decide(mono .. "/packages/app/src/main.ts")
+  eq("project: the repository is the root", d.root, mono)
+
+  -- Back into the package first: a mode seeds from where you *are*, and project
+  -- mode just moved the cwd up to the repository root.
+  vim.cmd("noautocmd cd " .. vim.fn.fnameescape(mono .. "/packages/app"))
+  cwd_mode.set_mode("nearest")
+  eq("nearest seeds from the package, not the repo", cwd_mode.root(), mono .. "/packages/app")
+  d = cwd_mode.decide(mono .. "/packages/app/src/main.ts")
+  eq("nearest: the owning package is the root", d.root, mono .. "/packages/app")
+
+  d = cwd_mode.decide(mono .. "/packages/lib/package.json")
+  eq("nearest: a sibling package switches the root", d.root, mono .. "/packages/lib")
+
+  -- A file that belongs to no package falls back to the repo (".git" is the
+  -- last-resort marker), not to the filesystem root.
+  local h = io.open(mono .. "/README.md", "w"); h:write("x"); h:close()
+  d = cwd_mode.decide(mono .. "/README.md")
+  eq("nearest: a file outside any package lands on the repo", d.root, mono)
+
+  cwd_mode.teardown()
+end
+
+-- ── tree_leads: the tree decides, not the buffer ──────────────────────────────
+do
+  local tree_root = base .. "/proj_a"
+  local adapter = stub_adapter(nil)
+  adapter.get_root_path = function() return tree_root end
+
+  vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base .. "/loose"))
+  cwd_mode.setup(vim.deepcopy(silent), adapter)
+  cwd_mode.set_mode("tree_leads")
+  eq("tree_leads seeds from the tree root", cwd_mode.root(), tree_root)
+  eq("tree_leads moved the cwd to the tree root", normkey(vim.fn.getcwd()), tree_root)
+
+  -- Buffer switches move nothing: that is the entire point of the reversal.
+  local d = cwd_mode.decide(base .. "/proj_b/three.lua")
+  eq("tree_leads: a buffer elsewhere does not move the root", d.root, tree_root)
+  check("tree_leads: no chdir on a buffer switch", d.chdir == false)
+  check("tree_leads: a file outside the tree root is not revealed", d.reveal == false)
+
+  d = cwd_mode.decide(base .. "/proj_a/src/one.lua")
+  check("tree_leads: still no chdir for a file inside", d.chdir == false)
+  check("tree_leads: a file inside the tree root is revealed", d.reveal == true)
+
+  -- Re-rooting the tree is what moves the cwd here.
+  cwd_mode.notify_manual_root(base .. "/proj_b")
+  eq("tree_leads: a re-root moves the root", cwd_mode.root(), base .. "/proj_b")
+  eq("tree_leads: the cwd followed the tree", normkey(vim.fn.getcwd()), base .. "/proj_b")
+
+  cwd_mode.teardown()
 end
 
 -- ── lock ──────────────────────────────────────────────────────────────────────

@@ -368,8 +368,9 @@ local function build_routes()
 
   routes[#routes + 1] = {
     path = { "cwd", "mode" },
-    args = { { name = "name", type = "STRING", enum = { "follow", "project", "lock", "manual" } } },
-    desc = "Set the cwd/root policy (follow | project | lock | manual)",
+    args = { { name = "name", type = "STRING",
+               enum = { "follow", "project", "nearest", "lock", "manual", "tree_leads" } } },
+    desc = "Set the cwd/root policy (follow | project | nearest | lock | manual | tree_leads)",
     run = function(ctx) TREE.cwd.mode({ ctx.args.name }) end,
   }
 

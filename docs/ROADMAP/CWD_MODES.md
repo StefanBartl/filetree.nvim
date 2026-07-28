@@ -19,8 +19,10 @@ deliberate "no policy" answer — the feature is then completely inert.
 |---|---|---|
 | `follow` | No policy; cwd_sync's own resolution applies unchanged | *(none)* |
 | `project` | Holds the project root while the focused file is inside it | `PROJECT` |
+| `nearest` | Same, but the nearest package boundary instead of the VCS root | `PKG` |
 | `lock` | Pins the cwd to one directory; enforced against foreign `:cd` | `LOCK` |
 | `manual` | Nothing automatic; explicit action only | `MANUAL` |
+| `tree_leads` | Reversed: the tree root is the truth and the cwd follows it | `TREE` |
 
 ---
 
@@ -47,7 +49,7 @@ deliberate "no policy" answer — the feature is then completely inert.
 
 ### filetree.nvim (`main`, commits `60c86aa`, `9b90b38`)
 
-- [x] **Feature `nav/cwd_mode`** — state machine, `decide()`, all four modes,
+- [x] **Feature `nav/cwd_mode`** — state machine, `decide()`, every mode,
       `root()` / `pinned()` / `component()` for other code.
 - [x] **`project.sticky`** — a file with no root of its own (a scratch note,
       something in `/tmp`) does not drag the session out of its project. This is
@@ -89,21 +91,22 @@ deliberate "no policy" answer — the feature is then completely inert.
       declined rather than restored. Uncovered a real lib defect on the way:
       `cache.disk` created only the cache root, so any namespace containing a
       slash — the form `store.project`'s own docs use — silently failed to write.
-- [x] **Tests** — `test/cwd_mode.lua`, 74 checks. The suites accept
+- [x] **`nearest` and `tree_leads`** — `nearest` walks package markers instead
+      of VCS ones (a monorepo's `.git` is too coarse), sharing `skip_dirs` and
+      `sticky` with `project` so there is one place to configure the filesystem
+      side; `.git` stays as its last-resort marker so a file outside any package
+      lands on the repository rather than walking to `/`. `tree_leads` reverses
+      the direction: buffer switches move nothing, `+`/`-` moves the cwd. Mode
+      names now live in one `MODES` table that also validates a persisted value,
+      so a mode can only be added in one place.
+- [x] **Tests** — `test/cwd_mode.lua`, 88 checks. The suites accept
       `$FILETREE_LIB_NVIM` to run against a lib.nvim worktree before it is merged.
 
 ---
 
 ## Open
 
-### 1. More modes
-- [ ] **`nearest`** — root at the nearest package boundary (`package.json`,
-      `Cargo.toml`, `pyproject.toml`) instead of the VCS root. In a monorepo
-      `.git` is too coarse. Mostly a `project.markers` preset plus a label.
-- [ ] **`tree_leads`** — direction reversal: whatever you root the tree at with
-      `+` becomes the cwd, rather than the buffer deciding.
-
-### 2. Collapse the three root resolvers
+### 1. Collapse the three root resolvers
 `project_root`, `cwd_sync.root_markers` and `cwd_mode.project.markers` each walk
 for a root with their own marker set. `util.root` now puts one door in front of
 them, but they can still drift apart.
@@ -111,7 +114,7 @@ them, but they can still drift apart.
 - [ ] Make cwd_mode the single resolver; leave the others as the fallback used
       only when cwd_mode is disabled.
 
-### 3. Smaller follow-ups
+### 2. Smaller follow-ups
 - [ ] Move `breadcrumbs`' hand-rolled winbar/float handling onto
       `lib.nvim.ui.statusline` — the second consumer was the argument for
       building that module.

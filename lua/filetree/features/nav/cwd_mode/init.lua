@@ -48,6 +48,18 @@ local ui_statusline = require("lib.nvim.ui.statusline")
 
 local M = {}
 
+---Every valid mode name. Also the source for `:Filetree cwd mode`'s enum and
+---for validating a persisted value, so a mode can only be added in one place.
+---@type table<FiletreeCwdModeName, true>
+local MODES = {
+  follow     = true,
+  project    = true,
+  nearest    = true,
+  lock       = true,
+  manual     = true,
+  tree_leads = true,
+}
+
 ---@type FiletreeCwdModeConfig
 local DEFAULTS = {
   enabled = true,
@@ -63,6 +75,19 @@ local DEFAULTS = {
     skip_dirs = { "node_modules", ".venv", "vendor" },
     max_depth = nil,
     sticky    = true,
+  },
+
+  -- `nearest` differs from `project` only in where it stops walking: the
+  -- package that owns the file, not the repository that contains it. Everything
+  -- else (skip_dirs, sticky) is shared, so there is one place to configure it.
+  nearest = {
+    markers = {
+      "package.json", "Cargo.toml", "go.mod", "pyproject.toml", "setup.py",
+      "*.rockspec", "mix.exs", "build.zig", "CMakeLists.txt",
+      -- Last resort: without a VCS marker a file outside any package would
+      -- walk to the filesystem root before giving up.
+      ".git",
+    },
   },
 
   lock = {
@@ -81,8 +106,14 @@ local DEFAULTS = {
     mode      = "auto",
     align     = "left",
     show_path = "lock",
-    labels    = { follow = "", project = "PROJECT", lock = "LOCK", manual = "MANUAL" },
-    hl        = { follow = "Comment", project = "DiagnosticInfo", lock = "DiagnosticWarn", manual = "Comment" },
+    labels = {
+      follow = "", project = "PROJECT", nearest = "PKG",
+      lock = "LOCK", manual = "MANUAL", tree_leads = "TREE",
+    },
+    hl = {
+      follow  = "Comment",        project = "DiagnosticInfo", nearest = "DiagnosticInfo",
+      lock    = "DiagnosticWarn", manual  = "Comment",        tree_leads = "DiagnosticHint",
+    },
   },
 
   cycle = { "follow", "project", "lock" },
@@ -111,8 +142,11 @@ local S = {
   prev_mode = "follow",
 }
 
----@type Lib.Fs.FindRoot?
+---@type Lib.Fs.FindRoot?  VCS-marker walk, used by `project`
 local _finder = nil
+
+---@type Lib.Fs.FindRoot?  package-marker walk, used by `nearest`
+local _finder_nearest = nil
 
 ---@type Lib.UI.Statusline.Segment?
 local _badge = nil
@@ -153,12 +187,19 @@ local function dir_of(p)
   return path_util.parent(p)
 end
 
----Project root for `file` per the configured markers, or nil.
+---Root for `file` per the marker set the given mode walks with.
+---
+---`project` and `nearest` differ only in that marker set — VCS boundaries
+---versus package boundaries — which is exactly why they are two modes rather
+---than one option: in a monorepo you want to switch between "the repository"
+---and "the package I am editing" at runtime, not at config time.
 ---@param file string
+---@param mode FiletreeCwdModeName
 ---@return string?
-local function project_root_of(file)
-  if not _finder then return nil end
-  local ok, root = pcall(_finder.find, file)
+local function root_of(file, mode)
+  local finder = (mode == "nearest") and _finder_nearest or _finder
+  if not finder then return nil end
+  local ok, root = pcall(finder.find, file)
   if not ok then return nil end
   return canon(root)
 end
@@ -211,19 +252,30 @@ function M.decide(file)
     return { root = root, chdir = true, reveal = _cfg.reveal_outside == "reveal" }
   end
 
-  if mode == "project" then
+  if mode == "tree_leads" then
+    -- Direction reversal: the tree root is the truth and the cwd follows it
+    -- (see notify_manual_root), so a buffer switch must move nothing at all.
+    -- Revealing a file that already lives under that root is free and useful;
+    -- anything outside it would have to re-root the tree to be shown, which is
+    -- precisely what this mode refuses.
+    local root = S.pinned
+    if not root then return nil end
+    return { root = root, chdir = false, reveal = inside(file, root) }
+  end
+
+  if mode == "project" or mode == "nearest" then
     if inside(file, S.pinned) then
       return { root = S.pinned, chdir = true, reveal = true }
     end
 
-    local root = project_root_of(file)
+    local root = root_of(file, mode)
     if root then
       S.pinned = root
       M.refresh_indicator()
       return { root = root, chdir = true, reveal = true }
     end
 
-    -- No detectable project for this file.
+    -- No detectable project/package for this file.
     if _cfg.project.sticky and S.pinned then
       -- Stay where we are: a scratch file in /tmp should not drag a project
       -- session out of its root. The tree keeps showing the project.
@@ -325,8 +377,9 @@ local function persist_restore()
 
   if data.scope then M.set_scope(data.scope) end
 
+  -- A mode name written by an older (or newer) version may no longer exist.
   local mode = data.mode
-  if type(mode) ~= "string" or mode == "follow" then return false end
+  if not MODES[mode] or mode == "follow" then return false end
 
   -- A stored lock whose directory has since been deleted or moved must not
   -- take the session hostage: fall through to the configured mode instead.
@@ -360,7 +413,10 @@ end
 ---prefer this over `getcwd()` so a locked session greps the locked project.
 ---@return string
 function M.root()
-  if S.pinned and (S.mode == "lock" or S.mode == "project") then
+  -- Every mode that holds a root answers with it; `follow` holds none and
+  -- `manual` deliberately does not claim authority over anything.
+  if S.pinned and (S.mode == "lock" or S.mode == "project"
+    or S.mode == "nearest" or S.mode == "tree_leads") then
     return S.pinned
   end
   return canon(vim.fn.getcwd()) or vim.fn.getcwd()
@@ -424,7 +480,7 @@ end
 ---@param dir string?  Directory to pin (lock mode; defaults to the current cwd).
 ---@return boolean ok
 function M.set_mode(mode, dir)
-  if mode ~= "follow" and mode ~= "project" and mode ~= "lock" and mode ~= "manual" then
+  if not MODES[mode] then
     notify.error("unknown cwd mode: " .. tostring(mode))
     return false
   end
@@ -443,12 +499,22 @@ function M.set_mode(mode, dir)
   else
     drop_guard()
     S.mode = mode
-    if mode == "project" then
+    if mode == "project" or mode == "nearest" then
       -- Seed the pin from the current buffer so the badge and `root()` are
       -- meaningful immediately, not only after the next buffer switch.
       local file = vim.api.nvim_buf_get_name(0)
       local from = (file ~= "" and file) or vim.fn.getcwd()
-      S.pinned = project_root_of(from) or canon(dir_of(from))
+      S.pinned = root_of(from, mode) or canon(dir_of(from))
+      if S.pinned then
+        local ok, err = chdir(S.pinned, { scope = _cfg.scope })
+        if not ok then notify.warn(err or ("could not change cwd to " .. S.pinned)) end
+      end
+    elseif mode == "tree_leads" then
+      -- Seed from the tree, not the buffer — the whole point of this mode is
+      -- that the tree is the authority. Without a tree to ask there is nothing
+      -- to follow, so the cwd stands in until the first re-root.
+      local from = _adapter and _adapter.get_root_path and _adapter.get_root_path()
+      S.pinned = canon(from) or canon(vim.fn.getcwd())
       if S.pinned then
         local ok, err = chdir(S.pinned, { scope = _cfg.scope })
         if not ok then notify.warn(err or ("could not change cwd to " .. S.pinned)) end
@@ -547,7 +613,10 @@ function M.notify_manual_root(dir)
     install_guard(target)
     persist_save()
     M.refresh_indicator()
-  elseif S.mode == "project" or S.mode == "manual" then
+  elseif S.mode ~= "follow" then
+    -- project / nearest / manual / tree_leads: a deliberate re-root becomes the
+    -- new root. For tree_leads this is not a concession but the whole contract
+    -- — the tree leads, the cwd follows.
     S.pinned = target
     unguarded(function()
       local ok, err = chdir(target, { scope = _cfg.scope })
@@ -642,8 +711,17 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config or {})
   _adapter = adapter
 
+  -- Two finders, one per marker set. They share skip_dirs and max_depth: those
+  -- describe the filesystem (vendor trees, how far to climb), not the question
+  -- being asked, and duplicating them would only let them drift.
   _finder = find_root({
     markers     = _cfg.project.markers,
+    skip_dirs   = _cfg.project.skip_dirs,
+    max_depth   = _cfg.project.max_depth,
+    cache_chain = true,
+  })
+  _finder_nearest = find_root({
+    markers     = _cfg.nearest.markers,
     skip_dirs   = _cfg.project.skip_dirs,
     max_depth   = _cfg.project.max_depth,
     cache_chain = true,
@@ -700,6 +778,7 @@ function M.teardown()
   drop_guard()
   detach_badge()
   _finder = nil
+  _finder_nearest = nil
   _adapter = nil
   _persist_path = nil
   S.mode      = "follow"

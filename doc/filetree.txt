@@ -368,15 +368,30 @@ MODES ~
             opened. With `project.sticky` (default) a file with no root of
             its own — a scratch note, something in /tmp — does not drag the
             cwd along either.
+  nearest   Like `project`, but the root is the nearest PACKAGE boundary
+            (package.json, Cargo.toml, go.mod, …) rather than the VCS root.
+            In a monorepo `.git` is too coarse: you want the package you are
+            editing. Everything else — sticky, skip_dirs — is shared with
+            `project`, and `.git` is the last-resort marker so a file outside
+            any package lands on the repository instead of walking to /.
   lock      The cwd is pinned to one directory. Buffer switches never move
             it, and with `lock.enforce` (default) neither does foreign code:
             a `:cd` from a picker, a session restore or another plugin is
             reverted (via lib.nvim.fs.dir_guard).
   manual    Nothing automatic. The cwd and the tree root change only through
             explicit action (`+`/`-`, `:Filetree cwd …`).
+  tree_leads  Direction reversal: the TREE is the authority and the cwd
+            follows it. Buffer switches move nothing at all; re-rooting the
+            tree with `+`/`-` is what moves the cwd. A file already under the
+            tree root is still revealed — showing anything else would mean
+            re-rooting, which is what this mode refuses.
 
 Re-rooting the tree by hand is never fought: pressing `+` in lock mode moves
 the pin instead of being reverted (`lock.follow_manual_root`).
+
+The badge shows `PROJECT`, `PKG`, `LOCK`, `MANUAL`, `TREE` — and nothing in
+follow mode. `cycle` defaults to `{ "follow", "project", "lock" }`; add the
+others if you want `:Filetree cwd toggle` (and `L`) to reach them.
 
 SCOPE ~
 
@@ -397,7 +412,8 @@ something else changes them.
 
 COMMANDS ~
 
-  :Filetree cwd mode <name>    follow | project | lock | manual (<Tab> completes)
+  :Filetree cwd mode <name>    follow | project | nearest | lock | manual |
+                               tree_leads   (<Tab> completes)
   :Filetree cwd scope <name>   global | tab | win
   :Filetree cwd lock [dir]     pin to `dir` (default: the current cwd)
   :Filetree cwd here           pin to the node under the cursor
@@ -448,12 +464,17 @@ CONFIGURATION ~
 >lua
   features = {
     cwd_mode = {
-      mode  = "follow",     -- follow | project | lock | manual
+      mode  = "follow",     -- follow | project | nearest | lock | manual | tree_leads
       scope = "global",     -- global | tab | win
       project = {
         markers   = { ".git", ".hg", ".svn" },
         skip_dirs = { "node_modules", ".venv", "vendor" },
         sticky    = true,
+      },
+      nearest = {   -- markers only; skip_dirs/sticky come from `project`
+        markers = { "package.json", "Cargo.toml", "go.mod", "pyproject.toml",
+                    "setup.py", "*.rockspec", "mix.exs", "build.zig",
+                    "CMakeLists.txt", ".git" },
       },
       lock = { enforce = true, follow_manual_root = true },
       reveal_outside = "skip",   -- or "reveal"
