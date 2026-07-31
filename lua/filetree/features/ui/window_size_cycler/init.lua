@@ -66,14 +66,24 @@ end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
+---With no count prefix, advances one step through the configured sizes as
+---before. With an explicit count N (`5w`), jumps directly to preset index N
+---(clamped to the table's bounds) instead of advancing N steps from wherever
+---the cycle currently is — `vim.v.count`, not `vim.v.count1`, specifically so
+---"no prefix" (0) and "explicit target index" (>0) stay distinguishable.
 function M.cycle()
   local sizes = _cfg.sizes
   if not sizes or #sizes == 0 then
     notify.warn("No sizes configured")
     return
   end
-  -- Advance from current position
-  _idx = (_idx % #sizes) + 1
+  local count = vim.v.count
+  if count > 0 then
+    _idx = math.max(1, math.min(#sizes, count))
+  else
+    -- Advance from current position
+    _idx = (_idx % #sizes) + 1
+  end
   apply_width(sizes[_idx])
 end
 
@@ -93,7 +103,7 @@ function M.setup(config, adapter)
     if _cfg.keymap then
       map("n", _cfg.keymap, M.cycle, {
         buffer = buf, silent = true,
-        desc   = "Filetree: cycle tree width",
+        desc   = "Filetree: cycle tree width (count N: jump to preset N)",
       })
     end
   end)

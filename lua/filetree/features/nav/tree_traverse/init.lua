@@ -96,12 +96,16 @@ function M.setup(cfg, adapter)
 
   tree_attach.on_attach(function(buf)
     if cfg.keymap_up and cfg.keymap_up ~= "" then
-      map("n", cfg.keymap_up, function() M.up() end,
-        { buffer = buf, desc = "filetree: traverse up", silent = true })
+      map("n", cfg.keymap_up, function()
+        -- M.up() has no count parameter of its own (each call climbs exactly
+        -- one level via go_to()), so a count prefix loops it.
+        for _ = 1, vim.v.count1 do M.up() end
+      end, { buffer = buf, desc = "filetree: traverse up (×count)", silent = true })
     end
     if cfg.keymap_down and cfg.keymap_down ~= "" then
-      map("n", cfg.keymap_down, function() M.down() end,
-        { buffer = buf, desc = "filetree: traverse down", silent = true })
+      map("n", cfg.keymap_down, function()
+        for _ = 1, vim.v.count1 do M.down() end
+      end, { buffer = buf, desc = "filetree: traverse down (×count)", silent = true })
     end
   end)
 end
