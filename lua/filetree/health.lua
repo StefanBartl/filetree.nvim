@@ -198,6 +198,9 @@ function M.check()
       vim.health.info(o.label .. " — not installed (optional)")
     end
   end
+
+  -- ── Composer route pre-flight ─────────────────────────────────────────────
+  require("lib.nvim.usercmd.composer").checkhealth("Filetree")
 end
 
 return M
