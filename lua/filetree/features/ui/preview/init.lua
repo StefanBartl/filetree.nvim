@@ -316,20 +316,26 @@ local function scroll_preview(delta)
   pcall(vim.api.nvim_win_set_cursor, _win, { next, 0 })
 end
 
----Scroll the BUFFER-mode preview (the file shown in the editor window) by a full
----page, without leaving the tree. Returns false when buffer-mode preview isn't
----active, so the caller can fall through to the tree's own native scroll.
+---Scroll the BUFFER-mode preview (the file shown in the editor window) by
+---`count` full pages, without leaving the tree. Returns false when
+---buffer-mode preview isn't active, so the caller can fall through to the
+---tree's own native scroll.
 ---@param dir integer  1 = down (<PageDown>/<C-f>), -1 = up (<PageUp>/<C-b>)
+---@param count integer|nil  defaults to 1.
 ---@return boolean handled
-local function scroll_buf_preview(dir)
+local function scroll_buf_preview(dir, count)
   if not (_buf_active and _editor_win and vim.api.nvim_win_is_valid(_editor_win)) then
     return false
   end
+  count = (type(count) == "number" and count > 0) and count or 1
   -- \6 = <C-f> (page down), \2 = <C-b> (page up); run in the preview window's
   -- context so its own view scrolls while the cursor stays in the tree.
+  -- <C-f>/<C-b> already honor a leading count natively ("3<C-f>" = 3 pages),
+  -- so the count is prefixed onto the same one-page command rather than
+  -- looping it.
   local key = dir > 0 and "\6" or "\2"
   pcall(vim.api.nvim_win_call, _editor_win, function()
-    vim.cmd("normal! " .. key)
+    vim.cmd("normal! " .. count .. key)
   end)
   return true
 end
@@ -555,7 +561,10 @@ function M.setup(config, adapter)
     end
 
     if _cfg.mode == "float" then
-      -- Float mode: the scroll keys move the float's cursor.
+      -- Float mode: the scroll keys move the float's cursor. A count prefix
+      -- multiplies the fixed step (1 line for <C-b>/<C-f>, 10 for
+      -- <PageUp>/<PageDown>) rather than looping scroll_preview, since its
+      -- delta is plain cursor-line arithmetic.
       local scroll_keys = {
         { _cfg.keymap_scroll_up,     1  },
         { _cfg.keymap_scroll_down,   -1 },
@@ -565,9 +574,9 @@ function M.setup(config, adapter)
       for _, pair in ipairs(scroll_keys) do
         local key, delta = pair[1], pair[2]
         if key then
-          map("n", key, function() scroll_preview(delta) end, {
+          map("n", key, function() scroll_preview(delta * vim.v.count1) end, {
             buffer = buf, silent = true,
-            desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down"),
+            desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down") .. " (×count)",
           })
         end
       end
@@ -575,7 +584,8 @@ function M.setup(config, adapter)
       -- Buffer mode: <PageUp>/<PageDown> page the previewed file in the
       -- editor window while the cursor stays in the tree. When no preview is
       -- active the key falls through to the tree's own native scroll (fed
-      -- back with noremap so this mapping doesn't re-trigger).
+      -- back with noremap so this mapping doesn't re-trigger) — the count is
+      -- carried along in both cases.
       local page_keys = {
         { _cfg.keymap_scroll_up10,   -1 },  -- <PageUp>  → page up
         { _cfg.keymap_scroll_down10,  1 },  -- <PageDown> → page down
@@ -584,13 +594,14 @@ function M.setup(config, adapter)
         local key, dir = pair[1], pair[2]
         if key then
           map("n", key, function()
-            if not scroll_buf_preview(dir) then
-              local k = vim.api.nvim_replace_termcodes(key, true, false, true)
+            local count = vim.v.count1
+            if not scroll_buf_preview(dir, count) then
+              local k = vim.api.nvim_replace_termcodes(tostring(count) .. key, true, false, true)
               vim.api.nvim_feedkeys(k, "n", false)
             end
           end, {
             buffer = buf, silent = true,
-            desc   = "Filetree: page preview " .. (dir > 0 and "down" or "up"),
+            desc   = "Filetree: page preview " .. (dir > 0 and "down" or "up") .. " (×count)",
           })
         end
       end
