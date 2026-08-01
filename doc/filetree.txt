@@ -172,6 +172,11 @@ reason:
                          visible effect unless other code calls into it.
   auto_resize            Automatic width management fights the manual
                          window_size_cycler (on by default).
+  handle_guard            Patches a neo-tree internal (fs_watch) and closes
+                         libuv handles it owns, to fix a sporadic Windows
+                         file-lock at the source. neo-tree adapter +
+                         Windows/WSL only; a no-op elsewhere. Inspect with
+                         `:Filetree handles` or |filetree-health|.
   git_actions            Default `gs` collides with live_search, and it mutates
                          the git index (stage/unstage) from the tree.
   path_utils             Redundant with path_copy (on by default); enabling
@@ -246,8 +251,15 @@ Triggers on: BufDelete, BufWipeout, WinClosed
 
 On BufEnter / WinEnter, when the current file is not under Neovim's cwd:
 silently `chdir` to its project root AND root the tree there, then reveal the
-file. Never prompts. Auto-pauses for 2 seconds when the cursor moves inside the
-tree window to avoid interfering with manual navigation.
+file. Never prompts.
+
+When `reveal = true` (the default), auto-pauses for 2 seconds when the cursor
+moves inside the tree window — the tree's own <CR>-driven open could
+otherwise race cwd_sync's own reveal on the file it just opened. With
+`reveal = false` (see below) this pause never triggers, since there is no
+reveal of ours left to race — so a file opened shortly after leaving the tree
+(e.g. from a picker invoked with the cursor still in the tree window) still
+gets its `chdir`.
 
 auto_reveal (|filetree-auto-reveal|, on by default) handles the common case —
 scrolling/expanding to reveal a file that is already under the current root —

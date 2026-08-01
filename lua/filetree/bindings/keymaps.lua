@@ -44,7 +44,7 @@ return {
     { lhs = "<C-c>", desc = "Clear copy/cut clipboard ⚠ conflicts with filter.keymap_clear", feature = "copy_move", scope = "tree" },
     { lhs = "<leader>rb", desc = "Batch rename buffer", feature = "rename_batch", scope = "tree" },
     { lhs = "r",  desc = "Rename with LSP refs",   feature = "smart_rename", scope = "tree" },
-    { lhs = "t",  desc = "Create from template",   feature = "create_from_template", scope = "tree" },
+    { lhs = "A",  desc = "Create from template (filename first, then filtered picker)", feature = "create_from_template", scope = "tree" },
     { lhs = "O",  desc = "Open (replace buffer)",  feature = "open_replace", scope = "tree" },
     { lhs = "sg", desc = "Open in vertical split", feature = "open_variants", scope = "tree" },
     { lhs = "sv", desc = "Open in horizontal split", feature = "open_variants", scope = "tree" },
