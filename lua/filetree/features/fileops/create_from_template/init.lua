@@ -15,14 +15,23 @@
 ---   ${day}        Current day (01-31)
 ---   ${time}       Current time in HH:MM:SS
 ---   ${author}     Value of config.author or $USER/$USERNAME
----   ${module}     Dotted path from the project root (any language, not just
----                 Lua — e.g. src/foo/Bar.cs -> "src.foo.Bar")
+---   ${module}     For a destination under a real lua/ directory: the canonical
+---                 Lua module path via lib.nvim.lua_ls.get_module_path (the
+---                 same resolver filetree's own lua_require_copy is built on
+---                 — not reimplemented here), e.g. lua/plugins/test.lua ->
+---                 "plugins.test". Otherwise a generic dotted path from the
+---                 project root (any language) — e.g. src/foo/Bar.cs ->
+---                 "src.foo.Bar".
 ---
 --- Workflow:
 ---   1. Press "A" in tree (the smart_create "a" counterpart) — or :FiletreeCreateFromTemplate
----   2. Pick a template from the picker
----   3. Enter the new filename
----   4. File is created in the current node's directory and opened
+---   2. Enter the new filename FIRST
+---   3. The template picker is filtered to templates matching that filename's
+---      extension (e.g. "foo.lua" only offers .lua templates); if none match,
+---      the full list is shown instead
+---   4. Pick a template — the destination path is already known at this
+---      point, so ${module} (and every other variable) resolves against it
+---   5. File is created in the current node's directory and opened
 ---
 --- Adding your own templates: drop a file into the template directory (default
 --- stdpath("data")/filetree/templates/) — its filename becomes the template
@@ -101,27 +110,33 @@ local function author()
   return vim.env.USER or vim.env.USERNAME or "unknown"
 end
 
----Dotted module/namespace path for `${module}`, relative to the project root
----(preferring a `lua/` subroot when the file is under one — Lua's own
----require() convention — else the project root directly). Generic across
----languages: strips WHATEVER extension the destination actually has (not
----hardcoded to ".lua"), so it works equally for foo/bar.go -> "foo.bar",
----foo/Bar.cs -> "foo.Bar", etc. The trailing ".init" collapse (Lua's
----foo/init.lua -> "foo") only ever matches that exact literal segment, so it
----is a no-op for every other language.
+-- The canonical, already-implemented path -> Lua module resolver (also what
+-- filetree's own lua_require_copy feature is conceptually doing by hand) —
+-- reuse it rather than re-deriving the same "/lua/…/init.lua -> foo.bar"
+-- logic a third time.
+local get_lua_module_path = require("lib.nvim.lua_ls.get_module_path")
+
+---Dotted module/namespace path for `${module}`.
+---
+---For a destination genuinely under a `lua/` directory, defers entirely to
+---`lib.nvim.lua_ls.get_module_path` — the shared resolver, not reimplemented
+---here. That function returns nil for anything not under `lua/` (by design:
+---it is Lua-specific), in which case this falls back to a generic path
+---relative to the project root (any language) — e.g. src/foo/Bar.cs ->
+---"src.foo.Bar" — stripping whatever extension the destination actually has.
 ---@param abs_path string
 ---@return string
 local function module_path(abs_path)
+  local canonical = get_lua_module_path(abs_path)
+  if canonical then return canonical end
+
   local ok_pr, pr = require("filetree.features").load("project_root")
   local root
   if ok_pr and type(pr.find) == "function" then
     root = pr.find(abs_path)
   end
   root = root or vim.fn.getcwd()  -- project_root.find() may return nil (no marker found)
-  local rel = path_u.relative(abs_path, root .. "/lua")
-  if rel == abs_path then
-    rel = path_u.relative(abs_path, root)
-  end
+  local rel = path_u.relative(abs_path, root)
   rel = rel:gsub("%.[^./\\]+$", "")  -- strip whatever extension is actually there
   return (rel:gsub("[/\\]", "."):gsub("%.init$", ""))  -- parens: gsub returns (str, count)
 end
@@ -425,19 +440,41 @@ end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
----Open the template picker and create a file in `dest_dir`.
+---Templates whose OWN extension matches `filename`'s extension. Falls back
+---to the full unfiltered list when nothing matches (a filter that leaves
+---nothing to pick from is a dead end, not a useful restriction) or when
+---`filename` has no extension at all.
+---@param templates {name:string, path:string, builtin:boolean?}[]
+---@param filename string
+---@return {name:string, path:string, builtin:boolean?}[]
+local function filter_by_extension(templates, filename)
+  local ext = vim.fn.fnamemodify(filename, ":e")
+  if ext == "" then return templates end
+
+  local matched = {}
+  for _, t in ipairs(templates) do
+    if vim.fn.fnamemodify(t.name, ":e") == ext then
+      matched[#matched + 1] = t
+    end
+  end
+  return #matched > 0 and matched or templates
+end
+
+---Prompt for a filename, then open the (extension-filtered) template picker,
+---then create the file — in that order, so both the picker and ${module}
+---substitution see the real destination path.
 ---@param dest_dir string  Absolute destination directory.
 function M.open(dest_dir)
-  local templates = list_templates()
+  require("lib.nvim.ui.kit").input({
+    title = "New file (in " .. vim.fn.fnamemodify(dest_dir, ":t") .. "): ",
+    on_submit = function(name)
+      if not name or name == "" then return end
+      name = path_u.slashify(name)  -- accept "/" or "\" if creating into a subdir
+      local dest = dest_dir .. "/" .. name
 
-  pick_template(templates, function(tmpl)
-    require("lib.nvim.ui.kit").input({
-      title = "Filename (in " .. vim.fn.fnamemodify(dest_dir, ":t") .. "): ",
-      on_submit = function(name)
-        if not name or name == "" then return end
-        name = path_u.slashify(name)  -- accept "/" or "\" if creating into a subdir
-        local dest = dest_dir .. "/" .. name
+      local templates = filter_by_extension(list_templates(), name)
 
+      pick_template(templates, function(tmpl)
         local function proceed()
           if create_from(tmpl.path, dest) then
             notify.info("Created: " .. name .. " (from " .. tmpl.name .. ")")
@@ -462,9 +499,9 @@ function M.open(dest_dir)
         else
           proceed()
         end
-      end,
-    })
-  end)
+      end)
+    end,
+  })
 end
 
 ---Open picker at the current tree node's directory.
