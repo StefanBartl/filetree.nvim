@@ -165,6 +165,14 @@ require("filetree").setup({
       dry_run     = false,
     },
 
+    handle_guard = {
+      enabled = false,  -- default: off — patches a neo-tree internal (fs_watch) +
+                         -- closes libuv handles it owns, to fix a sporadic Windows
+                         -- file-lock at the source (watcher_quarantine only hides
+                         -- the error). neo-tree adapter + Windows/WSL only; a no-op
+                         -- elsewhere. No keymaps — inspect with `:Filetree handles`.
+    },
+
     -- auto_resize is also off by default — see "Default-disabled features".
   },
 

@@ -24,7 +24,7 @@
 ---                 "src.foo.Bar".
 ---
 --- Workflow:
----   1. Press "A" in tree (the smart_create "a" counterpart) — or :FiletreeCreateFromTemplate
+---   1. Press "A" in tree (the smart_create "a" counterpart) — or :Filetree template
 ---   2. Enter the new filename FIRST
 ---   3. The template picker is filtered to templates matching that filename's
 ---      extension (e.g. "foo.lua" only offers .lua templates); if none match,

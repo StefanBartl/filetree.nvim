@@ -41,7 +41,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](BINDINGS/KEYMAPS.md).
 | `copy_move` | Stage copy/cut (`c`/`x`) and paste (`p`) nodes |
 | `rename_batch` | Edit-buffer batch rename (`<leader>rb`) |
 | `smart_rename` | Rename with LSP reference updates (`r`) |
-| `create_from_template` | Create a file from a template (`t`) |
+| `create_from_template` | Create a file from a template — filename first, then a picker filtered to that extension; reorder with `<M-j>`/`<M-k>` (`A`) |
 | `trash` | Cross-platform trash + undo (`d` `U` `<leader>th`); one batch chooser for multi-mark deletes, force-closes the deleted file's buffers |
 | `open_replace` | Open a file replacing the current editor buffer (`O`) |
 | `open_variants` | Open in split/vsplit/tab, or badd without switching focus (`sg` `sv` `st` `gb`/`<S-CR>`) |
@@ -105,7 +105,8 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](BINDINGS/KEYMAPS.md).
 | `ignore_list` | Hide `.git`, `node_modules`, build artefacts, … |
 | `project_root` | Shared, cached project-root detection used by cwd_sync and other features |
 | `file_watcher` | Refresh the tree on external filesystem changes |
-| `watcher_quarantine` | Suppress watcher EPERM noise around file ops (Windows/WSL) |
+| `watcher_quarantine` | Suppress watcher EPERM noise around file ops (Windows/WSL) _(complementary to `handle_guard` — this hides the error, `handle_guard` prevents it)_ |
+| `handle_guard` | Release neo-tree's directory-watcher handles before a rename/move/trash so the Windows file-lock (EPERM/`ERROR_SHARING_VIOLATION`) can't happen in the first place; `:Filetree handles` inspects tracked handles _(opt-in)_ |
 | `hooks_api` | Programmatic hooks for other code to react to tree events |
 | `safety` | Backup API used before destructive ops _(opt-in)_ |
 
@@ -119,6 +120,7 @@ These stay **off** until you set `{ enabled = true }`, each for a concrete reaso
 | `current_hl` | Purely cosmetic; ships hardcoded colours that only fit some colorschemes |
 | `safety` | A backup **API** with no keymaps — enabling it has no visible effect unless other code calls in |
 | `auto_resize` | Automatic width management fights the manual `window_size_cycler` (on by default) |
+| `handle_guard` | Patches a neo-tree internal (`fs_watch`) and closes libuv handles it owns — opt-in until you want that behaviour. neo-tree adapter + Windows/WSL only; a no-op elsewhere |
 
 ## Feature reference
 
@@ -136,8 +138,14 @@ On `BufEnter` / `WinEnter`: silently `chdir` to the current file's project
 root — resolved via `root_markers` (default `{ ".git" }`, cached), falling
 back to `use_project_root` (the broader [project_root](#infra--plumbing)
 marker set) and then the file's own parent directory. Never prompts.
-Auto-pauses 2 seconds when the cursor enters the tree window (manual
-navigation).
+
+When `reveal = true` (the default), cwd_sync auto-pauses for 2 seconds when
+the cursor enters the tree window — the tree's own `<CR>`-driven open could
+otherwise race cwd_sync's own reveal on the file it just opened. With
+`reveal = false` this pause never triggers (there's no reveal of ours left to
+race — the tree plugin owns that), so a file opened shortly after leaving the
+tree — e.g. from a picker invoked with the cursor still in the tree window —
+still gets its `chdir`.
 
 With `reveal = true` (the default) the tree is also rooted at that same
 directory and the file revealed there. See
@@ -192,3 +200,73 @@ safety.before_move("/path/src.lua", "/path/dst.lua")
 safety.list_backups()
 safety.toggle_dry_run()
 ```
+
+### Create From Template
+
+Press `A` (the `smart_create` "`a`" counterpart), or `:Filetree template`.
+Workflow, in order:
+
+1. **Filename first.** You're prompted for the new file's name before
+   anything else — the destination path is fully known from this point on.
+2. **Filtered picker.** The template list is narrowed to templates whose own
+   extension matches the filename you just typed (`foo.lua` → only `.lua`
+   templates). If nothing matches, or the filename has no extension, the full
+   list is shown instead — a filter that leaves nothing to pick from is a
+   dead end, not a useful restriction.
+3. **Pick a template.** Variables substitute against the real destination
+   (see below), then the file is created and opened.
+
+**Built-in templates** ship with filetree.nvim itself — one each for Lua
+(plus a `@meta`/`@types` variant), TypeScript, JavaScript, Go, Rust, Python,
+C, C++, C#, and WebAssembly text format. They show up in the picker with a
+`[builtin]` marker. **Add your own** by dropping a file into the template
+directory (default `stdpath("data")/filetree/templates/`) — its filename
+becomes the template name — or call `M.add_template(name, content)`. A user
+template with the **same name** as a built-in shadows it entirely (name and
+content); that's how you customize a shipped default.
+
+**Reorder** while the picker is open, filter empty (not mid-search):
+`<M-j>`/`<M-k>` move the highlighted template down/up, persisted immediately
+to a `.order.json` sidecar in the template directory. A never-reordered or
+newly-added template is appended alphabetically after the ones with an
+explicit position.
+
+**Variables:**
+
+| Variable | Value |
+|---|---|
+| `${filename}` | Basename of the new file, without extension |
+| `${ext}` | Extension of the new file, without the dot |
+| `${date}` / `${year}` / `${month}` / `${day}` / `${time}` | Current date/time components |
+| `${author}` | `config.author`, else `$USER`/`$USERNAME` |
+| `${module}` | For a destination under a real `lua/` directory: the canonical Lua module path (`lua/plugins/test.lua` → `plugins.test`) via `lib.nvim.lua_ls.get_module_path` — the same resolver the `lua_require_copy` feature (`paths` category, above) is conceptually doing by hand. Otherwise a generic dotted path from the project root, any language (`src/foo/Bar.cs` → `src.foo.Bar`) |
+
+```lua
+local tpl = require("filetree").feature("create_from_template")
+tpl.list()                                  -- all templates, in display order
+tpl.add_template("go_test.go", "package ${filename}\n")
+tpl.move("go_test.go", -1)                  -- same as pressing <M-k> on it
+```
+
+### Handle Guard
+
+Fixes a sporadic Windows file-lock at the source, rather than hiding it like
+`watcher_quarantine` does. neo-tree's own directory watchers (with
+`use_libuv_file_watcher = true`) keep an OS handle open per expanded
+directory and never close it — so renaming/deleting a watched directory can
+intermittently fail with `EPERM` / `ERROR_SHARING_VIOLATION`, because
+filetree's own watcher is still holding it.
+
+Opt-in (patches a neo-tree internal + closes libuv handles), neo-tree
+adapter + Windows/WSL only, a no-op elsewhere:
+
+```lua
+require("filetree").setup({
+  features = { handle_guard = { enabled = true } },
+})
+```
+
+Once enabled, it's wired automatically into the fileops that move/rename/
+trash a watched path — no further configuration needed. Inspect live with
+`:Filetree handles` (lists tracked handles, flags any pointing at a path
+that no longer exists — the leak signature) or `:checkhealth filetree`.

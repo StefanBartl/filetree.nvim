@@ -160,7 +160,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 ### Misc
 | Command | Action |
 |---------|--------|
-| `:Filetree template` | Create file from template |
+| `:Filetree template` | Create file from template — prompts for the filename first, then a picker filtered to that extension |
 | `:Filetree open system` | Open with system default |
 | `:Filetree open pick` | Open with app picker |
 | `:Filetree open app <name>` | Open with named app |
@@ -182,6 +182,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree safety dry-run` | Toggle safety dry-run |
 | `:Filetree watcher enter [ms]` | Enter watcher quarantine |
 | `:Filetree watcher exit` | Exit watcher quarantine |
+| `:Filetree handles` | List tracked neo-tree watcher handles (`handle_guard`); flags any pointing at a path that no longer exists |
 | `:Filetree hooks events` | List registered hook events |
 | `:Filetree hooks clear [event]` | Clear hooks |
 | `:Filetree health` | Run `:checkhealth filetree` |
