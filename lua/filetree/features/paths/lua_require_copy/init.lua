@@ -5,6 +5,11 @@ local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
+-- The canonical, already-implemented path -> Lua module resolver (same one
+-- create_from_template's ${module} defers to) — reuse it rather than
+-- re-deriving the same "/lua/…/init.lua -> foo.bar" logic a second time.
+local get_lua_module_path = require("lib.nvim.lua_ls.get_module_path")
+
 ---@type FiletreeLuaRequireCopyConfig
 local _cfg = {
   enabled = false,
@@ -15,28 +20,9 @@ local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.lua_require_copy]")
 
----Find the lua/ root directory in a path.
----@param path string
----@return string?
-local function find_lua_root(path)
-  -- Walk up until we find a /lua/ segment
-  local cur = path
-  while true do
-    local parent = vim.fn.fnamemodify(cur, ":h")
-    if parent == cur then break end
-    -- Check if there is a 'lua' directory at this level
-    local candidate = parent .. "/lua"
-    local stat = vim.uv.fs_stat(candidate)
-    if stat and stat.type == "directory" then
-      return candidate
-    end
-    cur = parent
-  end
-  -- Fallback: stdpath("config")/lua
-  return vim.fn.stdpath("config") .. "/lua"
-end
-
----Convert a relative path (from lua root) to a module string.
+---Convert a relative path (from a known root) to a module string. Only
+---needed for copy_require_relative's cwd-relative root below — the
+---absolute-path case defers entirely to get_lua_module_path instead.
 ---@param rel_path string
 ---@return string
 local function path_to_module(rel_path)
@@ -47,26 +33,23 @@ local function path_to_module(rel_path)
     :gsub("/", ".")
 end
 
----Recursively gather all .lua files under a directory.
+---Recursively gather all .lua files under a directory as module strings.
 ---@param dir string   Absolute directory path
----@param lua_root string
+---@param resolve fun(full_path: string): string?   Path -> module resolver; nil skips the file
 ---@return string[]   Module strings
-local function gather_lua_files(dir, lua_root)
+local function gather_lua_files(dir, resolve)
   local modules = {}
   local entries = vim.fn.readdir(dir)
   if not entries then return modules end
 
-  -- Ensure lua_root ends with /
-  local root = lua_root:gsub("\\", "/"):gsub("/?$", "/")
-
   for _, entry in ipairs(entries) do
     local full = dir .. "/" .. entry
     if vim.fn.isdirectory(full) == 1 then
-      local sub = gather_lua_files(full, lua_root)
+      local sub = gather_lua_files(full, resolve)
       for _, m in ipairs(sub) do modules[#modules + 1] = m end
     elseif entry:match("%.lua$") then
-      local rel = full:gsub("\\", "/"):gsub("^" .. vim.pesc(root), "")
-      modules[#modules + 1] = path_to_module(rel)
+      local m = resolve(full)
+      if m then modules[#modules + 1] = m end
     end
   end
   return modules
@@ -82,7 +65,11 @@ local function write_to_clipboard(text, count)
     count == 1 and text or text:sub(1, 200) .. (count > 1 and "\n..." or "")))
 end
 
----Copy current node as require() string(s) using the lua root.
+---Copy current node as require() string(s), resolved via the canonical
+---get_lua_module_path (a pure "/lua/" substring search — no filesystem
+---walking or stdpath("config") guessing). A node genuinely outside any
+---lua/ directory resolves to no modules rather than a guessed, likely-wrong
+---one.
 function M.copy_require()
   if not _adapter then return end
 
@@ -92,20 +79,12 @@ function M.copy_require()
     return
   end
 
-  local lua_root = find_lua_root(node.path)
-  if not lua_root then
-    notify.warn("Could not find lua/ root")
-    return
-  end
-
-  local root_norm = lua_root:gsub("\\", "/"):gsub("/?$", "/")
-
   local modules = {}
   if node.type == "directory" then
-    modules = gather_lua_files(node.path, lua_root)
+    modules = gather_lua_files(node.path, get_lua_module_path)
   else
-    local rel = node.path:gsub("\\", "/"):gsub("^" .. vim.pesc(root_norm), "")
-    modules[1] = path_to_module(rel)
+    local m = get_lua_module_path(node.path)
+    if m then modules[1] = m end
   end
 
   if #modules == 0 then
@@ -133,17 +112,19 @@ function M.copy_require_relative()
 
   local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
   -- Use cwd/lua as the root
-  local lua_root = cwd .. "lua"
+  local root_norm = cwd .. "lua/"
 
-  local root_norm = lua_root:gsub("/?$", "/")
+  local function resolve(full_path)
+    local path_norm = full_path:gsub("\\", "/")
+    local rel = path_norm:gsub("^" .. vim.pesc(root_norm), "")
+    return path_to_module(rel)
+  end
 
   local modules = {}
   if node.type == "directory" then
-    modules = gather_lua_files(node.path, lua_root)
+    modules = gather_lua_files(node.path, resolve)
   else
-    local path_norm = node.path:gsub("\\", "/")
-    local rel = path_norm:gsub("^" .. vim.pesc(root_norm), "")
-    modules[1] = path_to_module(rel)
+    modules[1] = resolve(node.path)
   end
 
   if #modules == 0 then
