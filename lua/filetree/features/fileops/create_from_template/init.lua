@@ -15,7 +15,8 @@
 ---   ${day}        Current day (01-31)
 ---   ${time}       Current time in HH:MM:SS
 ---   ${author}     Value of config.author or $USER/$USERNAME
----   ${module}     Lua-style module path from project root (for .lua files)
+---   ${module}     Dotted path from the project root (any language, not just
+---                 Lua — e.g. src/foo/Bar.cs -> "src.foo.Bar")
 ---
 --- Workflow:
 ---   1. Press "A" in tree (the smart_create "a" counterpart) — or :FiletreeCreateFromTemplate
@@ -75,6 +76,24 @@ local function template_dir()
   return dir
 end
 
+---Directory of templates shipped WITH filetree.nvim itself (one per common
+---language), found via 'runtimepath' rather than a path computed relative to
+---this file — works regardless of how the plugin was installed (git clone,
+---local dir checkout, symlink, …), same mechanism ftplugin/syntax/doc rely
+---on. Namespaced under lua/filetree/… (not a generic top-level "templates/")
+---so an unrelated plugin can never collide with it. Cached: 'rtp' doesn't
+---change mid-session in normal use, and this is the picker's hot path.
+---@return string?
+local _builtin_dir
+local function builtin_dir()
+  if _builtin_dir ~= nil then
+    return _builtin_dir ~= false and _builtin_dir or nil
+  end
+  local found = vim.api.nvim_get_runtime_file("lua/filetree/assets/templates/", true)
+  _builtin_dir = found[1] or false
+  return found[1]
+end
+
 -- ── Variable substitution ─────────────────────────────────────────────────────
 
 local function author()
@@ -82,19 +101,29 @@ local function author()
   return vim.env.USER or vim.env.USERNAME or "unknown"
 end
 
+---Dotted module/namespace path for `${module}`, relative to the project root
+---(preferring a `lua/` subroot when the file is under one — Lua's own
+---require() convention — else the project root directly). Generic across
+---languages: strips WHATEVER extension the destination actually has (not
+---hardcoded to ".lua"), so it works equally for foo/bar.go -> "foo.bar",
+---foo/Bar.cs -> "foo.Bar", etc. The trailing ".init" collapse (Lua's
+---foo/init.lua -> "foo") only ever matches that exact literal segment, so it
+---is a no-op for every other language.
+---@param abs_path string
+---@return string
 local function module_path(abs_path)
   local ok_pr, pr = require("filetree.features").load("project_root")
   local root
   if ok_pr and type(pr.find) == "function" then
     root = pr.find(abs_path)
-  else
-    root = vim.fn.getcwd()
   end
+  root = root or vim.fn.getcwd()  -- project_root.find() may return nil (no marker found)
   local rel = path_u.relative(abs_path, root .. "/lua")
   if rel == abs_path then
     rel = path_u.relative(abs_path, root)
   end
-  return rel:gsub("%.lua$", ""):gsub("[/\\]", "."):gsub("%.init$", "")
+  rel = rel:gsub("%.[^./\\]+$", "")  -- strip whatever extension is actually there
+  return (rel:gsub("[/\\]", "."):gsub("%.init$", ""))  -- parens: gsub returns (str, count)
 end
 
 local function substitute(content, new_path)
@@ -145,12 +174,11 @@ end
 
 -- ── Template list ─────────────────────────────────────────────────────────────
 
----Templates on disk, alphabetical — the order-agnostic source of truth for
----"what templates exist". `list_templates()` below layers the persisted
----display order on top of this.
----@return {name:string, path:string}[]
-local function raw_templates()
-  local dir = template_dir()
+---List template files (name + path) directly in `dir`, alphabetical.
+---@param dir string
+---@param builtin boolean
+---@return {name:string, path:string, builtin:boolean}[]
+local function scan_dir(dir, builtin)
   local ok, entries = pcall(vim.fn.readdir, dir)
   if not ok then return {} end
   local tmpl = {}
@@ -158,7 +186,7 @@ local function raw_templates()
     if not e:match("^%.") then  -- skip .order.json and any other dotfile
       local full = dir .. "/" .. e
       if vim.fn.filereadable(full) == 1 then
-        tmpl[#tmpl + 1] = { name = e, path = full }
+        tmpl[#tmpl + 1] = { name = e, path = full, builtin = builtin }
       end
     end
   end
@@ -166,10 +194,46 @@ local function raw_templates()
   return tmpl
 end
 
+---Templates on disk, alphabetical — the order-agnostic source of truth for
+---"what templates exist". `list_templates()` below layers the persisted
+---display order on top of this.
+---
+---Merges the built-in templates shipped with filetree.nvim (one per common
+---language, read-only — never written to by add_template/M.move) with the
+---user's own template_dir(). A user template with the SAME NAME as a
+---built-in shadows it entirely (name and content), the usual override-layer
+---pattern — so customizing a shipped default is just: drop a same-named file
+---into your own template_dir().
+---@return {name:string, path:string, builtin:boolean}[]
+local function raw_templates()
+  local user = scan_dir(template_dir(), false)
+
+  local bdir = builtin_dir()
+  local builtin = bdir and scan_dir(bdir, true) or {}
+
+  local by_name, out = {}, {}
+  for _, t in ipairs(user) do
+    by_name[t.name] = t
+  end
+  for _, t in ipairs(builtin) do
+    if not by_name[t.name] then
+      by_name[t.name] = t
+    end
+  end
+  for name in pairs(by_name) do out[#out + 1] = name end
+  table.sort(out)
+
+  local tmpl = {}
+  for _, name in ipairs(out) do
+    tmpl[#tmpl + 1] = by_name[name]
+  end
+  return tmpl
+end
+
 ---Templates in display order: the persisted order first (skipping any entry
 ---that no longer exists on disk), then any template without an explicit
 ---position — new or never-reordered — appended alphabetically.
----@return {name:string, path:string}[]
+---@return {name:string, path:string, builtin:boolean?}[]
 local function list_templates()
   local all = raw_templates()
   local by_name = {}
@@ -245,15 +309,23 @@ end
 
 -- ── Picker flow ───────────────────────────────────────────────────────────────
 
+---Display label: built-ins get a marker so the merged list makes clear which
+---entries ship with the plugin vs. the user's own (or an override of one).
+---@param t {name:string, builtin:boolean?}
+---@return string
+local function display_name(t)
+  return t.builtin and (t.name .. "  [builtin]") or t.name
+end
+
 ---Plain, non-reorderable picker (fallback when the ui kit's `picker`
 ---component is unavailable — e.g. lib.nvim absent, or the kit's own mount
 ---failed).
----@param templates {name:string, path:string}[]
----@param on_select fun(tmpl: {name:string, path:string})
+---@param templates {name:string, path:string, builtin:boolean?}[]
+---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template_plain(templates, on_select)
   ui_select(templates, {
     prompt = "Templates",
-    format_item = function(t) return t.name end,
+    format_item = display_name,
   }, function(tmpl)
     if tmpl then on_select(tmpl) end
   end)
@@ -265,14 +337,14 @@ end
 ---own query→on_change), it just can't be combined with reordering in the
 ---same keystroke, since "move" is only well-defined against the full,
 ---unfiltered order.
----@param templates {name:string, path:string}[]
----@param on_select fun(tmpl: {name:string, path:string})
+---@param templates {name:string, path:string, builtin:boolean?}[]
+---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template_reorderable(templates, on_select)
   local list = templates
 
   local function render(handle)
     local lines = {}
-    for _, t in ipairs(list) do lines[#lines + 1] = t.name end
+    for _, t in ipairs(list) do lines[#lines + 1] = display_name(t) end
     handle.set_results(lines)
   end
 
@@ -336,8 +408,8 @@ local function pick_template_reorderable(templates, on_select)
   map({ "i", "n" }, "<M-k>", function() move(-1) end, mo, "Filetree: move template up")
 end
 
----@param templates {name:string, path:string}[]
----@param on_select fun(tmpl: {name:string, path:string})
+---@param templates {name:string, path:string, builtin:boolean?}[]
+---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template(templates, on_select)
   if #templates == 0 then
     notify.warn("No templates in: " .. template_dir())
@@ -406,7 +478,7 @@ function M.open_current()
 end
 
 ---Return all available templates.
----@return {name:string, path:string}[]
+---@return {name:string, path:string, builtin:boolean?}[]
 function M.list()
   return list_templates()
 end
