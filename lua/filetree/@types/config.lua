@@ -281,7 +281,7 @@
 
 ---@class FiletreeCreateFromTemplateConfig
 ---@field enabled       boolean
----@field keymap        string?   Key inside tree (default "t").
+---@field keymap        string?   Key inside tree (default "A" — the smart_create "a" counterpart, template-driven).
 ---@field template_dir  string?   Custom template directory. Defaults to stdpath("data")/filetree/templates/.
 ---@field author        string?   Author name for ${author} substitution.
 ---@field open_after    boolean   Open created file in editor (default true).
