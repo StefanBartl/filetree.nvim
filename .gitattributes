@@ -1,0 +1,7 @@
+# Shipped file templates are copied byte-for-byte into the files users create
+# (create_from_template reads them with readfile() and writes the result back),
+# so their line endings end up in the generated file. Under core.autocrlf=true
+# a Windows clone would check them out as CRLF and every generated file would
+# inherit that — a shell template would produce `#!/usr/bin/env bash\r`, which
+# no Linux kernel will execute. Pin them to LF regardless of the local setting.
+lua/filetree/assets/templates/** text eol=lf
