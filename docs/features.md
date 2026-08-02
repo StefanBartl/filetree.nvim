@@ -216,9 +216,32 @@ Workflow, in order:
 3. **Pick a template.** Variables substitute against the real destination
    (see below), then the file is created and opened.
 
-**Built-in templates** ship with filetree.nvim itself — one each for Lua
-(plus a `@meta`/`@types` variant), TypeScript, JavaScript, Go, Rust, Python,
-C, C++, C#, and WebAssembly text format. They show up in the picker with a
+**Built-in templates** ship with filetree.nvim itself — several per language
+for the common ones, so the extension filter in step 2 leaves you with a real
+choice rather than a single entry:
+
+| Extension | Templates |
+|---|---|
+| `.lua` | `lua_module` · `lua_class` · `lua_spec` (busted/plenary) · `lua_types` (`@meta`) |
+| `.ts` | `typescript_module` · `typescript_class` · `typescript_test` · `typescript_types.d` |
+| `.tsx` | `typescript_react` |
+| `.js` | `javascript_module` · `javascript_test` |
+| `.py` | `python_module` · `python_class` · `python_test` · `python_main` |
+| `.go` | `go_package` · `go_main` · `go_test` |
+| `.rs` | `rust_module` · `rust_main` · `rust_test` |
+| `.cs` | `csharp_class` · `csharp_interface` · `csharp_test` |
+| `.c` / `.h` | `c_source` · `c_header` |
+| `.cpp` / `.hpp` | `cpp_source` · `cpp_header` |
+| `.zig` | `zig_module` · `zig_test` |
+| `.json` | `json_object` · `json_package` · `json_tsconfig` |
+| `.md` | `markdown_doc` · `markdown_readme` |
+| `.yaml` / `.yml` | `yaml_document` · `yaml_workflow` (GitHub Actions) |
+| `.toml` | `toml_config` |
+| `.sh` / `.ps1` | `shell_script` · `powershell_script` |
+| `.html` / `.css` | `html_page` · `css_stylesheet` |
+| `.wat` | `wasm_module` |
+
+They show up in the picker with a
 `[builtin]` marker. **Add your own** by dropping a file into the template
 directory (default `stdpath("data")/filetree/templates/`) — its filename
 becomes the template name — or call `M.add_template(name, content)`. A user

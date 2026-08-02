@@ -685,9 +685,12 @@ Commands: >
 Create files from user-defined templates with variable substitution. Each
 file directly inside the template directory (default
 stdpath("data")/filetree/templates/) is a template; its filename is the name
-shown in the picker. Templates shipped with filetree.nvim itself (one per
-common language) are merged in underneath — a same-named file in your own
-template directory shadows a built-in one entirely.
+shown in the picker. Templates shipped with filetree.nvim itself (several per
+common language — module/class/test variants for Lua, TypeScript, JavaScript,
+Python, Go, Rust, C#, C, C++, Zig, plus JSON, Markdown, YAML, TOML, shell,
+PowerShell, HTML and CSS; see docs/features.md for the full table) are merged
+in underneath — a same-named file in your own template directory shadows a
+built-in one entirely.
 
 Workflow: press "A" in the tree (the smart_create "a" counterpart) — or
 `:Filetree template` — enter the new filename FIRST, then pick a template

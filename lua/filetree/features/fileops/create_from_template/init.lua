@@ -106,13 +106,16 @@ local function template_dir()
   return dir
 end
 
----Directory of templates shipped WITH filetree.nvim itself (one per common
----language), found via 'runtimepath' rather than a path computed relative to
----this file — works regardless of how the plugin was installed (git clone,
----local dir checkout, symlink, …), same mechanism ftplugin/syntax/doc rely
----on. Namespaced under lua/filetree/… (not a generic top-level "templates/")
----so an unrelated plugin can never collide with it. Cached: 'rtp' doesn't
----change mid-session in normal use, and this is the picker's hot path.
+---Directory of templates shipped WITH filetree.nvim itself (several per
+---common language), found via 'runtimepath' rather than a path computed
+---relative to this file — works regardless of how the plugin was installed
+---(git clone, local dir checkout, symlink, …), same mechanism
+---ftplugin/syntax/doc rely on. Namespaced under lua/filetree/… (not a generic
+---top-level "templates/") so an unrelated plugin can never collide with it.
+---Living under lua/ does mean lua_ls would parse the .lua templates as source
+---and choke on their ${...} placeholders, hence the workspace.ignoreDir entry
+---for this directory in .luarc.json. Cached: 'rtp' doesn't change mid-session
+---in normal use, and this is the picker's hot path.
 ---@return string?
 local _builtin_dir
 local function builtin_dir()
@@ -234,8 +237,8 @@ end
 ---"what templates exist". `list_templates()` below layers the persisted
 ---display order on top of this.
 ---
----Merges the built-in templates shipped with filetree.nvim (one per common
----language, read-only — never written to by add_template/M.move) with the
+---Merges the built-in templates shipped with filetree.nvim (several per
+---common language, read-only — never written to by add_template/M.move) with the
 ---user's own template_dir(). A user template with the SAME NAME as a
 ---built-in shadows it entirely (name and content), the usual override-layer
 ---pattern — so customizing a shipped default is just: drop a same-named file

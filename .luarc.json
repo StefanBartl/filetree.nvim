@@ -15,6 +15,7 @@
   "workspace.ignoreDir": [
     ".git",
     "doc",
-    "docs"
+    "docs",
+    "lua/filetree/assets/templates"
   ]
 }
