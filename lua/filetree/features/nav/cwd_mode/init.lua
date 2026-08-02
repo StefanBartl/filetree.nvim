@@ -106,9 +106,29 @@ local DEFAULTS = {
     mode      = "auto",
     align     = "left",
     show_path = "lock",
+    -- Which label set below the badge is built from. "numeric" is the only
+    -- style that shows something for `follow` — the point of the digit row
+    -- is "which of the N states am I in", and 0 answers that; the other
+    -- styles keep treating follow as the inert, nothing-to-report default.
+    style = "text", -- "text" | "short" | "numeric" | "icon"
     labels = {
       follow = "", project = "PROJECT", nearest = "PKG",
       lock = "LOCK", manual = "MANUAL", tree_leads = "TREE",
+    },
+    labels_short = {
+      follow = "", project = "P", nearest = "N",
+      lock = "L", manual = "M", tree_leads = "T",
+    },
+    labels_numeric = {
+      follow = "0", project = "1", nearest = "2",
+      lock = "3", manual = "4", tree_leads = "5",
+    },
+    -- Nerd Font glyphs. Swap any of these in your own config if one renders
+    -- as tofu with your font — badge_text() falls back to "" either way if a
+    -- key is missing, so a partial override is always safe.
+    icons = {
+      follow = "", project = "", nearest = "",
+      lock = "", manual = "", tree_leads = "",
     },
     hl = {
       follow  = "Comment",        project = "DiagnosticInfo", nearest = "DiagnosticInfo",
@@ -673,12 +693,19 @@ end
 
 -- ── Indicator ─────────────────────────────────────────────────────────────────
 
+---Which `indicator.*` table a given style reads labels from.
+---@type table<string, string>
+local LABEL_SET_BY_STYLE = {
+  text = "labels", short = "labels_short", numeric = "labels_numeric", icon = "icons",
+}
+
 ---The badge text for the current mode, e.g. `LOCK  …/Notes`.
 ---@return string text
 ---@return string? hl
 local function badge_text()
   local cfg = _cfg.indicator
-  local label = cfg.labels[S.mode] or ""
+  local label_set = cfg[LABEL_SET_BY_STYLE[cfg.style]] or cfg.labels
+  local label = (label_set and label_set[S.mode]) or ""
   if label == "" then return "", nil end
 
   local text = label

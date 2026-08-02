@@ -147,6 +147,19 @@ deliberate "no policy" answer — the feature is then completely inert.
       `filetree.setup()` positive case the fix above hinges on: cwd_sync
       genuinely enabled must not warn. The suites accept
       `$FILETREE_LIB_NVIM` to run against a lib.nvim worktree before it is merged.
+- [x] **`indicator.style`** — the badge text is no longer locked to full words.
+      `"text"` (default, unchanged) / `"short"` (first-letter abbreviations) /
+      `"numeric"` (one digit per mode, 0–5 — the only style that shows
+      anything for `follow`) / `"icon"` (a Nerd Font glyph, no text). Each
+      style reads its own table (`labels`, `labels_short`, `labels_numeric`,
+      `icons`), so overriding one mode in one style never touches another.
+      `hl` (the color) stays shared across all four — switching `style` only
+      changes the text. The filled, capsule-like badge look (background color
+      instead of just colored text, as a host statusline's `mode()` segment
+      usually has) is left to the consuming statusline: `badge()` already
+      hands over `{ text, hl }`, and wrapping that in a bg-filled highlight
+      group with a fading separator is the host's call, not this plugin's —
+      see the wkdnvchad statusline config for a worked example.
 
 ---
 
