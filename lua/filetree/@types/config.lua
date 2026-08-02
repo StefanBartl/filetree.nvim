@@ -291,12 +291,23 @@
 
 -- ── create_from_template ──────────────────────────────────────────────────────
 
+---@alias FiletreeCreateFromTemplatePrefer
+---| '"auto"'      Real fuzzy search + native content preview via pickers.nvim, when installed
+---                 (its own telescope > fzf > snacks priority). Falls back to "builtin" otherwise.
+---| '"telescope"' Force pickers.nvim's telescope engine.
+---| '"fzf"'       Force pickers.nvim's fzf-lua engine.
+---| '"snacks"'    Force pickers.nvim's snacks engine.
+---| '"builtin"'   Always use the original kit.picker/vim.ui.select flow (plain substring match,
+---                 no preview) — the only option that supports the <M-j>/<M-k> reorder keymaps.
+
 ---@class FiletreeCreateFromTemplateConfig
 ---@field enabled       boolean
 ---@field keymap        string?   Key inside tree (default "A" — the smart_create "a" counterpart, template-driven).
 ---@field template_dir  string?   Custom template directory. Defaults to stdpath("data")/filetree/templates/.
 ---@field author        string?   Author name for ${author} substitution.
 ---@field open_after    boolean   Open created file in editor (default true).
+---@field prefer        FiletreeCreateFromTemplatePrefer?  Which picker renders template selection (default "auto").
+---                                pickers.nvim is a soft dependency — absent, and this always behaves like "builtin".
 
 -- ── auto_reveal ───────────────────────────────────────────────────────────────
 

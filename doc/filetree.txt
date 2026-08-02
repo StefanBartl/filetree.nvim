@@ -20,6 +20,7 @@ CONTENTS                                                    *filetree-contents*
      5.5 Current Highlight ................ |filetree-current-hl|
      5.6 Safety / Backup .................. |filetree-safety|
      5.7 Auto Reveal ....................... |filetree-auto-reveal|
+     5.8 Create From Template ............. |filetree-create-from-template|
   6. Adapters ............................... |filetree-adapters|
   7. Public API ............................. |filetree-api|
   8. Health check ........................... |filetree-health|
@@ -676,6 +677,87 @@ Commands: >
   :FiletreeAutoRevealPause [ms]   Pause for N ms (default 2000).
   :FiletreeAutoRevealResume       Resume immediately.
   :FiletreeRevealCurrent          Force reveal now.
+<
+
+------------------------------------------------------------------------------
+5.8 CREATE FROM TEMPLATE                          *filetree-create-from-template*
+
+Create files from user-defined templates with variable substitution. Each
+file directly inside the template directory (default
+stdpath("data")/filetree/templates/) is a template; its filename is the name
+shown in the picker. Templates shipped with filetree.nvim itself (one per
+common language) are merged in underneath — a same-named file in your own
+template directory shadows a built-in one entirely.
+
+Workflow: press "A" in the tree (the smart_create "a" counterpart) — or
+`:Filetree template` — enter the new filename FIRST, then pick a template
+from the list filtered to that filename's extension (falls back to the full
+list when nothing matches). The destination path is already known at pick
+time, so `${module}` and every other variable below resolves against it.
+
+Variables (substituted on creation): >
+  ${filename}   Basename of the new file (without extension)
+  ${ext}        Extension of the new file (without dot)
+  ${date}       Current date, YYYY-MM-DD
+  ${year} ${month} ${day} ${time}
+  ${author}     config.author, or $USER/$USERNAME
+  ${module}     Dotted Lua module path for a destination under lua/ (e.g.
+                lua/plugins/test.lua -> "plugins.test"); a generic dotted
+                path from the project root for anything else.
+<
+
+PICKER BACKEND ~
+
+`prefer` picks what renders the template list:
+
+  auto (default)  Real fuzzy search + a native content preview of the
+                  highlighted template, via pickers.nvim (github.com/
+                  StefanBartl/pickers.nvim) — its own telescope > fzf > snacks
+                  priority. Falls back to "builtin" when pickers.nvim isn't
+                  installed.
+  telescope       Force pickers.nvim's telescope engine.
+  fzf             Force pickers.nvim's fzf-lua engine.
+  snacks          Force pickers.nvim's snacks engine.
+  builtin         The original picker: a hand-rolled prompt+results float
+                  (plain substring match, no preview), or plain
+                  `vim.ui.select` when even that is unavailable.
+
+pickers.nvim is a soft dependency (like lib.nvim's ui kit) — nothing to
+install unless you want it.
+
+Trade-off: only "builtin" supports reordering (below). pickers.nvim's
+`pick_item()` has no concept of custom in-picker keymaps, so picking
+"auto"/"telescope"/"fzf"/"snacks" loses <M-j>/<M-k> — set `prefer = "builtin"`
+to keep reordering instead of fuzzy search + preview.
+
+REORDERING ~ (builtin picker only)
+
+While the picker is open and the filter is empty, <M-j>/<M-k> move the
+highlighted template down/up. The order persists to a `.order.json` sidecar
+in the template directory, so it survives restarts; a never-reordered or
+newly-added template is appended alphabetically after the ones with an
+explicit position.
+
+CONFIGURATION ~
+>lua
+  features = {
+    create_from_template = {
+      enabled      = true,
+      keymap       = "A",
+      template_dir = nil,      -- defaults to stdpath("data")/filetree/templates/
+      author       = nil,      -- defaults to $USER/$USERNAME
+      open_after   = true,     -- open the created file in the editor
+      prefer       = "auto",   -- auto | telescope | fzf | snacks | builtin
+    },
+  }
+<
+
+PUBLIC API ~
+>lua
+  local cft = require("filetree").feature("create_from_template")
+  cft.list()                 --> {name:string, path:string, builtin:boolean?}[]
+  cft.add_template(name, content)
+  cft.move(name, -1)         --> boolean moved (up); +1 moves down
 <
 
 ==============================================================================

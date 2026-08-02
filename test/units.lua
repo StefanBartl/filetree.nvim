@@ -1475,6 +1475,103 @@ do
   package.loaded["filetree.features.fileops.create_from_template"] = nil
 end
 
+-- ── create_from_template: pickers.nvim dispatch (prefer, Pickers.Item) ──────
+do
+  local tmp = (vim.env.TEMP .. "/units-cft-pickers"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local tdir = tmp .. "/templates"
+  vim.fn.mkdir(tdir, "p")
+  vim.fn.writefile({ "content" }, tdir .. "/basic.lua")
+
+  local dest_dir = tmp .. "/dest"
+  vim.fn.mkdir(dest_dir, "p")
+
+  local stub = setmetatable({
+    name = "units-stub-cft-pickers", is_available = function() return true end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  -- prefer = "auto" (default): dispatches through pickers.engines.load(),
+  -- items carry {text, file, tmpl} and on_select unwraps .tmpl.
+  do
+    local captured_prefer, captured_items
+    package.loaded["pickers.engines"] = {
+      load = function(prefer)
+        captured_prefer = prefer
+        return {
+          pick_item = function(o)
+            captured_items = o.items
+            o.on_select(o.items[1]) -- pick the first template
+          end,
+        }
+      end,
+    }
+    package.loaded["lib.nvim.ui.kit"] = {
+      input = function(opts) opts.on_submit("new.lua") end,
+    }
+    package.loaded["filetree.features.fileops.create_from_template"] = nil
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({ adapter = "units-stub-cft-pickers",
+      features = { create_from_template = { enabled = true, template_dir = tdir } } })
+
+    local cft = ft.feature("create_from_template")
+    cft.open(dest_dir)
+
+    check("pickers dispatch: prefer defaults to \"auto\"", captured_prefer == "auto",
+      tostring(captured_prefer))
+    check("pickers dispatch: item carries display text", captured_items ~= nil
+      and captured_items[1].text == "basic.lua")
+    check("pickers dispatch: item carries the template's file path",
+      captured_items ~= nil and captured_items[1].file == tdir .. "/basic.lua")
+    check("pickers dispatch: selecting created the file from the template",
+      vim.fn.filereadable(dest_dir .. "/new.lua") == 1
+      and vim.fn.readfile(dest_dir .. "/new.lua")[1] == "content")
+  end
+
+  -- prefer = "builtin": pickers.engines.load() must never be called; falls
+  -- through to the pre-existing kit.picker/ui_select flow unchanged.
+  do
+    vim.fn.delete(dest_dir .. "/new2.lua")
+    local pickers_called = false
+    package.loaded["pickers.engines"] = {
+      load = function() pickers_called = true return nil end,
+    }
+    package.loaded["lib.nvim.ui.kit"] = {
+      select = function(o) o.on_select(o.items[1], 1) end,
+      input = function(opts) opts.on_submit("new2.lua") end,
+    }
+    package.loaded["filetree.util.select"] = nil
+    package.loaded["filetree.features.fileops.create_from_template"] = nil
+
+    local ft = require("filetree")
+    ft.setup({ adapter = "units-stub-cft-pickers",
+      features = { create_from_template = { enabled = true, template_dir = tdir, prefer = "builtin" } } })
+    local cft = ft.feature("create_from_template")
+    cft.open(dest_dir)
+
+    check("pickers dispatch: prefer=\"builtin\" never calls pickers.engines.load",
+      pickers_called == false)
+    check("pickers dispatch: prefer=\"builtin\" still creates the file (fallback path)",
+      vim.fn.filereadable(dest_dir .. "/new2.lua") == 1)
+  end
+
+  -- Both sub-blocks above stub lib.nvim.ui.kit with an incomplete table (only
+  -- `.input`/`.select`, no `.confirm`). create_from_template's own module-level
+  -- `require("filetree.util.confirm")` captures whatever `kit` is live THE
+  -- MOMENT it is first (re)loaded, and caches it — so unless that cache is
+  -- invalidated too, any later feature calling confirm.lua (e.g. trash) would
+  -- permanently get our incomplete stub and crash on `kit.confirm(...)`.
+  package.loaded["pickers.engines"] = nil
+  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["filetree.util.select"] = nil
+  package.loaded["filetree.util.confirm"] = nil
+  package.loaded["filetree.features.fileops.create_from_template"] = nil
+end
+
 -- ── open_variants: sg/sv/st/gb/<S-CR> are all bound ──────────────────────────
 do
   local cur_node = { path = (vim.env.TEMP .. "/units-openvariants.txt"):gsub("\\", "/"), type = "file" }
