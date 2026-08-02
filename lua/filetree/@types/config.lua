@@ -172,13 +172,25 @@
 ---@field follow_manual_root boolean?  Re-rooting the tree by hand (`+`/`-`) moves the lock
 ---                                    instead of being reverted (default true).
 
+---@alias FiletreeCwdModeIndicatorStyle
+---| "text"    Full words: PROJECT, PKG, LOCK, MANUAL, TREE (default).
+---| "short"   First-letter abbreviations: P, N, L, M, T.
+---| "numeric" One digit per mode, 0 (follow) through 5 — the only style that
+---            shows anything for `follow`, since the row's whole point is
+---            "which of the N states am I in".
+---| "icon"    A single Nerd Font glyph, no text.
+
 ---@class FiletreeCwdModeIndicatorConfig
----@field enabled   boolean? Show the mode badge in the tree window (default true).
----@field mode      Lib.UI.Statusline.Mode?  "auto" (default), "statusline" or "float".
----@field align     Lib.UI.Statusline.Align? Placement in the line (default "left").
----@field show_path ("never"|"lock"|"always")?  Append the pinned path (default "lock").
----@field labels    table<FiletreeCwdModeName, string>?  Badge text per mode; "" hides it.
----@field hl        table<FiletreeCwdModeName, string>?  Highlight group per mode.
+---@field enabled        boolean? Show the mode badge in the tree window (default true).
+---@field mode           Lib.UI.Statusline.Mode?  "auto" (default), "statusline" or "float".
+---@field align          Lib.UI.Statusline.Align? Placement in the line (default "left").
+---@field show_path      ("never"|"lock"|"always")?  Append the pinned path (default "lock").
+---@field style          FiletreeCwdModeIndicatorStyle?  Which label table below is read (default "text").
+---@field labels         table<FiletreeCwdModeName, string>?  Badge text per mode for style="text"; "" hides it.
+---@field labels_short   table<FiletreeCwdModeName, string>?  Badge text per mode for style="short".
+---@field labels_numeric table<FiletreeCwdModeName, string>?  Badge text per mode for style="numeric".
+---@field icons          table<FiletreeCwdModeName, string>?  Badge text per mode for style="icon".
+---@field hl             table<FiletreeCwdModeName, string>?  Highlight group per mode (shared across styles).
 
 ---@class FiletreeCwdModeConfig
 ---@field enabled        boolean

@@ -408,8 +408,10 @@ Re-rooting the tree by hand is never fought: pressing `+` in lock mode moves
 the pin instead of being reverted (`lock.follow_manual_root`).
 
 The badge shows `PROJECT`, `PKG`, `LOCK`, `MANUAL`, `TREE` — and nothing in
-follow mode. `cycle` defaults to `{ "follow", "project", "lock" }`; add the
-others if you want `:Filetree cwd toggle` (and `L`) to reach them.
+follow mode (this is `indicator.style = "text"`; see LABEL STYLE below for
+the other label styles). `cycle` defaults to `{ "follow", "project", "lock"
+}`; add the others if you want `:Filetree cwd toggle` (and `L`) to reach
+them.
 
 SCOPE ~
 
@@ -475,6 +477,41 @@ The badge uses the window's own statusline, and falls back to a one-line
 float over the tree's last row when `laststatus = 3` removes per-window
 statuslines (`indicator.mode = "auto"`; force one with "statusline"/"float").
 
+LABEL STYLE ~
+
+`indicator.style` picks which label table the badge text comes from:
+
+  text (default)   PROJECT   PKG   LOCK   MANUAL   TREE   (nothing in follow)
+  short             P         N     L      M         T    (nothing in follow)
+  numeric           1         2     3      4         5    (0 in follow)
+  icon                                                     (nothing in follow)
+
+`numeric` is the only style that shows anything for `follow` (`"0"`) — its
+whole point is "which of the N states am I in", and 0 answers that; the other
+styles keep follow as the inert, nothing-to-report default they always were.
+
+Each style reads its own table — `labels` (text), `labels_short`,
+`labels_numeric`, `icons` — so overriding one mode's text in one style never
+touches the others: >lua
+  indicator = {
+    style = "short",
+    labels_short = { lock = "🔒" },  -- only `lock` changes; P/N/M/T stay default
+  },
+<
+`icons` holds Nerd Font glyphs and is the only table with no built-in text
+fallback if your font is missing a glyph — swap the entry for that mode in
+your own config.
+
+`hl` (the highlight group per mode) is shared across all four styles: switching
+`style` only changes the text, never the color.
+
+Getting the filled, capsule-like look of a vim-mode indicator (background
+color instead of just colored text) is a rendering choice for the *host*
+statusline, not something this plugin's `text`/`hl` pair does on its own —
+`badge()` gives you the raw text and highlight group; wrapping them in a
+bg-filled highlight group with a fading separator is the same recipe you'd
+use for `mode()` itself. See EXTERNAL STATUSLINE below.
+
 EXTERNAL STATUSLINE ~
 
 To render the mode yourself — in lualine, heirline, or a hand-rolled
@@ -530,7 +567,8 @@ CONFIGURATION ~
       lock = { enforce = true, follow_manual_root = true },
       reveal_outside = "skip",   -- or "reveal"
       persist = false,           -- remember mode/scope/pin per project
-      indicator = { enabled = true, mode = "auto", show_path = "lock" },
+      indicator = { enabled = true, mode = "auto", show_path = "lock",
+                    style = "text" },  -- text | short | numeric | icon
       cycle = { "follow", "project", "lock" },
     },
   }

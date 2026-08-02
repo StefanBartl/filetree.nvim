@@ -52,7 +52,7 @@ return {
     -- entirely. Switch modes at runtime with :Filetree cwd …
     cwd_mode = {
       enabled = true,
-      mode    = "follow",      -- follow | project | lock | manual
+      mode    = "follow",      -- follow | project | nearest | lock | manual | tree_leads
       scope   = "global",      -- global | tab | win
       project = {
         markers   = { ".git", ".hg", ".svn" },
@@ -69,6 +69,7 @@ return {
         enabled   = true,
         mode      = "auto",         -- statusline, or float under laststatus=3
         show_path = "lock",
+        style     = "text",         -- text | short | numeric | icon (see :h filetree-cwd-mode)
       },
     },
     current_hl = {

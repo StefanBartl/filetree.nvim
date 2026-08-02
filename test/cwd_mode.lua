@@ -299,6 +299,56 @@ do
     stl():find("LOCK", 1, true) ~= nil and stl():find("proj_a", 1, true) ~= nil, stl())
   check("component() exposes the badge text", cwd_mode.component():find("LOCK", 1, true) == 1)
 
+  -- ── indicator.style ──
+  cwd_mode.setup({ enabled = true, indicator = { mode = "statusline", show_path = "never", style = "short" } }, adapter)
+  cwd_mode.set_mode("project")
+  eq("style=short: project", stl(), "%#DiagnosticInfo#P%*")
+  cwd_mode.lock(base .. "/proj_a")
+  eq("style=short: lock", stl(), "%#DiagnosticWarn#L%*")
+  cwd_mode.set_mode("follow")
+  eq("style=short: follow still hidden", stl(), "")
+
+  cwd_mode.setup({ enabled = true, indicator = { mode = "statusline", show_path = "never", style = "numeric" } }, adapter)
+  cwd_mode.set_mode("project")
+  eq("style=numeric: project shows 1", stl(), "%#DiagnosticInfo#1%*")
+  cwd_mode.lock(base .. "/proj_a")
+  eq("style=numeric: lock shows 3", stl(), "%#DiagnosticWarn#3%*")
+  cwd_mode.set_mode("follow")
+  eq("style=numeric: follow shows 0 (the only style that does)", stl(), "%#Comment#0%*")
+
+  cwd_mode.setup({ enabled = true, indicator = { mode = "statusline", show_path = "never", style = "icon" } }, adapter)
+  cwd_mode.lock(base .. "/proj_a")
+  -- Not asserting the exact Nerd Font codepoint here (fragile to encode/
+  -- compare in a plain Lua string) — just that the default table actually
+  -- has *something* non-empty wired up for lock. `labels_short override`
+  -- below covers exact-match behaviour with a plain ASCII override instead.
+  local icon_stl = stl()
+  check("style=icon: lock shows a non-empty glyph",
+    icon_stl:match("^%%#DiagnosticWarn#(.+)%%%*$") ~= nil, icon_stl)
+  cwd_mode.set_mode("follow")
+  eq("style=icon: follow still hidden", stl(), "")
+
+  cwd_mode.setup({
+    enabled = true,
+    indicator = { mode = "statusline", show_path = "never", style = "icon", icons = { lock = "X" } },
+  }, adapter)
+  cwd_mode.lock(base .. "/proj_a")
+  eq("style=icon: icons override applies", stl(), "%#DiagnosticWarn#X%*")
+
+  -- Overriding one mode in one style's table leaves the others (and the
+  -- other styles) untouched.
+  cwd_mode.setup({
+    enabled = true,
+    indicator = {
+      mode = "statusline", show_path = "never", style = "short",
+      labels_short = { lock = "X" },
+    },
+  }, adapter)
+  cwd_mode.set_mode("project")
+  eq("labels_short override: unrelated mode keeps its default", stl(), "%#DiagnosticInfo#P%*")
+  cwd_mode.lock(base .. "/proj_a")
+  eq("labels_short override: overridden mode uses the custom label", stl(), "%#DiagnosticWarn#X%*")
+
   cwd_mode.teardown()
   eq("teardown restores the statusline", stl(), "")
 
