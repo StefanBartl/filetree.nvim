@@ -43,6 +43,19 @@
 --- restarts; a never-reordered or newly-added template is appended
 --- alphabetically after the ones with an explicit position.
 ---
+--- Picker backend (`indicator`-style `prefer` config, default "auto"): when
+--- pickers.nvim is installed, the template list goes through it instead of
+--- the built-in kit.picker — real fuzzy matching (not the plain substring
+--- match kit.picker does) plus a native content preview of the highlighted
+--- template (telescope's own file previewer, snacks', or fzf-lua's, via
+--- pickers.nvim's `Pickers.Item` preview support). Trade-off: pickers.nvim's
+--- `pick_item()` has no concept of custom in-picker keymaps, so the
+--- <M-j>/<M-k> reorder keymaps above only work through the built-in picker —
+--- set `prefer = "builtin"` to keep reordering instead of fuzzy search +
+--- preview. pickers.nvim is a soft dependency (pcall-required, like
+--- lib.nvim's ui kit): absent, or `prefer = "builtin"`, and this falls back
+--- to the original kit.picker/vim.ui.select flow unchanged.
+---
 --- Keymap (default): "A" in tree buffer.
 
 local notify  = require("filetree.util.notify").create("[filetree.create_from_template]")
@@ -62,6 +75,13 @@ local ui_confirm = require("filetree.util.confirm")
 local _ok_kit, kit = pcall(require, "lib.nvim.ui.kit")
 local has_kit_picker = _ok_kit and type(kit) == "table" and type(kit.picker) == "function"
 
+-- Optional: real fuzzy search + native content preview via pickers.nvim's
+-- Pickers.Item support, instead of kit.picker's plain substring match and no
+-- preview at all. Soft dependency, same pattern as the kit check above —
+-- absent, and pick_template() falls back to the kit.picker/ui_select flow.
+local _ok_pickers, pickers_engines = pcall(require, "pickers.engines")
+local has_pickers = _ok_pickers and type(pickers_engines) == "table" and type(pickers_engines.load) == "function"
+
 local M = {}
 
 ---@type FiletreeCreateFromTemplateConfig
@@ -71,6 +91,7 @@ local _cfg = {
   template_dir = nil,  -- defaults to stdpath("data")/filetree/templates/
   author       = nil,  -- defaults to $USER/$USERNAME
   open_after   = true, -- open file in editor after creation
+  prefer       = "auto", -- auto | telescope | fzf | snacks | builtin
 }
 
 ---@type FiletreeAdapter?
@@ -423,11 +444,46 @@ local function pick_template_reorderable(templates, on_select)
   map({ "i", "n" }, "<M-k>", function() move(-1) end, mo, "Filetree: move template up")
 end
 
+---Delegate to pickers.nvim for real fuzzy search + a native content preview
+---of the highlighted template. Loses the <M-j>/<M-k> reorder keymaps that
+---`pick_template_reorderable` has — pickers.nvim's `pick_item()` has no
+---concept of custom in-picker keymaps; `prefer = "builtin"` keeps reordering
+---instead. Each item carries the original template descriptor under `tmpl`
+---(alongside the `text`/`file` fields pickers.nvim itself reads) purely so
+---`on_select` gets it back directly — pickers.nvim always passes an item
+---through unchanged, so this needs no lookup-by-label the way a plain
+---string list would.
+---@param templates {name:string, path:string, builtin:boolean?}[]
+---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
+---@return boolean ok  false when no engine could be loaded — caller should fall back
+local function pick_template_via_pickers(templates, on_select)
+  local engine_mod = pickers_engines.load(_cfg.prefer)
+  if not engine_mod then return false end
+
+  local items = {}
+  for i, t in ipairs(templates) do
+    items[i] = { text = display_name(t), file = t.path, tmpl = t }
+  end
+
+  engine_mod.pick_item({
+    prompt = "Templates",
+    items = items,
+    on_select = function(item)
+      if type(item) == "table" and item.tmpl then on_select(item.tmpl) end
+    end,
+  })
+  return true
+end
+
 ---@param templates {name:string, path:string, builtin:boolean?}[]
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template(templates, on_select)
   if #templates == 0 then
     notify.warn("No templates in: " .. template_dir())
+    return
+  end
+
+  if _cfg.prefer ~= "builtin" and has_pickers and pick_template_via_pickers(templates, on_select) then
     return
   end
 
