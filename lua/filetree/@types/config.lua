@@ -104,6 +104,11 @@
 
 ---@class FiletreeNoNameGuardConfig
 ---@field enabled  boolean  Redirect stray [No Name] editor windows to a real buffer (default true).
+---                         Two passes: a BufWinEnter handler tied to the window actually being
+---                         focused, plus a BufAdd/BufDelete/BufWipeout sweep across every window
+---                         (all tabs) that also catches a stray buffer sitting in some OTHER window
+---                         that never itself refires BufWinEnter. Both always skip the tree's own
+---                         window.
 
 -- ── cwd_sync ──────────────────────────────────────────────────────────────────
 
@@ -669,9 +674,21 @@
 -- ── open_in_fm ────────────────────────────────────────────────────────────────
 
 ---@class FiletreeOpenInFmConfig
----@field enabled   boolean
----@field keymap    string?  Key in tree buffer (default "<leader>fm").
----@field command   string?  Override launch binary (auto-detected per OS by default).
+---@field enabled        boolean
+---@field keymap         string?   Key in tree buffer (default "<leader>fm").
+---@field command        string?   Override launch binary (auto-detected per OS by default).
+---@field debug          boolean?  Verbose notify.debug() logging of every launch attempt — branch
+---                                taken, argv, job id, and (only when this is on) the process's
+---                                exit code/stderr. Default false. This feature only ever confirms
+---                                that a process STARTED, never that it succeeded (a file manager
+---                                is meant to be fire-and-forget) — turn this on to see what
+---                                actually happened when a launch silently doesn't open anything.
+---@field reuse_existing boolean?  Windows only. Before opening a new Explorer window, check
+---                                whether one is already open and navigate IT to the target path
+---                                instead of spawning another. Not a literal new TAB (Explorer's
+---                                own tab feature has no scripting hook to add one from outside) —
+---                                see reuse_win.lua. Adds a synchronous PowerShell round-trip
+---                                (~100-300ms) to every launch. Default false.
 
 -- ── shell_run ─────────────────────────────────────────────────────────────────
 

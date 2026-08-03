@@ -1572,6 +1572,146 @@ do
   package.loaded["filetree.features.fileops.create_from_template"] = nil
 end
 
+-- ── open_in_fm: debug logging + reuse_existing dispatch ─────────────────────
+-- Regression coverage for a feature that previously had ZERO logic tests: it
+-- only checked that a process STARTED, never that it succeeded, and had no
+-- debug logging at all — this is what made an intermittent real-world
+-- failure look like it had "no pattern."
+do
+  local platform = require("filetree.util.platform")
+  local tmp_dir = (vim.env.TEMP .. "/units-open-in-fm"):gsub("\\", "/")
+  vim.fn.mkdir(tmp_dir, "p")
+
+  local stub_adapter = {
+    get_current_node = function() return { path = tmp_dir } end,
+  }
+
+  -- Force the manual_open path (not vim.ui.open) so job-spawn behavior is
+  -- deterministic regardless of Neovim version/host config.
+  local orig_ui_open = vim.ui.open
+  vim.ui.open = nil
+  local orig_is_windows = platform.is_windows
+  platform.is_windows = function() return true end
+  local orig_jobstart = vim.fn.jobstart
+
+  local captured
+  vim.fn.jobstart = function(args, opts)
+    captured = { args = args, opts = opts }
+    return 42
+  end
+
+  package.loaded["filetree.features.system.open_in_fm"] = nil
+  local open_in_fm = require("filetree.features.system.open_in_fm")
+  open_in_fm.setup({ enabled = true }, stub_adapter)
+  open_in_fm.open()
+
+  check("open_in_fm: debug=false (default) — no on_exit wired", captured.opts.on_exit == nil)
+  check("open_in_fm: debug=false (default) — no on_stderr wired", captured.opts.on_stderr == nil)
+  check("open_in_fm: manual_open builds explorer argv on windows", captured.args[1] == "explorer")
+
+  package.loaded["filetree.features.system.open_in_fm"] = nil
+  open_in_fm = require("filetree.features.system.open_in_fm")
+  open_in_fm.setup({ enabled = true, debug = true }, stub_adapter)
+  open_in_fm.open()
+
+  check("open_in_fm: debug=true — on_exit wired", type(captured.opts.on_exit) == "function")
+  check("open_in_fm: debug=true — on_stderr wired", type(captured.opts.on_stderr) == "function")
+  check("open_in_fm: debug=true — on_exit callback does not error",
+    pcall(captured.opts.on_exit, 42, 0))
+  check("open_in_fm: debug=true — on_stderr callback does not error",
+    pcall(captured.opts.on_stderr, 42, { "some stderr line" }))
+
+  -- reuse_existing: reuse_win.try()'s return value gates whether a new
+  -- process gets spawned at all.
+  local jobstart_called
+  vim.fn.jobstart = function(...)
+    jobstart_called = true
+    return 42
+  end
+
+  package.loaded["filetree.features.system.open_in_fm.reuse_win"] = { try = function() return true end }
+  package.loaded["filetree.features.system.open_in_fm"] = nil
+  open_in_fm = require("filetree.features.system.open_in_fm")
+  jobstart_called = false
+  open_in_fm.setup({ enabled = true, reuse_existing = true }, stub_adapter)
+  open_in_fm.open()
+  check("open_in_fm: reuse_existing=true + a window was reused — no new process spawned",
+    jobstart_called == false)
+
+  package.loaded["filetree.features.system.open_in_fm.reuse_win"] = { try = function() return false end }
+  package.loaded["filetree.features.system.open_in_fm"] = nil
+  open_in_fm = require("filetree.features.system.open_in_fm")
+  jobstart_called = false
+  open_in_fm.setup({ enabled = true, reuse_existing = true }, stub_adapter)
+  open_in_fm.open()
+  check("open_in_fm: reuse_existing=true + nothing reused — falls back to spawning",
+    jobstart_called == true)
+
+  vim.fn.jobstart = orig_jobstart
+  vim.ui.open = orig_ui_open
+  platform.is_windows = orig_is_windows
+  package.loaded["filetree.features.system.open_in_fm.reuse_win"] = nil
+  package.loaded["filetree.features.system.open_in_fm"] = nil
+end
+
+-- ── open_in_fm.reuse_win: PowerShell script construction (pure string checks) ─
+do
+  local reuse_win = require("filetree.features.system.open_in_fm.reuse_win")
+
+  local script = reuse_win.build_script("C:\\Users\\test\\some dir")
+  check("reuse_win.build_script: navigates to the given path",
+    script:find("Navigate2('C:\\Users\\test\\some dir')", 1, true) ~= nil)
+  check("reuse_win.build_script: exits 1 when no window is found",
+    script:find("exit 1", 1, true) ~= nil)
+  check("reuse_win.build_script: escapes embedded single quotes",
+    reuse_win.build_script("C:\\it's\\a path"):find("it''s", 1, true) ~= nil)
+end
+
+-- ── no_name_guard: tab-wide sweep on BufAdd/BufDelete/BufWipeout ────────────
+-- Regression coverage for a real, previously-untested gap: a stray [No Name]
+-- buffer sitting in a window that never itself refires BufWinEnter (so the
+-- existing single-pair `handle()` never revisits it) used to persist
+-- indefinitely even with real, usable buffers open elsewhere.
+do
+  vim.cmd("only")
+  local real_path = (vim.env.TEMP .. "/units-no-name-guard-real.txt"):gsub("\\", "/")
+  vim.fn.writefile({ "x" }, real_path)
+  vim.cmd("edit " .. vim.fn.fnameescape(real_path))
+
+  vim.cmd("vsplit")
+  local no_name_win = vim.api.nvim_get_current_win()
+  vim.cmd("enew") -- fresh [No Name] buffer in THIS window only
+  local no_name_buf = vim.api.nvim_win_get_buf(no_name_win)
+
+  check("no_name_guard setup: second window really is a stray No Name buffer",
+    vim.api.nvim_buf_get_name(no_name_buf) == "" and vim.bo[no_name_buf].buftype == "")
+
+  local stub_adapter = setmetatable({
+    name = "units-stub-no-name-guard",
+    is_available = function() return true end,
+    get_winid = function() return nil end,
+    refresh = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub_adapter)
+  ft.setup({ adapter = "units-stub-no-name-guard",
+    features = { no_name_guard = { enabled = true } } })
+
+  -- The sweep doesn't care which buffer/event triggered it, only that the
+  -- buffer list changed -- fire BufAdd on something unrelated.
+  vim.cmd("badd " .. vim.fn.fnameescape(vim.fn.tempname()))
+  vim.wait(50)
+
+  check("no_name_guard sweep: the No Name window was redirected to a real buffer",
+    vim.api.nvim_win_get_buf(no_name_win) ~= no_name_buf)
+  check("no_name_guard sweep: the stray buffer itself was wiped",
+    not vim.api.nvim_buf_is_valid(no_name_buf))
+
+  pcall(vim.api.nvim_win_close, no_name_win, true)
+  vim.cmd("only")
+end
+
 -- ── open_variants: sg/sv/st/gb/<S-CR> are all bound ──────────────────────────
 do
   local cur_node = { path = (vim.env.TEMP .. "/units-openvariants.txt"):gsub("\\", "/"), type = "file" }

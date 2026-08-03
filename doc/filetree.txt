@@ -21,6 +21,8 @@ CONTENTS                                                    *filetree-contents*
      5.6 Safety / Backup .................. |filetree-safety|
      5.7 Auto Reveal ....................... |filetree-auto-reveal|
      5.8 Create From Template ............. |filetree-create-from-template|
+     5.9 Open In File Manager ............. |filetree-open-in-fm|
+     5.10 No Name Guard ................... |filetree-no-name-guard|
   6. Adapters ............................... |filetree-adapters|
   7. Public API ............................. |filetree-api|
   8. Health check ........................... |filetree-health|
@@ -762,6 +764,68 @@ PUBLIC API ~
   cft.add_template(name, content)
   cft.move(name, -1)         --> boolean moved (up); +1 moves down
 <
+
+------------------------------------------------------------------------------
+5.9 OPEN IN FILE MANAGER                              *filetree-open-in-fm*
+
+Opens the directory of the node under the cursor in the platform's file
+manager (default keymap "<leader>fm"): Windows -> explorer.exe, macOS -> Finder
+(via `open`), Linux -> whatever `xdg-open`/`wslview` resolves to. Prefers
+Neovim's own `vim.ui.open` (0.10+); falls back to a manual per-platform spawn,
+or an explicit `command` override.
+
+This only ever confirms that a process STARTED — a file manager launch is
+meant to be fire-and-forget, so neither path waits for or inspects an exit
+code by default. If a launch silently opens nothing, turn on `debug` to see
+what actually happened: >lua
+  features = {
+    open_in_fm = { enabled = true, debug = true },
+  }
+<
+This logs the branch taken (vim.ui.open vs. the manual per-OS command), the
+exact argv, the spawned job id, and — only while `debug` is on, so there is
+zero overhead otherwise — the process's exit code and stderr output.
+
+REUSE AN EXISTING WINDOW (Windows only) ~
+
+  reuse_existing = true
+
+Before opening a new Explorer window, checks (via a `Shell.Application` COM
+query) whether one is already open and navigates IT to the target path
+instead of spawning another. This is NOT the same as opening a new tab in
+that window — Explorer's own tab feature (Windows 11 22H2+) has no public
+scripting hook to add a tab to an existing window from outside the process,
+so this reuses/replaces that window's current view instead. Adds a
+synchronous PowerShell round-trip (roughly 100-300ms) to every launch, which
+is why it defaults to off. If your default folder handler is something other
+than Explorer (some third-party file managers register themselves as the
+`Directory` shell-open handler the same way a browser registers itself for
+http(s) links), `vim.ui.open`/the manual `explorer` launch should still work —
+Windows dispatches to whatever's registered — but `reuse_existing`'s COM
+query is Explorer-specific and will simply find nothing to reuse.
+
+------------------------------------------------------------------------------
+5.10 NO NAME GUARD                                    *filetree-no-name-guard*
+
+Redirects a stray [No Name] editor window to a real, open buffer and wipes
+the stray one — Neovim falls back to showing [No Name] in any window left
+with nothing to display (a `:bd`/`:bwipeout` with no alternate, `:enew`, …).
+Left alone when no real buffer exists to redirect to (e.g. the last file
+buffer just closed) — that IS the legitimate case.
+
+Two passes, both always skipping the tree's own window:
+  - A `BufWinEnter` handler tied to the window actually being focused —
+    fires deterministically the moment a stray buffer becomes the focused one.
+  - A `BufAdd`/`BufDelete`/`BufWipeout` sweep across every window, all tabs —
+    catches a stray buffer sitting in some OTHER window that never itself
+    refires BufWinEnter, which the first pass alone would never revisit.
+
+Both defer one tick and re-validate before acting (BufDelete/BufWipeout fire
+mid-transition, before Neovim has settled the window's replacement buffer),
+so this never races a user who deliberately switched into a [No Name] window.
+
+Config:
+  `enabled`   boolean   (default true)
 
 ==============================================================================
 6. ADAPTERS                                               *filetree-adapters*
