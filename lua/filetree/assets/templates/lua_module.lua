@@ -1,6 +1,5 @@
 ---@module '${module}'
----@brief
----@description
+--- Template for a new plain Lua module.
 
 local M = {}
 

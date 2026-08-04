@@ -1,5 +1,5 @@
 ---@module 'filetree.adapter.mini_files'
----@brief mini.files adapter — implements the FiletreeAdapter interface for mini.files.
+--- mini.files adapter — implements the FiletreeAdapter interface for mini.files.
 
 -- Imported as `pathutil` (not `path`) because `path` is used pervasively below as
 -- a local parameter/variable name for a plain path string; importing under that
@@ -12,6 +12,7 @@ local M = { name = "mini_files", filetypes = { "minifiles" } }
 
 local _ns = nil
 
+---@internal
 local function ns()
   if not _ns then _ns = vim.api.nvim_create_namespace("filetree_mini_files") end
   return _ns
@@ -19,6 +20,7 @@ end
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
+---@internal
 local function get_mf()
   local ok, mf = pcall(require, "mini.files")
   if not ok then return nil end
@@ -26,6 +28,7 @@ local function get_mf()
 end
 
 ---Get explorer state (nil when mini.files is not open).
+---@internal
 local function get_state()
   local mf = get_mf()
   if not mf or not mf.get_explorer_state then return nil end
@@ -36,6 +39,7 @@ end
 
 -- ── Interface ─────────────────────────────────────────────────────────────────
 
+---@return boolean
 function M.is_available()
   local ok = pcall(require, "mini.files")
   return ok
@@ -46,6 +50,7 @@ end
 -- own docs spell this out ("Each element is a table with <win_id> ... and
 -- <path> ..."). An earlier version of this adapter passed the table itself to
 -- nvim_win_is_valid()/nvim_win_get_buf(), which errors ("Expected Lua number").
+---@internal
 ---@param state table  result of MiniFiles.get_explorer_state()
 ---@return integer?
 local function last_win_id(state)
@@ -55,6 +60,7 @@ local function last_win_id(state)
   return type(entry) == "table" and entry.win_id or nil
 end
 
+---@return boolean, integer? bufnr
 function M.is_open()
   local state = get_state()
   if state == nil then return false, nil end
@@ -66,6 +72,7 @@ function M.is_open()
   return true, nil
 end
 
+---@return integer? winid
 function M.get_winid()
   local state = get_state()
   if not state then return nil end
@@ -74,11 +81,13 @@ function M.get_winid()
   return nil
 end
 
+---@return integer? bufnr
 function M.get_bufnr()
   local _, buf = M.is_open()
   return buf
 end
 
+---@return string root_path
 function M.get_root_path()
   local state = get_state()
   if not state then return vim.fn.getcwd() end
@@ -87,6 +96,7 @@ function M.get_root_path()
   return vim.fn.getcwd()
 end
 
+---@return FiletreeNode?
 function M.get_current_node()
   local mf = get_mf()
   if not mf or not mf.get_fs_entry then return nil end
@@ -110,6 +120,8 @@ function M.get_current_node()
   }
 end
 
+---@param filter? FiletreeFilterMode
+---@return FiletreeNode[]
 function M.get_visible_nodes(filter)
   local mf = get_mf()
   if not mf or not mf.get_fs_entry then return {} end
@@ -161,12 +173,15 @@ end
 -- backslash->forward-slash pass doesn't fix. Collapse any run of slashes that
 -- follows a non-slash character down to one; a pattern requiring a preceding
 -- character never touches a genuine leading UNC "//", so that stays intact.
+---@internal
 ---@param p string
 ---@return string
 local function normalize_key(p)
   return (pathutil.slashify(p):gsub("(%S)/+", "%1/"))
 end
 
+---@param node_path string
+---@return integer? line_number
 function M.get_node_line(node_path)
   local query = normalize_key(node_path)
   local nodes = M.get_visible_nodes()
@@ -176,9 +191,17 @@ function M.get_node_line(node_path)
   return nil
 end
 
+---@param _node FiletreeNode
+---@return boolean
 function M.expand_node(_node) return false end
+
+---@param _node FiletreeNode
+---@return boolean
 function M.collapse_node(_node) return false end
 
+---@param path string
+---@param mode? FiletreeOpenMode
+---@return boolean
 function M.open_file(path, mode)
   local mf = get_mf()
   if mf then pcall(mf.close) end
@@ -189,6 +212,9 @@ function M.open_file(path, mode)
   return ok
 end
 
+---@param path string
+---@param _parent_levels? integer
+---@return boolean
 function M.open_reveal(path, _parent_levels)
   local mf = get_mf()
   if not mf then return false end
@@ -197,6 +223,8 @@ function M.open_reveal(path, _parent_levels)
   return ok
 end
 
+---@param path string
+---@return boolean
 function M.set_root(path)
   local mf = get_mf()
   if not mf then return false end
@@ -204,6 +232,7 @@ function M.set_root(path)
   return ok
 end
 
+---@return boolean
 function M.open_cwd()
   local mf = get_mf()
   if not mf then return false end
@@ -211,6 +240,7 @@ function M.open_cwd()
   return ok
 end
 
+---@return boolean
 function M.close()
   local mf = get_mf()
   if not mf then return false end
@@ -218,6 +248,7 @@ function M.close()
   return ok
 end
 
+---@return boolean
 function M.refresh()
   local mf = get_mf()
   if not mf then return false end
@@ -227,6 +258,8 @@ function M.refresh()
   return ok1 and ok2
 end
 
+---@param line integer
+---@return boolean
 function M.scroll_to_line(line)
   local win = M.get_winid()
   if not win then return false end
@@ -238,6 +271,9 @@ end
 ---@type table<string, integer>
 local _hl_marks = {}
 
+---@param path string
+---@param hl_group string
+---@return boolean
 function M.highlight_node(path, hl_group)
   local line = M.get_node_line(path)
   if not line then return false end
@@ -251,6 +287,8 @@ function M.highlight_node(path, hl_group)
   return ok
 end
 
+---@param path string
+---@return boolean
 function M.unhighlight_node(path)
   local id = _hl_marks[path]
   if not id then return true end

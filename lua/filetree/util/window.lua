@@ -1,6 +1,6 @@
 ---@module 'filetree.util.window'
----@brief Window helpers — delegate to lib.nvim.window, with fallbacks.
----@description
+--- Window helpers — delegate to lib.nvim.window, with fallbacks.
+---
 --- Thin wrapper so filetree shares lib.nvim's floating/scratch-window
 --- conventions when present, and still runs standalone otherwise.
 ---

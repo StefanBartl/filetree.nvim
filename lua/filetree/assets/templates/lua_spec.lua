@@ -1,5 +1,5 @@
 ---@module '${module}'
----@brief Specs for ${filename}.
+--- Template for a busted spec file for ${filename}.
 
 describe("${filename}", function()
   before_each(function()

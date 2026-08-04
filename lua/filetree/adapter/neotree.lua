@@ -1,5 +1,5 @@
 ---@module 'filetree.adapter.neotree'
----@brief Neo-tree adapter — implements the FiletreeAdapter interface for neo-tree.nvim.
+--- Neo-tree adapter — implements the FiletreeAdapter interface for neo-tree.nvim.
 
 local notify = require("filetree.util.notify").create("[filetree.adapter.neotree]")
 local registry = require("filetree.adapter")
@@ -24,12 +24,14 @@ local M = {
 
 -- ── Internal helpers ──────────────────────────────────────────────────────────
 
+---@internal
 local function get_manager()
   local ok, manager = pcall(require, "neo-tree.sources.manager")
   if not ok then return nil end
   return manager
 end
 
+---@internal
 local function get_state()
   local manager = get_manager()
   if not manager then return nil end
@@ -38,6 +40,7 @@ local function get_state()
   return state
 end
 
+---@internal
 local function get_commands()
   local ok, commands = pcall(require, "neo-tree.command")
   if not ok then return nil end
@@ -52,6 +55,7 @@ local VALID_POSITIONS = { left = true, right = true, float = true, current = tru
 ---default. Neo-tree keeps one shared state per source, not per position, so this
 ---is the only source of truth for "where is/was the tree". Falls back to "left"
 ---when there is no prior state (e.g. first show of the session) or an unexpected value.
+---@internal
 ---@return FiletreeTreePosition
 local function get_current_position()
   local state = get_state()
@@ -64,6 +68,7 @@ end
 ---Prefers the canonical `node.path`, falls back to the node id (which for the
 ---filesystem source is the path). Returns nil for nodes without a real path
 ---(message / loading / virtual nodes), so callers can skip them.
+---@internal
 ---@param node table?
 ---@return string? path
 local function node_path(node)
@@ -85,6 +90,7 @@ end
 
 ---Determine whether a node is a directory (uses node.type, falls back to a
 ---filesystem check when the field is absent).
+---@internal
 ---@param node table
 ---@param path string
 ---@return boolean
@@ -96,11 +102,13 @@ end
 
 -- ── Interface ─────────────────────────────────────────────────────────────────
 
+---@return boolean
 function M.is_available()
   local ok = pcall(require, "neo-tree")
   return ok
 end
 
+---@return boolean, integer? bufnr
 function M.is_open()
   local state = get_state()
   if not state then return false, nil end
@@ -113,11 +121,13 @@ function M.is_open()
   return false, nil
 end
 
+---@return integer? bufnr
 function M.get_bufnr()
   local _, bufnr = M.is_open()
   return bufnr
 end
 
+---@return integer? winid
 function M.get_winid()
   local state = get_state()
   if not state then return nil end
@@ -127,11 +137,13 @@ function M.get_winid()
   return nil
 end
 
+---@return string? root_path
 function M.get_root_path()
   local state = get_state()
   return state and state.path or nil
 end
 
+---@return FiletreeNode?
 function M.get_current_node()
   local state = get_state()
   if not state or not state.tree then return nil end
@@ -182,6 +194,8 @@ end
 -- collecting past this many nodes — far more than any picker/marks use needs.
 local MAX_VISIBLE = 5000
 
+---@param filter? FiletreeFilterMode
+---@return FiletreeNode[]
 function M.get_visible_nodes(filter)
   local state = get_state()
   if not state or not state.tree then return {} end
@@ -190,6 +204,7 @@ function M.get_visible_nodes(filter)
   local line_nr = 1
   local capped = false
 
+  ---@internal
   local function collect(node)
     if not node or #nodes >= MAX_VISIBLE then
       capped = capped or #nodes >= MAX_VISIBLE
@@ -252,6 +267,7 @@ end
 ---sides to the same form, every lookup silently misses on Windows — the map
 ---builds fine but `get_node_line()` never finds an entry, forcing the
 ---(otherwise avoidable) slow reveal path on every call.
+---@internal
 ---@param p string
 ---@return string
 local function key_of(p)
@@ -264,6 +280,7 @@ local _line_map_buf = -1
 local _line_map_tick = -1
 
 ---Build (or reuse) the path→line map for the currently rendered tree.
+---@internal
 ---@return table<string, integer>?
 local function line_map()
   local _, bufnr = M.is_open()
@@ -290,11 +307,15 @@ local function line_map()
   return map
 end
 
+---@param path string
+---@return integer? line_number
 function M.get_node_line(path)
   local map = line_map()
   return map and map[key_of(path)] or nil
 end
 
+---@param node FiletreeNode
+---@return boolean
 function M.expand_node(node)
   local state = get_state()
   if not state or not state.tree then return false end
@@ -312,6 +333,8 @@ function M.expand_node(node)
   return true
 end
 
+---@param node FiletreeNode
+---@return boolean
 function M.collapse_node(node)
   local state = get_state()
   if not state or not state.tree then return false end
@@ -329,6 +352,9 @@ function M.collapse_node(node)
   return true
 end
 
+---@param path string
+---@param mode? FiletreeOpenMode
+---@return boolean
 function M.open_file(path, mode)
   mode = mode or "edit"
   local cmd_map = {
@@ -344,6 +370,8 @@ function M.open_file(path, mode)
   return ok
 end
 
+---@param path string
+---@return boolean
 function M.set_root(path)
   local commands = get_commands()
   if not commands then return false end
@@ -356,6 +384,10 @@ function M.set_root(path)
   return ok
 end
 
+---@param path string
+---@param parent_levels? integer
+---@param root_dir? string
+---@return boolean
 function M.open_reveal(path, parent_levels, root_dir)
   local commands = get_commands()
   if not commands then return false end
@@ -386,6 +418,7 @@ function M.open_reveal(path, parent_levels, root_dir)
   return ok
 end
 
+---@return boolean
 function M.open_cwd()
   local commands = get_commands()
   if not commands then return false end
@@ -416,6 +449,7 @@ function M.toggle_at(position, opts)
   }))
 end
 
+---@return boolean
 function M.close()
   local commands = get_commands()
   if not commands then return false end
@@ -423,6 +457,7 @@ function M.close()
   return ok
 end
 
+---@return boolean
 function M.refresh()
   local commands = get_commands()
   if not commands then return false end
@@ -443,6 +478,8 @@ function M.redraw()
   return (pcall(renderer.redraw, state))
 end
 
+---@param line integer
+---@return boolean
 function M.scroll_to_line(line)
   local winid = M.get_winid()
   if not winid then return false end
@@ -456,11 +493,15 @@ end
 local _hl_marks = {}
 local _ns = nil
 
+---@internal
 local function ns()
   if not _ns then _ns = vim.api.nvim_create_namespace("filetree_current_hl_neotree") end
   return _ns
 end
 
+---@param path string
+---@param hl_group string
+---@return boolean
 function M.highlight_node(path, hl_group)
   local line = M.get_node_line(path)
   if not line then return false end
@@ -474,6 +515,8 @@ function M.highlight_node(path, hl_group)
   return ok
 end
 
+---@param path string
+---@return boolean
 function M.unhighlight_node(path)
   local id = _hl_marks[path]
   if not id then return true end
@@ -490,11 +533,16 @@ end
 ---@type table<string, integer>   path → sign extmark id
 local _sign_marks = {}
 local _sign_ns = nil
+---@internal
 local function sign_ns()
   if not _sign_ns then _sign_ns = vim.api.nvim_create_namespace("filetree_sign_neotree") end
   return _sign_ns
 end
 
+---@param path string
+---@param text string
+---@param hl_group string
+---@return boolean
 function M.sign_node(path, text, hl_group)
   local line = M.get_node_line(path)
   if not line then return false end
@@ -510,6 +558,8 @@ function M.sign_node(path, text, hl_group)
   return ok
 end
 
+---@param path string
+---@return boolean
 function M.unsign_node(path)
   local id = _sign_marks[path]
   if not id then return true end
@@ -539,6 +589,8 @@ local _reveal_guard_installed = false
 ---calls neo-tree's command API directly (a user's own custom keymaps, a
 ---plugin, neo-tree's own internals) can just as easily trigger it, and missing
 ---even one call site (this is exactly how the original bug report happened —
+---
+---@return nil
 ---several sites were correctly guarded, one was overlooked) brings the prompt
 ---back. Since every caller shares the same `neo-tree.command` module table,
 ---wrapping `execute` once here protects all of them, current and future,

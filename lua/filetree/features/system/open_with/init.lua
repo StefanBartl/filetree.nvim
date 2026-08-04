@@ -1,6 +1,6 @@
----@module 'filetree.features.open_with'
----@brief Open tree nodes with external applications.
----@description
+---@module 'filetree.features.system.open_with'
+--- Open tree nodes with external applications.
+---
 --- Two modes:
 ---   system  — uses the OS default handler (xdg-open / open / start)
 ---   custom  — user-defined app list with optional keymaps
@@ -40,6 +40,7 @@ local _adapter = nil
 
 -- ── Open helpers ──────────────────────────────────────────────────────────────
 
+---@internal
 ---Per-OS "open with default handler" command (fallback for Neovim < 0.10).
 ---@return string[]
 local function system_open_cmd()
@@ -53,6 +54,9 @@ local function system_open_cmd()
   return { "xdg-open" }
 end
 
+---@internal
+---@param cmd_parts string[]
+---@param path string
 local function open_with_cmd(cmd_parts, path)
   local full_cmd = vim.deepcopy(cmd_parts)
   full_cmd[#full_cmd + 1] = path
@@ -65,9 +69,11 @@ local function open_with_cmd(cmd_parts, path)
   end)
 end
 
+---@internal
 ---Open `path` with the OS default handler. Prefers Neovim's built-in
 ---`vim.ui.open` (0.10+, platform-correct + maintained); falls back to a manual
 ---per-OS spawn otherwise.
+---@param path string
 local function system_open(path)
   if type(vim.ui.open) == "function" then
     local ok, obj = pcall(vim.ui.open, path)
@@ -76,6 +82,8 @@ local function system_open(path)
   open_with_cmd(system_open_cmd(), path)
 end
 
+---@internal
+---@return string?
 local function current_path()
   if not _adapter then return nil end
   local node = _adapter.get_current_node()

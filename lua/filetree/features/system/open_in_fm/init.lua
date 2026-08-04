@@ -1,6 +1,6 @@
----@module 'filetree.features.open_in_fm'
----@brief Open the node under cursor in the system file manager.
----@description
+---@module 'filetree.features.system.open_in_fm'
+--- Open the node under cursor in the system file manager.
+---
 --- Binds a key (default `<leader>fm`) in the tree buffer.  On activation it
 --- resolves the directory of the node under the cursor and opens it in the
 --- platform's native file manager:
@@ -46,6 +46,7 @@ local M = {}
 ---@type boolean
 local _debug = false
 
+---@internal
 ---@param msg string
 local function dbg(msg)
   if _debug then notify.debug(msg) end
@@ -53,6 +54,7 @@ end
 
 -- ── Launch ────────────────────────────────────────────────────────────────────
 
+---@internal
 ---Spawn a detached process; returns true when the job started.
 ---
 ---NOTE on what "true" actually means: only that `jobstart` accepted the argv
@@ -87,6 +89,7 @@ local function spawn(args)
   return true
 end
 
+---@internal
 ---Manual per-platform folder open (fallback for Neovim < 0.10).
 ---@param dir string
 ---@return boolean
@@ -109,6 +112,7 @@ end
 ---@type boolean
 local _reuse_existing = false
 
+---@internal
 ---Open `dir` in the system file manager. Prefers `vim.ui.open`.
 ---@param dir string  Absolute directory path.
 ---@param override string?  Explicit launcher command, if configured.

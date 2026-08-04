@@ -1,6 +1,6 @@
 ---@module 'filetree.commands'
----@brief Central :Filetree command dispatcher with tab-completion.
----@description
+--- Central :Filetree command dispatcher with tab-completion.
+---
 --- Registers a single :Filetree command (built via lib.nvim.usercmd.composer)
 --- that dispatches to all feature modules. TREE is the single source of
 --- truth for dispatch, <Tab> completion, and M.command_paths(); composer
@@ -23,6 +23,10 @@ local M = {}
 
 -- ── Feature accessor (lazy, only works after setup()) ─────────────────────────
 
+---@internal
+---Resolve a loaded feature module by name (nil when unavailable/before setup()).
+---@param name string
+---@return table?
 local function ft(name)
   local ok, main = pcall(require, "filetree")
   if not ok then return nil end
@@ -317,6 +321,8 @@ local TREE = {
 -- for filter/reveal/mdlink/search/info/require (all `[""]`-bearing groups),
 -- reproduced for free by composer's own walk, not re-implemented here.
 
+---@internal
+---Recursively walk a TREE-shaped table, appending a composer route per leaf function.
 ---@param node table
 ---@param path string[]
 ---@param routes table[]
@@ -335,6 +341,7 @@ local function walk_tree(node, path, routes)
   end
 end
 
+---@internal
 ---Build the composer route list from TREE. A few leaves are special-cased so
 --- their arguments get types (directory completion, a closed set of mode
 --- names) instead of the generic tree-key walking; every other leaf just
@@ -439,6 +446,7 @@ function M.setup(cfg)
   end
 end
 
+---Unregister every :Filetree/:Ft command variant registered by the last M.setup().
 function M.teardown()
   for _, cmd_name in ipairs(_registered_commands) do
     usercmd.del(cmd_name)

@@ -1,6 +1,6 @@
 ---@module 'filetree.bindings'
----@brief Aggregated binding catalog + optional which-key integration.
----@description
+--- Aggregated binding catalog + optional which-key integration.
+---
 --- One place to introspect everything filetree.nvim binds:
 ---   • keymaps    — default keymaps by category (bindings.keymaps)
 ---   • usercommands — every `:Filetree …` sub-command, walked live from the

@@ -1,6 +1,6 @@
 ---@module 'filetree.util.select'
----@brief Selection prompt — routes vim.ui.select through lib.nvim.ui.kit.
----@description
+--- Selection prompt — routes vim.ui.select through lib.nvim.ui.kit.
+---
 --- Drop-in for `vim.ui.select(items, opts, on_choice)`. When lib.nvim is present
 --- it renders via `lib.nvim.ui.kit` (`kit.select`) for a consistent floating UI
 --- across the author's plugins; otherwise it falls back to `vim.ui.select`. Call
@@ -12,6 +12,7 @@
 local _ok, kit = pcall(require, "lib.nvim.ui.kit")
 local has_kit = _ok and type(kit) == "table" and type(kit.select) == "function"
 
+---Prompt the user to select one of `items`, via lib.nvim.ui.kit if available.
 ---@param items any[]
 ---@param opts  table|nil   { prompt?, format_item? } (as vim.ui.select)
 ---@param on_choice fun(item: any|nil, idx: integer|nil)

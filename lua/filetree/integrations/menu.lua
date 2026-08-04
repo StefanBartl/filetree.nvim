@@ -18,6 +18,7 @@
 
 local M = {}
 
+---@internal
 --- Resolve a loaded feature module (nil when the feature is disabled/absent).
 ---@param name string
 ---@return table|nil
@@ -27,6 +28,7 @@ local function feature(name)
   return main.feature(name)
 end
 
+---@internal
 --- Build one menu entry, or nil when the feature/function is unavailable.
 ---@param name string   feature name
 ---@param fn string     function on the feature module
@@ -46,6 +48,7 @@ local function entry(name, fn, label, rtxt)
   }
 end
 
+---@internal
 --- Append every non-nil entry of `group` to `out`, preceded by a separator when
 --- both `out` and `group` are non-empty. Returns whether anything was added.
 ---@param out table

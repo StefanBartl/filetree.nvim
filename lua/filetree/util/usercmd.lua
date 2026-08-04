@@ -1,6 +1,6 @@
 ---@module 'filetree.util.usercmd'
----@brief User-command helpers — delegate to lib.nvim.usercmd, with fallbacks.
----@description
+--- User-command helpers — delegate to lib.nvim.usercmd, with fallbacks.
+---
 --- `lib.nvim.usercmd.create(name, callback, opts)` is a drop-in for
 --- `nvim_create_user_command`, so filetree shares the user's usercmd conventions
 --- when lib.nvim is present and still works standalone otherwise.

@@ -1,7 +1,7 @@
----@module 'filetree.features.open_in_fm.reuse_win'
----@brief Windows only: reuse an already-open Explorer window instead of
----spawning another one.
----@description
+---@module 'filetree.features.system.open_in_fm.reuse_win'
+--- Windows only: reuse an already-open Explorer window instead of spawning
+--- another one.
+---
 --- Explorer's tab feature (Windows 11 22H2+) has no public scripting API to
 --- add a tab to an EXISTING window from an outside process — there is no
 --- documented COM or CLI hook for it. What IS reliably scriptable (classic

@@ -1,6 +1,6 @@
----@module 'filetree.features.open_replace'
----@brief Open file under cursor and replace the current editor buffer.
----@description
+---@module 'filetree.features.fileops.open_replace'
+--- Open file under cursor and replace the current editor buffer.
+---
 --- Binds a key (default `O`) in the tree buffer.  On activation it:
 ---
 ---   1. Finds the most-recently-focused non-tree window.

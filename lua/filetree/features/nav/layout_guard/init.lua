@@ -1,6 +1,6 @@
----@module 'filetree.features.layout_guard'
----@brief Ensure an editor window always exists when the tree is the only window.
----@description
+---@module 'filetree.features.nav.layout_guard'
+--- Ensure an editor window always exists when the tree is the only window.
+---
 --- When the user closes all editor windows but leaves the tree open, this
 --- feature automatically opens a new empty window so the user is never
 --- trapped inside the tree with no place to edit files.

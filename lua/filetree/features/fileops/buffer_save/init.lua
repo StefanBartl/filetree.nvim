@@ -1,6 +1,6 @@
----@module 'filetree.features.buffer_save'
----@brief Force-save a buffer without leaving the tree window.
----@description
+---@module 'filetree.features.fileops.buffer_save'
+--- Force-save a buffer without leaving the tree window.
+---
 --- Two keymaps (both active while focus is in a tree buffer):
 ---
 ---   <C-s>  — save the last-focused adjacent editor buffer (analog to the
@@ -26,6 +26,7 @@ local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
+---@internal
 ---Save buffer `bufnr`.  Returns true on success.
 ---@param bufnr  integer
 ---@param force  boolean  true → write!   false → update

@@ -1,6 +1,6 @@
 ---@module 'filetree.util.notify'
----@brief Notification factory — scoped notifier with a fixed prefix.
----@description
+--- Notification factory — scoped notifier with a fixed prefix.
+---
 --- Delegates to `lib.nvim.notify` (a declared dependency; same `create(prefix)`
 --- API) when available, so notifications share the user's lib.nvim configuration.
 --- Falls back to a local vim.notify wrapper so filetree still works standalone.
@@ -23,6 +23,7 @@ function M.set_debug(on)
   _debug = on == true
 end
 
+---@internal
 ---Local fallback notifier (used when lib.nvim is not installed).
 ---@param prefix string
 ---@return FiletreeNotifier
@@ -38,6 +39,7 @@ local function local_notifier(prefix)
   }
 end
 
+---@internal
 ---Wrap a base notifier so `debug` only emits (visibly, as INFO) when the global
 ---debug switch is on — a no-op otherwise. info/warn/error pass straight through.
 ---@param base FiletreeNotifier

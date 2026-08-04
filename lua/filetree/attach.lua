@@ -1,6 +1,6 @@
 ---@module 'filetree.attach'
----@brief Inject filetree feature keymaps into neo-tree's `window.mappings`.
----@description
+--- Inject filetree feature keymaps into neo-tree's `window.mappings`.
+---
 --- filetree normally binds its keymaps via the central tree-attach dispatcher
 --- (`util.tree_attach`) AFTER the adapter has set up its own buffer-local
 --- keymaps.  Those keymaps work,
@@ -126,6 +126,7 @@ local SPEC = {
 
 -- ── Helpers ─────────────────────────────────────────────────────────────────────
 
+---@internal
 ---Resolve the lhs for an entry from the feature config; nil = skip.
 ---@param feat_cfg table
 ---@param entry FiletreeAttachEntry
@@ -138,6 +139,7 @@ local function resolve_key(feat_cfg, entry)
   return nil
 end
 
+---@internal
 ---Build a handler that lazily calls feature.<method>().  neo-tree invokes the
 ---handler with `state`; the feature actions take no args, so it is ignored.
 ---@param feature string
@@ -154,6 +156,7 @@ local function make_handler(feature, method)
   end
 end
 
+---@internal
 ---Normalize a neo-tree map key (e.g. "<C-M>" → "<c-m>") so injected entries merge
 ---and display consistently with neo-tree's own normalized mappings.
 ---@param key string
@@ -211,6 +214,7 @@ function M.neotree(opts, config)
   return opts
 end
 
+---@internal
 ---Merge `mappings` into every window.mappings table in `windows`.
 ---@param windows table[]  list of neo-tree `window` config tables
 ---@param mappings table

@@ -1,6 +1,6 @@
----@module 'filetree.features.open_variants'
----@brief Alternate ways to open the current node besides the adapter's default <CR>.
----@description
+---@module 'filetree.features.fileops.open_variants'
+--- Alternate ways to open the current node besides the adapter's default <CR>.
+---
 --- Covers the handful of "open elsewhere" actions that don't fit any other
 --- feature: split/vsplit/new-tab, and silently adding the file to the buffer
 --- list without moving focus off the tree.
@@ -36,6 +36,7 @@ local _cfg = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
+---@internal
 ---@return string?
 local function current_file_path()
   if not _adapter then return nil end
@@ -47,6 +48,7 @@ end
 ---Move focus to a real editor window (creating one if none exists), then run
 ---`cmd` there. Splitting/tabbing from the tree window itself would split the
 ---tree, not the editor.
+---@internal
 ---@param cmd string
 local function open_in_editor(cmd)
   local path = current_file_path()

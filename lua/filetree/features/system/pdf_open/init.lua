@@ -1,6 +1,6 @@
----@module 'filetree.features.pdf_open'
----@brief Open the PDF under the cursor via pdfport.nvim (optional dependency).
----@description
+---@module 'filetree.features.system.pdf_open'
+--- Open the PDF under the cursor via pdfport.nvim (optional dependency).
+---
 --- Bridges the tree node under the cursor to pdfport.nvim's core `open{}` API
 --- through filetree's own adapter — no per-tree code, no filetype switching. The
 --- adapter already abstracts neo-tree / nvim-tree / oil / …, so this feature is
@@ -37,6 +37,7 @@ local _cfg = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
+---@internal
 ---Path of the PDF file under the cursor, or nil (skips folders / non-PDFs).
 ---@return string?
 local function current_pdf()
@@ -47,6 +48,7 @@ local function current_pdf()
   return nil
 end
 
+---@internal
 ---@param mode FiletreePdfOpenMode
 local function open(mode)
   local path = current_pdf()
@@ -58,9 +60,13 @@ local function open(mode)
   pdf.open(path, opts)
 end
 
+---Open the PDF under the cursor using the configured `default_mode`.
 function M.open_default()  open(_cfg.default_mode or "buffer") end
+---Open the PDF under the cursor with pdfport's text extraction ("buffer" mode).
 function M.open_text()     open("buffer")   end
+---Open the PDF under the cursor in the OS default viewer.
 function M.open_system()   open("system")   end
+---Open the PDF under the cursor with pdfport in a terminal.
 function M.open_terminal() open("terminal") end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────

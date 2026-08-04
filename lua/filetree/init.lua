@@ -1,6 +1,6 @@
 ---@module 'filetree'
----@brief filetree.nvim — adapter-agnostic filetree features for Neovim.
----@description
+--- filetree.nvim — adapter-agnostic filetree features for Neovim.
+---
 --- Entry point. Call require("filetree").setup({}) with your configuration.
 --- See :help filetree or README.md for full option reference.
 

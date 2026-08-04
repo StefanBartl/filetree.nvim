@@ -1,6 +1,6 @@
----@module 'filetree.features.live_search'
----@brief Real-time incremental search/filter inside the tree buffer.
----@description
+---@module 'filetree.features.search.live_search'
+--- Real-time incremental search/filter inside the tree buffer.
+---
 --- Opens a minimal floating input bar at the bottom of the tree window.
 --- As the user types, visible nodes that do not match the query are dimmed
 --- in real-time. Pressing <CR> commits the pattern to the filter feature
@@ -47,12 +47,18 @@ local _ns = vim.api.nvim_create_namespace("filetree_live_search")
 
 -- ── Overlay helpers ───────────────────────────────────────────────────────────
 
+---@internal
+---@param bufnr integer?
 local function clear_overlay(bufnr)
   if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
     pcall(vim.api.nvim_buf_clear_namespace, bufnr, _ns, 0, -1)
   end
 end
 
+---@internal
+---Highlight matching lines and dim non-matching ones in the tree buffer.
+---@param tree_bufnr integer
+---@param query string?
 local function apply_overlay(tree_bufnr, query)
   clear_overlay(tree_bufnr)
   if not query or query == "" then return end
@@ -86,6 +92,7 @@ end
 
 -- ── Floating input bar ────────────────────────────────────────────────────────
 
+---@internal
 ---@param tree_winid integer
 ---@param tree_bufnr integer
 local function open_input_bar(tree_winid, tree_bufnr)
@@ -129,6 +136,7 @@ end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
+---Open the live-search input bar over the tree window.
 function M.open()
   if not _adapter then return end
   local winid = _adapter.get_winid and _adapter.get_winid() or -1
@@ -144,6 +152,7 @@ function M.open()
   open_input_bar(winid, bufnr)
 end
 
+---Clear the live-search overlay, if any.
 function M.clear()
   if not _adapter then return end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1

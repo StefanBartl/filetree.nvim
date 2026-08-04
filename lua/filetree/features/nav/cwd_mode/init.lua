@@ -1,6 +1,6 @@
----@module 'filetree.features.cwd_mode'
----@brief Root policy: decide *where* the cwd and the tree root belong.
----@description
+---@module 'filetree.features.nav.cwd_mode'
+--- Root policy: decide *where* the cwd and the tree root belong.
+---
 --- cwd_sync answers "the buffer changed, now what?" statelessly — it
 --- re-resolves a root from the file on every BufEnter. A *mode* is by
 --- definition state: "keep the cwd here regardless of which buffer is
@@ -193,6 +193,7 @@ local STORE_KEY = "filetree/cwd_mode"
 ---equal to the `E:/repos` the same directory produces elsewhere.
 ---@param dir string?
 ---@return string?
+---@internal
 local function canon(dir)
   if type(dir) ~= "string" or dir == "" then return nil end
   local out = normkey(dir)
@@ -202,6 +203,7 @@ end
 ---Directory of a file path (or the path itself when it is a directory).
 ---@param p string
 ---@return string
+---@internal
 local function dir_of(p)
   if vim.fn.isdirectory(p) == 1 then return p end
   return path_util.parent(p)
@@ -216,6 +218,7 @@ end
 ---@param file string
 ---@param mode FiletreeCwdModeName
 ---@return string?
+---@internal
 local function root_of(file, mode)
   local finder = (mode == "nearest") and _finder_nearest or _finder
   if not finder then return nil end
@@ -228,6 +231,7 @@ end
 ---@param file string
 ---@param root string?
 ---@return boolean
+---@internal
 local function inside(file, root)
   if not root then return false end
   return is_subpath(normkey(file), root)
@@ -240,6 +244,7 @@ end
 ---Returns nil in `follow` mode — that is the "no policy" answer, and it lets
 ---cwd_sync keep its own resolution chain instead of this module quietly
 ---replacing it.
+---@see filetree.features.nav.cwd_sync
 ---@param file string  Absolute path of the buffer being entered.
 ---@return FiletreeCwdDecision?
 function M.decide(file)
@@ -313,6 +318,7 @@ end
 
 -- ── Enforcement ───────────────────────────────────────────────────────────────
 
+---@internal
 local function drop_guard()
   if S.guard then
     pcall(S.guard.release)
@@ -321,6 +327,7 @@ local function drop_guard()
 end
 
 ---Install (or move) the dir_guard that keeps a lock honest.
+---@internal
 ---@param root string
 local function install_guard(root)
   if not _cfg.lock.enforce then
@@ -348,6 +355,7 @@ local function install_guard(root)
 end
 
 ---Run `fn` without the lock guard fighting it (used by deliberate moves).
+---@internal
 ---@param fn fun()
 local function unguarded(fn)
   if S.guard and S.guard.is_held() then
@@ -361,6 +369,7 @@ end
 
 ---The project store, or nil when persistence is off/unavailable.
 ---@return Lib.Store.Project?
+---@internal
 local function store()
   if not _cfg.persist or not _persist_path then return nil end
   local ok, mod = pcall(require, "lib.nvim.store.project")
@@ -373,6 +382,7 @@ end
 ---mode re-pins itself on every buffer switch, and persisting each of those
 ---would mean a disk write per BufEnter for a value that is re-derived at
 ---startup anyway.
+---@internal
 local function persist_save()
   local s = store()
   if not s then return end
@@ -388,6 +398,7 @@ end
 
 ---Apply the policy saved for this project, if any.
 ---@return boolean restored
+---@internal
 local function persist_restore()
   local s = store()
   if not s then return false end
@@ -522,6 +533,7 @@ end
 ---`lock` and `tree_leads` do not have this dependency: dir_guard and
 ---tree_traverse's manual re-root drive those directly, so this only warns for
 ---the two modes that actually need cwd_sync to do anything beyond the seed.
+---@internal
 ---@param mode FiletreeCwdModeName
 local function warn_if_cwd_sync_missing(mode)
   if mode ~= "project" and mode ~= "nearest" then return end
@@ -702,6 +714,7 @@ local LABEL_SET_BY_STYLE = {
 ---The badge text for the current mode, e.g. `LOCK  …/Notes`.
 ---@return string text
 ---@return string? hl
+---@internal
 local function badge_text()
   local cfg = _cfg.indicator
   local label_set = cfg[LABEL_SET_BY_STYLE[cfg.style]] or cfg.labels
@@ -725,6 +738,7 @@ local function badge_text()
   return text, cfg.hl[S.mode]
 end
 
+---@internal
 local function detach_badge()
   if _badge then
     pcall(_badge.detach)
@@ -749,6 +763,7 @@ local _last_hl = nil
 ---redraw. `redrawstatus` is scheduled rather than called inline because this
 ---runs from inside command handlers and autocmd callbacks, where a raw
 ---`:redrawstatus` can be a no-op or error depending on what is mid-flight.
+---@internal
 local function announce_change()
   pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "FiletreeCwdModeChanged" })
   vim.schedule(function() pcall(vim.cmd, "redrawstatus") end)

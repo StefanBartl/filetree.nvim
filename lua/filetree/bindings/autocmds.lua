@@ -1,6 +1,6 @@
 ---@module 'filetree.bindings.autocmds'
----@brief Catalog of the autocmds filetree.nvim registers, by event.
----@description
+--- Catalog of the autocmds filetree.nvim registers, by event.
+---
 --- Behavioural autocmds only (feature keymaps are also bound via a FileType
 --- autocmd but are cataloged in bindings.keymaps). All groups are named
 --- `filetree_<feature>` and are cleared on re-setup. Per-feature autocmds can be

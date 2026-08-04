@@ -1,6 +1,6 @@
----@module 'filetree.features.smart_rename'
----@brief LSP-aware single-node rename with will/did rename notifications.
----@description
+---@module 'filetree.features.fileops.smart_rename'
+--- LSP-aware single-node rename with will/did rename notifications.
+---
 --- Renames the current node and notifies all attached LSP servers via the
 --- workspace/willRenameFiles → (file move) → workspace/didRenameFiles
 --- protocol sequence so that servers can update cross-file references.
@@ -60,14 +60,17 @@ local _adapter = nil
 
 -- ── LSP helpers ───────────────────────────────────────────────────────────────
 
+---@internal
 local function make_rename_files_params(old_uri, new_uri)
   return { files = { { oldUri = old_uri, newUri = new_uri } } }
 end
 
+---@internal
 local function uri(fname)
   return vim.uri_from_fname(fname)
 end
 
+---@internal
 ---Send willRenameFiles to all supporting clients. Returns edit to apply (or nil).
 ---@param old_path string
 ---@param new_path string
@@ -96,6 +99,7 @@ local function lsp_will_rename(old_path, new_path, cb)
   end
 end
 
+---@internal
 local function lsp_did_rename(old_path, new_path)
   local params = make_rename_files_params(uri(old_path), uri(new_path))
   for _, client in pairs(vim.lsp.get_clients()) do
@@ -123,10 +127,12 @@ end
 -- family, and only runs when the LSP path didn't already handle it (or the
 -- file is Lua, which never gets an LSP edit here regardless).
 
+---@internal
 local function escape_lua_pattern(s)
   return (s:gsub("[%(%)%.%%%+%-%*%?%[%]%^%$]", "%%%1"))
 end
 
+---@internal
 local function escape_gsub_repl(s)
   return (s:gsub("%%", "%%%%"))
 end
@@ -134,6 +140,7 @@ end
 ---Absolute .lua path → dotted require() module name, e.g.
 ---".../lua/foo/bar.lua" → "foo.bar". Mirrors path_utils'/lua_require_copy's
 ---path_to_module convention: a trailing "/init" collapses into its parent.
+---@internal
 ---@param abs_path string
 ---@return string?
 local function file_to_lua_module(abs_path)
@@ -156,6 +163,7 @@ end
 
 ---Absolute .py path → dotted import module name, relative to the nearest
 ---detected project root (falls back to the file's own directory).
+---@internal
 ---@param abs_path string
 ---@return string?
 local function file_to_python_module(abs_path)
@@ -176,6 +184,7 @@ end
 
 ---Relative path from `from_dir` to `target_path`, POSIX-style, with ".."
 ---segments where needed (filetree.util.path.relative only handles descendants).
+---@internal
 ---@param from_dir string
 ---@param target_path string
 ---@return string
@@ -196,6 +205,7 @@ end
 
 ---Relative path from `from_dir` to `target_path` as a JS/TS module specifier
 ---(extensionless, "/index" collapsed, "./"-prefixed unless it already climbs up).
+---@internal
 ---@param from_dir string
 ---@param target_path string
 ---@return string
@@ -210,6 +220,7 @@ end
 ---supported reference pattern (old/new module couldn't be resolved, e.g. the
 ---file isn't under a lua/ root). `ref_file` matters only for TS/JS, where the
 ---import specifier is relative to the file being patched, not to old_path.
+---@internal
 ---@param filetype string
 ---@param old_path string
 ---@param new_path string
@@ -270,6 +281,7 @@ end
 ---Also returns the *resolved* filetype, since a directory rename comes in
 ---with an empty `filetype` (no extension to detect one from) but must still
 ---be dispatched as "lua" downstream, in build_line_replacer.
+---@internal
 ---@param old_path string
 ---@param filetype string
 ---@return string? needle, string[]? extensions, string? resolved_filetype
@@ -296,6 +308,7 @@ end
 ---Synchronous ripgrep scan for files containing `needle` as a fixed string,
 ---restricted to `exts`. Degrades to an empty result (no-op) when ripgrep
 ---isn't installed rather than hard-failing.
+---@internal
 ---@param root string
 ---@param needle string
 ---@param exts string[]
@@ -331,6 +344,7 @@ end
 
 ---Patch one file's require()/import references, whether it's open in a
 ---buffer (patched live) or only on disk (read/written directly).
+---@internal
 ---@param file string
 ---@param old_path string
 ---@param new_path string
@@ -371,6 +385,7 @@ end
 
 ---Project-wide fallback: rewrite require()/import references to `old_path`
 ---after a rename/move, when the LSP path above didn't already cover it.
+---@internal
 ---@param old_path string
 ---@param new_path string
 ---@param had_workspace_edit boolean  Whether an LSP client applied an edit.
@@ -410,6 +425,7 @@ end
 -- check gates a still-pending delete) -- a rename is trivially reversible, so
 -- there's no "cancel" option here, just "fix the links up" or "leave them".
 
+---@internal
 ---@param old_path string
 ---@param new_path string
 ---@param refs table[]|nil  References captured BEFORE the rename (via prefetch).
@@ -449,6 +465,7 @@ end
 
 -- ── Core rename ───────────────────────────────────────────────────────────────
 
+---@internal
 ---@param old_path string
 ---@param new_path string
 ---@param refs table[]|nil  Markdown refs captured before the rename (prefetch).

@@ -1,6 +1,6 @@
 ---@module 'filetree.util.platform'
----@brief Cross-platform detection utilities.
----@description
+--- Cross-platform detection utilities.
+---
 --- Base OS detectors (`is_windows`/`is_wsl`/`is_mac`/`is_linux`) delegate to
 --- `lib.nvim.cross.platform.*` when available, matching this repo's existing
 --- soft-dependency pattern (see `util/notify.lua`, `util/map.lua`). Falls
@@ -12,6 +12,8 @@
 
 local M = {}
 
+---@internal
+---Resolve `lib.nvim.cross.platform.<name>` if lib.nvim is installed and exports it.
 ---@param name string
 ---@return function|nil
 local function try_lib(name)

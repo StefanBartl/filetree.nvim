@@ -1,6 +1,6 @@
----@module 'filetree.features.auto_reveal'
----@brief Automatically reveal the current editor buffer in the tree.
----@description
+---@module 'filetree.features.nav.auto_reveal'
+--- Automatically reveal the current editor buffer in the tree.
+---
 --- Unlike cwd_sync (which changes the working directory), auto_reveal never
 --- changes the cwd or the tree's root. On every buffer switch it:
 ---   1. Scrolls to the file's line if it is already rendered (cheap).
@@ -56,22 +56,31 @@ local _debounce = nil
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
+---@internal
+---@return boolean
 local function is_paused()
   return (vim.uv or vim.loop).hrtime() < _paused_until
 end
 
+---@internal
+---@return boolean
 local function tree_is_open()
   if not _adapter then return false end
   local winid = _adapter.get_winid and _adapter.get_winid() or -1
   return winid > 0 and vim.api.nvim_win_is_valid(winid)
 end
 
+---@internal
+---@return boolean
 local function cursor_in_tree()
   if not _adapter then return false end
   local winid = _adapter.get_winid and _adapter.get_winid() or -1
   return winid > 0 and vim.api.nvim_get_current_win() == winid
 end
 
+---@internal
+---@param bufnr integer
+---@return boolean
 local function should_ignore(bufnr)
   local ft = vim.bo[bufnr].filetype
   local bt = vim.bo[bufnr].buftype
@@ -82,6 +91,7 @@ local function should_ignore(bufnr)
   return false
 end
 
+---@internal
 ---Whether `path` lives under `root` (prefers lib.nvim.fs.is_subpath; falls back
 ---to a local forward-slash prefix comparison so this still works without it).
 ---@param path string
@@ -100,6 +110,8 @@ end
 
 -- ── Reveal logic ──────────────────────────────────────────────────────────────
 
+---@internal
+---@param path string
 local function do_reveal(path)
   if not _adapter then return end
   if is_paused() then return end
@@ -133,6 +145,8 @@ local function do_reveal(path)
   end
 end
 
+---@internal
+---@param path string
 local function schedule_reveal(path)
   _debounce.call(path)
 end

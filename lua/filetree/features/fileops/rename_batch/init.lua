@@ -1,6 +1,6 @@
----@module 'filetree.features.rename_batch'
----@brief Batch-rename visible tree nodes in a scratch buffer.
----@description
+---@module 'filetree.features.fileops.rename_batch'
+--- Batch-rename visible tree nodes in a scratch buffer.
+---
 --- Opens a scratch buffer listing the names (not full paths) of all visible
 --- file and directory nodes in the current tree. The user edits the names
 --- in normal Vim; on write (:w) the module diffs old vs new and executes
@@ -61,6 +61,7 @@ local _adapter = nil
 ---@field old_name string  Original filename (tail only).
 ---@field new_name string  Name after user edit.
 
+---@internal
 ---@return RenameEntry[]
 local function snapshot_nodes()
   if not _adapter then return {} end
@@ -87,6 +88,7 @@ end
 -- `.new_target` (computed against whichever item it was found for), so the
 -- "update all" and "inspect" paths both just call refs_util.update() directly.
 
+---@internal
 ---@param all_refs table[]  MarkdownFileRef[], each with `.new_target` pre-set.
 local function handle_batch_markdown_refs(all_refs)
   if not _cfg.check_markdown_refs or #all_refs == 0 then return end
@@ -116,6 +118,7 @@ end
 
 -- ── Diff + execute ────────────────────────────────────────────────────────────
 
+---@internal
 ---Actually perform the renames for an already-confirmed plan.
 ---@param plan {src:string, dst:string}[]
 ---@return boolean ok
@@ -188,6 +191,7 @@ local function run_plan(plan)
   return errors == 0
 end
 
+---@internal
 ---@param entries RenameEntry[]
 ---@param new_names string[]  Edited lines from the scratch buffer.
 ---@param on_done fun(ok: boolean)
