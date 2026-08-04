@@ -1,5 +1,5 @@
 ---@module 'filetree.adapter.oil'
----@brief oil.nvim adapter — implements the FiletreeAdapter interface for oil.nvim.
+--- oil.nvim adapter — implements the FiletreeAdapter interface for oil.nvim.
 
 -- Imported as `pathutil` (not `path`) because `path` is used pervasively below as
 -- a local parameter/variable name for a plain path string; importing under that
@@ -12,6 +12,7 @@ local M = { name = "oil", filetypes = { "oil" } }
 
 local _ns = nil
 
+---@internal
 local function ns()
   if not _ns then _ns = vim.api.nvim_create_namespace("filetree_oil") end
   return _ns
@@ -19,6 +20,7 @@ end
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
+---@internal
 local function get_oil()
   local ok, oil = pcall(require, "oil")
   if not ok then return nil end
@@ -26,6 +28,7 @@ local function get_oil()
 end
 
 ---Find the first open oil buffer.
+---@internal
 ---@return integer?
 local function find_oil_buf()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -39,6 +42,7 @@ local function find_oil_buf()
 end
 
 ---Find the window for a buffer.
+---@internal
 ---@param bufnr integer
 ---@return integer?
 local function buf_to_win(bufnr)
@@ -52,27 +56,32 @@ end
 
 -- ── Interface ─────────────────────────────────────────────────────────────────
 
+---@return boolean
 function M.is_available()
   local ok = pcall(require, "oil")
   return ok
 end
 
+---@return boolean, integer? bufnr
 function M.is_open()
   local buf = find_oil_buf()
   if buf then return true, buf end
   return false, nil
 end
 
+---@return integer? winid
 function M.get_winid()
   local buf = find_oil_buf()
   if not buf then return nil end
   return buf_to_win(buf)
 end
 
+---@return integer? bufnr
 function M.get_bufnr()
   return (select(2, M.is_open()))
 end
 
+---@return string root_path
 function M.get_root_path()
   local oil = get_oil()
   if not oil then return vim.fn.getcwd() end
@@ -81,6 +90,7 @@ function M.get_root_path()
   return vim.fn.getcwd()
 end
 
+---@return FiletreeNode?
 function M.get_current_node()
   local oil = get_oil()
   if not oil then return nil end
@@ -109,6 +119,8 @@ function M.get_current_node()
   }
 end
 
+---@param filter? FiletreeFilterMode
+---@return FiletreeNode[]
 function M.get_visible_nodes(filter)
   local oil = get_oil()
   if not oil then return {} end
@@ -159,6 +171,8 @@ end
 -- with forward-slash paths sourced from
 -- vim.api.nvim_buf_get_name()/expand("%:p"). Normalize both sides before
 -- comparing, so a mismatched separator style can't cause a silent miss.
+---@param node_path string
+---@return integer? line_number
 function M.get_node_line(node_path)
   local query = pathutil.slashify(node_path)
   local nodes = M.get_visible_nodes()
@@ -168,9 +182,17 @@ function M.get_node_line(node_path)
   return nil
 end
 
+---@param _node FiletreeNode
+---@return boolean
 function M.expand_node(_node) return false end
+
+---@param _node FiletreeNode
+---@return boolean
 function M.collapse_node(_node) return false end
 
+---@param path string
+---@param mode? FiletreeOpenMode
+---@return boolean
 function M.open_file(path, mode)
   local oil = get_oil()
   if oil then pcall(oil.close) end
@@ -190,6 +212,7 @@ end
 ---triggered while the user's focus is in the editor (e.g. from
 ---cwd_sync/auto_reveal on BufEnter) would silently hijack the EDITOR window
 ---into a directory listing instead of updating the oil split.
+---@internal
 ---@param oil table
 ---@param dir string
 ---@return boolean
@@ -206,6 +229,9 @@ local function open_in_tree_win(oil, dir)
   return ok
 end
 
+---@param path string
+---@param _parent_levels? integer
+---@return boolean
 function M.open_reveal(path, _parent_levels)
   local oil = get_oil()
   if not oil then return false end
@@ -213,18 +239,22 @@ function M.open_reveal(path, _parent_levels)
   return open_in_tree_win(oil, dir)
 end
 
+---@param path string
+---@return boolean
 function M.set_root(path)
   local oil = get_oil()
   if not oil then return false end
   return open_in_tree_win(oil, path)
 end
 
+---@return boolean
 function M.open_cwd()
   local oil = get_oil()
   if not oil then return false end
   return open_in_tree_win(oil, vim.fn.getcwd())
 end
 
+---@return boolean
 function M.close()
   local oil = get_oil()
   if not oil then return false end
@@ -232,6 +262,7 @@ function M.close()
   return ok
 end
 
+---@return boolean
 function M.refresh()
   local oil = get_oil()
   if not oil then return false end
@@ -246,6 +277,8 @@ function M.refresh()
   return ok
 end
 
+---@param line integer
+---@return boolean
 function M.scroll_to_line(line)
   local win = M.get_winid()
   if not win then return false end
@@ -257,6 +290,9 @@ end
 ---@type table<string, integer>
 local _hl_marks = {}
 
+---@param path string
+---@param hl_group string
+---@return boolean
 function M.highlight_node(path, hl_group)
   local line = M.get_node_line(path)
   if not line then return false end
@@ -270,6 +306,8 @@ function M.highlight_node(path, hl_group)
   return ok
 end
 
+---@param path string
+---@return boolean
 function M.unhighlight_node(path)
   local id = _hl_marks[path]
   if not id then return true end

@@ -1,9 +1,9 @@
 ---@module 'filetree.util.markdown_refs'
----@brief Shared soft-dependency bridge to markdown.nvim's `find_references`,
+--- Shared soft-dependency bridge to markdown.nvim's `find_references`,
 --- plus a reference-rewriting helper. Used by `trash` (flag broken refs with
 --- "REF!") and `smart_rename`/`rename_batch`/`copy_move` (rewrite refs to the
 --- new path after a move).
----@description
+---
 ---   local refs_util = require("filetree.util.markdown_refs")
 ---   local refs = refs_util.find(old_path)          -- {} if markdown.nvim absent
 ---   for _, r in ipairs(refs) do r.new_target = "REF!" end
@@ -24,6 +24,7 @@ function M.available()
   return ok_md and type(md.find_references) == "function"
 end
 
+---@internal
 ---Resolve the search root for a path: the nearest project root (via the
 ---project_root feature), or nil to let markdown.nvim default to cwd.
 ---@param path string
@@ -144,6 +145,7 @@ function M.relative_target(new_path)
   return (vim.fn.fnamemodify(new_path, ":."):gsub("\\", "/"))
 end
 
+---@internal
 ---Rewrite `](old_target)` → `](new_target)` on a single line for one ref.
 ---Content-verified: only changes the line if it actually still holds the exact
 ---`](r.target)` that was scanned, so a live buffer whose lines have drifted
@@ -160,6 +162,7 @@ local function apply_ref(line, r)
   return new_line, n > 0
 end
 
+---@internal
 ---Find a loaded buffer whose name is `file` (separator-normalized compare so a
 ---forward-slash buffer name matches an OS-native path on Windows).
 ---@param file string

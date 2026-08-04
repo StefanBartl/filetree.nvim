@@ -1,6 +1,6 @@
----@module 'filetree.features.auto_resize'
----@brief Responsive tree sidebar width based on editor column count.
----@description
+---@module 'filetree.features.nav.auto_resize'
+--- Responsive tree sidebar width based on editor column count.
+---
 --- Listens to VimResized and adjusts the tree window width to one of the
 --- configured breakpoint widths. Also exposes M.set_width(n) for manual
 --- control and :Filetree resize [width].
@@ -45,10 +45,17 @@ local _adapter = nil
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
+---@internal
+---@param v number
+---@param lo number
+---@param hi number
+---@return number
 local function clamp(v, lo, hi)
   return math.max(lo, math.min(hi, v))
 end
 
+---@internal
+---@return integer
 local function target_width()
   local cols  = vim.o.columns
   local width = _cfg.breakpoints[1] and _cfg.breakpoints[1].width or 30
@@ -58,6 +65,8 @@ local function target_width()
   return clamp(width, _cfg.min_width, _cfg.max_width)
 end
 
+---@internal
+---@param w integer
 local function apply_width(w)
   if not _adapter then return end
   local winid = _adapter.get_winid and _adapter.get_winid() or -1

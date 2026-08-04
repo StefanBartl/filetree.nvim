@@ -1,6 +1,6 @@
----@module 'filetree.features.lsp_diagnostics'
----@brief Decorate tree nodes with LSP diagnostic counts via extmarks.
----@description
+---@module 'filetree.features.lsp.lsp_diagnostics'
+--- Decorate tree nodes with LSP diagnostic counts via extmarks.
+---
 --- Subscribes to the DiagnosticChanged autocmd and recomputes error/warning
 --- counts per file using vim.diagnostic.get(). Results are rendered as eol
 --- virtual text on the matching tree node lines.
@@ -55,6 +55,7 @@ local sev = vim.diagnostic and vim.diagnostic.severity or {
   ERROR = 1, WARN = 2, INFO = 3, HINT = 4,
 }
 
+---@internal
 local function recompute()
   local new_counts = {}
   local all = vim.diagnostic.get(nil)
@@ -78,6 +79,9 @@ end
 
 -- ── Rendering ─────────────────────────────────────────────────────────────────
 
+---@internal
+---@param counts DiagCounts
+---@return string
 local function sev_hl(counts)
   if counts.error   > 0 then return "DiagnosticError" end
   if counts.warning > 0 then return "DiagnosticWarn"  end
@@ -85,6 +89,7 @@ local function sev_hl(counts)
   return "DiagnosticInfo"
 end
 
+---@internal
 function M._render()
   if not _adapter then return end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
@@ -154,11 +159,13 @@ end
 ---@type table?
 local _debounce = nil
 
+---@internal
 local function do_update()
   recompute()
   M._render()
 end
 
+---@internal
 local function schedule_update()
   _debounce.call()
 end

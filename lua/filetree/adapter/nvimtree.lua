@@ -1,5 +1,5 @@
 ---@module 'filetree.adapter.nvimtree'
----@brief nvim-tree adapter — implements FiletreeAdapter for nvim-tree.lua.
+--- nvim-tree adapter — implements FiletreeAdapter for nvim-tree.lua.
 
 local notify = require("filetree.util.notify").create("[filetree.adapter.nvimtree]")
 -- Imported as `pathutil` (not `path`) because `path` is used pervasively below as
@@ -21,6 +21,7 @@ local M = {
 
 -- ── Internal helpers ──────────────────────────────────────────────────────────
 
+---@internal
 local function api()
   local ok, a = pcall(require, "nvim-tree.api")
   if not ok then return nil end
@@ -29,10 +30,12 @@ end
 
 -- ── Interface ─────────────────────────────────────────────────────────────────
 
+---@return boolean
 function M.is_available()
   return pcall(require, "nvim-tree")
 end
 
+---@return boolean, integer? bufnr
 function M.is_open()
   local a = api()
   if not a then return false, nil end
@@ -46,11 +49,13 @@ function M.is_open()
   return false, nil
 end
 
+---@return integer? bufnr
 function M.get_bufnr()
   local _, bufnr = M.is_open()
   return bufnr
 end
 
+---@return integer? winid
 function M.get_winid()
   local a = api()
   if not a then return nil end
@@ -61,6 +66,8 @@ function M.get_winid()
   return nil
 end
 
+---@param path string
+---@return boolean
 function M.set_root(path)
   local a = api()
   if not a then return false end
@@ -68,6 +75,7 @@ function M.set_root(path)
   return ok
 end
 
+---@return string root_path
 function M.get_root_path()
   -- The actual configured tree root, not "parent of whatever node the cursor
   -- happens to be on" (an earlier version used get_node_under_cursor() for
@@ -83,6 +91,7 @@ function M.get_root_path()
   return vim.fn.getcwd()
 end
 
+---@return FiletreeNode?
 function M.get_current_node()
   local a = api()
   if not a then return nil end
@@ -100,11 +109,14 @@ function M.get_current_node()
   }
 end
 
+---@param filter? FiletreeFilterMode
+---@return FiletreeNode[]
 function M.get_visible_nodes(filter)
   local a = api()
   if not a then return {} end
   local ok, all = pcall(function()
     local nodes = {}
+    ---@internal
     local function walk(node, depth)
       if not node then return end
       local ntype = node.type == "directory" and "directory" or "file"
@@ -147,6 +159,8 @@ end
 -- this platform's Neovim build. Normalize both sides before comparing, or the
 -- lookup silently misses on Windows. See adapter/neotree.lua's key_of() for the
 -- same fix in that adapter.
+---@param node_path string
+---@return integer? line_number
 function M.get_node_line(node_path)
   local query = pathutil.slashify(node_path)
   local nodes = M.get_visible_nodes()
@@ -156,6 +170,8 @@ function M.get_node_line(node_path)
   return nil
 end
 
+---@param node FiletreeNode
+---@return boolean
 function M.expand_node(node)
   local a = api()
   if not a then return false end
@@ -170,10 +186,15 @@ function M.expand_node(node)
   return ok
 end
 
+---@param node FiletreeNode
+---@return boolean
 function M.collapse_node(node)
   return M.expand_node(node) -- toggle-style; expand_node opens/closes
 end
 
+---@param path string
+---@param mode? FiletreeOpenMode
+---@return boolean
 function M.open_file(path, mode)
   mode = mode or "edit"
   local cmd_map = {
@@ -187,6 +208,9 @@ function M.open_file(path, mode)
   return ok
 end
 
+---@param path string
+---@param _parent_levels? integer
+---@return boolean
 function M.open_reveal(path, _parent_levels)
   local a = api()
   if not a then return false end
@@ -198,6 +222,7 @@ function M.open_reveal(path, _parent_levels)
   return ok2
 end
 
+---@return boolean
 function M.open_cwd()
   local a = api()
   if not a then return false end
@@ -205,6 +230,7 @@ function M.open_cwd()
   return ok
 end
 
+---@return boolean
 function M.close()
   local a = api()
   if not a then return false end
@@ -212,6 +238,7 @@ function M.close()
   return ok
 end
 
+---@return boolean
 function M.refresh()
   local a = api()
   if not a then return false end
@@ -219,6 +246,8 @@ function M.refresh()
   return ok
 end
 
+---@param line integer
+---@return boolean
 function M.scroll_to_line(line)
   local winid = M.get_winid()
   if not winid then return false end
@@ -231,11 +260,15 @@ end
 local _hl_marks = {}
 local _ns = nil
 
+---@internal
 local function ns()
   if not _ns then _ns = vim.api.nvim_create_namespace("filetree_current_hl_nvimtree") end
   return _ns
 end
 
+---@param path string
+---@param hl_group string
+---@return boolean
 function M.highlight_node(path, hl_group)
   local line = M.get_node_line(path)
   if not line then return false end
@@ -249,6 +282,8 @@ function M.highlight_node(path, hl_group)
   return ok
 end
 
+---@param path string
+---@return boolean
 function M.unhighlight_node(path)
   local id = _hl_marks[path]
   if not id then return true end

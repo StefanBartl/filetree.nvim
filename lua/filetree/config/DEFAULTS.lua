@@ -1,6 +1,6 @@
 ---@module 'filetree.config.DEFAULTS'
----@brief Plugin-side default configuration.
----@description
+--- Plugin-side default configuration.
+---
 --- The single source of truth for filetree.nvim's built-in defaults. User config
 --- passed to `require("filetree").setup({})` is deep-merged on top of this table
 --- (see `filetree.config`). Per-feature defaults that are not listed here live in

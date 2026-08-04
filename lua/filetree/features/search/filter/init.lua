@@ -1,6 +1,6 @@
----@module 'filetree.features.filter'
----@brief Live filter/search within the tree using a floating input.
----@description
+---@module 'filetree.features.search.filter'
+--- Live filter/search within the tree using a floating input.
+---
 --- Two strategies, tried in order:
 ---   1. Adapter native filter API (neo-tree: manager.filter_all, nvim-tree: api.tree.search_node)
 ---   2. Extmark-based dimming fallback: non-matching lines are greyed out.
@@ -42,6 +42,11 @@ local _query = ""
 
 -- ── Adapter-native filter ─────────────────────────────────────────────────────
 
+---@internal
+---Try the adapter's native filter API (neo-tree/nvim-tree). Returns false when
+---no native filter is available, so the caller can fall back to dimming.
+---@param query string?
+---@return boolean handled
 local function try_native_filter(query)
   if not _adapter then return false end
 
@@ -78,6 +83,9 @@ end
 
 -- ── Extmark-based dimming fallback ────────────────────────────────────────────
 
+---@internal
+---Dim non-matching lines in the tree buffer via extmarks (fallback strategy).
+---@param query string?
 local function dim_non_matching(query)
   if not _adapter then return end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
@@ -108,6 +116,9 @@ local function dim_non_matching(query)
   end
 end
 
+---@internal
+---Apply `query`: try the native filter first, fall back to dimming.
+---@param query string?
 local function apply(query)
   _query = query or ""
   if not try_native_filter(query) then
@@ -120,6 +131,7 @@ end
 ---@type Lib.UI.Kit.Surface|nil
 local _surf = nil
 
+---Open the floating filter-query input, focusing it if already open.
 function M.enter()
   if _surf and _surf:is_valid() then
     _surf:focus()
@@ -209,6 +221,7 @@ function M.setup(config, adapter)
   end
 end
 
+---Clear the filter and close the floating input, if open.
 function M.teardown()
   M.clear()
   if _surf then _surf:close() end

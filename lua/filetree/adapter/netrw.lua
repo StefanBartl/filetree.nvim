@@ -1,5 +1,5 @@
 ---@module 'filetree.adapter.netrw'
----@brief netrw adapter — implements the FiletreeAdapter interface for Neovim's built-in netrw.
+--- netrw adapter — implements the FiletreeAdapter interface for Neovim's built-in netrw.
 
 -- Imported as `pathutil` (not `path`) because `path` is used pervasively below as
 -- a local parameter/variable name for a plain path string; importing under that
@@ -12,6 +12,7 @@ local M = { name = "netrw", filetypes = { "netrw" } }
 
 local _ns = nil
 
+---@internal
 local function ns()
   if not _ns then _ns = vim.api.nvim_create_namespace("filetree_netrw") end
   return _ns
@@ -20,6 +21,7 @@ end
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
 ---Find the first open netrw buffer.
+---@internal
 ---@return integer?  bufnr
 local function find_netrw_buf()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -33,6 +35,7 @@ local function find_netrw_buf()
 end
 
 ---Find the window displaying a given buffer.
+---@internal
 ---@param bufnr integer
 ---@return integer?  winid
 local function buf_to_win(bufnr)
@@ -46,6 +49,7 @@ end
 
 ---Parse a netrw buffer line to extract the filename.
 ---netrw renders filenames in the last column; directories end with /.
+---@internal
 ---@param line string
 ---@return string?
 local function parse_netrw_line(line)
@@ -62,26 +66,31 @@ end
 -- ── Interface ─────────────────────────────────────────────────────────────────
 
 ---netrw is always available — it is built in to Neovim.
+---@return boolean
 function M.is_available()
   return true
 end
 
+---@return boolean, integer? bufnr
 function M.is_open()
   local buf = find_netrw_buf()
   if buf then return true, buf end
   return false, nil
 end
 
+---@return integer? winid
 function M.get_winid()
   local buf = find_netrw_buf()
   if not buf then return nil end
   return buf_to_win(buf)
 end
 
+---@return integer? bufnr
 function M.get_bufnr()
   return (select(2, M.is_open()))
 end
 
+---@return string? root_path
 function M.get_root_path()
   local buf = find_netrw_buf()
   if not buf then return vim.fn.getcwd() end
@@ -90,6 +99,7 @@ function M.get_root_path()
   return vim.fn.getcwd()
 end
 
+---@return FiletreeNode?
 function M.get_current_node()
   local buf = find_netrw_buf()
   if not buf then return nil end
@@ -117,6 +127,8 @@ function M.get_current_node()
   }
 end
 
+---@param filter? FiletreeFilterMode
+---@return FiletreeNode[]
 function M.get_visible_nodes(filter)
   local buf = find_netrw_buf()
   if not buf then return {} end
@@ -161,6 +173,8 @@ end
 -- (cwd_sync/auto_reveal/current_hl) query with forward-slash paths sourced from
 -- vim.api.nvim_buf_get_name()/expand("%:p"). Normalize both sides before
 -- comparing, or the lookup silently misses on Windows.
+---@param node_path string
+---@return integer? line_number
 function M.get_node_line(node_path)
   local query = pathutil.slashify(node_path)
   local nodes = M.get_visible_nodes()
@@ -170,15 +184,22 @@ function M.get_node_line(node_path)
   return nil
 end
 
+---@param _node FiletreeNode
+---@return boolean
 function M.expand_node(_node)
   -- netrw doesn't have a tree expand concept; navigating into dir is the equivalent
   return false
 end
 
+---@param _node FiletreeNode
+---@return boolean
 function M.collapse_node(_node)
   return false
 end
 
+---@param path string
+---@param mode? FiletreeOpenMode
+---@return boolean
 function M.open_file(path, mode)
   mode = mode or "edit"
   local cmd_map = { edit = "edit", split = "split", vsplit = "vsplit", tab = "tabnew" }
@@ -196,6 +217,7 @@ end
 ---EDITOR window into a directory listing instead of updating the netrw split.
 ---@param dir string
 ---@return boolean
+---@internal
 local function explore_in_tree_win(dir)
   local cur_win = vim.api.nvim_get_current_win()
   local tree_win = M.get_winid()
@@ -209,19 +231,26 @@ local function explore_in_tree_win(dir)
   return ok
 end
 
+---@param path string
+---@param _parent_levels? integer
+---@return boolean
 function M.open_reveal(path, _parent_levels)
   local dir = vim.fn.fnamemodify(path, ":h")
   return explore_in_tree_win(dir)
 end
 
+---@param path string
+---@return boolean
 function M.set_root(path)
   return explore_in_tree_win(path)
 end
 
+---@return boolean
 function M.open_cwd()
   return explore_in_tree_win(vim.fn.getcwd())
 end
 
+---@return boolean
 function M.close()
   local buf = find_netrw_buf()
   if not buf then return false end
@@ -229,6 +258,7 @@ function M.close()
   return ok
 end
 
+---@return boolean
 function M.refresh()
   local buf = find_netrw_buf()
   if not buf then return false end
@@ -244,6 +274,8 @@ function M.refresh()
   return ok
 end
 
+---@param line integer
+---@return boolean
 function M.scroll_to_line(line)
   local win = M.get_winid()
   if not win then return false end
@@ -255,6 +287,9 @@ end
 ---@type table<string, integer>
 local _hl_marks = {}
 
+---@param path string
+---@param hl_group string
+---@return boolean
 function M.highlight_node(path, hl_group)
   local line = M.get_node_line(path)
   if not line then return false end
@@ -268,6 +303,8 @@ function M.highlight_node(path, hl_group)
   return ok
 end
 
+---@param path string
+---@return boolean
 function M.unhighlight_node(path)
   local id = _hl_marks[path]
   if not id then return true end

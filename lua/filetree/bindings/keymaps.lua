@@ -1,6 +1,6 @@
 ---@module 'filetree.bindings.keymaps'
----@brief Catalog of default keymaps, grouped by feature category.
----@description
+--- Catalog of default keymaps, grouped by feature category.
+---
 --- Reference catalog of the keymaps filetree.nvim binds out of the box. It mirrors
 --- the per-feature defaults (which remain the runtime source of truth and stay
 --- user-configurable). Used for the `docs/BINDINGS.lua` cheatsheet and the

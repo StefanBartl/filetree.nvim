@@ -1,5 +1,6 @@
 ---@meta
 ---@module 'filetree.@types.config'
+--- Type declarations for filetree.nvim's user-facing configuration table.
 
 ---@alias FiletreeBuiltinAlias
 ---| "Ft"       Short alias registered by default.

@@ -1,6 +1,6 @@
 ---@meta
 ---@module 'filetree.@types.node'
----@brief Generic filetree node representation used by all adapters.
+--- Generic filetree node representation used by all adapters.
 
 ---@class FiletreeNode
 ---@field id          string               Unique node identifier (usually absolute path).

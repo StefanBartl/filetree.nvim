@@ -1,5 +1,5 @@
----@module 'filetree.features.smart_create'
----@brief Enhanced file/directory creation with clipboard paste and LuaLS templates.
+---@module 'filetree.features.fileops.smart_create'
+--- Enhanced file/directory creation with clipboard paste and LuaLS templates.
 
 local map     = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
@@ -24,6 +24,7 @@ local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.smart_create]")
 
+---@internal
 ---Find the lua/ root above a path.
 ---@param filepath string
 ---@return string?
@@ -42,6 +43,7 @@ local function find_lua_root(filepath)
   return vim.fn.stdpath("config") .. "/lua"
 end
 
+---@internal
 ---Derive module path from an absolute file path.
 ---@param filepath string
 ---@return string
@@ -56,6 +58,7 @@ end
 ---Show a success notification for a created file/directory, at the
 ---configured verbosity: "verbose" (default) names what was created, "short"
 ---is little more than the path, "off" is silent.
+---@internal
 ---@param kind "file"|"directory"
 ---@param target string  Absolute path of what was created.
 local function notify_created(kind, target)
@@ -73,6 +76,7 @@ end
 ---window itself. Loading a new buffer into the tree's own window fights neo-
 ---tree's window-management autocmds (and this plugin's own layout_guard),
 ---which can spiral into an autocmd storm that looks like Neovim hanging.
+---@internal
 ---@return integer winid  The editor window now showing filepath.
 local function open_editor_window()
   local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid()
@@ -86,6 +90,7 @@ local function open_editor_window()
   return win
 end
 
+---@internal
 ---Write initial content to a new buffer and save.
 ---@param filepath string
 ---@param lines string[]
@@ -99,6 +104,7 @@ local function create_with_content(filepath, lines)
   end
 end
 
+---@internal
 ---Build template lines for a new file.
 ---@param filepath string
 ---@param paste_clipboard boolean
@@ -132,6 +138,7 @@ local function build_template(filepath, paste_clipboard)
   return lines
 end
 
+---@internal
 ---Get the directory to create in (current node's dir or cwd).
 ---@return string
 local function resolve_parent_dir()

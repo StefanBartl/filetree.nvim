@@ -1,5 +1,5 @@
 ---@module 'filetree.adapter'
----@brief Adapter registry: load, resolve, and cache the active filetree adapter.
+--- Adapter registry: load, resolve, and cache the active filetree adapter.
 
 local notify = require("filetree.util.notify").create("[filetree.adapter]")
 

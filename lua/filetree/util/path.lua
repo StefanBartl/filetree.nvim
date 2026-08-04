@@ -1,6 +1,6 @@
 ---@module 'filetree.util.path'
----@brief Pure path operations: normalize, convert, transform, escape.
----@description
+--- Pure path operations: normalize, convert, transform, escape.
+---
 --- No global state, no project-root lookup — every function derives its result
 --- purely from its arguments (relative paths resolve against an explicit base or
 --- the cwd). Features that need project-root-relative paths pass the base in.

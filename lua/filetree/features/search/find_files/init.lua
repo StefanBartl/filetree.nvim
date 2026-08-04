@@ -1,6 +1,6 @@
----@module 'filetree.features.find_files'
----@brief Fuzzy-find files within the tree root, then reveal the result.
----@description
+---@module 'filetree.features.search.find_files'
+--- Fuzzy-find files within the tree root, then reveal the result.
+---
 --- Detects available fuzzy finders in order:
 ---   1. telescope.nvim  (nvim-telescope/telescope.nvim)
 ---   2. fzf-lua         (ibhagwan/fzf-lua)
@@ -31,6 +31,8 @@ local M = {}
 -- no other feedback otherwise. No-op (returns nil) when lib.nvim isn't
 -- installed — the scan still runs, just without the indicator.
 local ok_progress, progress_mod = pcall(require, "lib.nvim.progress")
+---@internal
+---@return table?
 local function new_progress()
   if not ok_progress then return nil end
   return progress_mod.create({ title = "[filetree.find_files]" })
@@ -52,6 +54,11 @@ local _adapter = nil
 
 -- ── Root resolution ───────────────────────────────────────────────────────────
 
+---@internal
+---Resolve the search root: the given node's directory, or the project/cwd
+---root via `filetree.util.root`.
+---@param from_node FiletreeNode?
+---@return string
 local function get_root(from_node)
   if from_node then
     return from_node.type == "directory"
@@ -67,6 +74,9 @@ end
 
 -- ── Post-select action ────────────────────────────────────────────────────────
 
+---@internal
+---Open the selected file and optionally reveal it in the tree.
+---@param path string?
 local function on_select(path)
   if not path or path == "" then return end
   if vim.fn.filereadable(path) == 0 then
@@ -81,6 +91,10 @@ end
 
 -- ── Backends ──────────────────────────────────────────────────────────────────
 
+---@internal
+---Find files via telescope.nvim. Returns false when telescope isn't installed.
+---@param root string
+---@return boolean handled
 local function via_telescope(root)
   local ok, tel = pcall(require, "telescope.builtin")
   if not ok then return false end
@@ -101,6 +115,10 @@ local function via_telescope(root)
   return true
 end
 
+---@internal
+---Find files via fzf-lua. Returns false when fzf-lua isn't installed.
+---@param root string
+---@return boolean handled
 local function via_fzflua(root)
   local ok, fzf = pcall(require, "fzf-lua")
   if not ok then return false end
@@ -118,6 +136,10 @@ local function via_fzflua(root)
   return true
 end
 
+---@internal
+---Find files via mini.pick. Returns false when mini.pick isn't installed.
+---@param root string
+---@return boolean handled
 local function via_minipick(root)
   local ok, mp = pcall(require, "mini.pick")
   if not ok then return false end
@@ -137,6 +159,7 @@ end
 ---whole tree in one call, so this can't prune the walk itself the way
 ---`fs.collect_recursive`'s `ignore_fn` does -- it only keeps ignored entries
 ---out of the results shown to the user.
+---@internal
 ---@param rel string
 ---@param ignored fun(name: string): boolean
 ---@return boolean
@@ -147,6 +170,10 @@ local function path_is_ignored(rel, ignored)
   return false
 end
 
+---@internal
+---Find files via vim.fn.globpath + vim.ui.select (dependency-free fallback).
+---@param root string
+---@return boolean handled
 local function via_builtin(root)
   -- vim.fn.glob all files, present via vim.ui.select
   local prog = new_progress()

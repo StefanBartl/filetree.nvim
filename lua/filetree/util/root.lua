@@ -1,6 +1,6 @@
 ---@module 'filetree.util.root'
----@brief The one answer to "which project are we in right now".
----@description
+--- The one answer to "which project are we in right now".
+---
 --- Several features need a project root: find_files scopes its search to one,
 --- grep_in_dir searches inside one, git_status decorates the tree from one,
 --- breadcrumbs count relative to one. Each of them resolved it by hand, with

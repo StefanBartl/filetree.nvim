@@ -1,6 +1,6 @@
----@module 'filetree.features.copy_move'
----@brief Filesystem clipboard: stage files for copy or cut, then paste.
----@description
+---@module 'filetree.features.fileops.copy_move'
+--- Filesystem clipboard: stage files for copy or cut, then paste.
+---
 --- Works like a vim register for files. Stage one or more nodes for copy
 --- or cut, then paste them into any directory node.
 ---
@@ -74,11 +74,13 @@ local _cut_prefetch = {}
 
 -- ── Clipboard state ───────────────────────────────────────────────────────────
 
+---@internal
 local function clear_marks()
   local ok, marks = require("filetree.features").load("marks")
   if ok and marks then marks.clear_all() end
 end
 
+---@internal
 local function get_targets()
   -- Prefer marks if any are set
   local ok, marks = require("filetree.features").load("marks")
@@ -91,6 +93,7 @@ local function get_targets()
   return node and { node.path } or {}
 end
 
+---@internal
 local function render_clipboard()
   if not _adapter then return end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
@@ -179,6 +182,7 @@ end
 
 -- ── Paste ─────────────────────────────────────────────────────────────────────
 
+---@internal
 ---Recursively copy a directory tree without shelling out (shell-agnostic:
 ---works identically whether &shell is cmd.exe, PowerShell, or a POSIX shell).
 ---@param src string
@@ -199,6 +203,9 @@ local function copy_dir(src, dst)
   return 0
 end
 
+---@internal
+---@param src string
+---@param dst_dir string
 local function do_copy(src, dst_dir)
   local name = vim.fn.fnamemodify(src, ":t")
   local dst  = dst_dir .. "/" .. name
@@ -216,6 +223,7 @@ local function do_copy(src, dst_dir)
   end
 end
 
+---@internal
 ---@param src string
 ---@param dst_dir string
 ---@return integer rc   0 on success, 1 on failure
@@ -251,6 +259,7 @@ end
 -- Same soft-dep + aggregated-chooser pattern as rename_batch: copies never
 -- break a reference (the original stays put), only cuts (= moves) do.
 
+---@internal
 ---@param all_refs table[]  MarkdownFileRef[], each with `.new_target` pre-set.
 local function handle_batch_markdown_refs(all_refs)
   if not _cfg.check_markdown_refs or #all_refs == 0 then return end
@@ -278,6 +287,7 @@ local function handle_batch_markdown_refs(all_refs)
   )
 end
 
+---@internal
 ---Actually perform an already-confirmed paste into `dst_dir`.
 ---@param dst_dir string
 local function do_paste_impl(dst_dir)

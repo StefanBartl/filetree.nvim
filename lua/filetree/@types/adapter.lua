@@ -1,7 +1,7 @@
 ---@meta
 ---@module 'filetree.@types.adapter'
----@brief Adapter interface every filetree backend must implement.
----@description
+--- Adapter interface every filetree backend must implement.
+---
 --- All methods are called from feature modules and from the adapter registry.
 --- Methods must not throw — return false/nil on failure and log internally.
 

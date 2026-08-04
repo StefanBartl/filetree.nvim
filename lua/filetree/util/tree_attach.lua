@@ -1,6 +1,6 @@
 ---@module 'filetree.util.tree_attach'
----@brief Central "on tree buffer" dispatcher for per-buffer setup (keymaps).
----@description
+--- Central "on tree buffer" dispatcher for per-buffer setup (keymaps).
+---
 --- Instead of every feature registering its own `FileType` autocmd to bind
 --- tree-buffer keymaps, features register a callback here and a single FileType
 --- autocmd runs them all (scheduled, past the adapter's own keymap setup, with a

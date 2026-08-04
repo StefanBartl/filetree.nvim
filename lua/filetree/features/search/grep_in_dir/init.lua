@@ -1,6 +1,6 @@
----@module 'filetree.features.grep_in_dir'
----@brief Grep/ripgrep in the directory of the current tree node.
----@description
+---@module 'filetree.features.search.grep_in_dir'
+--- Grep/ripgrep in the directory of the current tree node.
+---
 --- Detects available backends in order:
 ---   1. telescope.nvim  live_grep / grep_string
 ---   2. fzf-lua         live_grep / grep
@@ -27,6 +27,8 @@ local M = {}
 -- blocking rg/grep process, which can take a while under a large directory.
 -- No-op (returns nil) when lib.nvim isn't installed.
 local ok_progress, progress_mod = pcall(require, "lib.nvim.progress")
+---@internal
+---@return table?
 local function new_progress()
   if not ok_progress then return nil end
   return progress_mod.create({ title = "[filetree.grep_in_dir]" })
@@ -48,6 +50,10 @@ local _adapter = nil
 
 -- ── Root ──────────────────────────────────────────────────────────────────────
 
+---@internal
+---Directory to grep in: the node under the cursor's directory, or the
+---held/project/cwd root via `filetree.util.root`.
+---@return string
 local function get_dir()
   -- No node under the cursor (or no tree at all): fall back to the root
   -- cwd_mode holds, if any, before the plain cwd — a locked session must
@@ -63,6 +69,11 @@ end
 
 -- ── Backends ──────────────────────────────────────────────────────────────────
 
+---@internal
+---Grep via telescope.nvim. Returns false when telescope isn't installed.
+---@param dir string
+---@param pattern string?
+---@return boolean handled
 local function via_telescope(dir, pattern)
   local ok, tel = pcall(require, "telescope.builtin")
   if not ok then return false end
@@ -80,6 +91,11 @@ local function via_telescope(dir, pattern)
   return true
 end
 
+---@internal
+---Grep via fzf-lua. Returns false when fzf-lua isn't installed.
+---@param dir string
+---@param pattern string?
+---@return boolean handled
 local function via_fzflua(dir, pattern)
   local ok, fzf = pcall(require, "fzf-lua")
   if not ok then return false end
@@ -96,6 +112,11 @@ local function via_fzflua(dir, pattern)
   return true
 end
 
+---@internal
+---Run the dependency-free rg/grep fallback and populate the quickfix list.
+---@param dir string
+---@param pattern string
+---@return boolean
 local function run_builtin_search(dir, pattern)
   -- Prefer rg, then grep
   local has_rg = vim.fn.executable("rg") == 1
@@ -160,6 +181,7 @@ local function run_builtin_search(dir, pattern)
   return true
 end
 
+---@internal
 ---Grep via the builtin rg/grep backend. Prompts for a pattern first when none
 ---is given (async via kit.input); the caller's return value is never
 ---consulted (this is always the last fallback in M.grep's chain), so it's

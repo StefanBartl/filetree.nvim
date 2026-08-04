@@ -1,6 +1,6 @@
 ---@module 'filetree.config'
----@brief Configuration management — defaults, merging, validation.
----@description
+--- Configuration management — defaults, merging, validation.
+---
 --- Plugin-side defaults live in `filetree.config.DEFAULTS`; this module deep-merges
 --- the user's `setup({})` config on top and exposes the active config.
 
@@ -13,6 +13,7 @@ local _defaults = require("filetree.config.DEFAULTS")
 local _active = {}
 
 ---Deep-merge src into dst (modifies dst in place).
+---@internal
 ---@param dst table
 ---@param src table
 ---@return table
@@ -33,11 +34,13 @@ end
 ---  2. All string values inside a sub-table whose key is "keymaps"
 ---     (e.g. copy_move.keymaps.copy, copy_file_list.keymaps.files_abs)
 ---A remap value of `false` disables the key; a string replaces it.
+---@internal
 ---@param cfg FiletreeConfig
 local function apply_keymap_remap(cfg)
   local remap = cfg.keymaps
   if type(remap) ~= "table" then return end
 
+  ---@internal
   local function patch(t)
     if type(t) ~= "table" then return end
     for k, v in pairs(t) do
@@ -69,6 +72,7 @@ end
 
 ---Propagate top-level `autocmds` disables into per-feature configs.
 ---`autocmds = { auto_reveal = false }` sets `fcfg.autocmds_enabled = false`.
+---@internal
 ---@param cfg FiletreeConfig
 local function apply_autocmd_overrides(cfg)
   local overrides = cfg.autocmds
@@ -98,12 +102,14 @@ local CONFIRMATION_ACTIONS = {
 --- Either way, a feature whose `confirm` the user already set explicitly
 --- (via `features.<name>.confirm`) keeps that value -- the top-level switch
 --- only fills in fields the user left unset.
+---@internal
 ---@param cfg FiletreeConfig
 local function apply_confirmations(cfg)
   local val = cfg.confirmations
   if val == nil then return end
   cfg.features = cfg.features or {}
 
+  ---@internal
   local function set_if_unset(action, value)
     local spec = CONFIRMATION_ACTIONS[action]
     if not spec then return end
@@ -132,6 +138,7 @@ end
 ---  true / nil → enabled, no override (use built-in / lib.nvim names)
 ---  false      → disabled
 ---  string[]   → enabled with those exact names
+---@internal
 ---@param cfg FiletreeConfig
 local function apply_ignore_list(cfg)
   local val = cfg.ignore_list

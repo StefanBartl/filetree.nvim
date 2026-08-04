@@ -1,6 +1,6 @@
----@module 'filetree.features.cwd_sync'
----@brief Keep Neovim's cwd (and the tree root) in sync with the current buffer.
----@description
+---@module 'filetree.features.nav.cwd_sync'
+--- Keep Neovim's cwd (and the tree root) in sync with the current buffer.
+---
 --- Debounced BufEnter/WinEnter handler for the active buffer's file:
 ---
 ---   1. Resolves the target root, in order: `root_markers` (default { ".git" },
@@ -67,11 +67,15 @@ local _adapter = nil
 ---@type FiletreeRootFinder?
 local _root_finder = nil
 
+---@internal
+---@return boolean
 local function paused()
   local uv = vim.uv or vim.loop
   return uv.hrtime() < S.paused_until
 end
 
+---@internal
+---@param ms integer?
 local function pause(ms)
   local uv = vim.uv or vim.loop
   S.paused_until = uv.hrtime() + (ms or 2000) * 1e6
@@ -82,6 +86,7 @@ end
 ---@param a string
 ---@param b string
 ---@return boolean
+---@internal
 local function same_dir(a, b)
   local na = path.slashify(a):gsub("/$", "")
   local nb = path.slashify(b):gsub("/$", "")
@@ -103,6 +108,7 @@ end
 ---  4. The file's own parent directory.
 ---@param file string
 ---@return string
+---@internal
 local function target_dir(file)
   local mode = require("filetree.features").require("cwd_mode")
   if mode and type(mode.resolve) == "function" then
@@ -129,8 +135,10 @@ end
 ---Returns nil when the feature is absent or in "follow" mode — the deliberate
 ---"no policy" answer, which leaves the resolution below exactly as it was
 ---before cwd_mode existed.
+---@internal
 ---@param file string
 ---@return FiletreeCwdDecision?
+---@see filetree.features.nav.cwd_mode
 local function policy(file)
   local registry = require("filetree.features")
   local mode = registry.require("cwd_mode")
@@ -147,6 +155,7 @@ end
 ---Falls back to "global" — the historical behaviour — when cwd_mode is absent
 ---or disabled.
 ---@return Lib.Fs.Chdir.Scope
+---@internal
 local function chdir_scope()
   local mode = require("filetree.features").require("cwd_mode")
   if mode and type(mode.scope) == "function" then
@@ -156,6 +165,8 @@ local function chdir_scope()
   return "global"
 end
 
+---@internal
+---@param path_ string
 local function do_reveal(path_)
   if not _adapter then return end
   if paused() then return end
@@ -252,6 +263,7 @@ local function do_reveal(path_)
   end
 end
 
+---@internal
 local function debounced_reveal()
   local file = vim.fn.expand("%:p")
   if file == "" or vim.fn.filereadable(file) == 0 then return end

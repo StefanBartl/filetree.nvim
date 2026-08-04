@@ -1,6 +1,6 @@
----@module 'filetree.features.diff'
----@brief Side-by-side file diff triggered from the tree.
----@description
+---@module 'filetree.features.compare.diff'
+--- Side-by-side file diff triggered from the tree.
+---
 --- Two workflows:
 ---   1. Mark two files via the marks feature, then call M.diff_marked().
 ---   2. Call M.stage(path) on a first file, then M.diff_current() on a second.
@@ -28,6 +28,10 @@ local _staged = nil
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
+---@internal
+---@param path_a string
+---@param path_b string
+---@return boolean ok
 local function open_diff(path_a, path_b)
   if vim.fn.filereadable(path_a) == 0 then
     notify.error("not readable: " .. path_a)

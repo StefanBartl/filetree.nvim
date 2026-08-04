@@ -1,6 +1,6 @@
----@module 'filetree.features.create_from_template'
----@brief Create files from user-defined templates with variable substitution.
----@description
+---@module 'filetree.features.fileops.create_from_template'
+--- Create files from user-defined templates with variable substitution.
+---
 --- Templates are stored as plain files in a configurable directory
 --- (default: stdpath("data")/filetree/templates/).
 --- Each file in that directory is a template; its filename is the template
@@ -99,6 +99,7 @@ local _adapter = nil
 
 -- ── Template directory ────────────────────────────────────────────────────────
 
+---@internal
 local function template_dir()
   local dir = _cfg.template_dir
     or (vim.fn.stdpath("data") .. "/filetree/templates")
@@ -116,6 +117,7 @@ end
 ---and choke on their ${...} placeholders, hence the workspace.ignoreDir entry
 ---for this directory in .luarc.json. Cached: 'rtp' doesn't change mid-session
 ---in normal use, and this is the picker's hot path.
+---@internal
 ---@return string?
 local _builtin_dir
 local function builtin_dir()
@@ -129,6 +131,7 @@ end
 
 -- ── Variable substitution ─────────────────────────────────────────────────────
 
+---@internal
 local function author()
   if _cfg.author and _cfg.author ~= "" then return _cfg.author end
   return vim.env.USER or vim.env.USERNAME or "unknown"
@@ -148,6 +151,7 @@ local get_lua_module_path = require("lib.nvim.lua_ls.get_module_path")
 ---it is Lua-specific), in which case this falls back to a generic path
 ---relative to the project root (any language) — e.g. src/foo/Bar.cs ->
 ---"src.foo.Bar" — stripping whatever extension the destination actually has.
+---@internal
 ---@param abs_path string
 ---@return string
 local function module_path(abs_path)
@@ -165,6 +169,10 @@ local function module_path(abs_path)
   return (rel:gsub("[/\\]", "."):gsub("%.init$", ""))  -- parens: gsub returns (str, count)
 end
 
+---@internal
+---@param content string
+---@param new_path string
+---@return string
 local function substitute(content, new_path)
   local base = vim.fn.fnamemodify(new_path, ":t:r")  -- name without ext
   local ext  = vim.fn.fnamemodify(new_path, ":e")
@@ -191,10 +199,12 @@ end
 -- template itself (vim.fn.readdir has no dotfile-hiding on Windows, hence the
 -- explicit skip in raw_templates() below rather than relying on that).
 
+---@internal
 local function order_file()
   return template_dir() .. "/.order.json"
 end
 
+---@internal
 ---@return string[]
 local function load_order()
   local ok, decoded = pcall(json.read, order_file())
@@ -204,6 +214,7 @@ local function load_order()
   return decoded.order
 end
 
+---@internal
 ---@param order string[]
 ---@return boolean ok
 local function save_order(order)
@@ -214,6 +225,7 @@ end
 -- ── Template list ─────────────────────────────────────────────────────────────
 
 ---List template files (name + path) directly in `dir`, alphabetical.
+---@internal
 ---@param dir string
 ---@param builtin boolean
 ---@return {name:string, path:string, builtin:boolean}[]
@@ -243,6 +255,7 @@ end
 ---built-in shadows it entirely (name and content), the usual override-layer
 ---pattern — so customizing a shipped default is just: drop a same-named file
 ---into your own template_dir().
+---@internal
 ---@return {name:string, path:string, builtin:boolean}[]
 local function raw_templates()
   local user = scan_dir(template_dir(), false)
@@ -272,6 +285,7 @@ end
 ---Templates in display order: the persisted order first (skipping any entry
 ---that no longer exists on disk), then any template without an explicit
 ---position — new or never-reordered — appended alphabetically.
+---@internal
 ---@return {name:string, path:string, builtin:boolean?}[]
 local function list_templates()
   local all = raw_templates()
@@ -321,6 +335,10 @@ end
 
 -- ── Creation ──────────────────────────────────────────────────────────────────
 
+---@internal
+---@param tmpl_path string
+---@param dest_path string
+---@return boolean ok
 local function create_from(tmpl_path, dest_path)
   local ok, lines = pcall(vim.fn.readfile, tmpl_path)
   if not ok then
@@ -350,6 +368,7 @@ end
 
 ---Display label: built-ins get a marker so the merged list makes clear which
 ---entries ship with the plugin vs. the user's own (or an override of one).
+---@internal
 ---@param t {name:string, builtin:boolean?}
 ---@return string
 local function display_name(t)
@@ -359,6 +378,7 @@ end
 ---Plain, non-reorderable picker (fallback when the ui kit's `picker`
 ---component is unavailable — e.g. lib.nvim absent, or the kit's own mount
 ---failed).
+---@internal
 ---@param templates {name:string, path:string, builtin:boolean?}[]
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template_plain(templates, on_select)
@@ -376,6 +396,7 @@ end
 ---own query→on_change), it just can't be combined with reordering in the
 ---same keystroke, since "move" is only well-defined against the full,
 ---unfiltered order.
+---@internal
 ---@param templates {name:string, path:string, builtin:boolean?}[]
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template_reorderable(templates, on_select)
@@ -456,6 +477,7 @@ end
 ---`on_select` gets it back directly — pickers.nvim always passes an item
 ---through unchanged, so this needs no lookup-by-label the way a plain
 ---string list would.
+---@internal
 ---@param templates {name:string, path:string, builtin:boolean?}[]
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 ---@return boolean ok  false when no engine could be loaded — caller should fall back
@@ -478,6 +500,7 @@ local function pick_template_via_pickers(templates, on_select)
   return true
 end
 
+---@internal
 ---@param templates {name:string, path:string, builtin:boolean?}[]
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template(templates, on_select)

@@ -1,7 +1,7 @@
 ---@module 'filetree.util.pdf'
----@brief Shared PDF opener: bridges to pdfport.nvim (optional dep) with a
----dependency-free system-viewer fallback.
----@description
+--- Shared PDF opener: bridges to pdfport.nvim (optional dep) with a
+--- dependency-free system-viewer fallback.
+---
 --- The single place where filetree talks to pdfport.nvim. Both the `preview`
 --- feature (<Tab>/<CR> image/PDF dispatch) and the dedicated `pdf_open` feature
 --- route through here, so the pdfport require + call signature live in exactly
@@ -21,6 +21,7 @@ local notify   = require("filetree.util.notify").create("[filetree.pdf]")
 
 local M = {}
 
+---True when `path` has a `.pdf` extension (case-insensitive).
 ---@param path string?
 ---@return boolean
 function M.is_pdf(path)

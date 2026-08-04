@@ -1,8 +1,10 @@
 ---@module 'filetree.health'
----@brief :checkhealth filetree — validates adapter availability and feature config.
+--- :checkhealth filetree — validates adapter availability and feature config.
 
 local M = {}
 
+---Run all :checkhealth filetree checks (lib.nvim, Neovim version, config,
+---adapters, active adapter, features, optional dependencies, composer routes).
 function M.check()
   vim.health.start("filetree.nvim")
 

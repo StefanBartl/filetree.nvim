@@ -1,8 +1,8 @@
 ---@module 'filetree.util.refs_picker'
----@brief Multi-select picker over a list of `{file, line}` references, with
+--- Multi-select picker over a list of `{file, line}` references, with
 --- a file preview and Tab/C-a multi-select. Telescope by default, fzf-lua if
 --- preferred, a quickfix-list fallback when neither is installed.
----@description
+---
 --- Built for the trash feature's "inspect references" flow (see
 --- features/fileops/trash), but adapter-agnostic and reusable anywhere a
 --- caller has a list of `{file, line, display}` entries and wants the user
@@ -31,6 +31,8 @@ local M = {}
 
 -- ── Telescope ─────────────────────────────────────────────────────────────────
 
+---@internal
+---Show `refs` via telescope.nvim; returns false when telescope isn't installed.
 ---@param refs table[]
 ---@param title string
 ---@param on_confirm fun(selected: table[])
@@ -97,6 +99,8 @@ end
 
 -- ── fzf-lua ───────────────────────────────────────────────────────────────────
 
+---@internal
+---Show `refs` via fzf-lua; returns false when fzf-lua isn't installed.
 ---@param refs table[]
 ---@param title string
 ---@param on_confirm fun(selected: table[])
@@ -142,6 +146,8 @@ end
 ---@type { refs: table[], on_confirm: fun(selected: table[]) }|nil
 local _qf_pending = nil
 
+---@internal
+---Populate and open the quickfix list as the always-available picker fallback.
 ---@param refs table[]
 ---@param title string
 ---@param on_confirm fun(selected: table[])
