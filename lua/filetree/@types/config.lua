@@ -438,11 +438,11 @@
 
 -- ── preview ───────────────────────────────────────────────────────────────────
 
----@alias FiletreeImageBackend "auto"|"snacks"|"image.nvim"|"system"|false
+---@alias FiletreeImageBackend "auto"|"images.nvim"|"snacks"|"image.nvim"|"system"|false
 ---@alias FiletreePdfBackend   "pdfport"|"system"|false
 
 ---@class FiletreePreviewImageConfig
----@field backend FiletreeImageBackend  "auto" tries snacks → image.nvim → system (default "auto").
+---@field backend FiletreeImageBackend  "auto" tries images.nvim → snacks → image.nvim → system (default "auto").
 
 ---@class FiletreePreviewPdfConfig
 ---@field backend FiletreePdfBackend  "pdfport" tries pdfport.nvim, falls back to system (default "pdfport").
