@@ -44,7 +44,7 @@ local _cfg = {
   keymap_scroll_up10   = "<PageUp>",
   keymap_scroll_down10 = "<PageDown>",
   image = {
-    backend = "auto",   -- "auto" | "snacks" | "image.nvim" | "system" | false
+    backend = "auto",   -- "auto" | "images.nvim" | "snacks" | "image.nvim" | "system" | false
   },
   pdf = {
     backend = "pdfport",  -- "pdfport" | "system" | false
@@ -132,6 +132,22 @@ end
 local function open_image(path)
   local backend = (_cfg.image or {}).backend or "auto"
   if backend == false then return false end   -- caller falls through to text preview
+
+  -- images.nvim first in "auto": it is the only backend that works on native
+  -- Windows Neovim. snacks.image and image.nvim both speak Kitty APC only, and
+  -- Kitty sequences coming from Neovim are never drawn in WezTerm on Windows —
+  -- so "auto" would silently degrade to the system app there.
+  if backend == "images.nvim" or backend == "auto" then
+    local ok0, images = pcall(require, "images")
+    if ok0 and images.show then
+      local opened0 = pcall(images.show, path)
+      if opened0 then return true end
+    end
+    if backend == "images.nvim" then
+      notify.warn("images.nvim not available — install StefanBartl/images.nvim")
+      return true
+    end
+  end
 
   if backend == "snacks" or backend == "auto" then
     local ok, snacks = pcall(require, "snacks")
