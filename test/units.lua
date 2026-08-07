@@ -1572,84 +1572,97 @@ do
   package.loaded["filetree.features.fileops.create_from_template"] = nil
 end
 
--- ── open_in_fm: debug logging + reuse_existing dispatch ─────────────────────
+-- ── open_in_fm: target resolution + reuse_existing dispatch ─────────────────
 -- Regression coverage for a feature that previously had ZERO logic tests: it
--- only checked that a process STARTED, never that it succeeded, and had no
--- debug logging at all — this is what made an intermittent real-world
--- failure look like it had "no pattern."
+-- only checked that a process STARTED, never that it succeeded — this is what
+-- made an intermittent real-world failure look like it had "no pattern."
+-- The platform dispatch now lives in lib.nvim.cross.reveal_in_fm (shared with
+-- open.nvim), so what is tested here is what this module still decides: which
+-- path is handed over, and with which options.
 do
   local platform = require("filetree.util.platform")
   local tmp_dir = (vim.env.TEMP .. "/units-open-in-fm"):gsub("\\", "/")
   vim.fn.mkdir(tmp_dir, "p")
+  local tmp_file = tmp_dir .. "/node.txt"
+  vim.fn.writefile({ "x" }, tmp_file)
 
+  local node_path = tmp_dir
   local stub_adapter = {
-    get_current_node = function() return { path = tmp_dir } end,
+    get_current_node = function() return { path = node_path } end,
   }
 
-  -- Force the manual_open path (not vim.ui.open) so job-spawn behavior is
-  -- deterministic regardless of Neovim version/host config.
-  local orig_ui_open = vim.ui.open
-  vim.ui.open = nil
   local orig_is_windows = platform.is_windows
   platform.is_windows = function() return true end
-  local orig_jobstart = vim.fn.jobstart
 
+  -- Stub the shared dispatcher: its own platform behavior is lib.nvim's to
+  -- test, and stubbing keeps these checks host-independent.
+  local orig_reveal_mod = package.loaded["lib.nvim.cross.reveal_in_fm"]
   local captured
-  vim.fn.jobstart = function(args, opts)
-    captured = { args = args, opts = opts }
-    return 42
+  package.loaded["lib.nvim.cross.reveal_in_fm"] = function(target, opts)
+    captured = { target = target, opts = opts or {} }
+    return true, nil
   end
 
-  package.loaded["filetree.features.system.open_in_fm"] = nil
-  local open_in_fm = require("filetree.features.system.open_in_fm")
+  local function reload()
+    package.loaded["filetree.features.system.open_in_fm"] = nil
+    return require("filetree.features.system.open_in_fm")
+  end
+
+  local open_in_fm = reload()
   open_in_fm.setup({ enabled = true }, stub_adapter)
+  captured = nil
   open_in_fm.open()
+  check("open_in_fm: directory node is handed over as-is", captured.target == tmp_dir)
+  check("open_in_fm: reveal defaults to true", captured.opts.reveal == true)
+  check("open_in_fm: no command override by default", captured.opts.command == nil)
 
-  check("open_in_fm: debug=false (default) — no on_exit wired", captured.opts.on_exit == nil)
-  check("open_in_fm: debug=false (default) — no on_stderr wired", captured.opts.on_stderr == nil)
-  check("open_in_fm: manual_open builds explorer argv on windows", captured.args[1] == "explorer")
-
-  package.loaded["filetree.features.system.open_in_fm"] = nil
-  open_in_fm = require("filetree.features.system.open_in_fm")
-  open_in_fm.setup({ enabled = true, debug = true }, stub_adapter)
+  node_path = tmp_file
+  open_in_fm = reload()
+  open_in_fm.setup({ enabled = true }, stub_adapter)
+  captured = nil
   open_in_fm.open()
+  check("open_in_fm: file node keeps the FILE path (so it can be selected)",
+    captured.target == tmp_file)
 
-  check("open_in_fm: debug=true — on_exit wired", type(captured.opts.on_exit) == "function")
-  check("open_in_fm: debug=true — on_stderr wired", type(captured.opts.on_stderr) == "function")
-  check("open_in_fm: debug=true — on_exit callback does not error",
-    pcall(captured.opts.on_exit, 42, 0))
-  check("open_in_fm: debug=true — on_stderr callback does not error",
-    pcall(captured.opts.on_stderr, 42, { "some stderr line" }))
+  open_in_fm = reload()
+  open_in_fm.setup({ enabled = true, reveal = false, command = "thunar" }, stub_adapter)
+  captured = nil
+  open_in_fm.open()
+  check("open_in_fm: reveal=false is forwarded", captured.opts.reveal == false)
+  check("open_in_fm: command override is forwarded", captured.opts.command == "thunar")
 
-  -- reuse_existing: reuse_win.try()'s return value gates whether a new
-  -- process gets spawned at all.
-  local jobstart_called
-  vim.fn.jobstart = function(...)
-    jobstart_called = true
-    return 42
-  end
+  -- A node whose path no longer exists falls back to its parent directory:
+  -- there is nothing to select there.
+  node_path = tmp_dir .. "/gone/deleted.txt"
+  open_in_fm = reload()
+  open_in_fm.setup({ enabled = true }, stub_adapter)
+  captured = nil
+  open_in_fm.open()
+  check("open_in_fm: nonexistent node falls back to a directory",
+    captured.target ~= node_path)
+
+  -- reuse_existing: reuse_win.try()'s return value gates whether the shared
+  -- dispatcher is invoked at all.
+  node_path = tmp_dir
 
   package.loaded["filetree.features.system.open_in_fm.reuse_win"] = { try = function() return true end }
-  package.loaded["filetree.features.system.open_in_fm"] = nil
-  open_in_fm = require("filetree.features.system.open_in_fm")
-  jobstart_called = false
+  open_in_fm = reload()
   open_in_fm.setup({ enabled = true, reuse_existing = true }, stub_adapter)
+  captured = nil
   open_in_fm.open()
   check("open_in_fm: reuse_existing=true + a window was reused — no new process spawned",
-    jobstart_called == false)
+    captured == nil)
 
   package.loaded["filetree.features.system.open_in_fm.reuse_win"] = { try = function() return false end }
-  package.loaded["filetree.features.system.open_in_fm"] = nil
-  open_in_fm = require("filetree.features.system.open_in_fm")
-  jobstart_called = false
+  open_in_fm = reload()
   open_in_fm.setup({ enabled = true, reuse_existing = true }, stub_adapter)
+  captured = nil
   open_in_fm.open()
   check("open_in_fm: reuse_existing=true + nothing reused — falls back to spawning",
-    jobstart_called == true)
+    captured ~= nil)
 
-  vim.fn.jobstart = orig_jobstart
-  vim.ui.open = orig_ui_open
   platform.is_windows = orig_is_windows
+  package.loaded["lib.nvim.cross.reveal_in_fm"] = orig_reveal_mod
   package.loaded["filetree.features.system.open_in_fm.reuse_win"] = nil
   package.loaded["filetree.features.system.open_in_fm"] = nil
 end

@@ -82,7 +82,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](BINDINGS/KEYMAPS.md).
 
 | Feature | What it does |
 |---|---|
-| `open_in_fm` | Open the node's directory in the system file manager (`<leader>fm`) |
+| `open_in_fm` | Show the node in the system file manager — a file selected in its parent directory, a directory navigated into (`<leader>fm`) |
 | `open_with` | Open with a configured external app (`<leader>sm`) |
 | `shell_run` | Prompt + run a shell command in the node's directory (`i`) |
 
