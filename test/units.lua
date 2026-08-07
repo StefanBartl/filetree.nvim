@@ -1641,43 +1641,45 @@ do
   check("open_in_fm: nonexistent node falls back to a directory",
     captured.target ~= node_path)
 
-  -- reuse_existing: reuse_win.try()'s return value gates whether the shared
-  -- dispatcher is invoked at all.
+  -- reuse_existing is no longer decided here: it is forwarded as an option, so
+  -- the reuse and the raise happen in one step inside the shared dispatcher.
+  -- The old in-module pre-step returned "reused" without ever bringing the
+  -- window forward, which Windows silently refuses for a background process.
   node_path = tmp_dir
 
-  package.loaded["filetree.features.system.open_in_fm.reuse_win"] = { try = function() return true end }
   open_in_fm = reload()
   open_in_fm.setup({ enabled = true, reuse_existing = true }, stub_adapter)
   captured = nil
   open_in_fm.open()
-  check("open_in_fm: reuse_existing=true + a window was reused — no new process spawned",
-    captured == nil)
+  check("open_in_fm: reuse_existing=true is forwarded as reuse", captured.opts.reuse == true)
+  check("open_in_fm: reuse_existing=true still reaches the shared dispatcher",
+    captured.target == tmp_dir)
 
-  package.loaded["filetree.features.system.open_in_fm.reuse_win"] = { try = function() return false end }
+  open_in_fm = reload()
+  open_in_fm.setup({ enabled = true }, stub_adapter)
+  captured = nil
+  open_in_fm.open()
+  check("open_in_fm: reuse defaults to false", captured.opts.reuse == false)
+
+  -- A launcher override names the program, so there is no Explorer window to
+  -- reuse — reuse must not be forwarded alongside it.
+  open_in_fm = reload()
+  open_in_fm.setup({ enabled = true, reuse_existing = true, command = "thunar" }, stub_adapter)
+  captured = nil
+  open_in_fm.open()
+  check("open_in_fm: a command override suppresses reuse", captured.opts.reuse == false)
+
+  -- Reuse is Explorer-specific COM automation; off-Windows it must not be sent.
+  platform.is_windows = function() return false end
   open_in_fm = reload()
   open_in_fm.setup({ enabled = true, reuse_existing = true }, stub_adapter)
   captured = nil
   open_in_fm.open()
-  check("open_in_fm: reuse_existing=true + nothing reused — falls back to spawning",
-    captured ~= nil)
+  check("open_in_fm: reuse is not forwarded off Windows", captured.opts.reuse == false)
 
   platform.is_windows = orig_is_windows
   package.loaded["lib.nvim.cross.reveal_in_fm"] = orig_reveal_mod
-  package.loaded["filetree.features.system.open_in_fm.reuse_win"] = nil
   package.loaded["filetree.features.system.open_in_fm"] = nil
-end
-
--- ── open_in_fm.reuse_win: PowerShell script construction (pure string checks) ─
-do
-  local reuse_win = require("filetree.features.system.open_in_fm.reuse_win")
-
-  local script = reuse_win.build_script("C:\\Users\\test\\some dir")
-  check("reuse_win.build_script: navigates to the given path",
-    script:find("Navigate2('C:\\Users\\test\\some dir')", 1, true) ~= nil)
-  check("reuse_win.build_script: exits 1 when no window is found",
-    script:find("exit 1", 1, true) ~= nil)
-  check("reuse_win.build_script: escapes embedded single quotes",
-    reuse_win.build_script("C:\\it's\\a path"):find("it''s", 1, true) ~= nil)
 end
 
 -- ── no_name_guard: tab-wide sweep on BufAdd/BufDelete/BufWipeout ────────────
