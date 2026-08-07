@@ -36,12 +36,16 @@
 ---                             succeeded, so a transient OS-side failure (Explorer's
 ---                             COM server busy, a slow/locked network path, a
 ---                             misconfigured xdg-open handler) was invisible.
----   reuse_existing boolean?   Windows only. Before opening a new Explorer window,
----                             check whether one is already open and navigate IT to
----                             the target path instead. See reuse_win.lua for why
----                             this reuses a window rather than adding a literal new
----                             tab (Explorer's own tab feature has no scripting
----                             hook), and its real latency cost. Default false.
+---   reuse_existing boolean?   Windows only. Navigate an already-open Explorer
+---                             window to the target instead of opening another one.
+---                             A window rather than a literal new tab because
+---                             Explorer's tab feature has no scripting hook, while
+---                             Shell.Application's Navigate2 has worked unchanged
+---                             since Windows XP. Forwarded to
+---                             lib.nvim.cross.reveal_in_fm as `reuse`; a file node
+---                             cannot be selected this way (Navigate2 takes a
+---                             folder), so it reuses the window on its parent
+---                             directory. Default false.
 
 local notify   = require("filetree.util.notify").create("[filetree.open_in_fm]")
 local platform = require("filetree.util.platform")
@@ -78,23 +82,20 @@ local _reveal = true
 ---@param target string  Absolute path of the node (file or directory).
 ---@param override string?  Explicit launcher command, if configured.
 local function launch(target, override)
-  if _reuse_existing and platform.is_windows() and not override then
-    -- Explorer reuse navigates a window to a FOLDER; it has no equivalent of
-    -- `/select,`, so a file node reuses the window on its parent directory.
-    local dir = path.ensure_dir(target)
-    local ok_req, reuse_win = pcall(require, "filetree.features.system.open_in_fm.reuse_win")
-    if ok_req and reuse_win.try(dir, dbg) then
-      dbg("launch: reused an existing Explorer window, done")
-      return
-    end
-    dbg("launch: no existing Explorer window reused, opening a new one")
-  end
+  -- Reuse is handed to the shared dispatcher rather than attempted here first:
+  -- it has to happen in the same step as bringing the window to the front, and
+  -- that raise is the part Windows makes hard (see lib.nvim's reveal_in_fm).
+  -- This module's own earlier copy did the Navigate2 and then called
+  -- SetForegroundWindow straight from PowerShell, which Windows silently
+  -- refuses for a background process — so the window was navigated but stayed
+  -- buried, which reads exactly like nothing happened.
+  local reuse = _reuse_existing and platform.is_windows() and not override
 
   local reveal_in_fm = require("lib.nvim.cross.reveal_in_fm")
-  dbg(("launch: reveal_in_fm target=%s reveal=%s command=%s")
-    :format(target, tostring(_reveal), tostring(override)))
+  dbg(("launch: reveal_in_fm target=%s reveal=%s reuse=%s command=%s")
+    :format(target, tostring(_reveal), tostring(reuse), tostring(override)))
 
-  local ok, err = reveal_in_fm(target, { reveal = _reveal, command = override })
+  local ok, err = reveal_in_fm(target, { reveal = _reveal, reuse = reuse, command = override })
   if not ok then
     notify.warn("Failed to open in file manager: " .. tostring(err))
     return

@@ -687,12 +687,14 @@
 ---                                that a process STARTED, never that it succeeded (a file manager
 ---                                is meant to be fire-and-forget) — turn this on to see what
 ---                                actually happened when a launch silently doesn't open anything.
----@field reuse_existing boolean?  Windows only. Before opening a new Explorer window, check
----                                whether one is already open and navigate IT to the target path
----                                instead of spawning another. Not a literal new TAB (Explorer's
----                                own tab feature has no scripting hook to add one from outside) —
----                                see reuse_win.lua. Adds a synchronous PowerShell round-trip
----                                (~100-300ms) to every launch. Default false.
+---@field reuse_existing boolean?  Windows only. Navigate an already-open Explorer window to the
+---                                target instead of spawning another. Not a literal new TAB
+---                                (Explorer's own tab feature has no scripting hook to add one from
+---                                outside) — a window, via Shell.Application's Navigate2. Forwarded
+---                                to lib.nvim.cross.reveal_in_fm as `reuse`, which does the reuse
+---                                and the raise in one asynchronous step; a file node cannot be
+---                                selected this way, so it reuses the window on its parent
+---                                directory. Default false.
 
 -- ── shell_run ─────────────────────────────────────────────────────────────────
 

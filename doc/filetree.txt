@@ -768,41 +768,54 @@ PUBLIC API ~
 ------------------------------------------------------------------------------
 5.9 OPEN IN FILE MANAGER                              *filetree-open-in-fm*
 
-Opens the directory of the node under the cursor in the platform's file
-manager (default keymap "<leader>fm"): Windows -> explorer.exe, macOS -> Finder
-(via `open`), Linux -> whatever `xdg-open`/`wslview` resolves to. Prefers
-Neovim's own `vim.ui.open` (0.10+); falls back to a manual per-platform spawn,
-or an explicit `command` override.
+Shows the node under the cursor in the platform's file manager (default keymap
+"<leader>fm"): Windows -> Explorer, macOS -> Finder (via `open`), Linux -> the
+first manager found on PATH. A file node is selected inside its parent
+directory unless `reveal = false`; a directory node is navigated into.
 
-This only ever confirms that a process STARTED — a file manager launch is
-meant to be fire-and-forget, so neither path waits for or inspects an exit
-code by default. If a launch silently opens nothing, turn on `debug` to see
-what actually happened: >lua
+The platform dispatch itself lives in `lib.nvim.cross.reveal_in_fm`, shared
+with open.nvim's `:Open filemanager`, so a fix there lands in both plugins.
+
+On Windows the launch also brings the Explorer window to the FRONT, which
+takes a short PowerShell helper. Spawning explorer.exe directly does create
+the window, but Windows only grants SetForegroundWindow to the process owning
+the foreground window — inside a terminal that is the terminal host, not
+nvim.exe — so the window was created behind everything and the feature looked
+dead. It appeared to work under a GUI Neovim (Neovide, nvim-qt), where
+nvim.exe IS the foreground process; that is what made this failure look
+intermittent for so long. See lib.nvim's `reveal_in_fm/README.md`.
+
+A launch is otherwise fire-and-forget: nothing waits on the file manager. If
+one silently opens nothing, turn on `debug` to see what happened: >lua
   features = {
     open_in_fm = { enabled = true, debug = true },
   }
 <
-This logs the branch taken (vim.ui.open vs. the manual per-OS command), the
-exact argv, the spawned job id, and — only while `debug` is on, so there is
-zero overhead otherwise — the process's exit code and stderr output.
+This logs the resolved target, the options handed to the shared dispatcher,
+and any error it reports back.
 
 REUSE AN EXISTING WINDOW (Windows only) ~
 
   reuse_existing = true
 
-Before opening a new Explorer window, checks (via a `Shell.Application` COM
-query) whether one is already open and navigates IT to the target path
-instead of spawning another. This is NOT the same as opening a new tab in
-that window — Explorer's own tab feature (Windows 11 22H2+) has no public
-scripting hook to add a tab to an existing window from outside the process,
-so this reuses/replaces that window's current view instead. Adds a
-synchronous PowerShell round-trip (roughly 100-300ms) to every launch, which
-is why it defaults to off. If your default folder handler is something other
-than Explorer (some third-party file managers register themselves as the
-`Directory` shell-open handler the same way a browser registers itself for
-http(s) links), `vim.ui.open`/the manual `explorer` launch should still work —
-Windows dispatches to whatever's registered — but `reuse_existing`'s COM
-query is Explorer-specific and will simply find nothing to reuse.
+Navigates an already-open Explorer window (found via a `Shell.Application` COM
+query) to the target instead of spawning another. This is NOT the same as
+opening a new tab in that window — Explorer's own tab feature (Windows 11
+22H2+) has no public scripting hook to add a tab to an existing window from
+outside the process, so this reuses/replaces that window's current view
+instead. A file node cannot be selected this way, since Navigate2 takes a
+folder; it reuses the window on the file's parent directory.
+
+Forwarded to `lib.nvim.cross.reveal_in_fm` as `reuse`, which does the reuse
+and the raise in the same asynchronous step — it is not a separate blocking
+pre-check, and it costs no extra round-trip over a normal Windows launch.
+
+It defaults to off because it replaces whatever the reused window was showing.
+If your default folder handler is something other than Explorer (some
+third-party file managers register themselves as the `Directory` shell-open
+handler the same way a browser registers itself for http(s) links), a normal
+launch still works — Windows dispatches to whatever's registered — but this
+COM query is Explorer-specific and will simply find nothing to reuse.
 
 ------------------------------------------------------------------------------
 5.10 NO NAME GUARD                                    *filetree-no-name-guard*
