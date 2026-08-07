@@ -140,8 +140,12 @@ local function open_image(path)
   if backend == "images.nvim" or backend == "auto" then
     local ok0, images = pcall(require, "images")
     if ok0 and images.show then
-      local opened0 = pcall(images.show, path)
-      if opened0 then return true end
+      -- pcall's first return is only "did this throw", not the callee's own
+      -- ok/fail result — images.show() never throws (it catches its own
+      -- errors and returns false), so that first value was always true here,
+      -- masking every real failure and short-circuiting the fallbacks below.
+      local call_ok0, shown0 = pcall(images.show, path)
+      if call_ok0 and shown0 then return true end
     end
     if backend == "images.nvim" then
       notify.warn("images.nvim not available — install StefanBartl/images.nvim")
@@ -152,8 +156,8 @@ local function open_image(path)
   if backend == "snacks" or backend == "auto" then
     local ok, snacks = pcall(require, "snacks")
     if ok and snacks.image then
-      local opened, _ = pcall(snacks.image.open, path)
-      if opened then return true end
+      local call_ok, opened = pcall(snacks.image.open, path)
+      if call_ok and opened then return true end
     end
     if backend == "snacks" then
       notify.warn("snacks.image not available — install folke/snacks.nvim")
@@ -164,8 +168,8 @@ local function open_image(path)
   if backend == "image.nvim" or backend == "auto" then
     local ok2, img = pcall(require, "image")
     if ok2 and img.open then
-      local opened2, _ = pcall(img.open, path)
-      if opened2 then return true end
+      local call_ok2, opened2 = pcall(img.open, path)
+      if call_ok2 and opened2 then return true end
     end
     if backend == "image.nvim" then
       notify.warn("image.nvim not available — install 3rd/image.nvim")
