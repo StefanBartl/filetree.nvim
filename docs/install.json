@@ -1,0 +1,33 @@
+{
+  "tools": [
+    {
+      "bin": "trash-put",
+      "required": false,
+      "why": "Enables moving deleted files to the desktop trash (with undo) on Linux instead of a permanent delete. gio (from GNOME/glib2) is tried first and usually already present; trash-put (trash-cli) is the fallback worth installing on a minimal/non-GNOME setup.",
+      "pkg": {
+        "apt": "trash-cli",
+        "dnf": "trash-cli",
+        "pacman": "trash-cli",
+        "zypper": "trash-cli",
+        "apk": "trash-cli",
+        "brew": "trash-cli"
+      }
+    },
+    {
+      "bin": "rg",
+      "required": false,
+      "why": "Powers the fast in-directory grep search feature and the smart-rename reference scanner. Without it, both are unavailable rather than falling back to something slower.",
+      "pkg": {
+        "apt": "ripgrep",
+        "dnf": "ripgrep",
+        "pacman": "ripgrep",
+        "zypper": "ripgrep",
+        "apk": "ripgrep",
+        "brew": "ripgrep",
+        "winget": "BurntSushi.ripgrep.MSVC",
+        "scoop": "ripgrep",
+        "choco": "ripgrep"
+      }
+    }
+  ]
+}
