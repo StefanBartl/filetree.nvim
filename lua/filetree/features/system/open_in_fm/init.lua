@@ -2,23 +2,31 @@
 --- Open the node under cursor in the system file manager.
 ---
 --- Binds a key (default `<leader>fm`) in the tree buffer.  On activation it
---- resolves the directory of the node under the cursor and opens it in the
---- platform's native file manager:
+--- resolves the node under the cursor and shows it in the platform's native
+--- file manager — a file selected inside its parent directory, a directory
+--- navigated into:
 ---
----   Windows  → explorer.exe
----   macOS    → open -R  (reveals the file in Finder)
----   Linux    → xdg-open (Nautilus, Thunar, Dolphin, …)
+---   Windows  → explorer.exe /select,<file>  /  explorer.exe <dir>
+---   macOS    → open -R <file>  /  open <dir>  (Finder)
+---   Linux    → nautilus / nemo / dolphin --select / …, xdg-open for a directory
 ---
---- Uses Neovim's built-in `vim.ui.open` (0.10+) by default — the platform-correct,
---- maintained way to hand a path to the OS (explorer on Windows, open on macOS,
---- xdg-open on Linux, wslview under WSL). Falls back to a manual per-platform
---- spawn on older Neovim, and honours a `command` override.
+--- The platform dispatch itself lives in `lib.nvim.cross.reveal_in_fm`, shared
+--- with open.nvim's `:Open filemanager` handler, so a fix there lands in both
+--- plugins at once. This module contributes what is specific to a tree buffer:
+--- resolving the node under the cursor, the optional Explorer-window reuse,
+--- and the debug logging.
 ---
 --- Config:
 ---   enabled        boolean
 ---   keymap         string?    Key in tree buffer (default "<leader>fm").
----   command        string?    Override the launcher. The directory path is passed as
----                             the last argument (e.g. "nautilus", "thunar").
+---   command        string?    Override the launcher. The path is passed as the
+---                             last argument (e.g. "nautilus", "thunar").
+---   reveal         boolean?   Select a file node inside its parent directory
+---                             (default true). false → open the containing
+---                             directory without selecting anything, which is
+---                             what this feature did before the reveal option
+---                             existed. Directory nodes are always navigated
+---                             into either way.
 ---   debug          boolean?   Verbose notify.debug() logging of every launch attempt
 ---                             (branch taken, argv, job id, exit code/stderr). Default
 ---                             false — this feature previously had NO diagnostics at
@@ -54,76 +62,26 @@ end
 
 -- ── Launch ────────────────────────────────────────────────────────────────────
 
----@internal
----Spawn a detached process; returns true when the job started.
----
----NOTE on what "true" actually means: only that `jobstart` accepted the argv
----and returned a positive job id, i.e. the OS agreed to fork/exec something.
----It says nothing about whether that process went on to actually open a file
----manager window — with `_debug` off, an `on_exit`/`on_stderr` handler isn't
----even attached, so a nonzero exit or stderr output is invisible by design
----(matches the previous zero-overhead behavior). Turn `debug = true` on to
----see the real outcome.
----@param args string[]
----@return boolean
-local function spawn(args)
-  dbg("spawn: " .. table.concat(args, " "))
-
-  local opts = { detach = true }
-  if _debug then
-    opts.on_exit = function(_, code)
-      dbg(("spawn exited: code=%d  args=%s"):format(code, table.concat(args, " ")))
-    end
-    opts.on_stderr = function(_, data)
-      local text = data and table.concat(data, "\n") or ""
-      if text ~= "" then dbg("spawn stderr: " .. text) end
-    end
-  end
-
-  local id = vim.fn.jobstart(args, opts)
-  if not id or id <= 0 then
-    notify.warn("Failed to launch: " .. table.concat(args, " "))
-    return false
-  end
-  dbg("spawn started: job id=" .. tostring(id))
-  return true
-end
-
----@internal
----Manual per-platform folder open (fallback for Neovim < 0.10).
----@param dir string
----@return boolean
-local function manual_open(dir)
-  if platform.is_windows() then
-    dbg("manual_open: windows -> explorer")
-    return spawn({ "explorer", (dir:gsub("/", "\\")) })
-  elseif platform.is_mac() then
-    dbg("manual_open: mac -> open")
-    return spawn({ "open", dir })
-  elseif platform.has_executable("wslview") then
-    dbg("manual_open: wsl -> wslview")
-    return spawn({ "wslview", dir })
-  else
-    dbg("manual_open: linux -> xdg-open")
-    return spawn({ "xdg-open", dir })
-  end
-end
-
 ---@type boolean
 local _reuse_existing = false
+---@type boolean
+local _reveal = true
 
 ---@internal
----Open `dir` in the system file manager. Prefers `vim.ui.open`.
----@param dir string  Absolute directory path.
+---Open `target` in the system file manager.
+---
+---Everything platform-specific is delegated to `lib.nvim.cross.reveal_in_fm`.
+---Note what a `true` return from it means: the OS agreed to spawn the
+---launcher, not that a file manager window actually appeared — a file manager
+---is fire-and-forget, so nothing here waits on it. `debug = true` at least
+---makes the branch taken and the reported error visible.
+---@param target string  Absolute path of the node (file or directory).
 ---@param override string?  Explicit launcher command, if configured.
-local function launch(dir, override)
-  if override and override ~= "" then
-    dbg("launch: command override -> " .. override)
-    spawn({ override, dir })
-    return
-  end
-
-  if _reuse_existing and platform.is_windows() then
+local function launch(target, override)
+  if _reuse_existing and platform.is_windows() and not override then
+    -- Explorer reuse navigates a window to a FOLDER; it has no equivalent of
+    -- `/select,`, so a file node reuses the window on its parent directory.
+    local dir = path.ensure_dir(target)
     local ok_req, reuse_win = pcall(require, "filetree.features.system.open_in_fm.reuse_win")
     if ok_req and reuse_win.try(dir, dbg) then
       dbg("launch: reused an existing Explorer window, done")
@@ -132,18 +90,16 @@ local function launch(dir, override)
     dbg("launch: no existing Explorer window reused, opening a new one")
   end
 
-  if type(vim.ui.open) == "function" then
-    dbg("launch: trying vim.ui.open")
-    -- vim.ui.open returns (SystemObj|nil, err|nil); a non-nil object = spawned.
-    local ok, obj = pcall(vim.ui.open, dir)
-    if ok and obj ~= nil then
-      dbg("launch: vim.ui.open returned an object (assumed spawned; see module doc)")
-      return
-    end
-    dbg("launch: vim.ui.open unavailable or failed, falling back to manual_open")
-  end
+  local reveal_in_fm = require("lib.nvim.cross.reveal_in_fm")
+  dbg(("launch: reveal_in_fm target=%s reveal=%s command=%s")
+    :format(target, tostring(_reveal), tostring(override)))
 
-  manual_open(dir)
+  local ok, err = reveal_in_fm(target, { reveal = _reveal, command = override })
+  if not ok then
+    notify.warn("Failed to open in file manager: " .. tostring(err))
+    return
+  end
+  dbg("launch: reveal_in_fm spawned the launcher")
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -166,15 +122,21 @@ function M.open()
     return
   end
 
-  local dir = path.ensure_dir(node.path)
-  if not dir or dir == "" then
-    notify.warn("Cannot resolve directory for node")
+  -- A file node is handed over as-is so it can be selected in its parent
+  -- directory (`reveal`); `ensure_dir` only steps in for a path that no longer
+  -- exists on disk, where selecting is not an option anyway.
+  local target = node.path
+  if vim.fn.isdirectory(target) ~= 1 and vim.fn.filereadable(target) ~= 1 then
+    target = path.ensure_dir(target)
+  end
+  if not target or target == "" then
+    notify.warn("Cannot resolve path for node")
     return
   end
 
-  notify.info("Opening in file manager: " .. dir)
-  dbg("open(): resolved dir=" .. dir)
-  launch(dir, _cmd)
+  notify.info("Opening in file manager: " .. target)
+  dbg("open(): resolved target=" .. target)
+  launch(target, _cmd)
 end
 
 ---@param config FiletreeOpenInFmConfig
@@ -187,6 +149,7 @@ function M.setup(config, adapter)
   _cmd            = config.command   -- nil unless the user overrides the launcher
   _debug          = config.debug == true
   _reuse_existing = config.reuse_existing == true
+  _reveal         = config.reveal ~= false
 
   tree_attach.on_attach(function(buf)
     map("n", keymap, M.open, { buffer = buf },

@@ -678,6 +678,9 @@
 ---@field enabled        boolean
 ---@field keymap         string?   Key in tree buffer (default "<leader>fm").
 ---@field command        string?   Override launch binary (auto-detected per OS by default).
+---@field reveal         boolean?  Select a file node inside its parent directory (default true).
+---                                false → open the containing directory without selecting
+---                                anything. Directory nodes are navigated into either way.
 ---@field debug          boolean?  Verbose notify.debug() logging of every launch attempt — branch
 ---                                taken, argv, job id, and (only when this is on) the process's
 ---                                exit code/stderr. Default false. This feature only ever confirms

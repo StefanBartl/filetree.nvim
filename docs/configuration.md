@@ -93,7 +93,10 @@ require("filetree").setup({
 
     open_in_fm = {
       enabled = true,            -- default: on
-      keymap  = "<leader>fm",    -- open node directory in system file manager
+      keymap  = "<leader>fm",    -- show node in the system file manager
+      reveal  = true,            -- false: open the containing dir without selecting
+      -- command = "thunar",     -- launcher override (auto-detected per OS)
+      -- reuse_existing = false, -- Windows: navigate an open Explorer window instead
     },
 
     shell_run = {
