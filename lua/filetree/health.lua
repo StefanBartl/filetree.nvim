@@ -115,7 +115,7 @@ function M.check()
   end
 
   -- pdf_open: pdfport.nvim is optional; without it PDFs open in the system viewer
-  if is_enabled("pdf_open") and not pcall(require, "pdfport_nvim") then
+  if is_enabled("pdf_open") and not pcall(require, "pdfport") then
     vim.health.info("pdf_open: pdfport.nvim not installed — PDFs open in the system viewer only")
   end
 
@@ -191,7 +191,7 @@ function M.check()
   local optionals = {
     { mod = "telescope",    label = "Telescope (for future telescope integration)" },
     { mod = "fzf-lua",      label = "fzf-lua (for future fzf integration)"        },
-    { mod = "pdfport_nvim", label = "pdfport.nvim (for pdf_open text extraction)" },
+    { mod = "pdfport",      label = "pdfport.nvim (for pdf_open text extraction)" },
   }
   for _, o in ipairs(optionals) do
     if pcall(require, o.mod) then

@@ -3,6 +3,14 @@
 > Zuständigkeits-Aufteilung für das „PDF aus dem Tree öffnen"-Feature.
 > Status: Konzept / Entscheidungsvorlage. Betrifft `filetree.nvim` (neues Feature)
 > und `pdfport.nvim` (keine Pflicht­änderung).
+>
+> **Korrektur (2026-08-07):** Dieses Dokument ging durchgehend von einem
+> Modulnamen `pdfport_nvim` aus. Das Modul heißt tatsächlich `pdfport`
+> (`lua/pdfport/`) — der Fehler wurde unverändert in `util/pdf.lua` und
+> `health.lua` übernommen und sorgte dort dafür, dass `has_pdfport()` bei
+> installiertem pdfport.nvim trotzdem immer `false` lieferte. Beide Stellen
+> sind gefixt; die `pdfport_nvim`-Vorkommen unten sind historisch belassen,
+> außer wo sie den tatsächlichen Modulnamen dokumentieren sollten.
 
 ---
 
