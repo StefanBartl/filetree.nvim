@@ -13,7 +13,7 @@
 --- names a pdfport backend or its fallback chain — `mode`/`backend` are passed
 --- straight through and pdfport's own setup() decides what actually runs.
 ---
---- Note: pdfport's Lua module is `pdfport_nvim` (dir `lua/pdfport_nvim/`), and
+--- Note: pdfport's Lua module is `pdfport` (dir `lua/pdfport/`), and
 --- its `open()` takes a *table* (`{ path = …, mode = … }`), not a bare path.
 
 local platform = require("filetree.util.platform")
@@ -57,7 +57,7 @@ end
 ---True when pdfport.nvim is installed and exposes open().
 ---@return boolean
 function M.has_pdfport()
-  local ok, pp = pcall(require, "pdfport_nvim")
+  local ok, pp = pcall(require, "pdfport")
   return ok and type(pp.open) == "function"
 end
 
@@ -80,7 +80,7 @@ function M.open(path, opts)
     return M.system_open(path)
   end
 
-  local ok, pp = pcall(require, "pdfport_nvim")
+  local ok, pp = pcall(require, "pdfport")
   if ok and type(pp.open) == "function" then
     local ok2, err = pcall(pp.open, {
       path       = path,
