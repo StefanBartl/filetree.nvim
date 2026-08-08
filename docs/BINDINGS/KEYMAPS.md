@@ -49,6 +49,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `<leader>sm` | open_with | `keymap` | Open with system default |
 | `r` | smart_rename | `keymap` | Rename with LSP reference update |
 | `A` | create_from_template | `keymap` | Create from template — filename first, then a picker filtered to that extension |
+| `<RightMouse>` | context_menu | `keymap` | Open a right-click context menu via nvzone/menu (soft dependency) |
 | `<leader>rb` | rename_batch | `keymap` | Open batch rename buffer |
 | `f` | find_files | `keymap_tree` | Find files (telescope/fzf-lua/builtin) |
 | `tf` | find_files | `keymap_telescope` | Find files, forcing telescope specifically |

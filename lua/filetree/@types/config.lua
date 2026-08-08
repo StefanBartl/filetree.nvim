@@ -63,6 +63,7 @@
 ---@field handle_guard        FiletreeHandleGuardConfig?
 ---@field marks               FiletreeMarksConfig?
 ---@field diff                FiletreeDiffConfig?
+---@field context_menu        FiletreeContextMenuConfig?
 ---@field project_root        FiletreeProjectRootConfig?
 ---@field git_status          FiletreeGitStatusConfig?
 ---@field preview             FiletreePreviewConfig?
@@ -286,6 +287,17 @@
 ---@field enabled  boolean
 ---@field split    "vsplit"|"split"  Layout for diff windows (default "vsplit").
 ---@field keymap   string?           Key inside tree to stage/diff current node (default "D").
+
+-- ── context_menu ─────────────────────────────────────────────────────────────
+
+---@class FiletreeContextMenuConfig
+---@field enabled boolean          Bind the mouse trigger (default true — opt-out).
+---@field keymap  string|false?    Mouse trigger inside the tree buffer (default "<RightMouse>").
+---                                 false disables the binding without disabling the feature outright.
+---                                 Opens nvzone/menu (soft dependency — a single notify, not an
+---                                 error, if it isn't installed) with the entries from
+---                                 `filetree.integrations.menu.items()`; which entries appear is
+---                                 controlled by the top-level `menu` config, not this one.
 
 -- ── project_root ──────────────────────────────────────────────────────────────
 

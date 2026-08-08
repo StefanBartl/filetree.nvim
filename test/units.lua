@@ -2116,6 +2116,71 @@ do
   check("breadcrumbs float: teardown closes it", #floats() == before)
 end
 
+-- ── context_menu: right-click binding, opt-out default, soft nvzone/menu dep ──
+do
+  local stub = setmetatable({
+    name = "units-stub-context-menu", filetypes = { "units-context-menu-ft" },
+    is_available = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-context-menu" })  -- no explicit context_menu config at all
+
+  check("context_menu: active without explicit config (opt-out, on by default)",
+    ft.feature("context_menu") ~= nil)
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(buf)
+  vim.bo[buf].filetype = "units-context-menu-ft"
+  vim.wait(200, function() return false end)
+
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do km[m.lhs] = m end
+  check("context_menu: default keymap '<RightMouse>' bound", km["<RightMouse>"] ~= nil)
+
+  -- Without nvzone/menu on rtp: clicking must not error, just degrade quietly.
+  package.loaded["menu"] = nil
+  local ok_no_menu = pcall(km["<RightMouse>"].callback)
+  check("context_menu: click without nvzone/menu installed does not error", ok_no_menu)
+
+  -- With a stubbed nvzone/menu: click must call menu.open(items, {mouse=true})
+  -- with the SAME entries filetree.integrations.menu.items() builds (that
+  -- module's own content is covered by test/menu.lua; this only checks the
+  -- wiring calls through correctly).
+  local captured
+  package.loaded["menu"] = { open = function(items, opts) captured = { items = items, opts = opts } end }
+  local ok_menu = pcall(km["<RightMouse>"].callback)
+  check("context_menu: click with nvzone/menu present does not error", ok_menu)
+  check("context_menu: calls menu.open()", captured ~= nil)
+  if captured then
+    check("context_menu: opens with mouse=true", captured.opts.mouse == true)
+    check("context_menu: passes a non-empty item list", #captured.items > 0)
+  end
+  package.loaded["menu"] = nil
+
+  -- keymap = false disables the binding without disabling the feature.
+  local stub2 = setmetatable({
+    name = "units-stub-context-menu-2", filetypes = { "units-context-menu-ft2" },
+    is_available = function() return true end,
+  }, { __index = function() return function() return false end end })
+  ft.register_adapter(stub2)
+  ft.setup({ adapter = "units-stub-context-menu-2",
+    features = { context_menu = { keymap = false } } })
+  check("context_menu: keymap=false still leaves the feature enabled",
+    ft.feature("context_menu") ~= nil)
+
+  local buf2 = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(buf2)
+  vim.bo[buf2].filetype = "units-context-menu-ft2"
+  vim.wait(200, function() return false end)
+  local has_rm = false
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf2, "n")) do
+    if m.lhs == "<RightMouse>" then has_rm = true end
+  end
+  check("context_menu: keymap=false does not bind '<RightMouse>'", not has_rm)
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end

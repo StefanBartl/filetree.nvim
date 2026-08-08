@@ -78,6 +78,17 @@ require("filetree").setup({
       keymap  = "<Esc>",
     },
 
+    context_menu = {
+      enabled = true,            -- default: on
+      keymap  = "<RightMouse>",  -- false disables the trigger without disabling the
+                                  -- feature (e.g. to wire your own via
+                                  -- filetree.integrations.menu.items() instead)
+      -- Soft dependency: opens https://github.com/nvzone/menu at the mouse.
+      -- Without it installed, a click degrades to a single notify, not an
+      -- error. WHICH entries appear is controlled by the top-level `menu`
+      -- config below, not here.
+    },
+
     buffer_save = {
       enabled        = true,      -- default: on
       keymap_adjacent = "<C-s>",  -- save last adjacent editor buffer
