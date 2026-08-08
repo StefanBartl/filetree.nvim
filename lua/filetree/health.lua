@@ -192,6 +192,7 @@ function M.check()
     { mod = "telescope",    label = "Telescope (for future telescope integration)" },
     { mod = "fzf-lua",      label = "fzf-lua (for future fzf integration)"        },
     { mod = "pdfport",      label = "pdfport.nvim (for pdf_open text extraction)" },
+    { mod = "menu",         label = "nvzone/menu (for context_menu's right-click popup)" },
   }
   for _, o in ipairs(optionals) do
     if pcall(require, o.mod) then

@@ -32,6 +32,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](BINDINGS/KEYMAPS.md).
 | `tree_reset` | `<Esc>` clears preview + filter + live search |
 | `opened_sync` | Re-render the tree on buffer open/close so the tree plugin's opened-file highlights stay in sync |
 | `current_hl` | Highlight the current file + parent dir, optional sign-column icon on the focused file _(opt-in)_ |
+| `context_menu` | Right-click (`<RightMouse>`) opens a context menu via [nvzone/menu](https://github.com/nvzone/menu) — soft dependency, inert without it installed; see [docs/menu.md](menu.md) |
 
 ## `fileops` — create / edit / move
 

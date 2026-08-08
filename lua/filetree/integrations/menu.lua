@@ -82,7 +82,7 @@ function M.items()
       entry("smart_create", "create", "  Create file / dir", "a"),
       entry("smart_rename", "rename_current", "  Rename (LSP refs)", "r"),
       entry("rename_batch", "open", "  Batch rename", "<leader>rb"),
-      entry("create_from_template", "open_current", "  New from template", "t"),
+      entry("create_from_template", "open_current", "  New from template", "A"),
     })
   end
 

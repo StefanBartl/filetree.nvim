@@ -34,6 +34,7 @@ return {
     { lhs = "w",  desc = "Cycle window size",     feature = "window_size_cycler", scope = "tree" },
     { lhs = "<Esc>", desc = "Reset preview + filter + search", feature = "tree_reset", scope = "tree" },
     { lhs = "?",  desc = "Keymap cheatsheet (native `?` on neotree instead)", feature = "cheatsheet", scope = "tree" },
+    { lhs = "<RightMouse>", desc = "Open context menu (nvzone/menu, soft dependency)", feature = "context_menu", scope = "tree" },
   },
   fileops = {
     { lhs = "a",  desc = "Smart create file/dir",  feature = "smart_create", scope = "tree" },
