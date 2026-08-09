@@ -49,8 +49,10 @@ require("filetree").setup({
 
     buffer_cycle = {
       enabled     = true,        -- default: on
-      keymap_next = "<S-Tab>",   -- next buffer in the adjacent editor window
-      keymap_prev = "<M-Tab>",   -- previous buffer in the adjacent editor window
+      keymap_next = "<C-f>",     -- next buffer in the adjacent editor window
+      keymap_prev = "<C-p>",     -- previous buffer in the adjacent editor window
+      -- <C-f> collides with preview's keymap_scroll_down, but only when
+      -- preview.mode = "float" (buffer mode, the default, doesn't bind it).
     },
 
     preview = {

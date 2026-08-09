@@ -26,8 +26,8 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
 | `L` | cwd_mode | `keymap_cycle` | Cycle the cwd policy (follow → project → lock) |
 | `gp` | cwd_mode | `keymap_lock_here` | Lock the cwd to the node under the cursor |
-| `<S-Tab>` | buffer_cycle | `keymap_next` | Next buffer in the adjacent editor window (tree keeps focus) |
-| `<M-Tab>` | buffer_cycle | `keymap_prev` | Previous buffer in the adjacent editor window (tree keeps focus) |
+| `<C-f>` | buffer_cycle | `keymap_next` | Next buffer in the adjacent editor window (tree keeps focus) |
+| `<C-p>` | buffer_cycle | `keymap_prev` | Previous buffer in the adjacent editor window (tree keeps focus) |
 | `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard |
 | `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard |
 | `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard |
@@ -83,6 +83,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `/` | `filter` + neotree fuzzy finder | neotree uses `/` for its own search. Remap `filter.keymap` if using neotree. |
 | `i` | `shell_run` + neotree built-in `i` (toggle node info) | filetree's `node_info` provides a better `I`; noop neotree's `i` via `adapter_keymaps`. |
 | `<C-c>` | `filter.keymap_clear` + `copy_move.keymaps.clear` | Both default to `<C-c>`. Last one registered wins; remap one if you need both reachable at once. |
+| `<C-f>` | `buffer_cycle.keymap_next` + `preview.keymap_scroll_down` | Only when `preview.mode = "float"` (buffer mode, the default, doesn't bind `<C-f>`). Remap one side if you use float-mode preview. |
 
 ---
 
