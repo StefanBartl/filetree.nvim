@@ -698,7 +698,7 @@
 
 ---@class FiletreeBufferCycleConfig
 ---@field enabled      boolean
----@field keymap_next  string?   Next buffer in adjacent editor window (default "<C-f>").
+---@field keymap_next  string?   Next buffer in adjacent editor window (default "<C-n>").
 ---@field keymap_prev  string?   Previous buffer in adjacent editor window (default "<C-p>").
 
 -- ── window_size_cycler ────────────────────────────────────────────────────────

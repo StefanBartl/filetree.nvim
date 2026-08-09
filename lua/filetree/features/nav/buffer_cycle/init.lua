@@ -3,20 +3,20 @@
 ---
 --- Two keymaps (both active while focus is in a tree buffer):
 ---
----   <C-f>  — next buffer in the adjacent editor window     (like `:bnext`)
+---   <C-n>  — next buffer in the adjacent editor window     (like `:bnext`)
 ---   <C-p>  — previous buffer in the adjacent editor window (like `:bprevious`)
 ---
 --- Mirrors switching buffers from inside that editor window: the cycle
 --- happens there, not in the tree, and the tree keeps focus throughout.
 ---
---- NOTE: <C-f> collides with preview's float-mode scroll-down
---- (keymap_scroll_down, default "<C-f>") — only when preview.mode == "float"
---- (buffer mode, the default, doesn't bind it). Remap one side if you use
---- float-mode preview.
+--- Both keys are unbound in neo-tree's own default window.mappings (unlike
+--- <C-f>/<C-b>, which neo-tree's defaults.lua claims natively for
+--- scroll_preview — verified live via nvim_buf_get_keymap() against a real
+--- neo-tree tree buffer, not just a source read).
 ---
 --- Config:
 ---   enabled       boolean
----   keymap_next   string?   Next buffer in adjacent window (default "<C-f>").
+---   keymap_next   string?   Next buffer in adjacent window (default "<C-n>").
 ---   keymap_prev   string?   Previous buffer in adjacent window (default "<C-p>").
 
 local notify  = require("filetree.util.notify").create("[filetree.buffer_cycle]")
@@ -58,7 +58,7 @@ end
 function M.setup(config, _adapter)
   if not config.enabled then return end
 
-  local keymap_next = config.keymap_next or "<C-f>"
+  local keymap_next = config.keymap_next or "<C-n>"
   local keymap_prev = config.keymap_prev or "<C-p>"
 
   tree_attach.on_attach(function(buf)
