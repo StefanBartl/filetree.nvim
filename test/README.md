@@ -222,14 +222,13 @@ Testet: `adapter.open_reveal()`, CWD-Sync.
 | G.3 | `:pwd` nach G.1/G.2 | CWD stimmt mit dem neuen Tree-Root überein |
 | G.4 | `-` aus dem Repo-Root heraus | Wechselt zum Parent des Repos (kein Fehler) |
 
-**buffer_cycle** (Keymaps `<C-f>`/`<C-p>` im Tree):
+**buffer_cycle** (Keymaps `<C-n>`/`<C-p>` im Tree):
 
 | # | Test | Erwartung |
 |---|------|-----------|
-| G.5 | Mind. 2 Buffer offen, Fokus im Tree, `<C-f>` | Editor-Fenster (nicht der Tree) zeigt den nächsten Buffer; Fokus bleibt im Tree |
+| G.5 | Mind. 2 Buffer offen, Fokus im Tree, `<C-n>` | Editor-Fenster (nicht der Tree) zeigt den nächsten Buffer; Fokus bleibt im Tree |
 | G.6 | Danach `<C-p>` | Editor-Fenster springt zurück zum vorherigen Buffer; Fokus bleibt im Tree |
-| G.7 | Kein Editor-Fenster vorhanden (nur Tree-Fenster), `<C-f>` | Notification `"No editor window found"`, kein Fehler |
-| G.8 | `preview.mode = "float"` gesetzt, dann `<C-f>` im Tree | Kollidiert mit `preview.keymap_scroll_down` — je nach Registrierungsreihenfolge gewinnt eine der beiden Aktionen; siehe „Known conflicts” in `docs/BINDINGS/KEYMAPS.md` |
+| G.7 | Kein Editor-Fenster vorhanden (nur Tree-Fenster), `<C-n>` | Notification `"No editor window found"`, kein Fehler |
 
 ---
 

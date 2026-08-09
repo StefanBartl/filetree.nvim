@@ -83,7 +83,7 @@ local SPEC = {
     { field = "keymap", method = "cycle", desc = "filetree: cycle window size", default = "w" },
   },
   buffer_cycle = {
-    { field = "keymap_next", method = "next", desc = "filetree: next buffer in adjacent window",     default = "<C-f>" },
+    { field = "keymap_next", method = "next", desc = "filetree: next buffer in adjacent window",     default = "<C-n>" },
     { field = "keymap_prev", method = "prev", desc = "filetree: previous buffer in adjacent window", default = "<C-p>" },
   },
   copy_file_list = {
