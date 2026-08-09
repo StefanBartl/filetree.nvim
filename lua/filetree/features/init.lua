@@ -76,6 +76,7 @@ M.FEATURES = {
   open_with     = { mod = "filetree.features.system.open_with",     category = "system" },
   shell_run     = { mod = "filetree.features.system.shell_run",     category = "system" },
   pdf_open      = { mod = "filetree.features.system.pdf_open",      category = "system" },
+  pdf_create    = { mod = "filetree.features.system.pdf_create",    category = "system" },
 
   -- ── lsp: diagnostics / symbols ─────────────────────────────────────────────
   lsp_diagnostics    = { mod = "filetree.features.lsp.lsp_diagnostics",    category = "lsp" },

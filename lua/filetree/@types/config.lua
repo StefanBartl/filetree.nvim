@@ -86,6 +86,7 @@
 ---@field hooks_api            FiletreeHooksApiConfig?
 ---@field open_with               FiletreeOpenWithConfig?
 ---@field pdf_open                FiletreePdfOpenConfig?
+---@field pdf_create              FiletreePdfCreateConfig?
 ---@field smart_rename            FiletreeSmartRenameConfig?
 ---@field path_copy               FiletreePathCopyConfig?
 ---@field live_search             FiletreeLiveSearchConfig?
@@ -537,6 +538,20 @@
 ---@field keymap_text     string?  Force text extraction into a buffer (default nil, off).
 ---@field keymap_system   string?  Force the OS default viewer (default nil, off).
 ---@field keymap_terminal string?  Force pdfport's terminal mode (default nil, off).
+
+-- ── pdf_create ────────────────────────────────────────────────────────────────
+
+---@class FiletreePdfCreateResult
+---@field path    string    The input path this result is for.
+---@field status  "ok"|"error"|"skipped"
+---@field output  string?   Created PDF path, when status == "ok".
+---@field error   string?   Failure reason, when status == "error".
+
+---@class FiletreePdfCreateConfig
+---@field enabled     boolean
+---@field keymap      string?   Create a PDF from the current node/marks/folder (default "gP").
+---@field on_conflict "overwrite"|"suffix"|"error"?  Passed to pdfport.create() (default "suffix").
+---@field confirm     boolean?  Ask via lib.nvim.ui.kit before creating (default true).
 
 -- ── smart_rename ─────────────────────────────────────────────────────────────
 

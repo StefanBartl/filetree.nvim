@@ -11,6 +11,22 @@
 > installiertem pdfport.nvim trotzdem immer `false` lieferte. Beide Stellen
 > sind gefixt; die `pdfport_nvim`-Vorkommen unten sind historisch belassen,
 > außer wo sie den tatsächlichen Modulnamen dokumentieren sollten.
+>
+> **Ergänzung (2026-08-09) — Schreibrichtung:** Dieses Dokument beschreibt nur
+> die Leserichtung („PDF aus dem Tree öffnen"). Die Gegenrichtung („Datei(en)
+> aus dem Tree als PDF erzeugen") ist jetzt ebenfalls angebunden, nach exakt
+> demselben Muster: `filetree.util.pdf.create(paths, opts)` ruft
+> `pdfport.create()` pro Eingabedatei auf (überspringt Dateien ohne
+> passenden pdfport-Producer, statt abzubrechen), und das neue Feature
+> `features/system/pdf_create` (Ziel-Ermittlung wie bei `trash`/`copy_move`:
+> markierte Knoten, sonst aktueller Knoten; ein Ordner-Knoten expandiert zu
+> seinen direkten Kind-Dateien, nicht rekursiv) fragt vor jeder Erstellung
+> über `filetree.util.confirm` (= `lib.nvim.ui.kit.confirm`) nach — einzelne
+> Datei als Ja/Nein, mehrere Dateien mit einer Vorschau der ersten paar
+> Namen. Default-Keymap `gP` (Großbuchstabe; kollidiert nicht mit `pdf_open`s
+> `gp`). Siehe [docs/BINDINGS/KEYMAPS.md](../BINDINGS/KEYMAPS.md) und, für den
+> vollen Producer-/Ausbaustufen-Kontext, `pdfport.nvim`s eigenes
+> `docs/ROADMAP/PDF_CREATE.md`.
 
 ---
 

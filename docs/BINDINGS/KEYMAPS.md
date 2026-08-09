@@ -70,6 +70,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `w` | window_size_cycler | `keymap` | Cycle tree width through presets (normal → large → small → …) |
 | `<leader>fm` | open_in_fm | `keymap` | Open node directory in system file manager |
 | `i` | shell_run | `keymap` | Prompt for a shell command, run in node directory |
+| `gP` | pdf_create | `keymap` | Create PDF(s) from the current node/marked nodes/folder via pdfport.nvim (confirms first) |
 
 ---
 
