@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Gating: stylua + luacheck must pass. stylua is advisory (continue-on-error)
+  # until a one-time `stylua .` formatting pass lands across the codebase --
+  # the existing style predates this config and a blind repo-wide reformat is
+  # out of scope for a repo with no test coverage over every corner. luacheck
+  # is a real gate; it passes clean.
+  lint:
+    name: lint (stylua + luacheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: stylua (check)
+        uses: JohnnyMorganz/stylua-action@v4
+        continue-on-error: true
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: v2.5.2
+          args: --check .
+
+      - name: Install luacheck
+        run: sudo apt-get update && sudo apt-get install -y luarocks && sudo luarocks install luacheck
+
+      - name: luacheck
+        run: luacheck lua docs/BINDINGS.lua test
+
+  # Real gate: the headless test suite (smoke, units, menu, cwd_mode). lib.nvim
+  # is checked out as a sibling so the suites' own sibling-checkout lookup
+  # (../lib.nvim) finds it -- filetree.nvim's command layer and several
+  # features depend on it at runtime.
+  test:
+    name: tests (headless)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout filetree.nvim
+        uses: actions/checkout@v4
+        with:
+          path: filetree.nvim
+
+      - name: Checkout lib.nvim
+        uses: actions/checkout@v4
+        with:
+          repository: StefanBartl/lib.nvim
+          path: lib.nvim
+
+      - name: Install Neovim (stable)
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Run test suites
+        working-directory: filetree.nvim
+        run: |
+          set -e
+          nvim --clean --headless -u NONE -l test/smoke.lua
+          nvim --clean --headless -u NONE -l test/units.lua
+          nvim --clean --headless -u NONE -l test/menu.lua
+          nvim --clean --headless -u NONE -l test/cwd_mode.lua

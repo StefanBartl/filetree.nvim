@@ -1,3 +1,9 @@
+# Force LF for all text files regardless of local core.autocrlf. Without this,
+# a Windows checkout with core.autocrlf=true stores CRLF in the working tree
+# while the committed blob stays LF — stylua then sees the whole file as
+# changed (false full-file diffs) on every --check run.
+* text=auto eol=lf
+
 # Shipped file templates are copied byte-for-byte into the files users create
 # (create_from_template reads them with readfile() and writes the result back),
 # so their line endings end up in the generated file. Under core.autocrlf=true
