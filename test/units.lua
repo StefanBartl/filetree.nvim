@@ -23,6 +23,11 @@ if not sibling_lib or sibling_lib == "" then
 end
 if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) end
 
+-- Cross-platform scratch-dir root for the many `tmp = TMP_ROOT .. "/units-*"`
+-- fixtures below. $TEMP is Windows-only; POSIX runners (incl. CI) don't set
+-- it, which previously hard-errored ("attempt to concatenate a nil value").
+local TMP_ROOT = vim.env.TEMP or vim.env.TMPDIR or vim.env.TMP or "/tmp"
+
 local passed, failed = 0, 0
 local function check(name, ok, detail)
   if ok then passed = passed + 1; print("  ok   " .. name)
@@ -35,7 +40,15 @@ end
 -- ── util.path ─────────────────────────────────────────────────────────────────
 do
   local path = require("filetree.util.path")
-  eq("path.to_unix backslashes", path.to_unix("E:\\a\\b"):gsub("^%a:", ""), "/a/b")
+  -- "E:\a\b" is only absolute on Windows; on POSIX it has no leading "/" and
+  -- to_absolute() would (correctly) resolve it against cwd instead, so this
+  -- assertion only holds on Windows. On POSIX, assert the same backslash-to-
+  -- forward-slash behavior with a path that is actually absolute there.
+  if vim.fn.has("win32") == 1 then
+    eq("path.to_unix backslashes", path.to_unix("E:\\a\\b"):gsub("^%a:", ""), "/a/b")
+  else
+    eq("path.to_unix backslashes", path.to_unix("/a\\b"), "/a/b")
+  end
   check("path.ensure_dir file → parent",
     path.ensure_dir(root .. "/lua/filetree/init.lua"):gsub("\\", "/"):match("/filetree$") ~= nil)
   check("path.ensure_dir dir → self",
@@ -74,7 +87,7 @@ do
   -- directory left the original buffer pointing at a path that no longer
   -- existed, so opening the file at its new location created a second,
   -- disconnected buffer instead of reusing the original one.
-  local tmp = (vim.env.TEMP .. "/units-relocate"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-relocate"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/src/sub", "p")
   vim.fn.mkdir(tmp .. "/dst", "p")
 
@@ -245,7 +258,7 @@ end
 
 -- ── cwd_sync: silently changes cwd + refreshes, never prompts ────────────────
 do
-  local tmp = (vim.env.TEMP .. "/units-cwdsync"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-cwdsync"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/proj/.git", "p")
   vim.fn.mkdir(tmp .. "/proj/sub", "p")
   vim.fn.writefile({ "x" }, tmp .. "/proj/sub/file.lua")
@@ -291,7 +304,7 @@ end
 -- the "VimEnter already happened" branch that filetree.nvim actually hits in
 -- practice (it typically loads on a lazy event well after VimEnter).
 do
-  local tmp = (vim.env.TEMP .. "/units-cwdsync-catchup"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-cwdsync-catchup"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/proj/.git", "p")
   vim.fn.writefile({ "x" }, tmp .. "/proj/file.lua")
 
@@ -449,7 +462,7 @@ end
 -- used to walk fs.collect_files/collect_folders with no ignore_fn at all, so
 -- .git internals ended up in the copied path list.
 do
-  local tmp = (vim.env.TEMP .. "/units-copyfilelist"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-copyfilelist"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/.git/objects", "p")
   vim.fn.mkdir(tmp .. "/src", "p")
   vim.fn.writefile({ "x" }, tmp .. "/.git/HEAD")
@@ -483,7 +496,7 @@ end
 -- through to via_builtin exactly as it would for a real user without those
 -- plugins installed.
 do
-  local tmp = (vim.env.TEMP .. "/units-findfiles"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-findfiles"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/.git/objects", "p")
   vim.fn.mkdir(tmp .. "/src", "p")
   vim.fn.writefile({ "x" }, tmp .. "/.git/HEAD")
@@ -521,7 +534,7 @@ end
 -- ── copy_move: default single-char "c"/"x" cleanly override the adapter's ───
 -- native "c"/"x" (exact same key, last-registration-wins -- no ambiguity).
 do
-  local tmp = (vim.env.TEMP .. "/units-copymove"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-copymove"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/dst", "p")
   vim.fn.writefile({ "hi" }, tmp .. "/file1.txt")
 
@@ -584,7 +597,7 @@ end
 -- char to a plain (non-nowait) <Nop> to restore Neovim's normal
 -- ambiguous-mapping wait behaviour.
 do
-  local tmp = (vim.env.TEMP .. "/units-copymove2"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-copymove2"):gsub("\\", "/")
   vim.fn.mkdir(tmp, "p")
 
   local cur_node = { path = tmp, type = "directory" }
@@ -631,7 +644,7 @@ end
 -- path that no longer existed on disk; opening the file at its new location
 -- then created a second, disconnected buffer instead of reusing the original.
 do
-  local tmp = (vim.env.TEMP .. "/units-copymove-relocate"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-copymove-relocate"):gsub("\\", "/")
   -- Wipe any leftover state from a previous run first: do_move() deliberately
   -- refuses to silently overwrite an existing destination, so a stale
   -- docs/filetree/filetree.md from a prior run would make this test fail for
@@ -679,7 +692,7 @@ end
 
 -- ── copy_move: markdown.nvim soft-dep -- cut updates refs, copy leaves them ─
 do
-  local tmp = (vim.env.TEMP .. "/units-copymove-mdrefs"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-copymove-mdrefs"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp .. "/dst", "p")
   local cut_src   = tmp .. "/cut.md"
@@ -751,7 +764,7 @@ end
 
 -- ── trash: delete_current binds d/U/<leader>th and trashes the right node ───
 do
-  local tmp = (vim.env.TEMP .. "/units-trash"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash"):gsub("\\", "/")
   vim.fn.mkdir(tmp, "p")
   vim.fn.writefile({ "x" }, tmp .. "/victim.txt")
 
@@ -804,7 +817,7 @@ end
 -- buffer doesn't linger pointing at a now-deleted path. Uses a stubbed trash
 -- backend (removes the file from disk, no real Recycle Bin side effects).
 do
-  local tmp = (vim.env.TEMP .. "/units-trash-bufclose"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash-bufclose"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local file = tmp .. "/doomed.txt"
@@ -850,7 +863,7 @@ end
 -- the marks feature to report two marked paths; verify both are trashed, both
 -- buffers closed, and marks cleared once.
 do
-  local tmp = (vim.env.TEMP .. "/units-trash-batch"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash-batch"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local a, b = tmp .. "/a.txt", tmp .. "/b.txt"
@@ -915,7 +928,7 @@ end
 -- persist + keep it unmodified.
 do
   local refs_util = require("filetree.util.markdown_refs")
-  local tmp = (vim.env.TEMP .. "/units-mdrefs-livebuf"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-mdrefs-livebuf"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
 
@@ -975,7 +988,7 @@ end
 -- popup) and, on "delete + remove references", rewrite the reporting line's
 -- link target to "REF!" in the referencing file.
 do
-  local tmp = (vim.env.TEMP .. "/units-trash-mdrefs"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash-mdrefs"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local victim  = tmp .. "/victim.md"
@@ -1039,7 +1052,7 @@ end
 -- same way a user would (delete a line), confirm via the picker's own public
 -- API, and verify only the surviving reference got cleaned up.
 do
-  local tmp = (vim.env.TEMP .. "/units-trash-mdrefs-inspect"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash-mdrefs-inspect"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local victim  = tmp .. "/victim.md"
@@ -1111,7 +1124,7 @@ end
 -- the rename already happened) and the "update all" path rewrites to the new
 -- cwd-relative path rather than a "REF!" marker.
 do
-  local tmp = (vim.env.TEMP .. "/units-smartrename-mdrefs"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-smartrename-mdrefs"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local old_path = tmp .. "/old.md"
@@ -1175,7 +1188,7 @@ end
 -- Two renamed files, each referenced from markdown; verify refs from BOTH
 -- land in one aggregated chooser and each gets its own correct new target.
 do
-  local tmp = (vim.env.TEMP .. "/units-renamebatch-mdrefs"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-renamebatch-mdrefs"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local a_old, a_new = tmp .. "/a.md", tmp .. "/a2.md"
@@ -1241,7 +1254,7 @@ end
 -- vim.ui.select list): the chooser must offer exactly Overwrite/Cancel, and
 -- picking Cancel must leave both files untouched.
 do
-  local tmp = (vim.env.TEMP .. "/units-smartrename-overwrite"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-smartrename-overwrite"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local old_path      = tmp .. "/old.txt"
@@ -1291,7 +1304,7 @@ end
 -- ── smart_create: non-empty clipboard asks confirm_choice (Empty/Paste) ─────
 -- Regression for the kit.confirm migration (used to be a vim.ui.select list).
 do
-  local tmp = (vim.env.TEMP .. "/units-smartcreate-paste"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-smartcreate-paste"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   vim.fn.chdir(tmp)
@@ -1340,7 +1353,7 @@ end
 -- ── rename_batch: confirm=true asks kit.confirm (async), not the old ────────
 -- blocking `vim.fn.input("...[y/N]...")` freetext prompt.
 do
-  local tmp = (vim.env.TEMP .. "/units-renamebatch-confirm"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-renamebatch-confirm"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local a_old, a_new = tmp .. "/a.txt", tmp .. "/a2.txt"
@@ -1382,7 +1395,7 @@ end
 -- ── copy_move: paste confirm=true asks kit.confirm (async); Cancel pastes ───
 -- nothing. Regression for the old blocking `vim.fn.input("...[y/N]...")`.
 do
-  local tmp = (vim.env.TEMP .. "/units-copymove-confirm"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-copymove-confirm"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp .. "/dst", "p")
   vim.fn.writefile({ "hi" }, tmp .. "/file1.txt")
@@ -1425,7 +1438,7 @@ end
 -- ── create_from_template: overwrite asks kit.confirm, Cancel keeps original ─
 -- Regression for the old blocking `vim.fn.input("...Overwrite? [y/N] ")`.
 do
-  local tmp = (vim.env.TEMP .. "/units-cft-overwrite"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-cft-overwrite"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local tdir = tmp .. "/templates"
@@ -1476,7 +1489,7 @@ end
 
 -- ── create_from_template: pickers.nvim dispatch (prefer, Pickers.Item) ──────
 do
-  local tmp = (vim.env.TEMP .. "/units-cft-pickers"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-cft-pickers"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local tdir = tmp .. "/templates"
@@ -1580,7 +1593,7 @@ end
 -- path is handed over, and with which options.
 do
   local platform = require("filetree.util.platform")
-  local tmp_dir = (vim.env.TEMP .. "/units-open-in-fm"):gsub("\\", "/")
+  local tmp_dir = (TMP_ROOT .. "/units-open-in-fm"):gsub("\\", "/")
   vim.fn.mkdir(tmp_dir, "p")
   local tmp_file = tmp_dir .. "/node.txt"
   vim.fn.writefile({ "x" }, tmp_file)
@@ -1688,7 +1701,7 @@ end
 -- indefinitely even with real, usable buffers open elsewhere.
 do
   vim.cmd("only")
-  local real_path = (vim.env.TEMP .. "/units-no-name-guard-real.txt"):gsub("\\", "/")
+  local real_path = (TMP_ROOT .. "/units-no-name-guard-real.txt"):gsub("\\", "/")
   vim.fn.writefile({ "x" }, real_path)
   vim.cmd("edit " .. vim.fn.fnameescape(real_path))
 
@@ -1728,7 +1741,7 @@ end
 
 -- ── open_variants: sg/sv/st/gb/<S-CR> are all bound ──────────────────────────
 do
-  local cur_node = { path = (vim.env.TEMP .. "/units-openvariants.txt"):gsub("\\", "/"), type = "file" }
+  local cur_node = { path = (TMP_ROOT .. "/units-openvariants.txt"):gsub("\\", "/"), type = "file" }
   vim.fn.writefile({ "x" }, cur_node.path)
   local stub = setmetatable({
     name = "units-stub4", is_available = function() return true end,
@@ -1762,7 +1775,7 @@ end
 
 -- ── markdown_links: current/recursive/marked all produce "[name](path)" ─────
 do
-  local tmp = (vim.env.TEMP .. "/units-mdlinks"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-mdlinks"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/sub", "p")
   vim.fn.writefile({ "x" }, tmp .. "/a.lua")
   vim.fn.writefile({ "x" }, tmp .. "/sub/b.lua")
@@ -1837,7 +1850,7 @@ end
 -- confirm=true (copy_move/rename_batch stay confirm=false) -- see the comment
 -- on trash/init.lua's _cfg.confirm.
 do
-  local tmp = (vim.env.TEMP .. "/units-trash-noconfirm"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash-noconfirm"):gsub("\\", "/")
   vim.fn.mkdir(tmp, "p")
   vim.fn.writefile({ "x" }, tmp .. "/victim2.txt")
 
@@ -1958,7 +1971,7 @@ do
   package.loaded["filetree.features.infra.project_root"] = nil
   local proot = require("filetree.features.infra.project_root")
 
-  local tmp = (vim.env.TEMP .. "/units-projectroot"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-projectroot"):gsub("\\", "/")
   vim.fn.mkdir(tmp .. "/proj/.git", "p")
   vim.fn.mkdir(tmp .. "/proj/src/deep/nested", "p")
   vim.fn.writefile({ "x" }, tmp .. "/proj/src/deep/nested/file.lua")
