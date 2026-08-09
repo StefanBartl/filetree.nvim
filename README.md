@@ -27,7 +27,10 @@
   [`deps` module](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/deps/README.md).
   A popup explains what's missing the first time `setup()` runs after
   installing filetree.nvim; `:Lib deps show filetree.nvim` repeats it any
-  time, also folded into `:checkhealth filetree`.
+  time, also folded into `:checkhealth filetree`. Opt out with
+  `vim.g.lib_nvim_deps_disable_first_run = true` (every plugin) or
+  `vim.g.lib_nvim_deps_disabled_plugins = { "filetree.nvim" }` (just this
+  one), set anywhere in your config.
 
 ## Quick start
 
