@@ -28,6 +28,19 @@ if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) en
 -- it, which previously hard-errored ("attempt to concatenate a nil value").
 local TMP_ROOT = vim.env.TEMP or vim.env.TMPDIR or vim.env.TMP or "/tmp"
 
+-- Headless CI runners (no X11/Wayland session) commonly have no clipboard
+-- provider at all; without one, "+"/"*" register writes/reads don't
+-- round-trip even in-memory. Probe once so clipboard-dependent fixtures
+-- below can skip their content assertions rather than fail on an
+-- environment limitation unrelated to the feature's own logic.
+local _clip_probe = "__filetree_units_clipboard_probe__"
+vim.fn.setreg("+", _clip_probe)
+local HAS_CLIPBOARD = vim.fn.getreg("+") == _clip_probe
+vim.fn.setreg("+", "")
+if not HAS_CLIPBOARD then
+  print("  note no clipboard provider available — skipping clipboard-content assertions")
+end
+
 local passed, failed = 0, 0
 local function check(name, ok, detail)
   if ok then passed = passed + 1; print("  ok   " .. name)
@@ -1303,7 +1316,9 @@ end
 
 -- ── smart_create: non-empty clipboard asks confirm_choice (Empty/Paste) ─────
 -- Regression for the kit.confirm migration (used to be a vim.ui.select list).
-do
+-- Skipped without a working clipboard provider (see HAS_CLIPBOARD above): the
+-- whole scenario hinges on `getreg("+")` actually returning what was set.
+if HAS_CLIPBOARD then
   local tmp = (TMP_ROOT .. "/units-smartcreate-paste"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
@@ -1794,17 +1809,23 @@ do
   ft.setup({ adapter = "units-stub5", features = { markdown_links = { enabled = true } } })
 
   local md = ft.feature("markdown_links")
-  md.link_current()
-  check("markdown_links: link_current() copies '[a.lua](a.lua)'",
-    vim.fn.getreg("+") == "[a.lua](a.lua)", vim.fn.getreg("+"))
+  local ok_cur = pcall(md.link_current)
+  check("markdown_links: link_current() does not error", ok_cur)
+  if HAS_CLIPBOARD then
+    check("markdown_links: link_current() copies '[a.lua](a.lua)'",
+      vim.fn.getreg("+") == "[a.lua](a.lua)", vim.fn.getreg("+"))
+  end
 
   cur_node = { path = tmp, type = "directory" }
-  md.link_recursive()
-  local recursive_reg = vim.fn.getreg("+")
-  check("markdown_links: link_recursive() includes the top-level file",
-    recursive_reg:find("[a.lua](a.lua)", 1, true) ~= nil, recursive_reg)
-  check("markdown_links: link_recursive() includes the nested file",
-    recursive_reg:find("b.lua", 1, true) ~= nil, recursive_reg)
+  local ok_rec = pcall(md.link_recursive)
+  check("markdown_links: link_recursive() does not error", ok_rec)
+  if HAS_CLIPBOARD then
+    local recursive_reg = vim.fn.getreg("+")
+    check("markdown_links: link_recursive() includes the top-level file",
+      recursive_reg:find("[a.lua](a.lua)", 1, true) ~= nil, recursive_reg)
+    check("markdown_links: link_recursive() includes the nested file",
+      recursive_reg:find("b.lua", 1, true) ~= nil, recursive_reg)
+  end
 end
 
 -- ── config.confirmations: boolean shorthand + per-action table ──────────────
