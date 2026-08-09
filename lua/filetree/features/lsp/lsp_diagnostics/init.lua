@@ -10,7 +10,6 @@
 ---
 --- Updates on DiagnosticChanged and when the tree buffer is entered.
 
-local notify = require("filetree.util.notify").create("[filetree.lsp_diagnostics]")
 
 local au  = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")

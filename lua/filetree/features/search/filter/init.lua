@@ -14,7 +14,6 @@
 ---   :FiletreeFilter [query]
 ---   :FiletreeFilterClear
 
-local notify = require("filetree.util.notify").create("[filetree.filter]")
 
 local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")

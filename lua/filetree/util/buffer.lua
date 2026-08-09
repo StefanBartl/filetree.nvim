@@ -257,11 +257,11 @@ end
 ---buffers exist, but also perturbs the window layout (e.g. a tree plugin
 ---repositioning around the new buffer). Only when NO other suitable buffer
 ---exists at all is the window left for Neovim's default [No Name] fallback.
----@param path string  Absolute path of the trashed/deleted file or directory.
+---@param target_path string  Absolute path of the trashed/deleted file or directory.
 ---@return integer  count of buffers closed
-function M.close_for_path(path)
+function M.close_for_path(target_path)
   local slashify = require("filetree.util.path").slashify
-  local key    = slashify(path)
+  local key    = slashify(target_path)
   local prefix = key .. "/"
 
   -- Collect the buffers to close.

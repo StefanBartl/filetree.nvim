@@ -96,7 +96,6 @@ end
 function M.save()
   if not _adapter then return end
 
-  local bufnr  = _adapter.get_bufnr and _adapter.get_bufnr() or -1
   local winid  = _adapter.get_winid and _adapter.get_winid() or -1
 
   local topline = 1

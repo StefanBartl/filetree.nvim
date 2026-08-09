@@ -36,12 +36,12 @@ end
 
 ---Call before moving/renaming a file.
 ---@param src string
----@param _dst string  (logged but not backed up separately — src is the risk)
+---@param dst string  (logged but not backed up separately — src is the risk)
 ---@return string?     Backup path, or nil if backup was not created.
-function M.before_move(src, _dst)
+function M.before_move(src, dst)
   if not _cfg.enabled then return nil end
   if _cfg.dry_run then
-    notify.info("[dry-run] move: " .. src .. " → " .. tostring(_dst))
+    notify.info("[dry-run] move: " .. src .. " → " .. tostring(dst))
     return src
   end
   return backup.create(src)

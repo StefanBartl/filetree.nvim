@@ -25,7 +25,7 @@ function M.record(original_path)
     original_path = original_path,
     name          = vim.fn.fnamemodify(original_path, ":t"),
     trashed_at    = os.date("%Y-%m-%d %H:%M:%S"),
-    platform      = require("filetree.util.platform").current(),
+    platform      = platform.current(),
   }
   table.insert(_history, 1, entry)
   if #_history > MAX_HISTORY then

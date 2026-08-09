@@ -5,7 +5,6 @@
 --- feature automatically opens a new empty window so the user is never
 --- trapped inside the tree with no place to edit files.
 
-local notify = require("filetree.util.notify").create("[filetree.layout_guard]")
 
 local au  = require("filetree.util.autocmd")
 local M = {}

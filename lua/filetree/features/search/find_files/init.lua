@@ -179,9 +179,19 @@ local function via_builtin(root)
   local prog = new_progress()
   if prog then prog:update({ text = "scanning " .. root .. "…" }) end
 
-  local pattern = _cfg.hidden and root .. "/**/*" or root .. "/**/*"
+  -- globpath's "*" does not match dot-prefixed entries (mirrors shell glob
+  -- semantics), so honoring _cfg.hidden requires a second pass with an
+  -- explicit dot pattern and merging the results.
   local ok_g, files = pcall(vim.fn.globpath, root, "**/*", false, true)
   if not ok_g then files = {} end
+  if _cfg.hidden then
+    local ok_h, hidden_files = pcall(vim.fn.globpath, root, "**/.*", false, true)
+    if ok_h then
+      for _, f in ipairs(hidden_files) do
+        files[#files + 1] = f
+      end
+    end
+  end
   -- filter to files only, skip ignored subtrees (.git, node_modules, …), limit to 10000
   local ignored = ignore.predicate()
   local root_len = #root + 2

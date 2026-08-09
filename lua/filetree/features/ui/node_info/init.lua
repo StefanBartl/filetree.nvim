@@ -17,12 +17,6 @@ local _adapter = nil
 ---@type Lib.UI.Kit.Surface|nil
 local _surf = nil
 local _last_path = nil
-local _ns = nil
-
-local function ns()
-  if not _ns then _ns = vim.api.nvim_create_namespace("filetree_node_info") end
-  return _ns
-end
 
 local function close_win()
   if _surf then _surf:close() end

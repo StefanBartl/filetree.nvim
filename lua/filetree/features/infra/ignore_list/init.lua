@@ -19,7 +19,6 @@
 ---   nvimtree → `H` (toggle_dotfiles) shows/hides dot-files.
 ---   Others   → filetree falls back to extmark-dim (same as ignore_patterns).
 
-local notify = require("filetree.util.notify").create("[filetree.ignore_list]")
 
 local au  = require("filetree.util.autocmd")
 local M = {}

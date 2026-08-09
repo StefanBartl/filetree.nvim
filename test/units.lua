@@ -114,7 +114,6 @@ do
   -- regression for the class of bug this session found across all 5 adapters.
   vim.fn.writefile({ "d" }, tmp .. "/src/d.txt")
   vim.cmd("edit " .. tmp .. "/src/d.txt")
-  local buf_d = vim.api.nvim_get_current_buf()
   vim.fn.rename(tmp .. "/src/d.txt", tmp .. "/dst/d.txt")
   local n4 = buf.relocate((tmp .. "/src/d.txt"):gsub("/", "\\"), (tmp .. "/dst/d.txt"):gsub("/", "\\"))
   eq("relocate: backslash old/new path still matches forward-slash buffer name", n4, 1)
@@ -133,9 +132,9 @@ do
 
   local function noname_count()
     local c = 0
-    for _, b in ipairs(vim.api.nvim_list_bufs()) do
-      if vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_is_loaded(b)
-         and vim.api.nvim_buf_get_name(b) == "" then c = c + 1 end
+    for _, nb in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.api.nvim_buf_is_valid(nb) and vim.api.nvim_buf_is_loaded(nb)
+         and vim.api.nvim_buf_get_name(nb) == "" then c = c + 1 end
     end
     return c
   end
