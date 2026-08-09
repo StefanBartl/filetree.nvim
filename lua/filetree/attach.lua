@@ -82,6 +82,10 @@ local SPEC = {
   window_size_cycler = {
     { field = "keymap", method = "cycle", desc = "filetree: cycle window size", default = "w" },
   },
+  buffer_cycle = {
+    { field = "keymap_next", method = "next", desc = "filetree: next buffer in adjacent window",     default = "<S-Tab>" },
+    { field = "keymap_prev", method = "prev", desc = "filetree: previous buffer in adjacent window", default = "<M-Tab>" },
+  },
   copy_file_list = {
     { field = "keymap_files_abs", method = "copy_files_abs", desc = "filetree: copy file list (abs)", default = "[f" },
     { field = "keymap_files_rel", method = "copy_files_rel", desc = "filetree: copy file list (rel)", default = "]f" },

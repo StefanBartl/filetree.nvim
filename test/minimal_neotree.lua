@@ -265,6 +265,11 @@ require("lazy").setup({
             keymap_down  = "+",   -- set dir as root    (original: +)
             sync_cwd     = true,
           },
+          buffer_cycle = {
+            enabled     = true,
+            keymap_next = "<S-Tab>",  -- next buffer in adjacent editor window
+            keymap_prev = "<M-Tab>",  -- previous buffer in adjacent editor window
+          },
         },
       })
     end,

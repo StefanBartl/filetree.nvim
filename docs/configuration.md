@@ -47,6 +47,12 @@ require("filetree").setup({
       delay_ms = 50,
     },
 
+    buffer_cycle = {
+      enabled     = true,        -- default: on
+      keymap_next = "<S-Tab>",   -- next buffer in the adjacent editor window
+      keymap_prev = "<M-Tab>",   -- previous buffer in the adjacent editor window
+    },
+
     preview = {
       enabled     = true,      -- default: on
       mode        = "buffer",  -- "buffer": show file in the editor window (default)

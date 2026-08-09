@@ -55,6 +55,7 @@
 ---@field shell_run           FiletreeShellRunConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field no_name_guard       FiletreeNoNameGuardConfig?
+---@field buffer_cycle        FiletreeBufferCycleConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
 ---@field cwd_mode            FiletreeCwdModeConfig?
 ---@field current_hl          FiletreeCurrentHlConfig?
@@ -692,6 +693,13 @@
 ---@field keymap_adjacent  string?   Save last adjacent editor buffer (default "<C-s>").
 ---@field keymap_node      string?   Save buffer matching node under cursor (default "<M-s>").
 ---@field force            boolean   Use write! (default true). false → update (no-op when unmodified).
+
+-- ── buffer_cycle ──────────────────────────────────────────────────────────────
+
+---@class FiletreeBufferCycleConfig
+---@field enabled      boolean
+---@field keymap_next  string?   Next buffer in adjacent editor window (default "<S-Tab>").
+---@field keymap_prev  string?   Previous buffer in adjacent editor window (default "<M-Tab>").
 
 -- ── window_size_cycler ────────────────────────────────────────────────────────
 

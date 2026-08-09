@@ -26,6 +26,8 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
 | `L` | cwd_mode | `keymap_cycle` | Cycle the cwd policy (follow → project → lock) |
 | `gp` | cwd_mode | `keymap_lock_here` | Lock the cwd to the node under the cursor |
+| `<S-Tab>` | buffer_cycle | `keymap_next` | Next buffer in the adjacent editor window (tree keeps focus) |
+| `<M-Tab>` | buffer_cycle | `keymap_prev` | Previous buffer in the adjacent editor window (tree keeps focus) |
 | `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard |
 | `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard |
 | `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard |
