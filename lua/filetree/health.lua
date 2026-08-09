@@ -15,7 +15,7 @@ function M.check()
   else
     vim.health.error(
       "lib.nvim not found — :Filetree/:Ft will fail to register",
-      { "Install \"StefanBartl/lib.nvim\" as a dependency" }
+      { 'Install "StefanBartl/lib.nvim" as a dependency' }
     )
   end
 
@@ -52,10 +52,10 @@ function M.check()
   vim.health.start("filetree.nvim — adapters")
 
   local adapters = {
-    { name = "neotree",  plugin = "neo-tree"        },
-    { name = "nvimtree", plugin = "nvim-tree"       },
-    { name = "netrw",    plugin = "netrw (builtin)" },
-    { name = "oil",        plugin = "oil.nvim"   },
+    { name = "neotree", plugin = "neo-tree" },
+    { name = "nvimtree", plugin = "nvim-tree" },
+    { name = "netrw", plugin = "netrw (builtin)" },
+    { name = "oil", plugin = "oil.nvim" },
     { name = "mini_files", plugin = "mini.files" },
   }
 
@@ -72,7 +72,9 @@ function M.check()
   end
 
   if not found_any then
-    vim.health.error("No supported filetree plugin found. Install neo-tree.nvim, nvim-tree.lua, oil.nvim, or mini.files.")
+    vim.health.error(
+      "No supported filetree plugin found. Install neo-tree.nvim, nvim-tree.lua, oil.nvim, or mini.files."
+    )
   end
 
   -- ── Active adapter ────────────────────────────────────────────────────────
@@ -139,8 +141,12 @@ function M.check()
           if not h.exists then leaked = leaked + 1 end
         end
         if leaked > 0 then
-          vim.health.warn(("handle_guard: %d of %d tracked watcher(s) point at a "
-            .. "gone path (see :Filetree handles)"):format(leaked, #list))
+          vim.health.warn(
+            (
+              "handle_guard: %d of %d tracked watcher(s) point at a "
+              .. "gone path (see :Filetree handles)"
+            ):format(leaked, #list)
+          )
         else
           vim.health.ok(("handle_guard installed (%d watcher(s) tracked)"):format(#list))
         end
@@ -149,8 +155,10 @@ function M.check()
         if plat_ok and not plat.is_windows() and not plat.is_wsl() then
           vim.health.info("handle_guard: no-op on non-Windows platforms")
         else
-          vim.health.info("handle_guard enabled but not installed "
-            .. "(needs the neo-tree adapter; fs_watch not reachable yet)")
+          vim.health.info(
+            "handle_guard enabled but not installed "
+              .. "(needs the neo-tree adapter; fs_watch not reachable yet)"
+          )
         end
       end
     end
@@ -158,10 +166,17 @@ function M.check()
 
   -- Human-readable category headings + feature names.
   local CATEGORY_LABELS = {
-    nav = "navigation & reveal", ui = "display / UI", fileops = "file operations",
-    search = "search & filter",  paths = "paths & clipboard", git = "git",
-    org = "marks & organization", system = "system integration", lsp = "LSP",
-    compare = "diff & compare",  integration = "plugin integrations",
+    nav = "navigation & reveal",
+    ui = "display / UI",
+    fileops = "file operations",
+    search = "search & filter",
+    paths = "paths & clipboard",
+    git = "git",
+    org = "marks & organization",
+    system = "system integration",
+    lsp = "LSP",
+    compare = "diff & compare",
+    integration = "plugin integrations",
     infra = "infrastructure",
   }
   local ACRONYM = { lsp = "LSP", fm = "FM", ui = "UI" }
@@ -189,10 +204,10 @@ function M.check()
   vim.health.start("filetree.nvim — optional dependencies")
 
   local optionals = {
-    { mod = "telescope",    label = "Telescope (for future telescope integration)" },
-    { mod = "fzf-lua",      label = "fzf-lua (for future fzf integration)"        },
-    { mod = "pdfport",      label = "pdfport.nvim (for pdf_open text extraction)" },
-    { mod = "menu",         label = "nvzone/menu (for context_menu's right-click popup)" },
+    { mod = "telescope", label = "Telescope (for future telescope integration)" },
+    { mod = "fzf-lua", label = "fzf-lua (for future fzf integration)" },
+    { mod = "pdfport", label = "pdfport.nvim (for pdf_open text extraction)" },
+    { mod = "menu", label = "nvzone/menu (for context_menu's right-click popup)" },
   }
   for _, o in ipairs(optionals) do
     if pcall(require, o.mod) then
@@ -200,6 +215,16 @@ function M.check()
     else
       vim.health.info(o.label .. " — not installed (optional)")
     end
+  end
+
+  -- ── Declared tools (lib.nvim.deps) ───────────────────────────────────────
+  -- filetree.nvim's own docs/install.json — the same trash/rg tools probed
+  -- above, but with their declared `why` and a pointer to `:Lib deps show`.
+  -- Does nothing if lib.nvim.deps is unavailable (older lib.nvim).
+  local ok_deps, deps_health = pcall(require, "lib.nvim.deps.health")
+  if ok_deps then
+    vim.health.start("filetree.nvim — declared tools (lib.nvim.deps)")
+    deps_health.report_for("filetree.nvim")
   end
 
   -- ── Composer route pre-flight ─────────────────────────────────────────────

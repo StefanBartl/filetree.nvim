@@ -4,14 +4,14 @@
 --- Entry point. Call require("filetree").setup({}) with your configuration.
 --- See :help filetree or README.md for full option reference.
 
-local config_mod  = require("filetree.config")
+local config_mod = require("filetree.config")
 local adapter_mod = require("filetree.adapter")
-local commands    = require("filetree.commands")
-local registry    = require("filetree.features")
+local commands = require("filetree.commands")
+local registry = require("filetree.features")
 local tree_attach = require("filetree.util.tree_attach")
-local notify      = require("filetree.util.notify").create("[filetree]")
-local au          = require("filetree.util.autocmd")
-local map         = require("filetree.util.map")
+local notify = require("filetree.util.notify").create("[filetree]")
+local au = require("filetree.util.autocmd")
+local map = require("filetree.util.map")
 
 local M = {}
 
@@ -45,11 +45,11 @@ local FEATURES = registry.FEATURES
 --
 ---@type table<string, boolean>
 local DEFAULT_DISABLED = {
-  cwd_sync     = true,
-  current_hl   = true,
-  safety       = true,
-  auto_resize  = true,
-  handle_guard = true,   -- patches a neo-tree internal + closes uv handles; opt-in.
+  cwd_sync = true,
+  current_hl = true,
+  safety = true,
+  auto_resize = true,
+  handle_guard = true, -- patches a neo-tree internal + closes uv handles; opt-in.
 }
 
 ---@type table<string, table>  name → loaded feature module
@@ -90,9 +90,7 @@ function M.setup(user_config)
 
   -- Tear down previous features (re-setup is idempotent)
   for _, feat in pairs(_active_features) do
-    if type(feat.teardown) == "function" then
-      pcall(feat.teardown)
-    end
+    if type(feat.teardown) == "function" then pcall(feat.teardown) end
   end
   _active_features = {}
 
@@ -104,14 +102,14 @@ function M.setup(user_config)
     local fcfg = feat_cfg[name]
     local enabled
     if type(fcfg) == "table" and fcfg.enabled ~= nil then
-      enabled = fcfg.enabled                 -- explicit user choice always wins
+      enabled = fcfg.enabled -- explicit user choice always wins
     else
-      enabled = not DEFAULT_DISABLED[name]   -- default: on, except the opt-in few
+      enabled = not DEFAULT_DISABLED[name] -- default: on, except the opt-in few
     end
     if enabled then
       fcfg = fcfg or {}
       fcfg.enabled = true
-      feat_cfg[name] = fcfg                   -- keep M.config() in sync
+      feat_cfg[name] = fcfg -- keep M.config() in sync
       local ok2, feat_mod = pcall(require, info.mod)
       if ok2 and type(feat_mod.setup) == "function" then
         local ok3, setup_err = pcall(feat_mod.setup, fcfg, adapter)
@@ -133,7 +131,9 @@ function M.setup(user_config)
   commands.setup(cfg.command)
 
   -- Register which-key group labels (no-op when which-key is absent).
-  pcall(function() require("filetree.bindings").setup_which_key() end)
+  pcall(function()
+    require("filetree.bindings").setup_which_key()
+  end)
 
   -- After registering all FileType autocmds, re-fire them for any tree buffer
   -- that is already open.  Handles two cases:
@@ -160,9 +160,7 @@ function M.setup(user_config)
   -- Runs in vim.schedule inside a FileType autocmd to fire AFTER the adapter
   -- has set its own buffer-local keymaps.
   if type(cfg.adapter_keymaps) == "table" then
-    if _adapter_keymaps_augroup then
-      au.del_group(_adapter_keymaps_augroup)
-    end
+    if _adapter_keymaps_augroup then au.del_group(_adapter_keymaps_augroup) end
     _adapter_keymaps_augroup = au.group("filetree_adapter_keymaps", true)
 
     local overrides = cfg.adapter_keymaps
@@ -192,9 +190,13 @@ function M.setup(user_config)
       require("filetree.attach").inject(config_mod.get(), adapter)
     end
     if vim.v.vim_did_enter == 1 then
-      vim.schedule(function() vim.defer_fn(do_inject, 50) end)
+      vim.schedule(function()
+        vim.defer_fn(do_inject, 50)
+      end)
     else
-      au.create("VimEnter", function() vim.defer_fn(do_inject, 50) end, { once = true })
+      au.create("VimEnter", function()
+        vim.defer_fn(do_inject, 50)
+      end, { once = true })
     end
     -- Give `/` back its native search inside neo-tree's `?` help popup.
     require("filetree.attach").native_search_in_help()
@@ -203,12 +205,18 @@ function M.setup(user_config)
     -- install_reveal_guard's own doc comment for the full mechanism). Run as
     -- early as setup() itself so it protects any tree-opening keymap the user
     -- may press before neo-tree finishes its own startup.
-    if type(adapter.install_reveal_guard) == "function" then
-      adapter.install_reveal_guard()
-    end
+    if type(adapter.install_reveal_guard) == "function" then adapter.install_reveal_guard() end
   end
 
   _initialized = true
+
+  -- One-time (persisted across restarts) popup on the first setup() after
+  -- installing this plugin: which CLI tools it wants and why
+  -- (docs/install.json). `:Lib deps show filetree.nvim` thereafter.
+  -- pcall'd: an older lib.nvim without lib.nvim.deps mustn't break setup()
+  -- over an informational popup.
+  local ok_deps, deps = pcall(require, "lib.nvim.deps")
+  if ok_deps then deps.show_once("filetree.nvim") end
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -240,9 +248,7 @@ end
 function M.is_feature_enabled(name)
   local features = config_mod.get().features
   local fcfg = features and features[name]
-  if type(fcfg) == "table" and fcfg.enabled ~= nil then
-    return fcfg.enabled == true
-  end
+  if type(fcfg) == "table" and fcfg.enabled ~= nil then return fcfg.enabled == true end
   return not DEFAULT_DISABLED[name]
 end
 
