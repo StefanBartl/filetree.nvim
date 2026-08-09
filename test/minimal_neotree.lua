@@ -267,8 +267,8 @@ require("lazy").setup({
           },
           buffer_cycle = {
             enabled     = true,
-            keymap_next = "<S-Tab>",  -- next buffer in adjacent editor window
-            keymap_prev = "<M-Tab>",  -- previous buffer in adjacent editor window
+            keymap_next = "<C-f>",  -- next buffer in adjacent editor window
+            keymap_prev = "<C-p>",  -- previous buffer in adjacent editor window
           },
         },
       })

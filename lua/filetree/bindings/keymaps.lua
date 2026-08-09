@@ -26,8 +26,8 @@ return {
     { lhs = "B",  desc = "Reveal alternate buffer (#)", feature = "reveal_alt", scope = "tree" },
     { lhs = "L",  desc = "Cycle cwd mode (follow/project/lock)", feature = "cwd_mode", scope = "tree" },
     { lhs = "gp", desc = "Lock cwd to the node under the cursor", feature = "cwd_mode", scope = "tree" },
-    { lhs = "<S-Tab>", desc = "Next buffer in adjacent editor window", feature = "buffer_cycle", scope = "tree" },
-    { lhs = "<M-Tab>", desc = "Previous buffer in adjacent editor window", feature = "buffer_cycle", scope = "tree" },
+    { lhs = "<C-f>", desc = "Next buffer in adjacent editor window", feature = "buffer_cycle", scope = "tree" },
+    { lhs = "<C-p>", desc = "Previous buffer in adjacent editor window", feature = "buffer_cycle", scope = "tree" },
   },
   ui = {
     { lhs = "<Tab>", desc = "Preview toggle; image/PDF dispatch", feature = "preview", scope = "tree" },

@@ -3,16 +3,21 @@
 ---
 --- Two keymaps (both active while focus is in a tree buffer):
 ---
----   <S-Tab>  — next buffer in the adjacent editor window     (like `:bnext`)
----   <M-Tab>  — previous buffer in the adjacent editor window (like `:bprevious`)
+---   <C-f>  — next buffer in the adjacent editor window     (like `:bnext`)
+---   <C-p>  — previous buffer in the adjacent editor window (like `:bprevious`)
 ---
---- Mirrors pressing Tab/Shift-Tab from inside that editor window: the cycle
+--- Mirrors switching buffers from inside that editor window: the cycle
 --- happens there, not in the tree, and the tree keeps focus throughout.
+---
+--- NOTE: <C-f> collides with preview's float-mode scroll-down
+--- (keymap_scroll_down, default "<C-f>") — only when preview.mode == "float"
+--- (buffer mode, the default, doesn't bind it). Remap one side if you use
+--- float-mode preview.
 ---
 --- Config:
 ---   enabled       boolean
----   keymap_next   string?   Next buffer in adjacent window (default "<S-Tab>").
----   keymap_prev   string?   Previous buffer in adjacent window (default "<M-Tab>").
+---   keymap_next   string?   Next buffer in adjacent window (default "<C-f>").
+---   keymap_prev   string?   Previous buffer in adjacent window (default "<C-p>").
 
 local notify  = require("filetree.util.notify").create("[filetree.buffer_cycle]")
 local bufutil = require("filetree.util.buffer")
@@ -53,8 +58,8 @@ end
 function M.setup(config, _adapter)
   if not config.enabled then return end
 
-  local keymap_next = config.keymap_next or "<S-Tab>"
-  local keymap_prev = config.keymap_prev or "<M-Tab>"
+  local keymap_next = config.keymap_next or "<C-f>"
+  local keymap_prev = config.keymap_prev or "<C-p>"
 
   tree_attach.on_attach(function(buf)
     if keymap_next then
