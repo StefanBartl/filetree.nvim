@@ -21,6 +21,13 @@
 - Neovim >= 0.8
 - [lib.nvim](https://github.com/StefanBartl/lib.nvim) — shared helper library. **Required** for the `:Filetree`/`:Ft` command layer (`lib.nvim.usercmd.composer`); most other integrations (notify, `find_root`, ...) still degrade gracefully with local fallbacks if it's missing, but the commands themselves won't register without it.
 - **One** of [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) or [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua)
+- Optional CLI tools (`trash-put`/`gio` for the trash feature, `rg` for
+  grep-in-dir and smart-rename) — declared in
+  [`docs/install.json`](docs/install.json), parsed by lib.nvim's
+  [`deps` module](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/deps/README.md).
+  A popup explains what's missing the first time `setup()` runs after
+  installing filetree.nvim; `:Lib deps show filetree.nvim` repeats it any
+  time, also folded into `:checkhealth filetree`.
 
 ## Quick start
 
