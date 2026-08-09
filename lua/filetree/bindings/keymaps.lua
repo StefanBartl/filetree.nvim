@@ -92,6 +92,7 @@ return {
     { lhs = "<leader>fm", desc = "Open dir in file manager", feature = "open_in_fm", scope = "tree" },
     { lhs = "<leader>sm", desc = "Open with system default", feature = "open_with", scope = "tree" },
     { lhs = "i",  desc = "Run shell command in dir", feature = "shell_run", scope = "tree" },
+    { lhs = "gP", desc = "Create PDF from node/marks/folder (pdfport, confirms first)", feature = "pdf_create", scope = "tree" },
   },
   lsp = {
   },

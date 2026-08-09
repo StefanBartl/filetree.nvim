@@ -121,6 +121,18 @@ function M.check()
     vim.health.info("pdf_open: pdfport.nvim not installed — PDFs open in the system viewer only")
   end
 
+  -- pdf_create: pdfport.nvim is a hard soft-dependency here (no fallback —
+  -- there is no dependency-free way to turn a file into a PDF), so flag it
+  -- more strongly than pdf_open's info-only note.
+  if is_enabled("pdf_create") then
+    local ok_pp, pp = pcall(require, "pdfport")
+    if not (ok_pp and type(pp.create) == "function") then
+      vim.health.warn(
+        "pdf_create: pdfport.nvim not installed (or has no create() API) — the gP keymap is a no-op"
+      )
+    end
+  end
+
   -- Watcher quarantine: note Windows-only relevance
   if is_enabled("watcher_quarantine") then
     local plat_ok, plat = pcall(require, "filetree.util.platform")
@@ -206,7 +218,7 @@ function M.check()
   local optionals = {
     { mod = "telescope", label = "Telescope (for future telescope integration)" },
     { mod = "fzf-lua", label = "fzf-lua (for future fzf integration)" },
-    { mod = "pdfport", label = "pdfport.nvim (for pdf_open text extraction)" },
+    { mod = "pdfport", label = "pdfport.nvim (for pdf_open text extraction and pdf_create)" },
     { mod = "menu", label = "nvzone/menu (for context_menu's right-click popup)" },
   }
   for _, o in ipairs(optionals) do
