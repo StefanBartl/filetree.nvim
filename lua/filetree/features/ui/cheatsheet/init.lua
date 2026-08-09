@@ -32,9 +32,6 @@ local _cfg = {
   keymap  = "?",
 }
 
----@type FiletreeAdapter?
-local _adapter = nil
-
 ---@type Lib.UI.Kit.Surface|nil
 local _surf = nil
 
@@ -130,8 +127,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_extend("force", _cfg, config)
-  _adapter = adapter
+  _cfg = vim.tbl_extend("force", _cfg, config)
 
   -- neo-tree already has this via attach.lua's window.mappings injection into
   -- its own native `?`/show_help; don't shadow a working, richer solution.
@@ -146,7 +142,6 @@ end
 
 function M.teardown()
   close_win()
-  _adapter = nil
 end
 
 return M

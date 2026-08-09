@@ -22,9 +22,6 @@ local platform = require("filetree.util.platform")
 
 local M = {}
 
----@type FiletreeHandleGuardConfig
-local _cfg = { enabled = false }
-
 ---@return table? watch  The lib.nvim.neotree.watch module, or nil if absent.
 local function watch_mod()
   local ok, watch = pcall(require, "lib.nvim.neotree.watch")
@@ -66,7 +63,6 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = config
 
   -- The whole mechanism is neo-tree-specific (it patches a neo-tree internal)
   -- and only fixes a Windows/WSL lock, so it is inert elsewhere.

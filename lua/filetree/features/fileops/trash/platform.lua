@@ -1,7 +1,6 @@
 ---@module 'filetree.features.trash.platform'
 ---@brief Platform-specific "send to trash" implementations.
 
-local notify   = require("filetree.util.notify").create("[filetree.trash.platform]")
 local platform = require("filetree.util.platform")
 
 local M = {}

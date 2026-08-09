@@ -22,7 +22,6 @@
 --- Commands (via :Filetree dispatcher):
 ---   :Filetree resize [width]
 
-local notify = require("filetree.util.notify").create("[filetree.auto_resize]")
 
 local au  = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")

@@ -36,11 +36,11 @@ function M.open_replace()
   local path = node.path
   if not path or path == "" then return end
 
+  -- If no editor window is open yet, fall through and let the edit below
+  -- create one.
   local ewin = bufutil.find_editor_win(vim.api.nvim_get_current_win())
   if ewin then
     vim.api.nvim_set_current_win(ewin)
-  else
-    -- No editor window open yet; let the close+edit flow create one.
   end
 
   local ok = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(path))
