@@ -17,9 +17,6 @@
 ---
 --- Updates on: BufEnter (tree buffer), BufWritePost (any buffer), FocusGained.
 
-local notify   = require("filetree.util.notify").create("[filetree.git_status]")
-local platform = require("filetree.util.platform")
-
 local au  = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
@@ -53,6 +50,12 @@ local _status_map = {}
 ---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
 ---@type table?
 local _debounce = nil
+
+---Debounce handle for cursor-triggered re-renders (visual-only, no git query).
+---Coalesces rapid j/k movement inside the tree buffer so each keystroke does
+---not force a full clear+rebuild of every extmark in the buffer.
+---@type table?
+local _render_debounce = nil
 
 -- ── Git query ─────────────────────────────────────────────────────────────────
 
@@ -191,28 +194,29 @@ function M.setup(config, adapter)
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(M.refresh, _cfg.debounce_ms)
 
+  if _render_debounce then _render_debounce.cancel() end
+  _render_debounce = lib_debounce.new(M._render, 50)
+
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_git_status", true)
 
-  -- Re-render when entering the tree buffer
-  tree_attach.on_attach(function() debounce_refresh() end)
+  -- Re-render when entering the tree buffer, and bind a buffer-local
+  -- CursorMoved so redraws-on-cursor-move only fire inside the tree buffer
+  -- itself, not globally on every cursor step in every window (pattern="*"
+  -- would run a callback on every single cursor move in the whole editor).
+  tree_attach.on_attach(function(buf)
+    debounce_refresh()
+    au.acmd("CursorMoved", {
+      group    = _augroup,
+      buffer   = buf,
+      callback = function() _render_debounce.call() end,
+    })
+  end)
 
   -- Re-query on file save or focus return
   au.acmd({ "BufWritePost", "FocusGained" }, {
     group    = _augroup,
     callback = function() debounce_refresh() end,
-  })
-
-  -- Re-render when tree buffer is redrawn (cursor moves inside tree)
-  au.acmd("CursorMoved", {
-    group   = _augroup,
-    pattern = "*",
-    callback = function()
-      local ft = vim.bo.filetype
-      if ft == "neo-tree" or ft == "NvimTree" then
-        M._render()
-      end
-    end,
   })
 
   M.refresh()
@@ -224,6 +228,10 @@ function M.teardown()
   if _debounce then
     _debounce.cancel()
     _debounce = nil
+  end
+  if _render_debounce then
+    _render_debounce.cancel()
+    _render_debounce = nil
   end
   if _augroup then
     au.del_group(_augroup)
