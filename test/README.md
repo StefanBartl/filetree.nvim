@@ -222,6 +222,14 @@ Testet: `adapter.open_reveal()`, CWD-Sync.
 | G.3 | `:pwd` nach G.1/G.2 | CWD stimmt mit dem neuen Tree-Root überein |
 | G.4 | `-` aus dem Repo-Root heraus | Wechselt zum Parent des Repos (kein Fehler) |
 
+**buffer_cycle** (Keymaps `<S-Tab>`/`<M-Tab>` im Tree):
+
+| # | Test | Erwartung |
+|---|------|-----------|
+| G.5 | Mind. 2 Buffer offen, Fokus im Tree, `<S-Tab>` | Editor-Fenster (nicht der Tree) zeigt den nächsten Buffer; Fokus bleibt im Tree |
+| G.6 | Danach `<M-Tab>` | Editor-Fenster springt zurück zum vorherigen Buffer; Fokus bleibt im Tree |
+| G.7 | Kein Editor-Fenster vorhanden (nur Tree-Fenster), `<S-Tab>` | Notification `"No editor window found"`, kein Fehler |
+
 ---
 
 ### H. Find / Grep Menu

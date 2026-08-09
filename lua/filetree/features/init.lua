@@ -26,6 +26,7 @@ M.FEATURES = {
   cwd_mode          = { mod = "filetree.features.nav.cwd_mode",          category = "nav" },
   layout_guard      = { mod = "filetree.features.nav.layout_guard",      category = "nav" },
   no_name_guard     = { mod = "filetree.features.nav.no_name_guard",     category = "nav" },
+  buffer_cycle      = { mod = "filetree.features.nav.buffer_cycle",      category = "nav" },
 
   -- ── ui: cosmetic / display ─────────────────────────────────────────────────
   window_style       = { mod = "filetree.features.ui.window_style",       category = "ui" },

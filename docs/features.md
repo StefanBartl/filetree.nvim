@@ -17,6 +17,7 @@ key is remappable; see [docs/BINDINGS/KEYMAPS.md](BINDINGS/KEYMAPS.md).
 | `layout_guard` | Opens an editor window when the tree would be the only window |
 | `auto_resize` | Responsive tree width on `VimResized` _(opt-in)_ |
 | `cwd_sync` | Silently `chdir` to the current file's project root (nearest `.git` ancestor by default) and root the tree there, then reveal the file _(opt-in)_ |
+| `buffer_cycle` | Cycle the adjacent editor window's buffer without leaving the tree (`<S-Tab>`/`<M-Tab>`) |
 
 ## `ui` — display
 
