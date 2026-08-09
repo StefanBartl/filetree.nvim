@@ -9,80 +9,86 @@
 
 ---@type FiletreeConfig
 return {
-  adapter     = "auto",
-  debug       = false,  -- true → show notifier.debug(...) messages (troubleshooting)
-  ignore_list = true,   -- hide .git, node_modules, etc. by default
+  adapter = "auto",
+  debug = false, -- true → show notifier.debug(...) messages (troubleshooting)
+  ignore_list = true, -- hide .git, node_modules, etc. by default
+
+  -- One-time "which CLI tools does this plugin want, and why" popup on
+  -- first setup() after install (via lib.nvim.deps). false disables it for
+  -- this plugin specifically, right here in the spec passed to setup() —
+  -- no vim.g needed. See README.
+  deps_popup = true,
 
   -- nvzone/menu integration (opt-in on the host side; entries provided by
   -- filetree.integrations.menu). Group-level opt-out; enable = false yields no
   -- entries. Entries whose feature is disabled are omitted automatically.
   menu = {
-    enable    = true,
-    fileops   = true, -- create / rename / batch rename / template
+    enable = true,
+    fileops = true, -- create / rename / batch rename / template
     clipboard = true, -- copy / cut / paste
-    delete    = true, -- trash
-    open      = true, -- vsplit / split / tab / system app / file manager
-    paths     = true, -- copy path / markdown link
-    search    = true, -- find files / grep in dir
-    info      = true, -- node info
+    delete = true, -- trash
+    open = true, -- vsplit / split / tab / system app / file manager
+    paths = true, -- copy path / markdown link
+    search = true, -- find files / grep in dir
+    info = true, -- node info
   },
   features = {
     layout_guard = {
-      enabled  = true,
+      enabled = true,
       delay_ms = 50,
     },
     no_name_guard = {
       enabled = true,
     },
     cwd_sync = {
-      enabled          = false,
-      debounce_ms      = 150,
-      parent_levels    = 0,
-      keep_focus       = true,
-      change_dir       = true,  -- actually chdir; never prompts
-      reveal           = true,  -- also reveal/root the tree ourselves. Set false when the
-                                -- tree plugin already follows the cwd (e.g. neo-tree
-                                -- bind_to_cwd + follow_current_file) so we don't fight it.
-      use_project_root = true,  -- target the detected project root, not just the file's dir
-      root_markers     = { ".git" },  -- anchor cwd to nearest ancestor with one of these
-                                      -- (cached); false disables. Prevents frequent cwd jumps.
+      enabled = false,
+      debounce_ms = 150,
+      parent_levels = 0,
+      keep_focus = true,
+      change_dir = true, -- actually chdir; never prompts
+      reveal = true, -- also reveal/root the tree ourselves. Set false when the
+      -- tree plugin already follows the cwd (e.g. neo-tree
+      -- bind_to_cwd + follow_current_file) so we don't fight it.
+      use_project_root = true, -- target the detected project root, not just the file's dir
+      root_markers = { ".git" }, -- anchor cwd to nearest ancestor with one of these
+      -- (cached); false disables. Prevents frequent cwd jumps.
     },
     -- Root policy in front of cwd_sync. Enabled but inert: mode "follow" means
     -- "no policy", and cwd_mode then stays out of cwd_sync's resolution
     -- entirely. Switch modes at runtime with :Filetree cwd …
     cwd_mode = {
       enabled = true,
-      mode    = "follow",      -- follow | project | nearest | lock | manual | tree_leads
-      scope   = "global",      -- global | tab | win
+      mode = "follow", -- follow | project | nearest | lock | manual | tree_leads
+      scope = "global", -- global | tab | win
       project = {
-        markers   = { ".git", ".hg", ".svn" },
+        markers = { ".git", ".hg", ".svn" },
         skip_dirs = { "node_modules", ".venv", "vendor" },
-        sticky    = true,      -- a file with no root of its own doesn't move the cwd
+        sticky = true, -- a file with no root of its own doesn't move the cwd
       },
       lock = {
-        enforce            = true,  -- revert foreign :cd (dir_guard)
-        follow_manual_root = true,  -- `+`/`-` moves the lock instead of fighting it
+        enforce = true, -- revert foreign :cd (dir_guard)
+        follow_manual_root = true, -- `+`/`-` moves the lock instead of fighting it
       },
-      reveal_outside = "skip",      -- file outside the held root: leave the tree alone
-      persist        = false,       -- remember mode/scope/pin per project across restarts
+      reveal_outside = "skip", -- file outside the held root: leave the tree alone
+      persist = false, -- remember mode/scope/pin per project across restarts
       indicator = {
-        enabled   = true,
-        mode      = "auto",         -- statusline, or float under laststatus=3
+        enabled = true,
+        mode = "auto", -- statusline, or float under laststatus=3
         show_path = "lock",
-        style     = "text",         -- text | short | numeric | icon (see :h filetree-cwd-mode)
+        style = "text", -- text | short | numeric | icon (see :h filetree-cwd-mode)
       },
     },
     current_hl = {
-      enabled     = false,
-      file_hl     = { fg = "#7aa2f7", bold = true },
-      parent_hl   = { fg = "#565f89" },
+      enabled = false,
+      file_hl = { fg = "#7aa2f7", bold = true },
+      parent_hl = { fg = "#565f89" },
       debounce_ms = 100,
     },
     safety = {
-      enabled     = false,
-      backup_dir  = nil,
+      enabled = false,
+      backup_dir = nil,
       max_backups = 5,
-      dry_run     = false,
+      dry_run = false,
     },
   },
 }
