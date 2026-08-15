@@ -149,7 +149,7 @@ flowchart LR
 
 ## Drift
 
-37 errors · 14 warnings · 159 info
+37 errors · 13 warnings · 159 info
 
 | Severity | Check | Message |
 |---|---|---|
@@ -191,7 +191,6 @@ flowchart LR
 | error | `module-path-mismatch` | lua/filetree/features/ui/window_size_cycler/init.lua declares @module 'filetree.features.window_size_cycler' but lives at 'filetree.features.ui.window_size_cycler' |
 | error | `module-path-mismatch` | lua/filetree/features/ui/window_style/init.lua declares @module 'filetree.features.window_style' but lives at 'filetree.features.ui.window_style' |
 | warn | `doc-references-missing` | docs/troubleshooting.md:10 references 'filetree.features.CATEGORY_ORDER', but filetree.features has no 'CATEGORY_ORDER' |
-| warn | `doc-references-missing` | docs/features.md:5 references 'filetree.features.CATEGORY_ORDER', but filetree.features has no 'CATEGORY_ORDER' |
 | warn | `doc-references-missing` | docs/FEATURES/README.md:5 references 'filetree.features.FEATURES', but filetree.features has no 'FEATURES' |
 | warn | `missing-summary` | lua/filetree/assets/templates/javascript_module.js has no description line |
 | warn | `missing-summary` | lua/filetree/assets/templates/javascript_test.js has no description line |
@@ -271,9 +270,9 @@ flowchart LR
 | `missing-readme` | lua/filetree/features/ui/tree_reset has no README.md |
 | `missing-readme` | lua/filetree/features/ui/window_size_cycler has no README.md |
 | `missing-readme` | lua/filetree/features/ui/window_style has no README.md |
+| `undocumented-param` | trash_wsl has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | trash_linux has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | trash_windows has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | trash_wsl has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | trash_mac has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | restore_linux_mac has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | restore_windows has 2 parameter(s) but only 0 @param line(s) |
@@ -285,20 +284,20 @@ flowchart LR
 | `undocumented-param` | ensure_hl_group has 2 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.setup has 2 parameter(s) but only 1 @param line(s) |
 | `undocumented-param` | ext has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | list_dir has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | hex_dump has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | open_preview has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | without_nav_events has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | is_binary has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | read_text has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | system_open has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | is_image has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | open_pdf has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | is_pdf has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | list_dir has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | is_image has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | without_nav_events has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | read_text has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | open_preview has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | is_binary has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | hex_dump has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | open_image has 1 parameter(s) but only 0 @param line(s) |
-| `undocumented-param` | get_file_size has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | system_open has 1 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | open_pdf has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | fmt_bytes has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | query_dir_size has 2 parameter(s) but only 0 @param line(s) |
+| `undocumented-param` | get_file_size has 1 parameter(s) but only 0 @param line(s) |
 | `undocumented-param` | M.setup has 2 parameter(s) but only 1 @param line(s) |
 | `undocumented-param` | apply_width has 1 parameter(s) but only 0 @param line(s) |
 | `unreferenced-module` | filetree.adapter.mini_files is required by no other file in the tree |
