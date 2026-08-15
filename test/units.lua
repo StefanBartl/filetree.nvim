@@ -548,6 +548,8 @@ end
 -- native "c"/"x" (exact same key, last-registration-wins -- no ambiguity).
 do
   local tmp = (TMP_ROOT .. "/units-copymove"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf") -- fresh dst/ each run, so a leftover file1.txt from a
+                           -- prior run doesn't look like a paste conflict here
   vim.fn.mkdir(tmp .. "/dst", "p")
   vim.fn.writefile({ "hi" }, tmp .. "/file1.txt")
 

@@ -7,6 +7,11 @@
 --- Multiple-file staging uses the marks feature: if files are marked when
 --- c/x is pressed, all marked files are staged at once.
 ---
+--- If any staged item's name already exists at the paste target, a
+--- kit.confirm prompt asks how to resolve the whole batch before anything
+--- is written: Overwrite / Keep both (auto-renamed) / Skip / Cancel. See
+--- `paste_resolving_conflicts` and `find_conflicts`.
+---
 --- Keymaps (in tree buffer):
 ---   c      Stage current node for copy (or all marked)
 ---   x      Stage current node for cut  (or all marked)
@@ -183,6 +188,71 @@ end
 -- ── Paste ─────────────────────────────────────────────────────────────────────
 
 ---@internal
+---Whether a path already exists as either a file or a directory.
+---@param path string
+---@return boolean
+local function exists(path)
+  return vim.fn.filereadable(path) == 1 or vim.fn.isdirectory(path) == 1
+end
+
+---@internal
+---Remove an existing file or directory outright — the "Overwrite" conflict
+---resolution's prep step, run just before the copy/move that replaces it.
+---No shell involved.
+---@param path string
+---@return boolean ok
+local function remove_existing(path)
+  if vim.fn.isdirectory(path) == 1 then
+    return vim.fn.delete(path, "rf") == 0
+  end
+  return vim.fn.delete(path) == 0
+end
+
+---@internal
+---First "name (N).ext" that collides with neither an existing path in
+---`dst_dir` nor a name already handed out earlier in the same paste batch
+---(`claimed`). Directories don't get extension-splitting -- a dir name has
+---no extension to preserve.
+---@param dst_dir string
+---@param name string
+---@param claimed table<string, true>
+---@param is_dir boolean
+---@return string
+local function unique_name(dst_dir, name, claimed, is_dir)
+  local base, ext
+  if not is_dir then
+    base, ext = name:match("^(.*)(%.[^./\\]+)$")
+  end
+  if not base or base == "" then
+    base, ext = name, ""
+  end
+  local candidate, n = name, 2
+  repeat
+    candidate = string.format("%s (%d)%s", base, n, ext)
+    n = n + 1
+  until not claimed[candidate] and not exists(dst_dir .. "/" .. candidate)
+  claimed[candidate] = true
+  return candidate
+end
+
+---@internal
+---Clipboard entries whose name would collide with an existing entry of
+---`dst_dir` if pasted as-is. Purely a preflight check -- the authoritative
+---existence check happens again at execution time in `do_paste_impl`, right
+---before each item is actually written.
+---@param dst_dir string
+---@return ClipboardEntry[]
+local function find_conflicts(dst_dir)
+  local conflicts = {}
+  for _, e in ipairs(_clipboard) do
+    if exists(dst_dir .. "/" .. vim.fn.fnamemodify(e.path, ":t")) then
+      conflicts[#conflicts + 1] = e
+    end
+  end
+  return conflicts
+end
+
+---@internal
 ---Recursively copy a directory tree without shelling out (shell-agnostic:
 ---works identically whether &shell is cmd.exe, PowerShell, or a POSIX shell).
 ---@param src string
@@ -204,37 +274,27 @@ local function copy_dir(src, dst)
 end
 
 ---@internal
+---Copy `src` to the already-resolved destination `dst` -- no collision
+---handling here, the caller has already decided how to deal with an
+---existing target before calling this.
 ---@param src string
----@param dst_dir string
-local function do_copy(src, dst_dir)
-  local name = vim.fn.fnamemodify(src, ":t")
-  local dst  = dst_dir .. "/" .. name
-  -- Avoid overwriting
-  if vim.fn.filereadable(dst) == 1 or vim.fn.isdirectory(dst) == 1 then
-    local ts = os.date("%H%M%S")
-    dst = dst_dir .. "/" .. ts .. "_" .. name
-  end
-
+---@param dst string
+---@return integer rc  0 on success, 1 on failure
+local function do_copy(src, dst)
   if vim.fn.isdirectory(src) == 1 then
     return copy_dir(src, dst)
-  else
-    local ok = fsops.copy_file(src, dst)
-    return ok and 0 or 1
   end
+  local ok = fsops.copy_file(src, dst)
+  return ok and 0 or 1
 end
 
 ---@internal
+---Move `src` to the already-resolved destination `dst`.
 ---@param src string
----@param dst_dir string
+---@param dst string
 ---@return integer rc   0 on success, 1 on failure
 ---@return string? dst  the destination path actually used, when rc == 0
-local function do_move(src, dst_dir)
-  local name = vim.fn.fnamemodify(src, ":t")
-  local dst  = dst_dir .. "/" .. name
-  if vim.fn.filereadable(dst) == 1 or vim.fn.isdirectory(dst) == 1 then
-    notify.error("Target exists, cannot move: " .. dst)
-    return 1
-  end
+local function do_move(src, dst)
   -- A move is the primary Windows lock trigger (an open neo-tree watcher on the
   -- source dir holds the handle), so route it through the retrying mutation
   -- chokepoint. But uv.fs_rename cannot cross filesystems/drives — it returns
@@ -290,7 +350,13 @@ end
 ---@internal
 ---Actually perform an already-confirmed paste into `dst_dir`.
 ---@param dst_dir string
-local function do_paste_impl(dst_dir)
+---@param conflict_mode? "Overwrite"|"Keep both"|"Skip"  How to resolve an
+---  item whose name already exists at the destination. Set only when
+---  `find_conflicts` found at least one during the preflight scan and the
+---  user picked a resolution for the batch; nil means none were found (in
+---  which case a target that turns out to exist anyway at execution time —
+---  a race since the scan — is treated as an error, not a silent guess).
+local function do_paste_impl(dst_dir, conflict_mode)
   if _cfg.use_safety then
     local ok_s, safety = require("filetree.features").load("safety")
     if ok_s and safety then
@@ -315,31 +381,65 @@ local function do_paste_impl(dst_dir)
   end
 
   refs_util.await_all(cut_handles, function(refs_by_path)
-    local errors  = 0
-    local done    = 0
+    local errors    = 0
+    local done      = 0
+    local skipped   = 0
     local relocated = 0
     local all_refs  = {}
-    for _, e in ipairs(_clipboard) do
-      if e.op == "copy" then
-        local rc = do_copy(e.path, dst_dir)
-        if rc ~= 0 then errors = errors + 1 else done = done + 1 end
-      else
-        local rc, dst = do_move(e.path, dst_dir)
-        if rc ~= 0 or not dst then
-          errors = errors + 1
-        else
-          done = done + 1
-          -- Repoint any open buffer(s) at the old path (or nested under it, for
-          -- a moved directory) so a stale buffer for the file's old location
-          -- doesn't linger alongside a second, disconnected buffer for its new
-          -- one. Per-item, right after that item's own move succeeds, so a
-          -- partial failure in a multi-item paste still fixes up the items that
-          -- did succeed.
-          relocated = relocated + buffer.relocate(e.path, dst)
+    local moved     = {} -- entry -> true, once its cut has actually landed
+    local claimed   = {} -- names already handed out by "Keep both" this batch
 
-          for _, r in ipairs(refs_by_path[e.path] or {}) do
-            r.new_target = refs_util.retarget(r, dst)
-            all_refs[#all_refs + 1] = r
+    for _, e in ipairs(_clipboard) do
+      local name = vim.fn.fnamemodify(e.path, ":t")
+      local dst  = dst_dir .. "/" .. name
+
+      if exists(dst) then
+        if conflict_mode == "Overwrite" then
+          if _cfg.use_safety then
+            local ok_s, safety = require("filetree.features").load("safety")
+            if ok_s and safety then pcall(safety.before_delete, dst) end
+          end
+          if not remove_existing(dst) then
+            notify.error("Could not clear existing target: " .. dst)
+            errors = errors + 1
+            dst = nil
+          end
+        elseif conflict_mode == "Keep both" then
+          local is_dir = vim.fn.isdirectory(e.path) == 1
+          dst = dst_dir .. "/" .. unique_name(dst_dir, name, claimed, is_dir)
+        elseif conflict_mode == "Skip" then
+          skipped = skipped + 1
+          dst = nil
+        else
+          notify.error("Target exists, skipping: " .. dst)
+          errors = errors + 1
+          dst = nil
+        end
+      end
+
+      if dst then
+        if e.op == "copy" then
+          local rc = do_copy(e.path, dst)
+          if rc ~= 0 then errors = errors + 1 else done = done + 1 end
+        else
+          local rc, moved_dst = do_move(e.path, dst)
+          if rc ~= 0 or not moved_dst then
+            errors = errors + 1
+          else
+            done = done + 1
+            moved[e] = true
+            -- Repoint any open buffer(s) at the old path (or nested under it, for
+            -- a moved directory) so a stale buffer for the file's old location
+            -- doesn't linger alongside a second, disconnected buffer for its new
+            -- one. Per-item, right after that item's own move succeeds, so a
+            -- partial failure in a multi-item paste still fixes up the items that
+            -- did succeed.
+            relocated = relocated + buffer.relocate(e.path, moved_dst)
+
+            for _, r in ipairs(refs_by_path[e.path] or {}) do
+              r.new_target = refs_util.retarget(r, moved_dst)
+              all_refs[#all_refs + 1] = r
+            end
           end
         end
       end
@@ -347,6 +447,9 @@ local function do_paste_impl(dst_dir)
 
     local msg = string.format("Pasted %d/%d item(s) into %s",
       done, #_clipboard, vim.fn.fnamemodify(dst_dir, ":t"))
+    if skipped > 0 then
+      msg = msg .. string.format(" (%d skipped)", skipped)
+    end
     if relocated > 0 then
       msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
     end
@@ -354,10 +457,13 @@ local function do_paste_impl(dst_dir)
 
     handle_batch_markdown_refs(all_refs)
 
-    -- Clear cut items from clipboard (keep copy items for potential re-paste)
+    -- Clear clipboard entries that actually landed: copy items always stay
+    -- (kept for potential re-paste); cut items only clear once their move
+    -- has actually happened, so a skipped or failed cut stays staged for
+    -- the user to resolve and paste again instead of vanishing silently.
     local remaining = {}
     for _, e in ipairs(_clipboard) do
-      if e.op == "copy" then remaining[#remaining + 1] = e end
+      if e.op == "copy" or not moved[e] then remaining[#remaining + 1] = e end
     end
     _clipboard = remaining
     _cut_prefetch = {}
@@ -365,6 +471,38 @@ local function do_paste_impl(dst_dir)
     render_clipboard()
     if _adapter.refresh then pcall(_adapter.refresh) end
   end)
+end
+
+---@internal
+---Preflight-check `dst_dir` for name collisions; if any exist, ask the user
+---once how to resolve the whole batch (Overwrite / Keep both / Skip /
+---Cancel) before touching the filesystem. No conflicts -> straight to paste,
+---same as before this feature existed.
+---@param dst_dir string
+local function paste_resolving_conflicts(dst_dir)
+  local conflicts = find_conflicts(dst_dir)
+  if #conflicts == 0 then
+    do_paste_impl(dst_dir)
+    return
+  end
+
+  local names = {}
+  for _, e in ipairs(conflicts) do
+    names[#names + 1] = vim.fn.fnamemodify(e.path, ":t")
+  end
+
+  confirm_choice(
+    string.format("%d item(s) already exist in %s:\n  %s",
+      #conflicts, vim.fn.fnamemodify(dst_dir, ":t"), table.concat(names, ", ")),
+    { "Overwrite", "Keep both", "Skip", "Cancel" },
+    function(choice)
+      if choice == nil or choice == "Cancel" then
+        notify.info("Paste cancelled")
+        return
+      end
+      do_paste_impl(dst_dir, choice)
+    end
+  )
 end
 
 function M.paste()
@@ -399,13 +537,13 @@ function M.paste()
         "Paste %d item(s) into %s?", #_clipboard, vim.fn.fnamemodify(dst_dir, ":~")),
       on_choice = function(yes)
         if not yes then notify.info("Cancelled"); return end
-        do_paste_impl(dst_dir)
+        paste_resolving_conflicts(dst_dir)
       end,
     })
     return
   end
 
-  do_paste_impl(dst_dir)
+  paste_resolving_conflicts(dst_dir)
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────

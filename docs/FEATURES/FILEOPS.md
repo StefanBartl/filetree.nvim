@@ -19,6 +19,15 @@ Stage one or more nodes with `c` (copy) or `x` (cut), then `p` to paste
 them under the cursor's directory — the same stage-then-paste model as a
 system file manager, works across multiple marked nodes at once.
 
+If any staged item's name already exists at the paste target, a prompt
+appears before anything is touched: **Overwrite** (replaces the existing
+item — backed up first when `use_safety` is on), **Keep both** (pastes
+alongside it as `name (2).ext`), **Skip** (leaves that item out of this
+paste; a skipped cut stays staged so you can resolve it and paste again
+instead of it silently vanishing), or **Cancel** (aborts the whole paste,
+nothing is touched). No conflicts means no prompt — pasting into an empty
+or non-colliding directory behaves exactly as before.
+
 - **Module:** `lua/filetree/features/fileops/copy_move/`
 - **Keymaps:** `c` (copy), `x` (cut), `p` (paste)
 
