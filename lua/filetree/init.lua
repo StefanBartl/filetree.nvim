@@ -83,6 +83,11 @@ function M.setup(user_config)
   -- Apply the global debug switch so notifier.debug(...) becomes visible.
   require("filetree.util.notify").set_debug(cfg.debug == true)
 
+  -- Apply the global progress style (e.g. "statusline") so batch operations
+  -- (trash, paste, …) render through it without each feature needing its
+  -- own progress_style option.
+  require("filetree.util.progress").set_style(cfg.progress_style)
+
   -- Reset the central tree-buffer keymap dispatcher; features re-register their
   -- on_attach callbacks during their own setup() below, then install() wires the
   -- single FileType autocmd.

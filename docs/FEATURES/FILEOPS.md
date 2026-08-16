@@ -28,6 +28,12 @@ instead of it silently vanishing), or **Cancel** (aborts the whole paste,
 nothing is touched). No conflicts means no prompt — pasting into an empty
 or non-colliding directory behaves exactly as before.
 
+A multi-item paste shows a progress indicator (current item, N/M, final
+summary) via the optional `lib.nvim.progress` dependency — see
+[Progress indicators](../configuration.md#full-option-reference)'s
+`progress_style` option (top-level `require("filetree").setup({...})`
+config, not per-feature).
+
 - **Module:** `lua/filetree/features/fileops/copy_move/`
 - **Keymaps:** `c` (copy), `x` (cut), `p` (paste)
 
@@ -106,7 +112,9 @@ Cross-platform trash (not permanent delete) with undo — `d` to trash,
 `U` to undo, `<leader>th` for trash history. Marking multiple nodes and
 trashing them opens one batch confirmation instead of one prompt per
 file, and force-closes any open buffers backed by the deleted paths so
-they don't linger as edits-to-nowhere.
+they don't linger as edits-to-nowhere. Same optional progress indicator
+as Copy / Move above, for both the "delete all at once" and "confirm
+each individually" batch paths.
 
 - **Module:** `lua/filetree/features/fileops/trash/`
 - **Keymaps:** `d`, `U`, `<leader>th`

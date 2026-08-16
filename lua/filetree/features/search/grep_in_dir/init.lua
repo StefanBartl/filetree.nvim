@@ -26,12 +26,11 @@ local M = {}
 -- Optional: shows a "searching…" indicator around the builtin backend's
 -- blocking rg/grep process, which can take a while under a large directory.
 -- No-op (returns nil) when lib.nvim isn't installed.
-local ok_progress, progress_mod = pcall(require, "lib.nvim.progress")
+local progress = require("filetree.util.progress")
 ---@internal
 ---@return table?
 local function new_progress()
-  if not ok_progress then return nil end
-  return progress_mod.create({ title = "[filetree.grep_in_dir]" })
+  return progress.create({ title = "[filetree.grep_in_dir]" })
 end
 
 ---@type FiletreeGrepInDirConfig
