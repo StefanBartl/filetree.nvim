@@ -1,7 +1,7 @@
 # Configuration
 
-**How defaults work:** every feature is enabled unless it appears in
-[Default-disabled features](features.md#default-disabled-features). You never write
+**How defaults work:** every feature is enabled unless it's marked opt-in in
+[docs/FEATURES/](FEATURES/README.md). You never write
 `enabled = true` to *get* a feature — you only ever write `enabled = false` to
 turn one off, or `enabled = true` to switch on one of the opt-in few. Omitting a
 feature entirely leaves it at its default (on) with its default options.
@@ -39,6 +39,10 @@ require("filetree").setup({
   --   confirmations = false                            -- no prompts at all
   --   confirmations = { delete = false }                -- opt out of the delete prompt only
   confirmations = nil,
+
+  -- Style for batch-operation progress indicators (trash, paste, …) — see
+  -- "Progress indicators" below. Needs lib.nvim.progress; a no-op without it.
+  progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
   features = {
     -- ── On by default ──────────────────────────────────────────────────────

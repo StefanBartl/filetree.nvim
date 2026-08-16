@@ -19,6 +19,13 @@ return {
   -- no vim.g needed. See README.
   deps_popup = true,
 
+  -- Style for batch-operation progress indicators (trash, paste, …).
+  -- "auto" (default) picks fidget.nvim if installed, else notify. Set to
+  -- "statusline" to feed lib.nvim.progress's headless statusline registry
+  -- instead (`lib.nvim.progress.styles.statusline.active()`). No-op without
+  -- lib.nvim.progress installed.
+  progress_style = "auto",
+
   -- nvzone/menu integration (opt-in on the host side; entries provided by
   -- filetree.integrations.menu). Group-level opt-out; enable = false yields no
   -- entries. Entries whose feature is disabled are omitted automatically.

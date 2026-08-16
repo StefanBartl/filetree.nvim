@@ -30,12 +30,11 @@ local M = {}
 -- vim.fn.globpath() walk, which can take a while under a large root and has
 -- no other feedback otherwise. No-op (returns nil) when lib.nvim isn't
 -- installed — the scan still runs, just without the indicator.
-local ok_progress, progress_mod = pcall(require, "lib.nvim.progress")
+local progress = require("filetree.util.progress")
 ---@internal
 ---@return table?
 local function new_progress()
-  if not ok_progress then return nil end
-  return progress_mod.create({ title = "[filetree.find_files]" })
+  return progress.create({ title = "[filetree.find_files]" })
 end
 
 ---@type FiletreeFindFilesConfig

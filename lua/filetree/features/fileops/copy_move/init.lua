@@ -31,6 +31,9 @@ local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm  = require("filetree.util.confirm")
 local refs_util   = require("filetree.util.markdown_refs")
 local refs_picker = require("filetree.util.refs_picker")
+-- Optional: progress indicator for a multi-item paste. No-op (returns nil)
+-- when lib.nvim isn't installed.
+local progress    = require("filetree.util.progress")
 
 -- Central FS-mutation chokepoint (libuv-based, no shell). Retries transient
 -- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_copyfile would
@@ -381,6 +384,7 @@ local function do_paste_impl(dst_dir, conflict_mode)
   end
 
   refs_util.await_all(cut_handles, function(refs_by_path)
+    local prog = progress.create({ title = "[filetree.copy_move]" })
     local errors    = 0
     local done      = 0
     local skipped   = 0
@@ -389,7 +393,10 @@ local function do_paste_impl(dst_dir, conflict_mode)
     local moved     = {} -- entry -> true, once its cut has actually landed
     local claimed   = {} -- names already handed out by "Keep both" this batch
 
-    for _, e in ipairs(_clipboard) do
+    for i, e in ipairs(_clipboard) do
+      if prog then
+        prog:update({ text = vim.fn.fnamemodify(e.path, ":t"), current = i - 1, total = #_clipboard })
+      end
       local name = vim.fn.fnamemodify(e.path, ":t")
       local dst  = dst_dir .. "/" .. name
 
@@ -453,6 +460,7 @@ local function do_paste_impl(dst_dir, conflict_mode)
     if relocated > 0 then
       msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
     end
+    if prog then prog:finish(msg) end
     notify.info(msg)
 
     handle_batch_markdown_refs(all_refs)

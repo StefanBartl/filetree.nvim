@@ -31,6 +31,10 @@ local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm  = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
 local refs_util   = require("filetree.util.markdown_refs")
+-- Optional: progress indicator for a multi-item batch (no other feedback
+-- otherwise while several files are sent to trash one after another).
+-- No-op (returns nil) when lib.nvim isn't installed.
+local progress    = require("filetree.util.progress")
 -- Release neo-tree's directory-watcher handle before the external trash command
 -- touches the path. No-op unless the handle_guard feature installed the registry.
 local watch       = require("lib.nvim.neotree.watch")
@@ -224,10 +228,15 @@ end
 ---Delete every path with no further prompting (the "all" decision).
 ---@param paths string[]
 local function run_all(paths)
+  local prog = progress.create({ title = "[filetree.trash]" })
   local ok_count = 0
-  for _, path in ipairs(paths) do
+  for i, path in ipairs(paths) do
+    if prog then
+      prog:update({ text = vim.fn.fnamemodify(path, ":t"), current = i - 1, total = #paths })
+    end
     if do_trash(path) then ok_count = ok_count + 1 end
   end
+  if prog then prog:finish(string.format("Moved %d/%d to trash", ok_count, #paths)) end
   finalize(ok_count, #paths, 0)
 end
 
@@ -235,13 +244,18 @@ end
 ---Async, chained one popup at a time so the flow stays modal-feeling.
 ---@param paths string[]
 local function run_individual(paths)
+  local prog = progress.create({ title = "[filetree.trash]" })
   local ok_count, cancelled = 0, 0
   local i = 0
   local function step()
     i = i + 1
     if i > #paths then
+      if prog then prog:finish(string.format("Moved %d/%d to trash", ok_count, #paths)) end
       finalize(ok_count, #paths, cancelled)
       return
+    end
+    if prog then
+      prog:update({ text = vim.fn.fnamemodify(paths[i], ":t"), current = i - 1, total = #paths })
     end
     confirm_popup(paths[i], function(yes)
       if yes then
