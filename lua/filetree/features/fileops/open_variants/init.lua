@@ -21,6 +21,7 @@ local notify = require("filetree.util.notify").create("[filetree.open_variants]"
 local map     = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local bufutil = require("filetree.util.buffer")
+local window  = require("filetree.util.window")
 local M = {}
 
 ---@type FiletreeOpenVariantsConfig
@@ -59,7 +60,10 @@ local function open_in_editor(cmd)
   if win then
     vim.api.nvim_set_current_win(win)
   else
-    vim.cmd("vsplit")
+    -- Away from the tree's side, not wherever 'splitright' points: splitting the
+    -- tree window itself with a bare `:vsplit` visually flips the sidebar to the
+    -- other side of the screen.
+    window.open_editor_window(_adapter)
   end
   vim.cmd(cmd .. " " .. vim.fn.fnameescape(path))
 end

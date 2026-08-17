@@ -66,6 +66,20 @@ function M.get_winid()
   return nil
 end
 
+---Which side nvim-tree's sidebar is configured for, so features can place new
+---windows clear of it (util.window.open_editor_window). nvim-tree exposes this
+---only as an internal (`nvim-tree.view`'s `View.side`, moved around across
+---versions), so this is best-effort: anything unexpected returns nil and the
+---caller falls back to reading the tree window's own column.
+---@return FiletreeTreePosition?
+function M.get_position()
+  local ok, view = pcall(require, "nvim-tree.view")
+  if not ok or type(view) ~= "table" then return nil end
+  local side = (type(view.View) == "table" and view.View.side) or view.side
+  if side == "left" or side == "right" then return side end
+  return nil
+end
+
 ---@param path string
 ---@return boolean
 function M.set_root(path)

@@ -64,6 +64,14 @@ local function get_current_position()
   return "left"
 end
 
+---Where the tree is (or was last) shown — see `get_current_position`. Public so
+---features can place new windows clear of the sidebar's side instead of relying
+---on 'splitright' (util.window.open_editor_window).
+---@return FiletreeTreePosition
+function M.get_position()
+  return get_current_position()
+end
+
 ---Resolve a neo-tree node's filesystem path robustly.
 ---Prefers the canonical `node.path`, falls back to the node id (which for the
 ---filesystem source is the path). Returns nil for nodes without a real path
