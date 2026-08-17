@@ -2216,6 +2216,53 @@ do
   check("context_menu: keymap=false does not bind '<RightMouse>'", not has_rm)
 end
 
+-- ── util.window: new editor windows stay clear of the tree's side ───────────
+-- Regression: a bare `:vsplit` from the (full-width) tree window follows
+-- 'splitright', so with the default `splitright = false` the new window landed
+-- LEFT of a left sidebar — visually moving the tree to the right edge.
+do
+  local window = require("filetree.util.window")
+
+  eq("window.away_modifier(left)",  window.away_modifier("left"),  "botright")
+  eq("window.away_modifier(right)", window.away_modifier("right"), "topleft")
+  eq("window.away_modifier(nil)",   window.away_modifier(nil),     "")
+
+  local function stub(pos, winid)
+    return {
+      name = "units-stub-window",
+      get_position = function() return pos end,
+      get_winid    = function() return winid end,
+    }
+  end
+
+  eq("window.tree_side: adapter position wins", window.tree_side(stub("right", nil)), "right")
+  check("window.tree_side: float has no side", window.tree_side(stub("float", nil)) == nil)
+  check("window.tree_side: no adapter at all", window.tree_side(nil) == nil)
+
+  local saved_splitright = vim.o.splitright
+  vim.o.splitright = false  -- the setting that produced the bug
+
+  vim.cmd("only")
+  local tree_win = vim.api.nvim_get_current_win()
+  local new_win  = window.open_editor_window(stub("left", tree_win), { empty = true })
+  check("window.open_editor_window: created a window", new_win ~= nil)
+  eq("window.open_editor_window: left tree stays at column 0",
+    vim.api.nvim_win_get_position(tree_win)[2], 0)
+  check("window.open_editor_window: new window sits right of a left tree",
+    new_win ~= nil and vim.api.nvim_win_get_position(new_win)[2] > 0)
+
+  vim.cmd("only")
+  local tree_win_r = vim.api.nvim_get_current_win()
+  local new_win_r  = window.open_editor_window(stub("right", tree_win_r), { empty = true })
+  check("window.open_editor_window: right tree keeps a non-zero column",
+    vim.api.nvim_win_get_position(tree_win_r)[2] > 0)
+  eq("window.open_editor_window: new window sits left of a right tree",
+    new_win_r and vim.api.nvim_win_get_position(new_win_r)[2], 0)
+
+  vim.cmd("only")
+  vim.o.splitright = saved_splitright
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end

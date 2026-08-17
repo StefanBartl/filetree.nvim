@@ -61,6 +61,7 @@
 local notify  = require("filetree.util.notify").create("[filetree.create_from_template]")
 local path_u  = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
+local win_u   = require("filetree.util.window")
 local json    = require("lib.nvim.fs.json")
 
 local map    = require("filetree.util.map")
@@ -567,7 +568,12 @@ function M.open(dest_dir)
               -- autocmds and can hang Neovim — see smart_create/duplicate_node).
               local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid()
               local win = bufutil.find_editor_win(tree_win)
-              if win then vim.api.nvim_set_current_win(win) else vim.cmd("vsplit") end
+              if win then
+                vim.api.nvim_set_current_win(win)
+              else
+                -- Opposite side of the tree, not wherever 'splitright' points.
+                win_u.open_editor_window(_adapter)
+              end
               vim.cmd("edit " .. vim.fn.fnameescape(dest))
             end
           end

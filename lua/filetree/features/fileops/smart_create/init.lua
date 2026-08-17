@@ -6,6 +6,7 @@ local tree_attach = require("filetree.util.tree_attach")
 local confirm_choice = require("filetree.util.confirm_choice")
 local path    = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
+local window  = require("filetree.util.window")
 local M = {}
 
 ---@type FiletreeSmartCreateConfig
@@ -82,9 +83,10 @@ local function open_editor_window()
   local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid()
   local win = bufutil.find_editor_win(tree_win)
   if not win then
-    -- No editor window yet: open one next to the tree instead of editing here.
-    vim.cmd("vsplit")
-    win = vim.api.nvim_get_current_win()
+    -- No editor window yet: open one next to the tree instead of editing here —
+    -- on the side away from the tree, so a bare `:vsplit` following 'splitright'
+    -- can't flip the sidebar to the other side of the screen.
+    win = window.open_editor_window(_adapter) or vim.api.nvim_get_current_win()
   end
   vim.api.nvim_set_current_win(win)
   return win

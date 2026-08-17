@@ -6,13 +6,15 @@
 --- trapped inside the tree with no place to edit files.
 
 
-local au  = require("filetree.util.autocmd")
+local au     = require("filetree.util.autocmd")
+local window = require("filetree.util.window")
+
 local M = {}
 
 ---@type integer?
 local _augroup = nil
 
----Create an empty editor window positioned next to the tree.
+---Create an empty editor window next to the tree — on the side AWAY from it.
 ---@param adapter FiletreeAdapter
 local function ensure_editor(adapter)
   -- Count normal (non-tree) windows
@@ -29,11 +31,14 @@ local function ensure_editor(adapter)
 
   if normal_wins > 0 then return end
 
-  -- Open a new split next to the tree
-  local ok = pcall(vim.cmd, "vsplit | enew")
-  if not ok then
-    pcall(vim.cmd, "new")
-  end
+  -- Pinned to the edge opposite the tree. A bare `:vsplit` here would follow
+  -- 'splitright' relative to the (now full-width) tree window, so with the
+  -- default `splitright = false` the new window landed on the tree's LEFT —
+  -- leaving a left sidebar sitting on the right of the screen afterwards. The
+  -- guard fires from BufDelete/WinClosed, which routinely happens while a
+  -- picker float is up, so this looked like "the tree jumps sides now and then
+  -- after using a picker".
+  window.open_editor_window(adapter, { empty = true })
 end
 
 ---@param config FiletreeLayoutGuardConfig

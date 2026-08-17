@@ -71,6 +71,26 @@ opens a new empty editor window automatically — fires on `BufDelete`,
 `BufWipeout`, `WinClosed` — so the user is never trapped inside the tree
 with nowhere to edit.
 
+The new window is pinned to the screen edge **away from the tree**
+(`:botright vsplit` for a left sidebar, `:topleft vsplit` for a right one),
+via `util.window.open_editor_window()`. A bare `:vsplit` would instead
+follow `'splitright'` relative to the tree window — which, at the moment the
+guard fires, is the only window and therefore spans the full width — so with
+the default `splitright = false` the new window appeared on the tree's left
+and the sidebar was left sitting at the right edge of the screen. Because
+the guard fires on `BufDelete`/`WinClosed`, that typically happened while a
+picker float was up, which made it look like the tree randomly swapped sides
+after using a picker. The side comes from `adapter.get_position()` (neo-tree
+keeps it in its own state, so it is still known while the tree window is
+closed), falling back to the tree window's actual column, and finally to a
+plain `:vsplit` when the tree has no side at all (float / `current`). When
+the guard fires while a floating window has focus, the split is made through
+`nvim_win_call` so the float keeps focus.
+
+The same helper backs the "no editor window exists yet" branch of
+`open_variants`, `smart_create` and `create_from_template`, which had the
+identical flip.
+
 - **Module:** [`features/nav/layout_guard/init.lua`](../../lua/filetree/features/nav/layout_guard/init.lua)
 - **Config:** `enabled` (default `true`), `delay_ms` (50)
 

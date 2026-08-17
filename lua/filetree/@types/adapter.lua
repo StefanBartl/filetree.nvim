@@ -40,6 +40,10 @@
 ---@field filetypes? string[]                    Buffer filetypes this backend's tree uses (e.g. {"neo-tree"}).
 ---@field hl_groups? table<string, string>       Tree HL group → editor group, for `window_style.highlights_isolate`.
 ---@field toggle_at? fun(position: FiletreeTreePosition, opts?: FiletreeToggleOpts): boolean  Position-aware toggle; return false if unsupported.
+---@field get_position? fun(): FiletreeTreePosition?  Where the tree is (or was last) shown. Must stay
+---                     correct while the tree window is CLOSED too (it is the only way to know which
+---                     side a sidebar belongs to once it is the sole window and spans the full width);
+---                     `util.window` falls back to reading the tree window's column when absent.
 ---@field redraw? fun(): boolean                 Re-render the current tree from existing state (no filesystem rescan); used by opened_sync.
 ---@field sign_node? fun(path: string, text: string, hl_group: string): boolean  Place a sign-column marker on a node's line (used by current_hl's icon).
 ---@field unsign_node? fun(path: string): boolean  Remove a previously placed sign marker.
