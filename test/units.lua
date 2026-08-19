@@ -1367,6 +1367,109 @@ if HAS_CLIPBOARD then
   package.loaded["filetree.features.fileops.smart_create"] = nil
 end
 
+-- ── link_create: file target asks Symlink/Hardlink, creates a real hardlink ──
+-- The link is created in the CURRENT NODE's directory, which must be
+-- different from the target's own directory or "same path" would collide
+-- with the existence guard before creation is ever attempted.
+do
+  local tmp = (TMP_ROOT .. "/units-linkcreate-file"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/src", "p")
+  vim.fn.mkdir(tmp .. "/dest", "p")
+  local target = tmp .. "/src/target.txt"
+  vim.fn.writefile({ "hello link" }, target)
+
+  package.loaded["lib.nvim.ui.kit"] = {
+    input = function(opts) opts.on_submit(target) end,
+  }
+  local captured_question, captured_choices
+  package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
+    captured_question, captured_choices = question, choices
+    on_choice("Hardlink")
+  end
+  package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stub
+
+  local cur_node = { path = tmp .. "/dest", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-linkcreate-file", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-linkcreate-file",
+    features = { link_create = { enabled = true } } })
+
+  ft.feature("link_create").create()
+
+  check("link_create file target: confirm_choice asked with Symlink/Hardlink",
+    captured_choices ~= nil and captured_choices[1] == "Symlink" and captured_choices[2] == "Hardlink",
+    vim.inspect(captured_choices))
+  check("link_create file target: question mentions the link's name",
+    captured_question ~= nil and captured_question:find("target.txt", 1, true) ~= nil,
+    tostring(captured_question))
+  check("link_create file target: hardlink created in dest/, with matching content",
+    vim.fn.filereadable(tmp .. "/dest/target.txt") == 1
+      and table.concat(vim.fn.readfile(tmp .. "/dest/target.txt"), "\n") == "hello link")
+
+  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.features.fileops.link_create"] = nil
+end
+
+-- ── link_create: directory target skips the chooser (symlink only) ──────────
+-- Windows symlink creation needs Developer Mode or an elevated process;
+-- assert the no-chooser behavior unconditionally, but only assert the link
+-- itself exists when creation actually succeeded (see mutate_spec.lua for the
+-- same accommodation).
+do
+  local tmp = (TMP_ROOT .. "/units-linkcreate-dir"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/src/target_dir", "p")
+  vim.fn.mkdir(tmp .. "/dest", "p")
+  local target = tmp .. "/src/target_dir"
+
+  package.loaded["lib.nvim.ui.kit"] = {
+    input = function(opts) opts.on_submit(target) end,
+  }
+  local confirm_choice_called = false
+  package.loaded["filetree.util.confirm_choice"] = function(_, _, on_choice)
+    confirm_choice_called = true
+    on_choice("Symlink")
+  end
+  package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stub
+
+  local cur_node = { path = tmp .. "/dest", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-linkcreate-dir", is_available = function() return true end,
+    get_current_node = function() return cur_node end,
+    get_winid = function() return nil end,
+    refresh   = function() return true end,
+  }, { __index = function() return function() return false end end })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "units-stub-linkcreate-dir",
+    features = { link_create = { enabled = true } } })
+
+  ft.feature("link_create").create()
+
+  check("link_create dir target: no Symlink/Hardlink chooser (directories can't be hardlinked)",
+    not confirm_choice_called)
+  local link_stat = (vim.uv or vim.loop).fs_lstat(tmp .. "/dest/target_dir")
+  if not link_stat then
+    print("  note link_create: directory symlink not created in this environment (needs elevation on Windows)")
+  else
+    check("link_create dir target: symlink created", link_stat.type == "link")
+  end
+
+  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.features.fileops.link_create"] = nil
+end
+
 -- ── rename_batch: confirm=true asks kit.confirm (async), not the old ────────
 -- blocking `vim.fn.input("...[y/N]...")` freetext prompt.
 do

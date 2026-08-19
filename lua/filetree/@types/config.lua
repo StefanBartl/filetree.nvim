@@ -82,6 +82,7 @@
 ---@field opened_sync          FiletreeOpenedSyncConfig?
 ---@field cheatsheet           FiletreeCheatsheetConfig?
 ---@field create_from_template FiletreeCreateFromTemplateConfig?
+---@field link_create           FiletreeLinkCreateConfig?
 ---@field auto_reveal          FiletreeAutoRevealConfig?
 ---@field auto_resize          FiletreeAutoResizeConfig?
 ---@field file_watcher         FiletreeFileWatcherConfig?
@@ -652,6 +653,14 @@
 ---@field notify_level         "verbose"|"short"|"off"  Success-message verbosity (default "verbose").
 ---                                     "verbose": "Created file/directory: <path>". "short": just
 ---                                     "Path: <path>". "off": no notification at all.
+
+-- ── link_create ───────────────────────────────────────────────────────────────
+
+---@class FiletreeLinkCreateConfig
+---@field enabled  boolean
+---@field keymap   string?   Key inside tree to prompt for a link target (default nil, off —
+---                          use `:Filetree link`). Symlink vs. hardlink is chosen at prompt
+---                          time via kit.confirm (directories only ever get a symlink).
 
 -- ── cursor_hide ───────────────────────────────────────────────────────────────
 
