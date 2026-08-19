@@ -48,6 +48,7 @@ M.FEATURES = {
   rename_batch         = { mod = "filetree.features.fileops.rename_batch",         category = "fileops" },
   smart_rename         = { mod = "filetree.features.fileops.smart_rename",         category = "fileops" },
   create_from_template = { mod = "filetree.features.fileops.create_from_template", category = "fileops" },
+  link_create          = { mod = "filetree.features.fileops.link_create",          category = "fileops" },
   trash                = { mod = "filetree.features.fileops.trash",               category = "fileops" },
   open_replace         = { mod = "filetree.features.fileops.open_replace",         category = "fileops" },
   open_variants        = { mod = "filetree.features.fileops.open_variants",        category = "fileops" },

@@ -117,6 +117,9 @@ local TREE = {
   -- ── template ────────────────────────────────────────────────────────────────
   template = function(_) local f = ft("create_from_template"); if f then f.open_current() end end,
 
+  -- ── link_create ─────────────────────────────────────────────────────────────
+  link = function(_) local f = ft("link_create"); if f then f.create() end end,
+
   -- ── reveal ──────────────────────────────────────────────────────────────────
   -- :Filetree reveal           → reveal current buffer
   -- :Filetree reveal pause [ms]
