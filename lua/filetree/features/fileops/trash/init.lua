@@ -89,17 +89,20 @@ end
 ---buffer never lingers pointing at a deleted file. Does NOT refresh the tree;
 ---callers refresh once after a whole batch.
 ---@param path string
----@return boolean ok
-local function do_trash(path)
+---@param cb fun(ok: boolean)  invoked on the main loop once the trash attempt settled
+---@return nil
+local function do_trash(path, cb)
   if vim.fn.filereadable(path) == 0 and vim.fn.isdirectory(path) == 0 then
     notify.warn("path does not exist: " .. path)
-    return false
+    cb(false)
+    return
   end
 
   if _cfg.dry_run then
     notify.info("[dry-run] would trash: " .. path)
     undo.record(path)
-    return true
+    cb(true)
+    return
   end
 
   -- Optional pre-trash backup via safety feature
@@ -108,26 +111,34 @@ local function do_trash(path)
     if ok_sf then pcall(safety.before_delete, path) end
   end
 
+  local function spawn()
+    trash_platform.send(path, function(result)
+      if not result.ok then
+        notify.error("Trash failed: " .. (result.err or "unknown error"))
+        cb(false)
+        return
+      end
+
+      undo.record(path)
+      buffer.close_for_path(path)   -- close any buffer(s) for the now-deleted file
+      cb(true)
+    end)
+  end
+
   -- The trash command runs in a SEPARATE process (mv / trash / gio), so unlike
   -- cross.fs.mutate it has no on_retry retry seam. Instead, proactively release
   -- any neo-tree watcher holding `path` (or a subpath) open before spawning it —
   -- otherwise our own libuv handle causes the very Windows sharing violation the
   -- external move would then fail on. libuv closes handles asynchronously, so
-  -- pump the loop briefly (only when something was actually released) to let the
-  -- close land before the external process runs.
+  -- give the close a moment to land before the external process runs. This used
+  -- to be a blocking `vim.wait(20)`; vim.defer_fn yields to the loop for the
+  -- same 20ms without freezing the editor, which is what actually lets the
+  -- close callbacks run.
   if watch.release(path) > 0 then
-    vim.wait(20)
+    vim.defer_fn(spawn, 20)
+  else
+    spawn()
   end
-
-  local result = trash_platform.send(path)
-  if not result.ok then
-    notify.error("Trash failed: " .. (result.err or "unknown error"))
-    return false
-  end
-
-  undo.record(path)
-  buffer.close_for_path(path)   -- close any buffer(s) for the now-deleted file
-  return true
 end
 
 ---Metadata lines for the confirm popup — reuses node_info's formatter so the
@@ -230,14 +241,29 @@ end
 local function run_all(paths)
   local prog = progress.create({ title = "[filetree.trash]" })
   local ok_count = 0
-  for i, path in ipairs(paths) do
-    if prog then
-      prog:update({ text = vim.fn.fnamemodify(path, ":t"), current = i - 1, total = #paths })
+
+  -- do_trash() is asynchronous now, so the batch is a chain rather than a
+  -- `for` loop: each path starts the next one from its own callback. Strictly
+  -- sequential on purpose - trashing in parallel would race the watcher
+  -- release/handle-close dance do_trash performs per path, and the progress
+  -- indicator would no longer describe one identifiable file.
+  local i = 0
+  local function step()
+    i = i + 1
+    if i > #paths then
+      if prog then prog:finish(string.format("Moved %d/%d to trash", ok_count, #paths)) end
+      finalize(ok_count, #paths, 0)
+      return
     end
-    if do_trash(path) then ok_count = ok_count + 1 end
+    if prog then
+      prog:update({ text = vim.fn.fnamemodify(paths[i], ":t"), current = i - 1, total = #paths })
+    end
+    do_trash(paths[i], function(ok)
+      if ok then ok_count = ok_count + 1 end
+      step()
+    end)
   end
-  if prog then prog:finish(string.format("Moved %d/%d to trash", ok_count, #paths)) end
-  finalize(ok_count, #paths, 0)
+  step()
 end
 
 ---Delete each path after its own info+yes/no popup (the "individual" decision).
@@ -258,12 +284,15 @@ local function run_individual(paths)
       prog:update({ text = vim.fn.fnamemodify(paths[i], ":t"), current = i - 1, total = #paths })
     end
     confirm_popup(paths[i], function(yes)
-      if yes then
-        if do_trash(paths[i]) then ok_count = ok_count + 1 end
-      else
+      if not yes then
         cancelled = cancelled + 1
+        step()
+        return
       end
-      step()
+      do_trash(paths[i], function(ok)
+        if ok then ok_count = ok_count + 1 end
+        step()
+      end)
     end)
   end
   step()
@@ -274,23 +303,32 @@ end
 ---Send the given path to the system trash (single-path API; confirms when the
 ---feature's `confirm` is on). Kept for direct/programmatic callers and the
 ---command dispatcher; the interactive `d` keymap goes through delete_current.
+---BREAKING (async conversion): this no longer returns the outcome. Trashing
+---goes through an external process, which is now spawned asynchronously, so the
+---result is only known later - pass `on_done` to observe it.
 ---@param path string  Absolute path of the file or directory.
----@return boolean ok
-function M.delete(path)
+---@param on_done fun(ok: boolean)|nil  invoked once the trash attempt settled
+---@return nil
+function M.delete(path, on_done)
+  local function done(ok)
+    if on_done then on_done(ok) end
+  end
+
   if not _cfg.enabled then
     notify.warn("trash feature is disabled")
-    return false
+    return done(false)
   end
   if vim.fn.filereadable(path) == 0 and vim.fn.isdirectory(path) == 0 then
     notify.warn("path does not exist: " .. path)
-    return false
+    return done(false)
   end
   if _cfg.confirm and not confirm(path) then
-    return false
+    return done(false)
   end
-  local ok = do_trash(path)
-  if ok and _adapter then pcall(_adapter.refresh) end
-  return ok
+  do_trash(path, function(ok)
+    if ok and _adapter then pcall(_adapter.refresh) end
+    done(ok)
+  end)
 end
 
 ---Collect the paths to trash: all marked nodes if any are marked, else the
