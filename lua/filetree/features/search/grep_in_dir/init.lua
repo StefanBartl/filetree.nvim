@@ -112,45 +112,20 @@ local function via_fzflua(dir, pattern)
 end
 
 ---@internal
----Run the dependency-free rg/grep fallback and populate the quickfix list.
+---Quickfix population for run_builtin_search, split out so the search itself
+---can hand its result over from a vim.system callback.
 ---@param dir string
 ---@param pattern string
----@return boolean
-local function run_builtin_search(dir, pattern)
-  -- Prefer rg, then grep
-  local has_rg = vim.fn.executable("rg") == 1
-  local output, exit_code
-
-  local prog = new_progress()
-  if prog then prog:update({ text = "searching " .. dir .. "…" }) end
-
-  if has_rg then
-    -- vim.system with an argv list (not a shell string) on purpose: it execs
-    -- rg directly with no shell in between, so there's nothing to quote/escape
-    -- and no dependency on &shell being cmd.exe-compatible (e.g. Git Bash as
-    -- &shell on Windows mishandles a hand-built quoted command string passed
-    -- through vim.fn.system/systemlist).
-    local args = { "rg", "--vimgrep", "--color=never" }
-    if _cfg.hidden then args[#args + 1] = "--hidden" end
-    for _, a in ipairs(_cfg.extra_args) do args[#args + 1] = a end
-    args[#args + 1] = "--"
-    args[#args + 1] = pattern
-    args[#args + 1] = dir
-
-    local result = vim.system(args, { text = true }):wait()
-    output = vim.split(result.stdout or "", "\n", { trimempty = true })
-    exit_code = result.code
-  else
-    local cmd = string.format('grep -rn -- %s %s', vim.fn.shellescape(pattern), vim.fn.shellescape(dir))
-    output = vim.fn.systemlist(cmd)
-    exit_code = vim.v.shell_error
-  end
-
+---@param output string[]
+---@param exit_code integer
+---@param prog table|nil
+---@return nil
+local function builtin_search_done(dir, pattern, output, exit_code, prog)
   if prog then prog:finish(string.format("%d line(s) matched", #output)) end
 
   if exit_code ~= 0 and #output == 0 then
     notify.info("No matches for: " .. pattern)
-    return true
+    return
   end
 
   -- Populate quickfix
@@ -170,13 +145,61 @@ local function run_builtin_search(dir, pattern)
 
   if #qf_items == 0 then
     notify.info("No matches for: " .. pattern)
-    return true
+    return
   end
 
   vim.fn.setqflist(qf_items, "r")
   vim.fn.setqflist({}, "a", { title = "grep: " .. pattern .. " [" .. dir .. "]" })
   vim.cmd("copen")
   notify.info(string.format("Found %d match(es) in %s", #qf_items, vim.fn.fnamemodify(dir, ":t")))
+  return
+end
+
+---@internal
+---Run the dependency-free rg/grep fallback and populate the quickfix list.
+---@param dir string
+---@param pattern string
+---@return boolean
+local function run_builtin_search(dir, pattern)
+  -- Prefer rg, then grep
+  local has_rg = vim.fn.executable("rg") == 1
+
+  local prog = new_progress()
+  if prog then prog:update({ text = "searching " .. dir .. "…" }) end
+
+  -- vim.system with an argv list (not a shell string) on purpose: it execs the
+  -- search tool directly with no shell in between, so there is nothing to
+  -- quote/escape and no dependency on &shell being cmd.exe-compatible (e.g.
+  -- Git Bash as &shell on Windows mishandles a hand-built quoted command
+  -- string passed through vim.fn.system/systemlist). The grep branch used to
+  -- build exactly such a string; it is an argv list now too.
+  local args
+  if has_rg then
+    args = { "rg", "--vimgrep", "--color=never" }
+    if _cfg.hidden then args[#args + 1] = "--hidden" end
+    for _, a in ipairs(_cfg.extra_args) do args[#args + 1] = a end
+    args[#args + 1] = "--"
+    args[#args + 1] = pattern
+    args[#args + 1] = dir
+  else
+    args = { "grep", "-rn", "--", pattern, dir }
+  end
+
+  -- The search used to run through `vim.system():wait()` (rg) or
+  -- `vim.fn.systemlist()` (grep) -- both froze the editor for the whole scan.
+  -- On a large tree that is seconds, and the progress indicator started just
+  -- above could never even paint. It is a callback now. The `true` returned
+  -- below is a formality: this is always the last fallback in M.grep's chain
+  -- and no caller consults it (see via_builtin's doc comment).
+  vim.system(args, { text = true }, function(result)
+    local output = vim.split(result.stdout or "", "\n", { trimempty = true })
+    -- vim.system callbacks run off the main loop; quickfix, notify and :copen
+    -- all need the main loop.
+    vim.schedule(function()
+      builtin_search_done(dir, pattern, output, result.code, prog)
+    end)
+  end)
+
   return true
 end
 
