@@ -312,15 +312,15 @@ end
 ---@param root string
 ---@param needle string
 ---@param exts string[]
----@return string[]
-local function find_candidate_files(root, needle, exts)
-  if vim.fn.executable("rg") == 0 then return {} end
+---@param cb fun(files: string[])  invoked on the main loop
+---@return nil
+local function find_candidate_files(root, needle, exts, cb)
+  if vim.fn.executable("rg") == 0 then return cb({}) end
 
   -- vim.system with an argv list (not a shell string) on purpose: it execs rg
   -- directly with no shell in between, so there's nothing to quote/escape and
   -- no dependency on &shell being cmd.exe-compatible (e.g. Git Bash as &shell
-  -- on Windows mishandles hand-built quoted command strings). Matches the
-  -- vim.system(cmd):wait() idiom used throughout the rest of the plugin.
+  -- on Windows mishandles hand-built quoted command strings).
   local cmd = { "rg", "--files-with-matches", "--fixed-strings", "--color=never" }
   for _, ext in ipairs(exts) do
     cmd[#cmd + 1] = "-g"
@@ -332,14 +332,23 @@ local function find_candidate_files(root, needle, exts)
   cmd[#cmd + 1] = needle
   cmd[#cmd + 1] = root
 
-  local result = vim.system(cmd, { text = true }):wait()
-  if result.code > 1 then return {} end -- rg: 0 = matches, 1 = no matches, >1 = error
+  -- Asynchronous: this used to be `vim.system(cmd):wait()`, which froze the
+  -- editor for the whole scan right after a rename -- on a large tree that is
+  -- seconds, and it happens at the exact moment the user expects the rename to
+  -- be done. The caller reports through notify and consumes no return value.
+  vim.system(cmd, { text = true }, function(result)
+    -- vim.system callbacks run off the main loop; the caller patches buffers.
+    vim.schedule(function()
+      -- rg: 0 = matches, 1 = no matches, >1 = error
+      if result.code > 1 then return cb({}) end
 
-  local files = {}
-  for line in (result.stdout or ""):gmatch("[^\r\n]+") do
-    files[#files + 1] = path.to_absolute(line)
-  end
-  return files
+      local files = {}
+      for line in (result.stdout or ""):gmatch("[^\r\n]+") do
+        files[#files + 1] = path.to_absolute(line)
+      end
+      cb(files)
+    end)
+  end)
 end
 
 ---Patch one file's require()/import references, whether it's open in a
@@ -401,20 +410,25 @@ local function update_references_fallback(old_path, new_path, had_workspace_edit
   local ok_pr, pr = require("filetree.features").load("project_root")
   local root = (ok_pr and pr and pr.find) and pr.find(old_path) or vim.fn.getcwd()
 
-  local files_changed = 0
-  for _, file in ipairs(find_candidate_files(root, needle, exts)) do
-    if path.to_absolute(file) ~= path.to_absolute(new_path)
-        and patch_file_references(file, old_path, new_path, resolved_filetype) then
-      files_changed = files_changed + 1
+  -- The candidate scan is asynchronous now, so the patch loop moved into its
+  -- callback. Nothing here consumed a return value; the outcome was always
+  -- reported through notify.
+  find_candidate_files(root, needle, exts, function(files)
+    local files_changed = 0
+    for _, file in ipairs(files) do
+      if path.to_absolute(file) ~= path.to_absolute(new_path)
+          and patch_file_references(file, old_path, new_path, resolved_filetype) then
+        files_changed = files_changed + 1
+      end
     end
-  end
 
-  if files_changed > 0 then
-    notify.info(string.format(
-      "Updated references in %d file(s) for %s",
-      files_changed, vim.fn.fnamemodify(old_path, ":t")
-    ))
-  end
+    if files_changed > 0 then
+      notify.info(string.format(
+        "Updated references in %d file(s) for %s",
+        files_changed, vim.fn.fnamemodify(old_path, ":t")
+      ))
+    end
+  end)
 end
 
 -- ── Markdown reference update (post-rename) ─────────────────────────────────────
