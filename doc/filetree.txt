@@ -23,6 +23,8 @@ CONTENTS                                                    *filetree-contents*
      5.8 Create From Template ............. |filetree-create-from-template|
      5.9 Open In File Manager ............. |filetree-open-in-fm|
      5.10 No Name Guard ................... |filetree-no-name-guard|
+     5.11 References ....................... |filetree-refs|
+     5.12 Move ............................. |filetree-move|
   6. Adapters ............................... |filetree-adapters|
   7. Public API ............................. |filetree-api|
   8. Health check ........................... |filetree-health|
@@ -55,6 +57,9 @@ Supported backends: neo-tree.nvim, nvim-tree.lua
     integrations still have local fallbacks if it's absent, but the
     commands themselves won't register without it.
   • One of: neo-tree.nvim, nvim-tree.lua
+  • ripgrep (optional, recommended) — pre-filters the reference scan
+    (|filetree-refs|). Without it the scan falls back to a capped
+    directory walk: slower, same result.
 
 ==============================================================================
 3. QUICK START                                          *filetree-quickstart*
@@ -211,7 +216,7 @@ tree is the active context. Opt out per group via `config.menu`: >
     require("filetree").setup({
       menu = {
         enable    = true,
-        fileops   = true, -- create / rename / batch rename / template
+        fileops   = true, -- create / rename / batch rename / move / template
         clipboard = true, -- copy / cut / paste
         delete    = true, -- trash
         open      = true, -- vsplit / split / tab / system app / file manager
@@ -839,6 +844,104 @@ so this never races a user who deliberately switched into a [No Name] window.
 
 Config:
   `enabled`   boolean   (default true)
+
+------------------------------------------------------------------------------
+5.11 REFERENCES                                                *filetree-refs*
+
+Moving a file breaks everything that pointed at it. The reference engine is
+the one place that fixes that, and every mutating feature routes through it:
+smart rename, batch rename, move (|filetree-move|), cut+paste, and trash.
+
+The scan starts the moment the key is pressed — while the file is still at
+its old path — and the mutation runs strictly after it finished, so a
+reference can never be missed because the file moved out from under the
+scanner. Each hit is then re-expressed for the new location in the style it
+was written in (an absolute link stays absolute, `./x` keeps its `./`, an
+aliased import stays aliased), and one chooser covers the whole operation: >
+
+  7 reference(s) in 4 file(s) (5 markdown, 2 lua)
+    Update all | Select… | Show diff | Leave as-is
+<
+Every rewrite is content-verified at the byte range the scan recorded, so a
+line that changed in the meantime is skipped rather than corrupted. A file
+open in a buffer is patched in that buffer (and written back only when it had
+no unsaved changes). `:Filetree refs undo` reverts the last batch.
+
+Providers (opt out per language):
+  markdown  [text](./path), images, [id]: definitions, HTML src=/href=,
+            optionally [[wiki]] links                            (default on)
+  lua       require("a.b") / require "a.b", incl. the submodule cascade
+            when a directory moves                               (default on)
+  python    import a.b, from a.b import x, relative from .x      (default on)
+  ts_js     import/export … from, dynamic import(), CJS require(), relative
+            specifiers plus tsconfig `paths` aliases            (default OFF —
+            tsserver does this better via willRenameFiles when it is running)
+
+A markdown file can link to any file type, so the markdown provider runs for
+every move: renaming foo.lua fixes the docs that link to it too.
+
+Matching resolves each target against the file it appears in and compares
+absolute paths — never text. That is why `../Test.md` from a subdirectory
+matches while a same-named file elsewhere does not.
+
+Config (one central block, not per feature): >lua
+  require("filetree").setup({
+    refs = {
+      enabled   = true,
+      providers = { markdown = true, lua = true, python = true, ts_js = false },
+      on_rename = "ask",   -- "ask" | "auto" | "off"
+      on_move   = "ask",
+      on_delete = "ask",   -- trash: blank dangling links to REF!
+      copy      = false,   -- a copy breaks nothing
+      picker    = "auto",  -- auto | telescope | fzf-lua | quickfix
+      prefer_lsp = true,
+      wiki_links = false,
+      scan = {
+        root = "project", respect_gitignore = true,
+        max_files = 5000, timeout_ms = 3000,
+      },
+      undo = true,
+    },
+  })
+<
+The per-feature options this replaces (`check_markdown_refs`,
+`refs_picker_prefer`, `smart_rename.update_references`) are migrated
+automatically, with a one-time notice.
+
+Commands:
+  :Filetree refs undo      Revert the last reference rewrite
+  :Filetree refs status    Modes, providers, ripgrep, pending undo
+
+Third-party providers register through the same contract the built-ins use:
+`require("filetree.refs").register({ name = …, plan = … })`. See
+lua/filetree/@types/refs.lua.
+
+------------------------------------------------------------------------------
+5.12 MOVE                                                      *filetree-move*
+
+`M` moves the node under the cursor — or every marked node — to a destination
+typed into one prompt, instead of the cut / navigate / paste round trip.
+<Tab> completes directories; the destination may be cwd-relative, absolute,
+or ~-prefixed.
+
+  • several nodes, or a destination that already is a directory → the items
+    move INTO it under their own names;
+  • a single node and a destination that does not exist → that becomes the
+    node's new full path, so `M` doubles as move-and-rename.
+
+A destination directory that does not exist is offered for creation rather
+than silently created; a collision asks Overwrite / Keep both / Cancel.
+References are updated through |filetree-refs|, whose scan starts on the
+keypress and therefore runs while the destination is being typed.
+
+Config:
+  `enabled`     boolean  (default true)
+  `keymap`      string   (default "M")
+  `use_safety`  boolean  Backup before moving (default true)
+  `dry_run`     boolean  Log the plan without executing (default false)
+
+Commands:
+  :Filetree move [destination]
 
 ==============================================================================
 6. ADAPTERS                                               *filetree-adapters*

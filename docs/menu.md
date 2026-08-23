@@ -60,7 +60,7 @@ WHICH entries appear, for both the built-in trigger and any of your own):
 require("filetree").setup({
   menu = {
     enable    = true,
-    fileops   = true, -- create / rename / batch rename / template
+    fileops   = true, -- create / rename / batch rename / move / template
     clipboard = true, -- copy / cut / paste
     delete    = true, -- trash
     open      = true, -- vsplit / split / tab / system app / file manager

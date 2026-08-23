@@ -16,7 +16,9 @@ This folder regroups those categories into fewer, reader-facing themes:
   and window lifecycle around the tree.
 - **[UI](UI.md)** — everything the tree window draws: preview, node info,
   breadcrumbs, sizes, styling, the cheatsheet.
-- **[FILEOPS](FILEOPS.md)** — create, rename, copy/move, trash.
+- **[FILEOPS](FILEOPS.md)** — create, rename, copy/move, trash, and the
+  reference engine that keeps links and imports pointing at the right file
+  through all of it.
 - **[SEARCH_AND_PATHS](SEARCH_AND_PATHS.md)** — filtering, finding, grepping,
   and copying paths/links out of the tree.
 - **[INTEGRATIONS](INTEGRATIONS.md)** — external programs, git, LSP, diff,

@@ -44,6 +44,29 @@ require("filetree").setup({
   -- "Progress indicators" below. Needs lib.nvim.progress; a no-op without it.
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
+  -- Reference engine: what happens to markdown links and require()/import
+  -- statements when a file is renamed, moved or deleted. One block for every
+  -- fileops feature — see FEATURES/FILEOPS.md#references for the full story.
+  refs = {
+    enabled   = true,
+    providers = { markdown = true, lua = true, python = true, ts_js = false },
+    on_rename = "ask",    -- "ask" (chooser) | "auto" (just do it) | "off"
+    on_move   = "ask",
+    on_delete = "ask",    -- trash: offer to blank dangling links to REF!
+    copy      = false,    -- a copy leaves the original in place: nothing breaks
+    picker    = "auto",   -- "auto" | "telescope" | "fzf-lua" | "quickfix"
+    prefer_lsp = true,    -- skip the textual code providers when a language
+                          -- server already applied a workspace edit
+    wiki_links = false,   -- also scan [[wiki]]-style markdown links
+    scan = {
+      root              = "project",  -- "project" (nearest root) | "cwd"
+      respect_gitignore = true,
+      max_files         = 5000,       -- cap for the ripgrep-free fallback walk
+      timeout_ms        = 3000,
+    },
+    undo = true,          -- `:Filetree refs undo` reverts the last rewrite
+  },
+
   features = {
     -- ── On by default ──────────────────────────────────────────────────────
     layout_guard = {

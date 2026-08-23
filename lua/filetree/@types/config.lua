@@ -16,7 +16,7 @@
 
 ---@class FiletreeMenuConfig
 ---@field enable    boolean?  Provide nvzone/menu entries at all (default true).
----@field fileops   boolean?  create / rename / batch rename / template (default true).
+---@field fileops   boolean?  create / rename / batch rename / move / template (default true).
 ---@field clipboard boolean?  copy / cut / paste (default true).
 ---@field delete    boolean?  trash (default true).
 ---@field open      boolean?  vsplit / split / tab / system app / file manager (default true).

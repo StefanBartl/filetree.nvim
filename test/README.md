@@ -11,7 +11,8 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
 - **[smoke.lua](smoke.lua)** — integration: every feature module loads, opt-out
   defaults resolve, registry resolver + binding catalog work.
 - **[units.lua](units.lua)** — unit: the util layer (path, buffer, line_count,
-  map/autocmd, select adapter) + neo-tree adapter helpers.
+  map/autocmd, select adapter) + neo-tree adapter helpers + the reference
+  engine's apply/undo layer and the chooser each fileops feature drives.
 - **[menu.lua](menu.lua)** — unit: `integrations/menu.lua` (nvzone/menu context
   menu). Stubs the top-level `filetree` module (`feature()`/`config()`) so it
   runs without a real adapter/tree window — the exact seam a host (RightMouse

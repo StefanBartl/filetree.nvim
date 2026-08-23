@@ -1,7 +1,11 @@
 # Referenz-Engine — Refs beim Move/Rename mitziehen
 
-Status: 🔲 Konzept. Teile davon existieren bereits (siehe Ist-Zustand), das Feature
-ist also kein Greenfield, sondern eine **Vereinheitlichung + Ausbau**.
+Status: ✅ **umgesetzt.** Die Engine liegt in
+[lua/filetree/refs/](../../../lua/filetree/refs/), die Doku in
+[docs/FEATURES/FILEOPS.md#references](../../FEATURES/FILEOPS.md#references),
+die Tests in [TESTS/refs/](../../../TESTS/refs/). Dieses Dokument bleibt als
+Konzept-/Entscheidungsprotokoll stehen; was am Ende anders lief als geplant,
+steht unten unter „Abweichungen".
 
 Idee (Originalformulierung): In `./README.md` steht eine Referenz auf `/Test.md`.
 Ich verschiebe `Test.md` nach `/docs/Test.md` — filetree scannt das cwd nach
@@ -305,3 +309,41 @@ das Muster ausbauen: pro Provider ein Fixture-Baum, Tabellen-Test
 `(altes Layout, Move, erwartetes Layout)`, plus Negativfälle (Ref in Kommentar,
 gleichnamiges Präfix `testfs.rem` vs. `testfs.rem_other`, Ref auf Symlink,
 ungespeicherter Buffer mit verschobenen Zeilen).
+
+---
+
+## 10. Abweichungen von der Planung
+
+Was bei der Umsetzung anders entschieden wurde als oben skizziert:
+
+- **Markdown ohne markdown.nvim, sofort.** Schritt 3 (eigener Scanner) wurde
+  nicht nachgelagert, sondern direkt gebaut — die Soft-Dep hätte sonst weiter
+  bestimmt, ob ein Kernfeature überhaupt läuft. `markdown.nvim` wird nicht mehr
+  benutzt; `util/markdown_refs.lua` ist entfallen.
+- **Pfad-Keys sind rein lexikalisch.** `fnamemodify(":p")` expandiert auf
+  Windows stillschweigend einen 8.3-Kurznamen, sobald es den Pfad ohnehin
+  umschreiben muss (`C:/Users/STEFAN~1/…` → `C:/Users/StefanBartl/…`), einen
+  bereits sauberen Pfad aber nicht. Dadurch hatte dieselbe Datei zwei
+  verschiedene Keys, je nachdem ob die Referenz `./Test.md` oder `Test.md`
+  geschrieben war — und **jede** gepunktete Referenz wurde übersehen. Deshalb
+  macht `refs/pathutil.lua` das Auflösen ausschließlich über `vim.fs.normalize`
+  und fasst das Dateisystem nicht an.
+- **Content-Verify über Byte-Range statt Pattern.** Jede Ref trägt `col` +
+  `#target`; ersetzt wird genau dieser Ausschnitt. Das war nicht geplant, macht
+  aber mehrere Links pro Zeile korrekt (rechts nach links angewendet) und
+  erspart das Escaping von Lua-Patterns komplett.
+- **ts_js: Phase 4a und 4b zusammen.** Die tsconfig-`paths`-Auflösung ist mit
+  drin (inkl. `extends`-Kette und JSONC-Vorreinigung), weil relative Specifier
+  allein in aliaslastigen Projekten fast nichts treffen. Der Provider ist
+  trotzdem **default aus** — mit laufendem `tsserver` ist `willRenameFiles` die
+  bessere Quelle.
+- **Python-Relativimporte nur dann, wenn sie ausdrückbar bleiben.** Verlässt
+  eine Datei ihr Package, wäre die Umschreibung ein Semantikwechsel; solche
+  Refs werden gezählt und gemeldet („N Referenzen nicht automatisch
+  umschreibbar"), nicht geraten.
+- **Zwei Utils extra**, die im Konzept nicht standen, aber durch die Umstellung
+  sichtbar wurden: `util/mutate.lua` (Windows-Retry + EXDEV-Fallback, vorher
+  dreimal kopiert) und `util/conflict.lua` (exists / remove_existing /
+  unique_name, geteilt von Paste und Move).
+- **Kein rg → kein Totalausfall.** Statt „still aus" (Konzept) gibt es einen
+  gedeckelten libuv-Walk als Fallback.

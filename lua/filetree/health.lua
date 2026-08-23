@@ -229,6 +229,26 @@ function M.check()
     end
   end
 
+  -- ── Reference engine ──────────────────────────────────────────────────────
+  -- What the engine would do on the next rename/move, and whether it has the
+  -- fast path (ripgrep) available -- the single question behind "why did my
+  -- links not get updated?".
+  vim.health.start("filetree.nvim — reference engine")
+  local ok_refs, refs = pcall(require, "filetree.refs")
+  if not ok_refs then
+    vim.health.warn("filetree.refs failed to load: " .. tostring(refs))
+  else
+    for _, line in ipairs(refs.status()) do
+      vim.health.info(line)
+    end
+    if vim.fn.executable("rg") == 1 then
+      vim.health.ok("ripgrep found — reference scans use the fast pre-filter")
+    else
+      vim.health.warn("ripgrep not found — reference scans fall back to a capped "
+        .. "directory walk (slower; raise refs.scan.max_files if it stops early)")
+    end
+  end
+
   -- ── Declared tools (lib.nvim.deps) ───────────────────────────────────────
   -- filetree.nvim's own docs/install.json — the same trash/rg tools probed
   -- above, but with their declared `why` and a pointer to `:Lib deps show`.

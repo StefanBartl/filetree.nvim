@@ -37,7 +37,7 @@ return {
   -- entries. Entries whose feature is disabled are omitted automatically.
   menu = {
     enable = true,
-    fileops = true, -- create / rename / batch rename / template
+    fileops = true, -- create / rename / batch rename / move / template
     clipboard = true, -- copy / cut / paste
     delete = true, -- trash
     open = true, -- vsplit / split / tab / system app / file manager

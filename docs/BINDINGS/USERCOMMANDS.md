@@ -134,6 +134,18 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree rename` | Open batch rename buffer |
 | `:Filetree smartrename` | Rename with LSP reference update |
 
+### Move
+| Command | Action |
+|---------|--------|
+| `:Filetree move` | Prompt for a destination and move the current node (or all marked) |
+| `:Filetree move <dest>` | Move straight to `<dest>`, no prompt |
+
+### References
+| Command | Action |
+|---------|--------|
+| `:Filetree refs undo` | Revert the last reference rewrite |
+| `:Filetree refs status` | Show engine state: modes, providers, ripgrep, pending undo |
+
 ### Tree traverse
 | Command | Action |
 |---------|--------|

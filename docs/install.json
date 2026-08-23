@@ -16,7 +16,7 @@
     {
       "bin": "rg",
       "required": false,
-      "why": "Powers the fast in-directory grep search feature and the smart-rename reference scanner. Without it, both are unavailable rather than falling back to something slower.",
+      "why": "Powers the fast in-directory grep search feature and pre-filters the reference scan that keeps links and imports pointing at the right file after a rename or move. Without it, grep-in-dir is unavailable and the reference scan falls back to a capped directory walk (slower, same result).",
       "pkg": {
         "apt": "ripgrep",
         "dnf": "ripgrep",

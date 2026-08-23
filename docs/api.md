@@ -10,6 +10,49 @@ ft.register_adapter(a)  -- register custom adapter (before setup)
 ft.is_initialized()     -- → boolean
 ```
 
+## Reference engine
+
+```lua
+local refs = require("filetree.refs")
+refs.config()            -- → FiletreeRefsConfig
+refs.status()            -- → string[]  (what `:Filetree refs status` prints)
+refs.undo()              -- revert the last reference rewrite
+refs.register(provider)  -- add a language provider
+```
+
+Driving it from your own file operation is a three-step contract — scan
+before the mutation, mutate, then hand the result back:
+
+```lua
+local handle = refs.prefetch({ old_path }, { op = "move" })
+handle.await(function(result)
+  -- the scan is finished and saw the file at its OLD path
+  do_the_move()
+  refs.handle_result(result, { [old_path] = new_path }, { op = "move" })
+end)
+```
+
+## Custom reference providers
+
+```lua
+require("filetree.refs").register({
+  name = "rust",
+  plan = function(old_path, ctx)      -- ctx = { root, is_dir, cfg }
+    return {                          -- return nil to sit this one out
+      needles    = { "…" },           -- fixed strings for the ripgrep pre-filter
+      extensions = { "rs" },          -- files that may hold such a reference
+      extract    = function(file, lineno, text) return { --[[ FiletreeRef… ]] } end,
+      retarget   = function(ref, new_path) return "…" end,
+    }
+  end,
+})
+```
+
+See [`lua/filetree/@types/refs.lua`](../lua/filetree/@types/refs.lua) for the
+full annotated contract and
+[`lua/filetree/refs/providers/`](../lua/filetree/refs/providers/) for the four
+built-in implementations.
+
 ## Custom adapters
 
 ```lua

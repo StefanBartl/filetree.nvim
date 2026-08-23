@@ -34,8 +34,41 @@ summary) via the optional `lib.nvim.progress` dependency — see
 `progress_style` option (top-level `require("filetree").setup({...})`
 config, not per-feature).
 
+A cut+paste is a move, so it runs the [reference engine](#references)
+too — the scan starts when you press `x`, and overlaps with you navigating
+to the paste target. A copy never breaks a reference (the original stays
+put), so copies are not scanned.
+
 - **Module:** `lua/filetree/features/fileops/copy_move/`
 - **Keymaps:** `c` (copy), `x` (cut), `p` (paste)
+- **See also:** [Move](#move) (`M`) for the one-prompt variant
+
+## Move
+
+`M` moves the node under the cursor — or every marked node — to a
+destination typed into one prompt, instead of the cut / navigate / paste
+round trip. `<Tab>` completes directories; the destination can be relative
+to the cwd, absolute, or `~`-prefixed.
+
+What the destination means depends on what is moving:
+
+- several nodes, or a destination that already **is** a directory → the
+  items move *into* it under their own names;
+- a single node and a destination that doesn't exist yet → that becomes
+  the node's new full path, so `M` doubles as move-and-rename (typing
+  `docs/Test.md` for a `Test.md` at the root does both at once).
+
+A destination directory that doesn't exist is offered for creation rather
+than silently created, and name collisions ask the same **Overwrite /
+Keep both / Cancel** question a paste does.
+
+References are handled by the [reference engine](#references) below: the
+scan starts the moment you press `M`, so it runs while you are still
+typing the destination.
+
+- **Module:** `lua/filetree/features/fileops/move/`
+- **Keymaps:** `M`
+- **Commands:** `:Filetree move [destination]`
 
 ## Batch Rename
 
@@ -51,6 +84,12 @@ lane for renaming several files at once without one prompt per file.
 `r` renames the node under the cursor and updates every LSP reference to
 it project-wide, the same guarantee an IDE's "rename symbol" gives you,
 applied to a file/module rename instead of a variable.
+
+Whatever the language server does *not* rewrite — markdown links always,
+plus `require()`/`import` statements when no server handled the rename
+(for Lua that is always, since lua_ls never implements
+`workspace/willRenameFiles`) — is picked up by the
+[reference engine](#references).
 
 - **Module:** `lua/filetree/features/fileops/smart_rename/`
 - **Keymaps:** `r`
@@ -116,8 +155,135 @@ they don't linger as edits-to-nowhere. Same optional progress indicator
 as Copy / Move above, for both the "delete all at once" and "confirm
 each individually" batch paths.
 
+When something links to the file being deleted, the plain yes/no becomes a
+chooser — **Delete + remove refs** (blanks the dangling links to `REF!`),
+**Inspect first** (pick which ones), **Delete, keep refs**, **Cancel**.
+See [References](#references).
+
 - **Module:** `lua/filetree/features/fileops/trash/`
 - **Keymaps:** `d`, `U`, `<leader>th`
+
+## References
+
+Moving a file breaks everything that pointed at it. The reference engine
+(`lua/filetree/refs/`) is the one place that knows how to fix that, and
+**every** mutating feature above routes through it — smart rename, batch
+rename, the `M` move, cut+paste, and trash.
+
+### What happens
+
+1. The scan starts the moment you press the key, while the file is still
+   at its old path — so it overlaps with you typing a new name or
+   navigating to a target, and can never miss a reference because the file
+   moved out from under it.
+2. The move/rename runs strictly after that scan finished.
+3. Each found reference is re-expressed for the new location, preserving
+   how it was written: an absolute link stays absolute, `./x` keeps its
+   `./`, an aliased TypeScript import stays aliased, an extensionless
+   specifier stays extensionless.
+4. You get one chooser for the whole operation, across all languages:
+
+```
+7 reference(s) in 4 file(s) (5 markdown, 2 lua)
+  ▸ Update all
+  ▸ Select…       → picker (Telescope / fzf-lua / quickfix), Tab to multi-select
+  ▸ Show diff     → read-only unified diff, then back to this chooser
+  ▸ Leave as-is
+```
+
+Every rewrite is content-verified at the exact byte range the scan
+recorded, so a line that changed in the meantime is skipped rather than
+corrupted; a file that is open in a buffer is patched **in that buffer**
+(and written back only if it had no unsaved changes). `:Filetree refs
+undo` reverts the last batch of rewrites.
+
+Deleting is the mirror image: trash offers to blank the now-dangling
+markdown links to `REF!` before the file goes, so the break is visible
+instead of silent. Code references are deliberately left alone there —
+a `require("REF!")` is worse than an obviously stale one.
+
+### Languages
+
+| Provider | Covers | Default |
+|---|---|---|
+| `markdown` | `[text](./path)`, `![img](…)`, reference definitions `[id]: …`, HTML `src=`/`href=`, optionally `[[wiki]]` links | on |
+| `lua` | `require("a.b")` / `require "a.b"`, including the submodule cascade when a directory moves | on |
+| `python` | `import a.b`, `from a.b import x`, and relative `from .x import y` | on |
+| `ts_js` | `import`/`export … from`, dynamic `import()`, CJS `require()`, relative specifiers plus `tsconfig`/`jsconfig` `paths` aliases | **off** |
+
+`ts_js` is opt-in: `tsserver` implements `willRenameFiles` and does a
+better job when it is running, so the textual provider is there for
+projects without it.
+
+A markdown file can link to *any* file type, so the markdown provider
+runs for every move — renaming `foo.lua` fixes the docs that link to it,
+not just the modules that require it.
+
+References are matched by **resolving** each target against the file it
+appears in and comparing absolute paths — never by comparing text. That
+is what makes `../Test.md` from a subdirectory a match while a same-named
+file in a different directory is not.
+
+### Configuration
+
+One central `refs` block, not per feature:
+
+```lua
+require("filetree").setup({
+  refs = {
+    enabled   = true,
+    providers = { markdown = true, lua = true, python = true, ts_js = false },
+    on_rename = "ask",    -- "ask" | "auto" | "off"
+    on_move   = "ask",
+    on_delete = "ask",
+    copy      = false,    -- a copy leaves the original in place: nothing breaks
+    picker    = "auto",   -- "auto" | "telescope" | "fzf-lua" | "quickfix"
+    prefer_lsp = true,    -- don't re-do what a language server already rewrote
+    wiki_links = false,   -- also scan [[wiki]]-style links
+    scan = {
+      root              = "project",  -- "project" (nearest root) | "cwd"
+      respect_gitignore = true,
+      max_files         = 5000,       -- cap for the ripgrep-free fallback walk
+      timeout_ms        = 3000,
+    },
+    undo = true,
+  },
+})
+```
+
+The scan uses **ripgrep** as a pre-filter when it is installed (only files
+that mention the name at all are read). Without ripgrep it falls back to a
+capped libuv walk, which is slower but still correct.
+
+The per-feature options this replaces — `check_markdown_refs`,
+`refs_picker_prefer`, `smart_rename.update_references` — are migrated
+automatically, with a one-time notice telling you what moved where.
+
+### Adding a language
+
+Providers are pluggable; a third-party one registers the same way the
+built-ins do:
+
+```lua
+require("filetree.refs").register({
+  name = "rust",
+  plan = function(old_path, ctx)
+    -- return nil when this provider has nothing to do for old_path
+    return {
+      needles    = { "…" },   -- fixed strings for the ripgrep pre-filter
+      extensions = { "rs" },  -- which files may hold such a reference
+      extract    = function(file, lineno, text) return { --[[ FiletreeRef… ]] } end,
+      retarget   = function(ref, new_path) return "…" end,
+    }
+  end,
+})
+```
+
+See `lua/filetree/@types/refs.lua` for the full contract and
+`lua/filetree/refs/providers/` for four worked examples.
+
+- **Module:** `lua/filetree/refs/`
+- **Commands:** `:Filetree refs undo`, `:Filetree refs status`
 
 ## Open Replace
 
