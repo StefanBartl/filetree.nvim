@@ -1,24 +1,28 @@
--- run.lua — reference-update regression test for smart_rename's textual
--- fallback (lua_ls has no workspace/willRenameFiles, so this fallback is the
--- only thing keeping require()/import references correct for Lua projects;
--- Python and TS/JS are covered too since the same code path serves them).
+-- run.lua — regression test for the reference engine (lua/filetree/refs) and
+-- the features that drive it.
 --
--- For each language under fixtures/<lang>/, it copies the fixture tree to a
--- scratch dir, renames the "hub" module via smart_rename.rename_current()
--- with a stubbed adapter (no real tree plugin needed) and a stubbed
--- vim.ui.input, then asserts every referencing file was rewritten to point
--- at the new name — and that an unrelated same-prefix module was NOT touched
--- (negative control, guards against overly loose pattern matching).
+-- For each language under fixtures/<lang>/ it copies the fixture tree to a
+-- scratch dir, renames (or moves) the "hub" file through the real feature —
+-- smart_rename / move, with a stubbed adapter and a stubbed kit.input, so no
+-- tree plugin, no LSP server and no floating window are involved — and then
+-- asserts that every referencing file was rewritten, and that a
+-- similar-but-different name was NOT touched (negative control, guards against
+-- loose matching).
+--
+-- The engine runs in `auto` mode here: the chooser (Update all / Select… /
+-- Show diff / Leave as-is) is a UI concern covered in test/units.lua, and what
+-- this suite is about is what actually lands on disk.
 --
 -- Usage (from the filetree.nvim repo root):
---   nvim --clean --headless -u NONE -l TESTS/smart_rename_refs/run.lua
+--   nvim --clean --headless -u NONE -l TESTS/refs/run.lua
 --
 -- Exit 0 = all passed, 1 = a check failed.
 --
 -- To add another language: add a fixtures/<lang>/ tree with a project marker
 -- file (see project_root's marker list — .luarc.json, pyproject.toml,
 -- package.json, Cargo.toml, go.mod, ... all work) and a LANGS entry below
--- pointing at the hub file + the files that reference it.
+-- pointing at the hub file + the files that reference it. A language the
+-- engine has no provider for yet needs one first (lua/filetree/refs/providers).
 
 -- ── Locate the repo root relative to this file, put it on rtp ────────────────
 local this = debug.getinfo(1, "S").source:sub(2)
@@ -54,7 +58,7 @@ end
 add_lib_nvim()
 
 local fixtures_root = vim.fn.fnamemodify(this, ":p:h") .. "/fixtures"
-local scratch_root = (vim.fn.has("win32") == 1 and vim.env.TEMP or "/tmp") .. "/filetree-smart-rename-test"
+local scratch_root = (vim.fn.has("win32") == 1 and vim.env.TEMP or "/tmp") .. "/filetree-refs-test"
 
 local passed, failed = 0, 0
 local function check(name, ok, detail)
@@ -114,6 +118,31 @@ local function old_fully_replaced(content, old, new)
   return content:find(old, 1, true) == nil
 end
 
+-- ── UI stubs ─────────────────────────────────────────────────────────────────
+-- kit.input opens a real floating prompt in insert mode, which headless Neovim
+-- cannot drive; kit.confirm likewise. Both are replaced by scripted answers.
+local kit = require("lib.nvim.ui.kit")
+local next_input, next_choice = nil, nil
+kit.input = function(opts)
+  if next_input ~= nil and opts.on_submit then opts.on_submit(next_input) end
+  return nil
+end
+kit.confirm = function(opts)
+  if opts.on_answer then opts.on_answer(next_choice) end
+  return nil
+end
+
+-- Auto mode: apply every found reference without asking, so the assertions
+-- below are about what the providers found, not about the chooser.
+local refs = require("filetree.refs")
+refs.setup({
+  on_rename = "auto",
+  on_move = "auto",
+  on_delete = "auto",
+  providers = { markdown = true, lua = true, python = true, ts_js = true },
+  wiki_links = false,
+})
+
 -- ── Language specs ────────────────────────────────────────────────────────────
 -- checks[i].old == checks[i].new marks a negative control: the file must
 -- still contain `old` unchanged (proves the rename didn't over-match).
@@ -159,6 +188,23 @@ local LANGS = {
       { file = "src/other/unrelated.ts", old = 'from "../util/shared_other"', new = 'from "../util/shared_other"' },
     },
   },
+  {
+    name     = "markdown",
+    hub      = "docs/guide.md",
+    new_name = "manual.md",
+    checks = {
+      -- every link form the provider claims to cover, all pointing at the
+      -- same moved file from two different directories
+      { file = "README.md",     old = "[the guide](./docs/guide.md)", new = "[the guide](./docs/manual.md)" },
+      { file = "README.md",     old = '<a href="./docs/guide.md">',   new = '<a href="./docs/manual.md">' },
+      { file = "README.md",     old = "[guide-ref]: ./docs/guide.md", new = "[guide-ref]: ./docs/manual.md" },
+      { file = "docs/notes.md", old = "[guide](guide.md)",            new = "[guide](manual.md)" },
+      -- negative controls: an external URL that merely contains the same
+      -- path, and a same-named file in a different directory
+      { file = "README.md", old = "https://example.com/docs/guide.md", new = "https://example.com/docs/guide.md" },
+      { file = "README.md", old = "[other](./docs/guides/guide.md)",   new = "[other](./docs/guides/guide.md)" },
+    },
+  },
 }
 
 -- ── Run one language ──────────────────────────────────────────────────────────
@@ -174,30 +220,19 @@ local function run_lang(lang)
   local hub_new = hub_dir .. "/" .. lang.new_name
 
   local smart_rename = require("filetree.features.fileops.smart_rename")
-  -- do_rename's fs_rename callback fires as soon as the OS-level rename
-  -- completes, but it then *schedules* the rest of the work (reference
-  -- update, refresh, final notify) for the next event-loop tick — so
-  -- filereadable(hub_new) can flip true a tick before the reference fallback
-  -- has actually run. adapter.refresh() is the last thing do_rename calls
-  -- before its final notify, so use it as the "fully done" signal instead.
+  -- The reference scan and the rename are asynchronous; adapter.refresh() is
+  -- the last thing do_rename calls before its final notify, so it is the
+  -- "fully done" signal (filereadable(hub_new) flips earlier).
   local done = false
   local stub_adapter = {
     get_current_node = function() return { path = hub_old, type = "file" } end,
     refresh          = function() done = true end,
   }
-  smart_rename.setup({
-    enabled           = true,
-    use_safety        = false,
-    dry_run           = false,
-    update_references = true,
-  }, stub_adapter)
+  smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, stub_adapter)
 
-  local orig_input = vim.ui.input
-  vim.ui.input = function(_, on_confirm) on_confirm(lang.new_name) end
-
+  next_input = lang.new_name
   smart_rename.rename_current()
-  vim.wait(3000, function() return done end, 20)
-  vim.ui.input = orig_input
+  vim.wait(5000, function() return done end, 20)
 
   check(lang.name .. ": hub file renamed on disk", vim.fn.filereadable(hub_new) == 1)
   check(lang.name .. ": old hub path gone", vim.fn.filereadable(hub_old) == 0)
@@ -205,7 +240,7 @@ local function run_lang(lang)
   for _, c in ipairs(lang.checks) do
     local content = read(work .. "/" .. c.file)
     if c.old == c.new then
-      check(("%s: %s unchanged (negative control)"):format(lang.name, c.file),
+      check(("%s: %s keeps %s (negative control)"):format(lang.name, c.file, c.old),
         content ~= nil and content:find(c.old, 1, true) ~= nil)
     else
       check(("%s: %s updated"):format(lang.name, c.file),
@@ -219,8 +254,8 @@ local function run_lang(lang)
 end
 
 -- ── Bonus: verify the open-buffer branch (not just on-disk files) ────────────
--- patch_file_references patches loaded buffers live via nvim_buf_set_lines
--- instead of going through disk I/O; exercise that path once, for Lua.
+-- refs.apply patches loaded buffers via nvim_buf_set_lines instead of going
+-- through disk I/O; exercise that path once, for Lua.
 local function run_lua_buffer_check()
   print("\n== lua (open buffer) ==")
 
@@ -236,21 +271,16 @@ local function run_lua_buffer_check()
 
   local done = false
   local smart_rename = require("filetree.features.fileops.smart_rename")
-  smart_rename.setup({
-    enabled = true, use_safety = false, dry_run = false, update_references = true,
-  }, {
+  smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, {
     get_current_node = function() return { path = hub_old, type = "file" } end,
     refresh          = function() done = true end,
   })
 
-  local orig_input = vim.ui.input
-  vim.ui.input = function(_, on_confirm) on_confirm("shared_utils.lua") end
+  next_input = "shared_utils.lua"
   smart_rename.rename_current()
-  vim.wait(3000, function() return done end, 20)
-  vim.ui.input = orig_input
+  vim.wait(5000, function() return done end, 20)
 
-  local buf_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  local buf_content = table.concat(buf_lines, "\n")
+  local buf_content = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
   check("lua buffer: open buffer patched in-memory",
     buf_content:find('require("proj.util.shared_utils")', 1, true) ~= nil,
     "buffer content: " .. buf_content)
@@ -275,18 +305,14 @@ local function run_lua_directory_cascade_check()
 
   local done = false
   local smart_rename = require("filetree.features.fileops.smart_rename")
-  smart_rename.setup({
-    enabled = true, use_safety = false, dry_run = false, update_references = true,
-  }, {
+  smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, {
     get_current_node = function() return { path = old_dir, type = "directory" } end,
     refresh          = function() done = true end,
   })
 
-  local orig_input = vim.ui.input
-  vim.ui.input = function(_, on_confirm) on_confirm("utilities") end
+  next_input = "utilities"
   smart_rename.rename_current()
-  vim.wait(3000, function() return done end, 20)
-  vim.ui.input = orig_input
+  vim.wait(5000, function() return done end, 20)
 
   check("lua dir cascade: directory renamed on disk", vim.fn.isdirectory(new_dir) == 1)
   check("lua dir cascade: old directory gone", vim.fn.isdirectory(old_dir) == 0)
@@ -303,18 +329,52 @@ local function run_lua_directory_cascade_check()
   }
   for _, c in ipairs(cascade_checks) do
     local content = read(work .. "/" .. c.file)
-    if c.old == c.new then
-      check(("lua dir cascade: %s unchanged (negative control)"):format(c.file),
-        content ~= nil and content:find(c.old, 1, true) ~= nil)
-    else
-      check(("lua dir cascade: %s updated"):format(c.file),
-        content ~= nil and content:find(c.new, 1, true) ~= nil,
-        "missing " .. c.new)
-      check(("lua dir cascade: %s old reference gone"):format(c.file),
-        content ~= nil and old_fully_replaced(content, c.old, c.new),
-        "still contains " .. c.old)
-    end
+    check(("lua dir cascade: %s updated"):format(c.file),
+      content ~= nil and content:find(c.new, 1, true) ~= nil,
+      "missing " .. c.new)
+    check(("lua dir cascade: %s old reference gone"):format(c.file),
+      content ~= nil and old_fully_replaced(content, c.old, c.new),
+      "still contains " .. c.old)
   end
+end
+
+-- ── The `move` feature (M): move into a directory, then undo the rewrite ────
+local function run_move_feature_check()
+  print("\n== move (M) + refs undo ==")
+
+  local work = scratch_root .. "/move"
+  vim.fn.delete(work, "rf")
+  copy_dir(fixtures_root .. "/markdown", work)
+
+  -- README.md links to ./docs/guide.md; moving docs/notes.md up to the root
+  -- must rewrite the link that points at it from README.md.
+  local src = work .. "/docs/notes.md"
+  local dst = work .. "/notes.md"
+  vim.fn.writefile({ "Notes live at [notes](./docs/notes.md)." }, work .. "/index.md")
+
+  local move = require("filetree.features.fileops.move")
+  local done = false
+  move.setup({ enabled = true, use_safety = false, dry_run = false }, {
+    get_current_node = function() return { path = src, type = "file" } end,
+    refresh          = function() done = true end,
+  })
+
+  -- ":Filetree move <dest>" path — no prompt involved, so nothing to stub.
+  move.move(work)
+  vim.wait(5000, function() return done end, 20)
+
+  check("move: file moved into the destination directory", vim.fn.filereadable(dst) == 1)
+  check("move: source is gone", vim.fn.filereadable(src) == 0)
+
+  local index = read(work .. "/index.md")
+  check("move: reference rewritten to the new location",
+    index ~= nil and index:find("[notes](./notes.md)", 1, true) ~= nil, index)
+
+  -- …and the undo token puts the reference back, byte for byte.
+  refs.undo()
+  local reverted = read(work .. "/index.md")
+  check("move: refs undo restores the previous line",
+    reverted ~= nil and reverted:find("[notes](./docs/notes.md)", 1, true) ~= nil, reverted)
 end
 
 -- ── Run ───────────────────────────────────────────────────────────────────────
@@ -323,7 +383,8 @@ for _, lang in ipairs(LANGS) do
 end
 run_lua_buffer_check()
 run_lua_directory_cascade_check()
+run_move_feature_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
-print(("\nsmart_rename_refs: %d passed, %d failed"):format(passed, failed))
+print(("\nrefs: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end

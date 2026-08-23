@@ -32,8 +32,8 @@ local EXTENSIONS = { "py", "pyi" }
 ---@param root string
 ---@return string?
 function M.module_name(abs_path, root)
-  local root_norm = ftpath.to_unix(root):gsub("/+$", "")
-  local rel = ftpath.to_unix(abs_path):gsub("/+$", "")
+  local root_norm = pathutil.abs(root)
+  local rel = pathutil.abs(abs_path)
   if rel:sub(1, #root_norm) == root_norm then
     rel = rel:sub(#root_norm + 2) -- +2 skips the root and its separating "/"
   end
@@ -50,7 +50,7 @@ end
 ---@param base string
 ---@return string
 local function module_to_path(mod, base)
-  return ftpath.to_unix(base:gsub("/+$", "") .. "/" .. mod:gsub("%.", "/"))
+  return pathutil.abs(base:gsub("/+$", "") .. "/" .. mod:gsub("%.", "/"))
 end
 
 ---@internal

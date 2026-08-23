@@ -99,7 +99,7 @@ local function load_alias_map(file, depth)
   if type(cfg.extends) == "string" then
     local parent_path = cfg.extends
     if parent_path:sub(1, 1) == "." then
-      parent_path = ftpath.to_unix(dir .. "/" .. parent_path)
+      parent_path = pathutil.abs(dir .. "/" .. parent_path)
       if not parent_path:match("%.json$") then parent_path = parent_path .. ".json" end
       map = load_alias_map(parent_path, depth + 1)
     end
@@ -111,10 +111,10 @@ local function load_alias_map(file, depth)
   if type(co.paths) == "table" then
     -- `paths` are relative to baseUrl when set, and to the config's own
     -- directory otherwise (TS 4.4+ allows paths without baseUrl).
-    local base = ftpath.to_unix(dir .. "/" .. (co.baseUrl or "."))
+    local base = pathutil.abs(dir .. "/" .. (co.baseUrl or "."))
     map = { base = base, paths = co.paths }
   elseif map and co.baseUrl then
-    map = { base = ftpath.to_unix(dir .. "/" .. co.baseUrl), paths = map.paths }
+    map = { base = pathutil.abs(dir .. "/" .. co.baseUrl), paths = map.paths }
   end
 
   return map
@@ -156,12 +156,12 @@ local function alias_candidates(spec, file)
       if spec:sub(1, #prefix) == prefix and (suffix == "" or spec:sub(-#suffix) == suffix) then
         local captured = spec:sub(#prefix + 1, #spec - #suffix)
         for _, t in ipairs(targets) do
-          out[#out + 1] = ftpath.to_unix(map.base .. "/" .. (t:gsub("%*", captured)))
+          out[#out + 1] = pathutil.abs(map.base .. "/" .. (t:gsub("%*", captured)))
         end
       end
     elseif spec == pattern then
       for _, t in ipairs(targets) do
-        out[#out + 1] = ftpath.to_unix(map.base .. "/" .. t)
+        out[#out + 1] = pathutil.abs(map.base .. "/" .. t)
       end
     end
   end
@@ -184,7 +184,7 @@ local function alias_retarget(spec, file, new_path)
     if prefix and spec:sub(1, #prefix) == prefix then
       for _, t in ipairs(targets) do
         local t_prefix = t:match("^(.-)%*") or t
-        local base_dir = ftpath.to_unix(map.base .. "/" .. t_prefix):gsub("/+$", "")
+        local base_dir = pathutil.abs(map.base .. "/" .. t_prefix):gsub("/+$", "")
         if pathutil.under(new_path, base_dir) then
           local rest = pathutil.relative(new_path, base_dir)
           return prefix .. rest .. suffix
@@ -293,7 +293,7 @@ function M.plan(old_path, ctx)
       each_specifier(text, function(col, spec)
         local kind, matched
         if spec:sub(1, 1) == "." then
-          local abs = ftpath.to_unix(ftpath.parent(file) .. "/" .. spec)
+          local abs = pathutil.abs(ftpath.parent(file) .. "/" .. spec)
           matched = resolves_to(abs, old_path, ctx.is_dir)
           kind = "relative"
         else

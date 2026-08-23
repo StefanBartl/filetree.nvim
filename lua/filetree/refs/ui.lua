@@ -14,10 +14,19 @@
 ---     ▸ Leave as-is
 
 local kit = require("lib.nvim.ui.kit")
-local confirm_choice = require("filetree.util.confirm_choice")
-local refs_picker = require("filetree.util.refs_picker")
 local notify = require("filetree.util.notify").create("[filetree.refs]")
 local apply = require("filetree.refs.apply")
+
+-- The two interactive pieces are resolved per call rather than at load time:
+-- this module is pulled in by every fileops feature (through filetree.refs),
+-- long before anything asks a question, and a call-time require keeps a test
+-- (or a user) able to swap either one out for its own dialog.
+local function confirm_choice(...)
+  return require("filetree.util.confirm_choice")(...)
+end
+local function refs_picker()
+  return require("filetree.util.refs_picker")
+end
 
 local M = {}
 
@@ -141,7 +150,7 @@ function M.confirm_and_apply(refs, opts, done)
           done(do_apply(refs, opts))
 
         elseif choice == "Select…" then
-          refs_picker.pick(
+          refs_picker().pick(
             refs,
             { prefer = opts.picker or "auto", title = title },
             function(selected)

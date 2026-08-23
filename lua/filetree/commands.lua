@@ -196,6 +196,14 @@ local TREE = {
     cancel  = function(_) require("filetree.util.refs_picker").qf_cancel()  end,
   },
 
+  -- ── refs (reference engine) ─────────────────────────────────────────────────
+  refs = {
+    undo   = function(_) require("filetree.refs").undo() end,
+    status = function(_)
+      notify.info(table.concat(require("filetree.refs").status(), "\n"))
+    end,
+  },
+
   -- ── markdown_links ─────────────────────────────────────────────────────────────
   mdlink = {
     [""]      = function(_) local f = ft("markdown_links"); if f then f.link_current()    end end,
@@ -224,6 +232,13 @@ local TREE = {
 
   -- ── smart_rename ─────────────────────────────────────────────────────────────
   smartrename = function(_) local f = ft("smart_rename"); if f then f.rename_current() end end,
+
+  -- ── move ─────────────────────────────────────────────────────────────────────
+  -- :Filetree move [destination]   (no argument → prompt)
+  move = function(args)
+    local f = ft("move")
+    if f then f.move(#args > 0 and table.concat(args, " ") or nil) end
+  end,
 
   -- ── path_copy ─────────────────────────────────────────────────────────────────
   copy = {

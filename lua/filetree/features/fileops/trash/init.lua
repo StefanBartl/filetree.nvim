@@ -30,7 +30,10 @@ local buffer      = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm  = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
-local refs_util   = require("filetree.util.markdown_refs")
+-- References that would dangle once the file is gone: the engine finds them
+-- (markdown links only — see refs.for_delete) and this feature decides what to
+-- do with them before the delete happens.
+local refs        = require("filetree.refs")
 -- Optional: progress indicator for a multi-item batch (no other feedback
 -- otherwise while several files are sent to trash one after another).
 -- No-op (returns nil) when lib.nvim isn't installed.
@@ -50,14 +53,12 @@ local _cfg = {
   -- accidental multi-mark deletes) and it's meaningfully harder to notice/
   -- undo than a move or rename. Override with `confirmations = false` (or
   -- `features.trash.confirm = false`) to opt back out.
-  confirm             = true,
-  use_safety          = false,
-  dry_run             = false,
-  check_markdown_refs = true,
-  refs_picker_prefer  = "auto", -- "auto"|"telescope"|"fzf-lua"|"quickfix", for "Inspect references"
-  keymap              = "d",
-  keymap_undo         = "U",
-  keymap_history      = "<leader>th",
+  confirm        = true,
+  use_safety     = false,
+  dry_run        = false,
+  keymap         = "d",
+  keymap_undo    = "U",
+  keymap_history = "<leader>th",
 }
 
 ---@type FiletreeAdapter?
@@ -154,70 +155,58 @@ local function info_body(path)
   return { "  " .. path }
 end
 
----Find markdown files that link to `path`, via the optional markdown.nvim
----soft-dependency (`find_references`). Returns {} when markdown.nvim isn't
----installed, or the check is turned off via `check_markdown_refs = false`.
----@param path string
----@return table[]  MarkdownFileRef[] — { file, line, target, display }
-local function markdown_refs(path)
-  if not _cfg.check_markdown_refs then return {} end
-  return refs_util.find(path)
-end
-
----Blank out each referencing link's target (`](old)` -> `](REF!)`).
----@param refs table[]  MarkdownFileRef[]
----@return integer files_changed
-local function cleanup_references(refs)
-  for _, r in ipairs(refs) do r.new_target = "REF!" end
-  return refs_util.update(refs)
-end
-
----Show the nice info+yes/no popup for a single path. When markdown.nvim
----finds files linking to it, a chooser (delete+cleanup / inspect references /
----delete only / cancel) replaces the plain yes/no.
+---Show the nice info+yes/no popup for a single path. When something links to
+---it, a chooser (delete+cleanup / inspect references / delete only / cancel)
+---replaces the plain yes/no.
+---
+---Unlike a rename, the scan has to finish *before* the dialog can be drawn —
+---its text depends on what was found — so this waits for it rather than
+---overlapping it with anything.
 ---@param path string
 ---@param cb fun(yes: boolean)
 local function confirm_popup(path, cb)
-  local refs = markdown_refs(path)
-  if #refs == 0 then
-    ui_confirm({
-      title    = " Trash ",
-      body     = info_body(path),
-      question = "Send to trash?",
-      on_choice = cb,
-    })
-    return
-  end
-
-  local files = refs_util.unique_files(refs)
-  notify.info(string.format(
-    "%d markdown reference(s) found in: %s", #refs, table.concat(files, ", ")
-  ))
-
-  confirm_choice(
-    string.format("Trash %s (%d ref(s) found)", vim.fn.fnamemodify(path, ":t"), #refs),
-    { "Delete + remove refs", "Inspect first", "Delete, keep refs", "Cancel" },
-    function(choice)
-      if choice == "Delete + remove refs" then
-        cleanup_references(refs)
-        cb(true)
-      elseif choice == "Inspect first" then
-        refs_picker.pick(
-          refs,
-          { prefer = _cfg.refs_picker_prefer, title = string.format("References to %s", vim.fn.fnamemodify(path, ":t")) },
-          function(selected)
-            if #selected > 0 then cleanup_references(selected) end
-            cb(true)
-          end,
-          function() confirm_popup(path, cb) end -- Esc/cancel -> back to this same chooser
-        )
-      elseif choice == "Delete, keep refs" then
-        cb(true)
-      else
-        cb(false)
-      end
+  refs.for_delete({ path }, nil, function(found)
+    if #found == 0 then
+      ui_confirm({
+        title    = " Trash ",
+        body     = info_body(path),
+        question = "Send to trash?",
+        on_choice = cb,
+      })
+      return
     end
-  )
+
+    local name = vim.fn.fnamemodify(path, ":t")
+    notify.info(refs.ui.summary(found) .. ": "
+      .. table.concat(refs.ui.unique_files(found), ", "))
+
+    confirm_choice(
+      string.format("Trash %s (%d ref(s) found)", name, #found),
+      { "Delete + remove refs", "Inspect first", "Delete, keep refs", "Cancel" },
+      function(choice)
+        if choice == "Delete + remove refs" then
+          refs.apply.run(found, { label = "delete: " .. name })
+          cb(true)
+        elseif choice == "Inspect first" then
+          refs_picker.pick(
+            found,
+            { prefer = refs.config().picker, title = "References to " .. name },
+            function(selected)
+              if #selected > 0 then
+                refs.apply.run(selected, { label = "delete: " .. name })
+              end
+              cb(true)
+            end,
+            function() confirm_popup(path, cb) end -- Esc/cancel -> back to this same chooser
+          )
+        elseif choice == "Delete, keep refs" then
+          cb(true)
+        else
+          cb(false)
+        end
+      end
+    )
+  end)
 end
 
 ---Finalize a batch: clear marks + refresh the tree once (only when something was

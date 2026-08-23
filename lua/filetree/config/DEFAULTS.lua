@@ -26,6 +26,12 @@ return {
   -- lib.nvim.progress installed.
   progress_style = "auto",
 
+  -- Reference engine: keeps markdown links and require()/import statements
+  -- pointing at the right file after a rename/move/delete. One block for every
+  -- fileops feature; see lua/filetree/refs/DEFAULTS.lua for the annotated
+  -- table and docs/FEATURES/FILEOPS.md for the full description.
+  refs = require("filetree.refs.DEFAULTS"),
+
   -- nvzone/menu integration (opt-in on the host side; entries provided by
   -- filetree.integrations.menu). Group-level opt-out; enable = false yields no
   -- entries. Entries whose feature is disabled are omitted automatically.

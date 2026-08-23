@@ -689,7 +689,12 @@ do
   local copy_move = ft.feature("copy_move")
   copy_move.stage_cut()
   stub.get_current_node = function() return target_node end -- cursor now on the new dir
+  -- A cut awaits its reference scan before moving anything, so the paste
+  -- completes a few event-loop ticks after the call returns.
   copy_move.paste()
+  vim.wait(5000, function()
+    return vim.fn.filereadable(tmp .. "/docs/filetree/filetree.md") == 1
+  end, 20)
 
   eq("copy_move relocate: original path no longer readable",
     vim.fn.filereadable(tmp .. "/docs/filetree.md"), 0)
@@ -705,9 +710,9 @@ do
       and #vim.api.nvim_list_bufs() == bufcount_before)
 end
 
--- ── copy_move: markdown.nvim soft-dep -- cut updates refs, copy leaves them ─
+-- ── copy_move: reference engine -- cut updates refs, copy leaves them ───────
 do
-  local tmp = (TMP_ROOT .. "/units-copymove-mdrefs"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-copymove-refs"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp .. "/dst", "p")
   local cut_src   = tmp .. "/cut.md"
@@ -715,24 +720,16 @@ do
   local copy_src  = tmp .. "/copy.md"
   local copy_dst  = tmp .. "/dst/copy.md"
   local linker    = tmp .. "/linker.md"
+  -- Project marker, so the reference scan's root is this fixture and not
+  -- whatever directory the system temp dir happens to sit in.
+  vim.fn.writefile({ "{}" }, tmp .. "/.luarc.json")
   vim.fn.writefile({ "# Cut" },  cut_src)
   vim.fn.writefile({ "# Copy" }, copy_src)
   vim.fn.writefile({ "Refs: [cut](cut.md) and [copy](copy.md)." }, linker)
 
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
-    on_choice(choices[1]) -- "Update all refs"
+    on_choice(choices[1]) -- "Update all"
   end
-  local function cm_refs(target_path)
-    if target_path == cut_src then
-      return { { file = linker, line = 1, target = "cut.md", display = "[cut](cut.md)" } }
-    end
-    return {} -- copy_src is never queried by a correct implementation, but
-              -- return {} regardless so a wrong one doesn't false-positive.
-  end
-  package.loaded["markdown_nvim"] = {
-    find_references       = function(tp, _o) return cm_refs(tp) end,
-    find_references_async = function(tp, _o, cb) cb(cm_refs(tp)) end,
-  }
   package.loaded["filetree.features.fileops.copy_move"] = nil -- reload with stubs
 
   local cur_node = { path = tmp .. "/dst", type = "directory" }
@@ -747,33 +744,36 @@ do
   local ft = require("filetree")
   ft.register_adapter(stub)
   ft.setup({ adapter = "units-stub-copymove-mdrefs",
+    refs = { on_move = "ask" },
     features = { copy_move = { enabled = true, confirm = false, use_safety = false } } })
 
   local cm = ft.feature("copy_move")
 
-  -- Cut cut.md, paste into dst/ -> its reference must be updated.
+  -- Cut cut.md, paste into dst/ -> its reference must be updated. The paste
+  -- awaits the reference scan, so it completes a few event-loop ticks later.
   cur_node = { path = cut_src, type = "file" }
   cm.stage_cut()
   cur_node = { path = tmp .. "/dst", type = "directory" }
   cm.paste()
-  eq("copy_move+mdrefs: cut file moved", vim.fn.filereadable(cut_dst), 1)
+  vim.wait(5000, function() return vim.fn.filereadable(cut_dst) == 1 end, 20)
+  eq("copy_move+refs: cut file moved", vim.fn.filereadable(cut_dst), 1)
 
   -- Copy copy.md, paste into dst/ -> the original stays put, no ref check needed.
   cur_node = { path = copy_src, type = "file" }
   cm.stage_copy()
   cur_node = { path = tmp .. "/dst", type = "directory" }
   cm.paste()
-  eq("copy_move+mdrefs: copied file duplicated, original untouched", vim.fn.filereadable(copy_src), 1)
-  eq("copy_move+mdrefs: copy landed at destination too", vim.fn.filereadable(copy_dst), 1)
+  vim.wait(5000, function() return vim.fn.filereadable(copy_dst) == 1 end, 20)
+  eq("copy_move+refs: copied file duplicated, original untouched", vim.fn.filereadable(copy_src), 1)
+  eq("copy_move+refs: copy landed at destination too", vim.fn.filereadable(copy_dst), 1)
 
   local linker_lines = vim.fn.readfile(linker)
-  check("copy_move+mdrefs: cut reference rewritten to the new (dst/) path",
+  check("copy_move+refs: cut reference rewritten to the new (dst/) path",
     linker_lines[1]:find("dst/cut.md", 1, true) ~= nil, linker_lines[1])
-  check("copy_move+mdrefs: copy reference left exactly as-is (original still valid)",
+  check("copy_move+refs: copy reference left exactly as-is (original still valid)",
     linker_lines[1]:find("](copy.md)", 1, true) ~= nil, linker_lines[1])
 
   package.loaded["filetree.util.confirm_choice"] = nil
-  package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.copy_move"] = nil
 end
 
@@ -841,7 +841,7 @@ do
   -- Stub the platform so no real trash happens; it just deletes on disk.
   package.loaded["filetree.features.fileops.trash.platform"] = {
     available = function() return true end,
-    send = function(p) os.remove(p); return { ok = true } end,
+    send = function(p, cb) os.remove(p); if cb then cb({ ok = true }) end end,
   }
   package.loaded["filetree.features.fileops.trash"] = nil -- reload with the stub
 
@@ -862,7 +862,15 @@ do
   ft.setup({ adapter = "units-stub-bufclose",
     features = { trash = { enabled = true, confirm = false } } })
 
+  -- Trashing is asynchronous (the reference scan runs first, then the platform
+  -- backend, then the buffer cleanup), so wait for the end of the chain rather
+  -- than asserting on the tick the call returns.
   ft.feature("trash").delete_current()
+  vim.wait(5000, function()
+    return vim.fn.filereadable(file) == 0
+      and (not vim.api.nvim_buf_is_valid(doomed_buf)
+        or vim.api.nvim_buf_get_name(doomed_buf) == "")
+  end, 20)
 
   eq("trash: single delete removes the file", vim.fn.filereadable(file), 0)
   check("trash: single delete force-closes the file's buffer",
@@ -887,7 +895,7 @@ do
 
   package.loaded["filetree.features.fileops.trash.platform"] = {
     available = function() return true end,
-    send = function(p) os.remove(p); return { ok = true } end,
+    send = function(p, cb) os.remove(p); if cb then cb({ ok = true }) end end,
   }
   -- Auto-drive the batch chooser: always pick option 1 ("Delete all at once").
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
@@ -921,6 +929,9 @@ do
     features = { trash = { enabled = true, confirm = true } } })
 
   ft.feature("trash").delete_current()
+  vim.wait(5000, function()
+    return vim.fn.filereadable(a) == 0 and vim.fn.filereadable(b) == 0 and cleared
+  end, 20)
 
   eq("trash batch: file a removed", vim.fn.filereadable(a), 0)
   eq("trash batch: file b removed", vim.fn.filereadable(b), 0)
@@ -936,14 +947,15 @@ do
   package.loaded["filetree.features.fileops.trash"] = nil
 end
 
--- ── markdown_refs.update: patches a LIVE buffer, not just the file on disk ───
+-- ── refs.apply: patches a LIVE buffer, not just the file on disk ────────────
 -- Regression: writefile() alone doesn't reload an open buffer (only a later
--- checktime/autoread does — hence "switch away and back" was needed). update()
+-- checktime/autoread does — hence "switch away and back" was needed). apply
 -- must patch the open buffer directly and, when it had no unsaved changes,
--- persist + keep it unmodified.
+-- persist + keep it unmodified. A ref without a column (`col = 0`) falls back
+-- to replacing the first literal occurrence of its target.
 do
-  local refs_util = require("filetree.util.markdown_refs")
-  local tmp = (TMP_ROOT .. "/units-mdrefs-livebuf"):gsub("\\", "/")
+  local refs_apply = require("filetree.refs.apply")
+  local tmp = (TMP_ROOT .. "/units-refs-livebuf"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
 
@@ -953,26 +965,26 @@ do
   vim.cmd("edit " .. vim.fn.fnameescape(open_file))
   local buf = vim.api.nvim_get_current_buf()
 
-  refs_util.update({
-    { file = open_file, line = 2, target = "old.md", display = "[x](old.md)", new_target = "new.md" },
+  refs_apply.run({
+    { file = open_file, line = 2, col = 9, target = "old.md", display = "[x](old.md)", new_target = "new.md" },
   })
 
   local buf_line2 = vim.api.nvim_buf_get_lines(buf, 1, 2, false)[1]
-  check("mdrefs.update: open buffer patched live (no reload needed)",
+  check("refs.apply: open buffer patched live (no reload needed)",
     buf_line2 == "See [x](new.md) here.", buf_line2)
-  check("mdrefs.update: buffer left unmodified (change persisted to disk)",
+  check("refs.apply: buffer left unmodified (change persisted to disk)",
     vim.bo[buf].modified == false)
   local disk = vim.fn.readfile(open_file)
-  check("mdrefs.update: disk also updated for the open+unmodified buffer",
+  check("refs.apply: disk also updated for the open+unmodified buffer",
     disk[2] == "See [x](new.md) here.", disk[2])
 
   -- Case 2: referencing file NOT open anywhere -> disk edit as before.
   local closed_file = tmp .. "/closed.md"
   vim.fn.writefile({ "[y](old.md)" }, closed_file)
-  refs_util.update({
-    { file = closed_file, line = 1, target = "old.md", display = "[y](old.md)", new_target = "new.md" },
+  refs_apply.run({
+    { file = closed_file, line = 1, col = 0, target = "old.md", display = "[y](old.md)", new_target = "new.md" },
   })
-  check("mdrefs.update: closed file edited on disk",
+  check("refs.apply: closed file edited on disk (col = 0 fallback)",
     vim.fn.readfile(closed_file)[1] == "[y](new.md)")
 
   -- Case 3: open buffer WITH unsaved changes -> patched live, left modified,
@@ -982,14 +994,14 @@ do
   vim.cmd("edit " .. vim.fn.fnameescape(dirty_file))
   local dbuf = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_lines(dbuf, 1, 1, false, { "unsaved tail" }) -- make it modified
-  refs_util.update({
-    { file = dirty_file, line = 1, target = "old.md", display = "[z](old.md)", new_target = "new.md" },
+  refs_apply.run({
+    { file = dirty_file, line = 1, col = 0, target = "old.md", display = "[z](old.md)", new_target = "new.md" },
   })
-  check("mdrefs.update: dirty buffer patched live",
+  check("refs.apply: dirty buffer patched live",
     vim.api.nvim_buf_get_lines(dbuf, 0, 1, false)[1] == "[z](new.md)")
-  check("mdrefs.update: dirty buffer stays modified (not force-saved)",
+  check("refs.apply: dirty buffer stays modified (not force-saved)",
     vim.bo[dbuf].modified == true)
-  check("mdrefs.update: disk left untouched while buffer is dirty",
+  check("refs.apply: disk left untouched while buffer is dirty",
     vim.fn.readfile(dirty_file)[1] == "[z](old.md)")
 
   -- cleanup buffers
@@ -997,23 +1009,24 @@ do
   pcall(vim.api.nvim_buf_delete, dbuf, { force = true })
 end
 
--- ── trash: markdown.nvim soft-dep — reference chooser + cleanup ─────────────
--- When markdown.nvim is present and reports references to the file being
--- trashed, delete_current() must show the 3-way chooser (not the plain y/N
--- popup) and, on "delete + remove references", rewrite the reporting line's
--- link target to "REF!" in the referencing file.
+-- ── trash: reference chooser + cleanup ──────────────────────────────────────
+-- When something links to the file being trashed, delete_current() must show
+-- the 3-way chooser (not the plain y/N popup) and, on "delete + remove
+-- references", rewrite that line's link target to "REF!" in the referencing
+-- file.
 do
-  local tmp = (TMP_ROOT .. "/units-trash-mdrefs"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash-refs"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local victim  = tmp .. "/victim.md"
   local linker  = tmp .. "/linker.md"
+  vim.fn.writefile({ "{}" }, tmp .. "/.luarc.json") -- project marker: scan root
   vim.fn.writefile({ "# Victim" }, victim)
   vim.fn.writefile({ "intro", "See [victim](victim.md) here.", "outro" }, linker)
 
   package.loaded["filetree.features.fileops.trash.platform"] = {
     available = function() return true end,
-    send = function(p) os.remove(p); return { ok = true } end,
+    send = function(p, cb) os.remove(p); if cb then cb({ ok = true }) end end,
   }
   -- Auto-drive the chooser: always pick option 1 ("Delete + remove refs").
   local select_prompt = nil
@@ -1021,14 +1034,6 @@ do
     select_prompt = question
     on_choice(choices[1])
   end
-  package.loaded["markdown_nvim"] = {
-    find_references = function(target_path, _opts)
-      if target_path == victim then
-        return { { file = linker, line = 2, target = "victim.md", display = "[victim](victim.md)" } }
-      end
-      return {}
-    end,
-  }
   package.loaded["filetree.features.fileops.trash"] = nil -- reload with stubs
 
   local cur_node = { path = victim, type = "file" }
@@ -1044,20 +1049,22 @@ do
   ft.setup({ adapter = "units-stub-mdrefs",
     features = { trash = { enabled = true, confirm = true } } })
 
+  -- The reference scan runs before the dialog can be drawn, so the whole flow
+  -- resolves a few event-loop ticks after the call returns.
   ft.feature("trash").delete_current()
+  vim.wait(5000, function() return vim.fn.filereadable(victim) == 0 end, 20)
 
-  check("trash+mdrefs: markdown reference triggers the chooser, not the plain y/N popup",
+  check("trash+refs: a reference triggers the chooser, not the plain y/N popup",
     select_prompt ~= nil and select_prompt:find("ref", 1, true) ~= nil, tostring(select_prompt))
-  eq("trash+mdrefs: victim file removed", vim.fn.filereadable(victim), 0)
+  eq("trash+refs: victim file removed", vim.fn.filereadable(victim), 0)
   local linker_lines = vim.fn.readfile(linker)
-  check("trash+mdrefs: referencing line rewritten to REF!",
+  check("trash+refs: referencing line rewritten to REF!",
     linker_lines[2] == "See [victim](REF!) here.", linker_lines[2])
-  check("trash+mdrefs: unrelated lines untouched",
+  check("trash+refs: unrelated lines untouched",
     linker_lines[1] == "intro" and linker_lines[3] == "outro")
 
   package.loaded["filetree.features.fileops.trash.platform"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
-  package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.trash"] = nil
 end
 
@@ -1067,11 +1074,12 @@ end
 -- same way a user would (delete a line), confirm via the picker's own public
 -- API, and verify only the surviving reference got cleaned up.
 do
-  local tmp = (TMP_ROOT .. "/units-trash-mdrefs-inspect"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash-refs-inspect"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local victim  = tmp .. "/victim.md"
   local linker  = tmp .. "/linker.md"
+  vim.fn.writefile({ "{}" }, tmp .. "/.luarc.json") -- project marker: scan root
   vim.fn.writefile({ "# Victim" }, victim)
   vim.fn.writefile({
     "See [victim](victim.md) here.",
@@ -1080,23 +1088,12 @@ do
 
   package.loaded["filetree.features.fileops.trash.platform"] = {
     available = function() return true end,
-    send = function(p) os.remove(p); return { ok = true } end,
+    send = function(p, cb) os.remove(p); if cb then cb({ ok = true }) end end,
   }
   -- Auto-drive the chooser: always pick option 2 ("Inspect first").
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[2])
   end
-  package.loaded["markdown_nvim"] = {
-    find_references = function(target_path, _opts)
-      if target_path == victim then
-        return {
-          { file = linker, line = 1, target = "victim.md", display = "[victim](victim.md)" },
-          { file = linker, line = 2, target = "victim.md", display = "[victim](victim.md)" },
-        }
-      end
-      return {}
-    end,
-  }
   package.loaded["filetree.features.fileops.trash"] = nil -- reload with stubs
 
   local cur_node = { path = victim, type = "file" }
@@ -1110,9 +1107,11 @@ do
   local ft = require("filetree")
   ft.register_adapter(stub)
   ft.setup({ adapter = "units-stub-mdrefs-inspect",
-    features = { trash = { enabled = true, confirm = true, refs_picker_prefer = "quickfix" } } })
+    refs = { picker = "quickfix" },
+    features = { trash = { enabled = true, confirm = true } } })
 
   ft.feature("trash").delete_current()
+  vim.wait(5000, function() return #vim.fn.getqflist() > 0 end, 20)
 
   -- The quickfix picker is now open awaiting user pruning; simulate keeping
   -- only line 1's reference (drop the line-2 duplicate) and confirming.
@@ -1121,6 +1120,7 @@ do
   vim.fn.setqflist({}, "r", { items = { qf[1] } })
   require("filetree.util.refs_picker").qf_confirm()
 
+  vim.wait(5000, function() return vim.fn.filereadable(victim) == 0 end, 20)
   eq("trash+inspect: victim file removed", vim.fn.filereadable(victim), 0)
   local linker_lines = vim.fn.readfile(linker)
   check("trash+inspect: kept reference (line 1) was cleaned up",
@@ -1130,21 +1130,21 @@ do
 
   package.loaded["filetree.features.fileops.trash.platform"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
-  package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.trash"] = nil
 end
 
--- ── smart_rename: markdown.nvim soft-dep -> update refs to the new path ─────
--- Same soft-dep + chooser pattern as trash, but post-rename (no "cancel" --
--- the rename already happened) and the "update all" path rewrites to the new
--- cwd-relative path rather than a "REF!" marker.
+-- ── smart_rename: reference engine -> update refs to the new path ───────────
+-- Same chooser pattern as trash, but post-rename (no "cancel" -- the rename
+-- already happened) and the "update all" path rewrites to the file's new name
+-- rather than a "REF!" marker.
 do
-  local tmp = (TMP_ROOT .. "/units-smartrename-mdrefs"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-smartrename-refs"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local old_path = tmp .. "/old.md"
   local new_path = tmp .. "/renamed.md"
   local linker   = tmp .. "/linker.md"
+  vim.fn.writefile({ "{}" }, tmp .. "/.luarc.json") -- project marker: scan root
   vim.fn.writefile({ "# Old" }, old_path)
   vim.fn.writefile({ "See [old](old.md) here." }, linker)
 
@@ -1155,18 +1155,6 @@ do
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[1]) -- "Update all refs"
   end
-  local function sr_refs(target_path)
-    if target_path == old_path then
-      return { { file = linker, line = 1, target = "old.md", display = "[old](old.md)" } }
-    end
-    return {}
-  end
-  package.loaded["markdown_nvim"] = {
-    find_references       = function(tp, _o) return sr_refs(tp) end,
-    find_references_async = function(tp, _o, cb) cb(sr_refs(tp)) end,
-    -- retarget left unstubbed on purpose: refs_util.retarget falls back to a
-    -- cwd-relative path, which still contains the new basename the test checks.
-  }
   package.loaded["filetree.features.fileops.smart_rename"] = nil -- reload with stubs
 
   local cur_node = { path = old_path, type = "file" }
@@ -1180,35 +1168,36 @@ do
   local ft = require("filetree")
   ft.register_adapter(stub)
   ft.setup({ adapter = "units-stub-smartrename",
-    features = { smart_rename = { enabled = true, use_safety = false, update_references = false } } })
+    refs = { on_rename = "ask", providers = { markdown = true } },
+    features = { smart_rename = { enabled = true, use_safety = false } } })
 
   ft.feature("smart_rename").rename_current()
-  vim.wait(500, function() return vim.fn.filereadable(new_path) == 1 end)
+  vim.wait(5000, function()
+    return vim.fn.filereadable(new_path) == 1
+      and vim.fn.readfile(linker)[1]:find("old.md", 1, true) == nil
+  end, 20)
 
-  eq("smart_rename+mdrefs: file renamed on disk", vim.fn.filereadable(new_path), 1)
+  eq("smart_rename+refs: file renamed on disk", vim.fn.filereadable(new_path), 1)
   local linker_lines = vim.fn.readfile(linker)
-  check("smart_rename+mdrefs: reference rewritten to the cwd-relative new path",
-    linker_lines[1]:find("](", 1, true) ~= nil and linker_lines[1]:find(vim.fn.fnamemodify(new_path, ":t"), 1, true) ~= nil,
-    linker_lines[1])
-  check("smart_rename+mdrefs: old target string no longer present",
-    linker_lines[1]:find("old.md", 1, true) == nil, linker_lines[1])
+  check("smart_rename+refs: reference rewritten to the new name, link style preserved",
+    linker_lines[1] == "See [old](renamed.md) here.", linker_lines[1])
 
   package.loaded["lib.nvim.ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
-  package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.smart_rename"] = nil
 end
 
--- ── rename_batch: markdown.nvim soft-dep -> aggregated across the batch ─────
+-- ── rename_batch: references aggregated across the batch ────────────────
 -- Two renamed files, each referenced from markdown; verify refs from BOTH
 -- land in one aggregated chooser and each gets its own correct new target.
 do
-  local tmp = (TMP_ROOT .. "/units-renamebatch-mdrefs"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-renamebatch-refs"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local a_old, a_new = tmp .. "/a.md", tmp .. "/a2.md"
   local b_old, b_new = tmp .. "/b.md", tmp .. "/b2.md"
   local linker = tmp .. "/linker.md"
+  vim.fn.writefile({ "{}" }, tmp .. "/.luarc.json") -- project marker: scan root
   vim.fn.writefile({ "# A" }, a_old)
   vim.fn.writefile({ "# B" }, b_old)
   vim.fn.writefile({ "See [a](a.md) and [b](b.md) here." }, linker)
@@ -1216,18 +1205,6 @@ do
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[1]) -- "Update all refs"
   end
-  local function rb_refs(target_path)
-    if target_path == a_old then
-      return { { file = linker, line = 1, target = "a.md", display = "[a](a.md)" } }
-    elseif target_path == b_old then
-      return { { file = linker, line = 1, target = "b.md", display = "[b](b.md)" } }
-    end
-    return {}
-  end
-  package.loaded["markdown_nvim"] = {
-    find_references       = function(tp, _o) return rb_refs(tp) end,
-    find_references_async = function(tp, _o, cb) cb(rb_refs(tp)) end,
-  }
   package.loaded["filetree.features.fileops.rename_batch"] = nil -- reload with stubs
 
   local nodes = {
@@ -1244,6 +1221,7 @@ do
   local ft = require("filetree")
   ft.register_adapter(stub)
   ft.setup({ adapter = "units-stub-renamebatch",
+    refs = { on_rename = "ask", providers = { markdown = true } },
     features = { rename_batch = { enabled = true, use_safety = false } } })
 
   ft.feature("rename_batch").open()
@@ -1251,16 +1229,16 @@ do
   -- Lines: header, blank, then one name per node (see M.open()'s 2-line offset).
   vim.api.nvim_buf_set_lines(rb_buf, 2, 4, false, { "a2.md", "b2.md" })
   vim.cmd("write")
+  vim.wait(5000, function() return vim.fn.filereadable(b_new) == 1 end, 20)
 
-  eq("rename_batch+mdrefs: a.md renamed", vim.fn.filereadable(a_new), 1)
-  eq("rename_batch+mdrefs: b.md renamed", vim.fn.filereadable(b_new), 1)
+  eq("rename_batch+refs: a.md renamed", vim.fn.filereadable(a_new), 1)
+  eq("rename_batch+refs: b.md renamed", vim.fn.filereadable(b_new), 1)
   local linker_lines = vim.fn.readfile(linker)
-  check("rename_batch+mdrefs: both references updated to their own new paths",
+  check("rename_batch+refs: both references updated to their own new paths",
     linker_lines[1]:find("a2.md", 1, true) ~= nil and linker_lines[1]:find("b2.md", 1, true) ~= nil,
     linker_lines[1])
 
   package.loaded["filetree.util.confirm_choice"] = nil
-  package.loaded["markdown_nvim"] = nil
   package.loaded["filetree.features.fileops.rename_batch"] = nil
 end
 
@@ -1503,6 +1481,8 @@ do
   local rb_buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_lines(rb_buf, 2, 3, false, { "a2.txt" })
   vim.cmd("write")
+  -- The batch awaits its reference scan before renaming anything.
+  vim.wait(5000, function() return vim.fn.filereadable(a_new) == 1 end, 20)
 
   check("rename_batch confirm: util.confirm asked instead of vim.fn.input",
     captured_question ~= nil, tostring(captured_question))
@@ -2011,6 +1991,15 @@ do
     if vim.api.nvim_win_get_config(w).relative ~= "" then floats_before = floats_before + 1 end
   end
   ft.feature("trash").delete_current()
+  -- The popup only appears once the reference scan that decides which dialog
+  -- to draw has finished.
+  local function any_float()
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(w).relative ~= "" then return true end
+    end
+    return false
+  end
+  vim.wait(5000, any_float, 20)
   vim.fn.confirm = orig_confirm
 
   local confirm_float = nil

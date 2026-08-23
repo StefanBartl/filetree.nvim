@@ -45,6 +45,7 @@ M.FEATURES = {
   -- ── fileops: create / edit / move ──────────────────────────────────────────
   smart_create         = { mod = "filetree.features.fileops.smart_create",         category = "fileops" },
   copy_move            = { mod = "filetree.features.fileops.copy_move",            category = "fileops" },
+  move                 = { mod = "filetree.features.fileops.move",                 category = "fileops" },
   rename_batch         = { mod = "filetree.features.fileops.rename_batch",         category = "fileops" },
   smart_rename         = { mod = "filetree.features.fileops.smart_rename",         category = "fileops" },
   create_from_template = { mod = "filetree.features.fileops.create_from_template", category = "fileops" },

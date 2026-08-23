@@ -88,6 +88,11 @@ function M.setup(user_config)
   -- own progress_style option.
   require("filetree.util.progress").set_style(cfg.progress_style)
 
+  -- Configure the reference engine before any feature sets up: every fileops
+  -- feature that mutates paths reads its scan/ask/apply policy from here
+  -- rather than carrying its own copy (see filetree/refs/init.lua).
+  require("filetree.refs").setup(cfg.refs)
+
   -- Reset the central tree-buffer keymap dispatcher; features re-register their
   -- on_attach callbacks during their own setup() below, then install() wires the
   -- single FileType autocmd.

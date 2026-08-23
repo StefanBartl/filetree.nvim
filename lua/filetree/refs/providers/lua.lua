@@ -14,7 +14,7 @@
 --- `workspace/willRenameFiles` — lua_ls does not implement it, so without this
 --- provider a Lua project silently loses every require() on every move.
 
-local ftpath = require("filetree.util.path")
+local pathutil = require("filetree.refs.pathutil")
 
 local M = {}
 
@@ -42,11 +42,11 @@ local EXTENSIONS = { "lua" }
 ---@param abs_path string
 ---@return string?
 function M.module_name(abs_path)
-  local rel = ftpath.to_unix(abs_path):match(".*/lua/(.+)$")
+  local rel = pathutil.abs(abs_path):match(".*/lua/(.+)$")
   if not rel then return nil end
-  -- to_unix() → fnamemodify(p, ":p") appends a trailing "/" when `p` exists as
-  -- a directory on disk, which for a rename's *new* path it already does by
-  -- the time this runs. Strip it so both sides are computed identically.
+  -- pathutil.abs() already strips a trailing slash, but a path that *ends* at
+  -- the lua/ root itself would leave `rel` empty rather than "/" — the gsub
+  -- below is harmless either way and keeps this independent of that detail.
   rel = rel:gsub("/$", ""):gsub("%.lua$", ""):gsub("/init$", "")
   return (rel:gsub("/", "."))
 end

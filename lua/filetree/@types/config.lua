@@ -36,6 +36,7 @@
 ---@field menu             FiletreeMenuConfig?              nvzone/menu integration entries (group-level opt-out; entries provided by filetree.integrations.menu).
 ---@field confirmations    boolean|FiletreeConfirmationsConfig|nil  Confirmable actions: paste/rename_batch default to *no* prompt, delete defaults to *prompt*. true/false applies to all three at once; a table applies per action, e.g. { delete = false } to opt out of just the delete prompt. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
 ---@field deps_popup       boolean?                         Show the lib.nvim.deps "declared tools" popup once, ever, on first setup() after install (default true; needs lib.nvim.deps — a no-op without it).
+---@field refs             FiletreeRefsConfig?              Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style   Lib.Progress.Style?              Style for batch-operation progress indicators (trash, paste, …): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress — a no-op without it.
 
 ---@class FiletreeConfirmationsConfig
@@ -90,6 +91,7 @@
 ---@field open_with               FiletreeOpenWithConfig?
 ---@field pdf_open                FiletreePdfOpenConfig?
 ---@field pdf_create              FiletreePdfCreateConfig?
+---@field move                    FiletreeMoveConfig?
 ---@field smart_rename            FiletreeSmartRenameConfig?
 ---@field path_copy               FiletreePathCopyConfig?
 ---@field live_search             FiletreeLiveSearchConfig?
@@ -251,8 +253,8 @@
 ---@field confirm             boolean  Ask before trashing (default true, unlike paste/rename_batch; see top-level `confirmations`).
 ---@field use_safety          boolean  Create a backup before trashing (default false).
 ---@field dry_run             boolean  Log without actually trashing (default false).
----@field check_markdown_refs boolean  Warn about markdown files linking to the target, via markdown.nvim's optional `find_references` (default true; no-op if markdown.nvim isn't installed).
----@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  Backend for the "Inspect references" chooser option (default "auto": telescope -> fzf-lua -> quickfix).
+---@field check_markdown_refs boolean  **Deprecated** — migrated to `refs.on_delete` (`false` → `"off"`). See @types/refs.lua.
+---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
 ---@field keymap              string?  Trash current node / all marked (default "d").
 ---@field keymap_undo         string?  Undo last trash operation (default "U").
 ---@field keymap_history      string?  Show trash history (default "<leader>th").
@@ -398,8 +400,16 @@
 ---@field confirm             boolean  Ask before paste (default false; see top-level `confirmations`).
 ---@field use_safety          boolean  Create backup before move (default true).
 ---@field dry_run             boolean  Log without executing (default false).
----@field check_markdown_refs boolean  After a paste, offer to update markdown `[text](path)` links pointing at any **cut** (moved) item -- copies never break a reference -- via markdown.nvim's optional `find_references` (default true; no-op if markdown.nvim isn't installed).
----@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  Backend for the "Inspect references" chooser option (default "auto").
+---@field check_markdown_refs boolean  **Deprecated** — migrated to `refs.on_move` (`false` → `"off"`). See @types/refs.lua.
+---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
+
+-- ── move ──────────────────────────────────────────────────────────────────────
+
+---@class FiletreeMoveConfig
+---@field enabled    boolean
+---@field keymap     string?  Move current node / all marked nodes (default "M").
+---@field use_safety boolean  Create a backup before moving (default true).
+---@field dry_run    boolean  Log the plan without executing it (default false).
 
 -- ── find_files ────────────────────────────────────────────────────────────────
 
@@ -430,8 +440,8 @@
 ---@field confirm             boolean  Ask for confirmation before renaming (default false; see top-level `confirmations`).
 ---@field use_safety          boolean  Create safety backup before renaming (default true).
 ---@field dry_run             boolean  Log plan without executing (default false).
----@field check_markdown_refs boolean  After the batch, offer to update markdown `[text](path)` links pointing at any renamed item, via markdown.nvim's optional `find_references` (default true; no-op if markdown.nvim isn't installed).
----@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  Backend for the "Inspect references" chooser option (default "auto").
+---@field check_markdown_refs boolean  **Deprecated** — migrated to `refs.on_rename` (`false` → `"off"`). See @types/refs.lua.
+---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
 
 -- ── session ───────────────────────────────────────────────────────────────────
 
@@ -568,11 +578,9 @@
 ---@field keymap              string?   Key inside tree (default "r").
 ---@field use_safety          boolean   Create safety backup before rename (default true).
 ---@field dry_run             boolean   Log without executing (default false).
----@field update_references   boolean   Fallback require()/import rewrite across the
----                                     project when no LSP client applied a
----                                     workspace edit, or the file is Lua (default true).
----@field check_markdown_refs boolean   After a successful rename, offer to update markdown `[text](path)` links pointing at the old path, via markdown.nvim's optional `find_references` (default true; no-op if markdown.nvim isn't installed).
----@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  Backend for the "Inspect references" chooser option (default "auto").
+---@field update_references   boolean   **Deprecated** — migrated to `refs.providers` (`false` turns the lua/python/ts_js providers off).
+---@field check_markdown_refs boolean   **Deprecated** — migrated to `refs.on_rename` (`false` → `"off"`). See @types/refs.lua.
+---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
 
 -- ── path_copy ────────────────────────────────────────────────────────────────
 

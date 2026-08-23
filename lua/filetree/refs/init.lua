@@ -41,30 +41,11 @@ M.ui = ui
 
 -- ── Config ────────────────────────────────────────────────────────────────────
 
+-- Shared with `filetree.config.DEFAULTS` (one table, two consumers — see
+-- filetree/refs/DEFAULTS.lua) so a default can never mean one thing to
+-- `setup({ refs = … })` and another to the engine itself.
 ---@type FiletreeRefsConfig
-local DEFAULTS = {
-  enabled = true,
-  providers = {
-    markdown = true,
-    lua = true,
-    python = true,
-    ts_js = false, -- opt-in: alias-heavy projects need a tsconfig to be useful
-  },
-  on_rename = "ask",
-  on_move = "ask",
-  on_delete = "ask",
-  copy = false,
-  picker = "auto",
-  prefer_lsp = true,
-  wiki_links = false,
-  scan = {
-    root = "project",
-    respect_gitignore = true,
-    max_files = 5000,
-    timeout_ms = 3000,
-  },
-  undo = true,
-}
+local DEFAULTS = require("filetree.refs.DEFAULTS")
 
 ---@type FiletreeRefsConfig
 local _cfg = vim.deepcopy(DEFAULTS)
@@ -176,9 +157,17 @@ function M.prefetch(paths, opts)
   ---@type FiletreeRefScanResult
   local result = { refs = {}, plans = {} }
 
-  if not M.active(opts.op or "move", opts.mode) then
-    vim.schedule(function() finish(result) end)
-    return { await = function(cb) if state.done then cb(state.result) else state.waiters[#state.waiters + 1] = cb end end }
+  -- Nothing to scan resolves *synchronously*, on purpose: `await` then runs its
+  -- callback inline, so a paste with no cut items, or a setup with references
+  -- switched off, is not deferred by an event-loop tick it has no use for.
+  if not M.active(opts.op or "move", opts.mode) or #paths == 0 then
+    finish(result)
+    return {
+      await = function(cb)
+        if state.done then cb(state.result)
+        else state.waiters[#state.waiters + 1] = cb end
+      end,
+    }
   end
 
   -- Build every (path, provider) plan up front, then run them all in parallel.
@@ -199,7 +188,7 @@ function M.prefetch(paths, opts)
   end
 
   if #jobs == 0 then
-    vim.schedule(function() finish(result) end)
+    finish(result) -- no provider had anything to look for
   else
     local pending = #jobs
     for _, job in ipairs(jobs) do

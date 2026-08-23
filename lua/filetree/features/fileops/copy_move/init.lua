@@ -29,8 +29,13 @@ local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm  = require("filetree.util.confirm")
-local refs_util   = require("filetree.util.markdown_refs")
-local refs_picker = require("filetree.util.refs_picker")
+-- Destination-collision helpers (exists / remove_existing / unique_name) and
+-- the shared move-with-retry, both also used by the `move` feature.
+local conflict    = require("filetree.util.conflict")
+local mutate      = require("filetree.util.mutate")
+-- Cross-file references after a cut+paste (= move). Copies never break one,
+-- so only cuts are ever scanned — see filetree.refs.
+local refs        = require("filetree.refs")
 -- Optional: progress indicator for a multi-item paste. No-op (returns nil)
 -- when lib.nvim isn't installed.
 local progress    = require("filetree.util.progress")
@@ -39,9 +44,6 @@ local progress    = require("filetree.util.progress")
 -- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_copyfile would
 -- surface as a hard failure — see the handle_guard plan.
 local fsops = require("lib.nvim.cross.fs.mutate")
--- On a transient lock during a move, release neo-tree's watcher on the source
--- so the retry can proceed. No-op unless handle_guard installed the registry.
-local watch = require("lib.nvim.neotree.watch")
 
 local M = {}
 
@@ -55,11 +57,9 @@ local _cfg = {
     show  = "P",
     clear = "<C-c>",
   },
-  confirm             = false,
-  use_safety          = true,
-  dry_run             = false,
-  check_markdown_refs = true,
-  refs_picker_prefer  = "auto",
+  confirm    = false,
+  use_safety = true,
+  dry_run    = false,
 }
 
 ---@type FiletreeAdapter?
@@ -77,8 +77,10 @@ local _ns = -1
 ---@type ClipboardEntry[]
 local _clipboard = {}
 
----@type table<string, { await: fun(cb: fun(refs: table[])) }>  cut-path -> prefetch handle
-local _cut_prefetch = {}
+---Reference scan for the staged cut items, started at stage time so it
+---overlaps with the user navigating to the paste target.
+---@type { await: fun(cb: fun(result: FiletreeRefScanResult)) }|nil
+local _cut_prefetch = nil
 
 -- ── Clipboard state ───────────────────────────────────────────────────────────
 
@@ -149,16 +151,11 @@ function M.stage(op)
     _clipboard[#_clipboard + 1] = { path = p, op = op }
   end
 
-  -- For a cut (= move), start the markdown-reference scan NOW, while the
-  -- sources still exist, so it overlaps with the time the user spends
-  -- navigating to the paste target. Copies never break a reference (the
-  -- original stays put), so only cuts prefetch. See refs_util.prefetch.
-  _cut_prefetch = {}
-  if op == "cut" and _cfg.check_markdown_refs and refs_util.available() then
-    for _, p in ipairs(paths) do
-      _cut_prefetch[p] = refs_util.prefetch(p)
-    end
-  end
+  -- For a cut (= move), start the reference scan NOW, while the sources still
+  -- exist, so it overlaps with the time the user spends navigating to the
+  -- paste target. Copies never break a reference (the original stays put), so
+  -- only cuts prefetch. See refs.prefetch.
+  _cut_prefetch = op == "cut" and refs.prefetch(paths, { op = "move" }) or nil
 
   clear_marks()
   render_clipboard()
@@ -171,6 +168,7 @@ function M.stage_cut()  M.stage("cut")  end
 
 function M.clear()
   _clipboard = {}
+  _cut_prefetch = nil -- nothing staged to move, so its reference scan is moot
   render_clipboard()
   notify.info("Clipboard cleared")
 end
@@ -191,54 +189,6 @@ end
 -- ── Paste ─────────────────────────────────────────────────────────────────────
 
 ---@internal
----Whether a path already exists as either a file or a directory.
----@param path string
----@return boolean
-local function exists(path)
-  return vim.fn.filereadable(path) == 1 or vim.fn.isdirectory(path) == 1
-end
-
----@internal
----Remove an existing file or directory outright — the "Overwrite" conflict
----resolution's prep step, run just before the copy/move that replaces it.
----No shell involved.
----@param path string
----@return boolean ok
-local function remove_existing(path)
-  if vim.fn.isdirectory(path) == 1 then
-    return vim.fn.delete(path, "rf") == 0
-  end
-  return vim.fn.delete(path) == 0
-end
-
----@internal
----First "name (N).ext" that collides with neither an existing path in
----`dst_dir` nor a name already handed out earlier in the same paste batch
----(`claimed`). Directories don't get extension-splitting -- a dir name has
----no extension to preserve.
----@param dst_dir string
----@param name string
----@param claimed table<string, true>
----@param is_dir boolean
----@return string
-local function unique_name(dst_dir, name, claimed, is_dir)
-  local base, ext
-  if not is_dir then
-    base, ext = name:match("^(.*)(%.[^./\\]+)$")
-  end
-  if not base or base == "" then
-    base, ext = name, ""
-  end
-  local candidate, n = name, 2
-  repeat
-    candidate = string.format("%s (%d)%s", base, n, ext)
-    n = n + 1
-  until not claimed[candidate] and not exists(dst_dir .. "/" .. candidate)
-  claimed[candidate] = true
-  return candidate
-end
-
----@internal
 ---Clipboard entries whose name would collide with an existing entry of
 ---`dst_dir` if pasted as-is. Purely a preflight check -- the authoritative
 ---existence check happens again at execution time in `do_paste_impl`, right
@@ -248,7 +198,7 @@ end
 local function find_conflicts(dst_dir)
   local conflicts = {}
   for _, e in ipairs(_clipboard) do
-    if exists(dst_dir .. "/" .. vim.fn.fnamemodify(e.path, ":t")) then
+    if conflict.exists(dst_dir .. "/" .. vim.fn.fnamemodify(e.path, ":t")) then
       conflicts[#conflicts + 1] = e
     end
   end
@@ -298,56 +248,10 @@ end
 ---@return integer rc   0 on success, 1 on failure
 ---@return string? dst  the destination path actually used, when rc == 0
 local function do_move(src, dst)
-  -- A move is the primary Windows lock trigger (an open neo-tree watcher on the
-  -- source dir holds the handle), so route it through the retrying mutation
-  -- chokepoint. But uv.fs_rename cannot cross filesystems/drives — it returns
-  -- EXDEV, which is not a transient error and so is not retried. vim.fn.rename
-  -- can (it copies+deletes internally), so fall back to it for exactly that
-  -- case: the cross-drive move keeps working (no retry protection, but a
-  -- cross-drive paste is rare), while the common same-drive move gets the
-  -- EPERM/EACCES/EBUSY retry it actually needs.
-  local ok, err = fsops.rename_file(src, dst, {
-    on_retry = function() watch.release(src) end,
-  })
-  if not ok then
-    if type(err) == "string" and err:match("^EXDEV") then
-      if vim.fn.rename(src, dst) == 0 then return 0, dst end
-    end
-    return 1
-  end
-  return 0, dst
-end
-
--- ── Markdown reference update (post-paste, cut items only) ─────────────────────
--- Same soft-dep + aggregated-chooser pattern as rename_batch: copies never
--- break a reference (the original stays put), only cuts (= moves) do.
-
----@internal
----@param all_refs table[]  MarkdownFileRef[], each with `.new_target` pre-set.
-local function handle_batch_markdown_refs(all_refs)
-  if not _cfg.check_markdown_refs or #all_refs == 0 then return end
-
-  local files = refs_util.unique_files(all_refs)
-  notify.info(string.format(
-    "%d markdown reference(s) found in: %s", #all_refs, table.concat(files, ", ")
-  ))
-
-  confirm_choice(
-    string.format("%d ref(s) across the moved item(s)", #all_refs),
-    { "Update all refs", "Inspect first", "Leave as-is" },
-    function(choice)
-      if choice == "Update all refs" then
-        refs_util.update(all_refs)
-      elseif choice == "Inspect first" then
-        refs_picker.pick(
-          all_refs,
-          { prefer = _cfg.refs_picker_prefer, title = "References across the moved item(s)" },
-          function(selected) if #selected > 0 then refs_util.update(selected) end end,
-          function() end
-        )
-      end
-    end
-  )
+  -- Windows sharing-lock retry and the cross-drive EXDEV fallback both live in
+  -- util.mutate, shared with rename_batch/move/smart_rename.
+  if mutate.move(src, dst) then return 0, dst end
+  return 1
 end
 
 ---@internal
@@ -369,27 +273,25 @@ local function do_paste_impl(dst_dir, conflict_mode)
     end
   end
 
-  -- Await the reference scans for cut items (started on stage_cut, so likely
-  -- already done after the user navigated here). Captured while the sources
-  -- still exist; the copy/move loop runs only inside the continuation, so no
-  -- move happens before its item's scan has finished. Copies aren't scanned —
-  -- the original stays put, so no reference breaks.
-  local cut_handles = {}
-  if _cfg.check_markdown_refs and refs_util.available() then
-    for _, e in ipairs(_clipboard) do
-      if e.op ~= "copy" then
-        cut_handles[e.path] = _cut_prefetch[e.path] or refs_util.prefetch(e.path)
-      end
-    end
+  -- Await the reference scan for the cut items (started on stage_cut, so
+  -- likely long finished by the time the user navigated here). It saw the
+  -- sources at their old locations, and the copy/move loop runs only inside
+  -- this continuation, so no move happens before the scan is complete.
+  local cut_paths = {}
+  for _, e in ipairs(_clipboard) do
+    if e.op ~= "copy" then cut_paths[#cut_paths + 1] = e.path end
   end
+  local refs_handle = _cut_prefetch or refs.prefetch(cut_paths, { op = "move" })
 
-  refs_util.await_all(cut_handles, function(refs_by_path)
+  refs_handle.await(function(scan_result)
     local prog = progress.create({ title = "[filetree.copy_move]" })
     local errors    = 0
     local done      = 0
     local skipped   = 0
     local relocated = 0
-    local all_refs  = {}
+    -- old path → new path, filled in only once a cut has actually landed, so a
+    -- failed or skipped item never gets its references rewritten.
+    local moves     = {}
     local moved     = {} -- entry -> true, once its cut has actually landed
     local claimed   = {} -- names already handed out by "Keep both" this batch
 
@@ -400,20 +302,20 @@ local function do_paste_impl(dst_dir, conflict_mode)
       local name = vim.fn.fnamemodify(e.path, ":t")
       local dst  = dst_dir .. "/" .. name
 
-      if exists(dst) then
+      if conflict.exists(dst) then
         if conflict_mode == "Overwrite" then
           if _cfg.use_safety then
             local ok_s, safety = require("filetree.features").load("safety")
             if ok_s and safety then pcall(safety.before_delete, dst) end
           end
-          if not remove_existing(dst) then
+          if not conflict.remove_existing(dst) then
             notify.error("Could not clear existing target: " .. dst)
             errors = errors + 1
             dst = nil
           end
         elseif conflict_mode == "Keep both" then
           local is_dir = vim.fn.isdirectory(e.path) == 1
-          dst = dst_dir .. "/" .. unique_name(dst_dir, name, claimed, is_dir)
+          dst = dst_dir .. "/" .. conflict.unique_name(dst_dir, name, claimed, is_dir)
         elseif conflict_mode == "Skip" then
           skipped = skipped + 1
           dst = nil
@@ -442,11 +344,7 @@ local function do_paste_impl(dst_dir, conflict_mode)
             -- partial failure in a multi-item paste still fixes up the items that
             -- did succeed.
             relocated = relocated + buffer.relocate(e.path, moved_dst)
-
-            for _, r in ipairs(refs_by_path[e.path] or {}) do
-              r.new_target = refs_util.retarget(r, moved_dst)
-              all_refs[#all_refs + 1] = r
-            end
+            moves[e.path] = moved_dst
           end
         end
       end
@@ -463,7 +361,12 @@ local function do_paste_impl(dst_dir, conflict_mode)
     if prog then prog:finish(msg) end
     notify.info(msg)
 
-    handle_batch_markdown_refs(all_refs)
+    -- One chooser for every reference across every moved item, rather than one
+    -- popup per file.
+    refs.handle_result(scan_result, moves, {
+      op = "move",
+      title = "References across the moved item(s)",
+    })
 
     -- Clear clipboard entries that actually landed: copy items always stay
     -- (kept for potential re-paste); cut items only clear once their move
@@ -474,7 +377,7 @@ local function do_paste_impl(dst_dir, conflict_mode)
       if e.op == "copy" or not moved[e] then remaining[#remaining + 1] = e end
     end
     _clipboard = remaining
-    _cut_prefetch = {}
+    _cut_prefetch = nil
 
     render_clipboard()
     if _adapter.refresh then pcall(_adapter.refresh) end

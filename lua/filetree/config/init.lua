@@ -157,6 +157,65 @@ local function apply_ignore_list(cfg)
   cfg.features.ignore_list = fi
 end
 
+---Per-feature reference options that predate the central `refs` block, and the
+---`refs` field each one now means. `check_markdown_refs = false` on a feature
+---turned that feature's reference handling off; the equivalent is switching
+---the corresponding operation to "off".
+---@type table<string, { op: string }>
+local LEGACY_REFS_FEATURES = {
+  smart_rename = { op = "on_rename" },
+  rename_batch = { op = "on_rename" },
+  copy_move    = { op = "on_move" },
+  trash        = { op = "on_delete" },
+}
+
+---Translate the deprecated per-feature reference options into `cfg.refs`.
+---
+---Only fields the user actually set are migrated (feature defaults live in the
+---feature modules, not in DEFAULTS, so anything present here is a user
+---choice), and an explicit `cfg.refs` setting always wins — migration fills
+---in, it never overrides.
+---@internal
+---@param cfg FiletreeConfig
+local function apply_legacy_refs(cfg)
+  if type(cfg.features) ~= "table" then return end
+  cfg.refs = cfg.refs or {}
+  local user_refs = cfg.refs
+  local deprecated = {}
+
+  for name, spec in pairs(LEGACY_REFS_FEATURES) do
+    local fcfg = cfg.features[name]
+    if type(fcfg) == "table" then
+      if fcfg.check_markdown_refs == false then
+        deprecated[#deprecated + 1] = name .. ".check_markdown_refs"
+        if user_refs[spec.op] == nil then user_refs[spec.op] = "off" end
+      end
+      if type(fcfg.refs_picker_prefer) == "string" then
+        deprecated[#deprecated + 1] = name .. ".refs_picker_prefer"
+        if user_refs.picker == nil then user_refs.picker = fcfg.refs_picker_prefer end
+      end
+    end
+  end
+
+  -- smart_rename.update_references gated the textual require()/import rewrite,
+  -- which is now what the code providers do.
+  local sr = cfg.features.smart_rename
+  if type(sr) == "table" and sr.update_references == false then
+    deprecated[#deprecated + 1] = "smart_rename.update_references"
+    user_refs.providers = user_refs.providers or {}
+    for _, provider in ipairs({ "lua", "python", "ts_js" }) do
+      if user_refs.providers[provider] == nil then user_refs.providers[provider] = false end
+    end
+  end
+
+  if #deprecated > 0 then
+    require("filetree.util.notify").create("[filetree]").warn(
+      "deprecated option(s) migrated to the central `refs` block: "
+        .. table.concat(deprecated, ", ")
+        .. " — see docs/FEATURES/FILEOPS.md#references")
+  end
+end
+
 ---Apply user config on top of defaults.
 ---@param user FiletreeConfig?
 function M.setup(user)
@@ -169,6 +228,7 @@ function M.setup(user)
   apply_autocmd_overrides(_active)
   apply_confirmations(_active)
   apply_ignore_list(_active)
+  apply_legacy_refs(_active)
 end
 
 ---Return the active configuration.

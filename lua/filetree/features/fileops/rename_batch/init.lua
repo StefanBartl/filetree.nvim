@@ -26,29 +26,25 @@ local map         = require("filetree.util.map")
 local au          = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local buffer      = require("filetree.util.buffer")
-local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm  = require("filetree.util.confirm")
-local refs_util   = require("filetree.util.markdown_refs")
-local refs_picker = require("filetree.util.refs_picker")
+-- Cross-file references (markdown links, require()/import statements) after
+-- the batch: one scan, one chooser for the whole batch — see filetree.refs.
+local refs        = require("filetree.refs")
 
--- Central FS-mutation chokepoint (libuv-based, no shell): retries transient
--- Windows sharing locks. A batch rename touches many watched paths in a row, so
--- it is a prime lock trigger. `watch.release` frees neo-tree's watcher on the
--- source before each retry (no-op unless handle_guard installed the registry).
-local fsops = require("lib.nvim.cross.fs.mutate")
-local watch = require("lib.nvim.neotree.watch")
+-- The one way this plugin moves a path: Windows sharing-lock retries (a batch
+-- rename touches many watched paths in a row, so it is a prime trigger) plus
+-- the cross-drive EXDEV fallback. See filetree.util.mutate.
+local mutate = require("filetree.util.mutate")
 
 local M = {}
 
 ---@type FiletreeRenameBatchConfig
 local _cfg = {
-  enabled             = false,
-  keymap              = "<leader>rb",
-  confirm             = false,
-  use_safety          = true,
-  dry_run             = false,
-  check_markdown_refs = true,
-  refs_picker_prefer  = "auto",
+  enabled    = false,
+  keymap     = "<leader>rb",
+  confirm    = false,
+  use_safety = true,
+  dry_run    = false,
 }
 
 ---@type FiletreeAdapter?
@@ -81,48 +77,18 @@ local function snapshot_nodes()
   return entries
 end
 
--- ── Markdown reference update (post-batch) ──────────────────────────────────────
--- Same soft-dep + chooser UX as trash/smart_rename, but aggregated: refs from
--- every renamed item in the batch are collected first, then offered as ONE
--- chooser instead of one popup per file. Each ref already carries its own
--- `.new_target` (computed against whichever item it was found for), so the
--- "update all" and "inspect" paths both just call refs_util.update() directly.
-
----@internal
----@param all_refs table[]  MarkdownFileRef[], each with `.new_target` pre-set.
-local function handle_batch_markdown_refs(all_refs)
-  if not _cfg.check_markdown_refs or #all_refs == 0 then return end
-
-  local files = refs_util.unique_files(all_refs)
-  notify.info(string.format(
-    "%d markdown reference(s) found in: %s", #all_refs, table.concat(files, ", ")
-  ))
-
-  confirm_choice(
-    string.format("%d ref(s) across the renamed batch", #all_refs),
-    { "Update all refs", "Inspect first", "Leave as-is" },
-    function(choice)
-      if choice == "Update all refs" then
-        refs_util.update(all_refs)
-      elseif choice == "Inspect first" then
-        refs_picker.pick(
-          all_refs,
-          { prefer = _cfg.refs_picker_prefer, title = "References across the renamed batch" },
-          function(selected) if #selected > 0 then refs_util.update(selected) end end,
-          function() end
-        )
-      end
-    end
-  )
-end
-
 -- ── Diff + execute ────────────────────────────────────────────────────────────
 
 ---@internal
 ---Actually perform the renames for an already-confirmed plan.
+---
+---Asynchronous because the reference scan is: it starts BEFORE the first
+---rename (while every source still exists on disk, so relative link targets
+---and module names resolve against the old layout) and the renames run inside
+---its callback, so nothing can move out from under the scanner.
 ---@param plan {src:string, dst:string}[]
----@return boolean ok
-local function run_plan(plan)
+---@param on_done fun(ok: boolean)
+local function run_plan(plan, on_done)
   -- Safety backup
   if _cfg.use_safety then
     local ok_s, safety = require("filetree.features").load("safety")
@@ -133,62 +99,51 @@ local function run_plan(plan)
     end
   end
 
-  -- Capture markdown references for every planned source BEFORE renaming,
-  -- while the files still exist on disk (so cwd-relative and every other link
-  -- style resolve correctly — resolution probes the filesystem). Keyed by plan
-  -- index so a source whose rename later fails contributes no stale refs.
-  local refs_by_idx = {}
-  if _cfg.check_markdown_refs then
-    for i, op in ipairs(plan) do
-      refs_by_idx[i] = refs_util.find(op.src)
-    end
-  end
+  local sources = {}
+  for _, op in ipairs(plan) do sources[#sources + 1] = op.src end
 
-  -- Execute
-  local errors    = 0
-  local relocated = 0
-  local all_refs  = {}
-  for i, op in ipairs(plan) do
-    local ok, err = fsops.rename_file(op.src, op.dst, {
-      on_retry = function() watch.release(op.src) end,
-    })
-    -- uv.fs_rename cannot cross filesystems/drives (EXDEV, not retried); fall
-    -- back to vim.fn.rename, which copies+deletes internally — same guard as
-    -- copy_move's do_move.
-    if not ok and type(err) == "string" and err:match("^EXDEV") then
-      ok = (vim.fn.rename(op.src, op.dst) == 0)
-    end
-    if not ok then
-      notify.error("Failed: " .. op.src .. " → " .. op.dst)
-      errors = errors + 1
-    else
-      -- Repoint any open buffer(s) at the old path (or nested under it, for a
-      -- renamed directory) so a stale buffer for the old name doesn't linger
-      -- alongside a second, disconnected buffer for the new one.
-      relocated = relocated + buffer.relocate(op.src, op.dst)
+  refs.prefetch(sources, { op = "rename" }).await(function(scan_result)
+    local errors    = 0
+    local relocated = 0
+    -- Only sources whose rename actually landed contribute references; a
+    -- failed one must not have its links rewritten to a file that isn't there.
+    local moves     = {}
 
-      for _, r in ipairs(refs_by_idx[i] or {}) do
-        r.new_target = refs_util.retarget(r, op.dst)
-        all_refs[#all_refs + 1] = r
+    for _, op in ipairs(plan) do
+      local ok = mutate.move(op.src, op.dst)
+      if not ok then
+        notify.error("Failed: " .. op.src .. " → " .. op.dst)
+        errors = errors + 1
+      else
+        -- Repoint any open buffer(s) at the old path (or nested under it, for a
+        -- renamed directory) so a stale buffer for the old name doesn't linger
+        -- alongside a second, disconnected buffer for the new one.
+        relocated = relocated + buffer.relocate(op.src, op.dst)
+        moves[op.src] = op.dst
       end
     end
-  end
 
-  local done = #plan - errors
-  local msg  = string.format("Renamed %d/%d item(s)", done, #plan)
-  if relocated > 0 then
-    msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
-  end
-  notify.info(msg)
+    local done = #plan - errors
+    local msg  = string.format("Renamed %d/%d item(s)", done, #plan)
+    if relocated > 0 then
+      msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
+    end
+    notify.info(msg)
 
-  handle_batch_markdown_refs(all_refs)
+    -- One chooser for the whole batch, across every provider, instead of one
+    -- popup per renamed file.
+    refs.handle_result(scan_result, moves, {
+      op = "rename",
+      title = "References across the renamed batch",
+    })
 
-  -- Refresh tree
-  if _adapter and _adapter.refresh then
-    pcall(_adapter.refresh)
-  end
+    -- Refresh tree
+    if _adapter and _adapter.refresh then
+      pcall(_adapter.refresh)
+    end
 
-  return errors == 0
+    on_done(errors == 0)
+  end)
 end
 
 ---@internal
@@ -252,13 +207,13 @@ local function execute_renames(entries, new_names, on_done)
           on_done(false)
           return
         end
-        on_done(run_plan(plan))
+        run_plan(plan, on_done)
       end,
     })
     return
   end
 
-  on_done(run_plan(plan))
+  run_plan(plan, on_done)
 end
 
 -- ── Scratch buffer ────────────────────────────────────────────────────────────
