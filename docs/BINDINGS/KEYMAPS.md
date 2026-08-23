@@ -84,6 +84,7 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `/` | `filter` + neotree fuzzy finder | neotree uses `/` for its own search. Remap `filter.keymap` if using neotree. |
 | `i` | `shell_run` + neotree built-in `i` (toggle node info) | filetree's `node_info` provides a better `I`; noop neotree's `i` via `adapter_keymaps`. |
 | `<C-c>` | `filter.keymap_clear` + `copy_move.keymaps.clear` | Both default to `<C-c>`. Last one registered wins; remap one if you need both reachable at once. |
+| `m` | `marks` + neotree built-in `m` (move) | filetree binds `m` to marking, shadowing neo-tree's own move. filetree's `M` does the same job and updates references while it's at it. |
 
 ---
 

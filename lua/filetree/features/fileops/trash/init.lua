@@ -180,6 +180,23 @@ local function confirm_popup(path, cb)
     notify.info(refs.ui.summary(found) .. ": "
       .. table.concat(refs.ui.unique_files(found), ", "))
 
+    -- `refs.on_delete = "auto"` means "don't ask about the references" -- not
+    -- "don't ask about the delete". So the ordinary confirmation still runs,
+    -- and the cleanup happens only once it came back yes: a cancelled delete
+    -- must not leave blanked-out links behind.
+    if refs.mode("delete") == "auto" then
+      ui_confirm({
+        title    = " Trash ",
+        body     = info_body(path),
+        question = string.format("Send to trash? (%d ref(s) will be marked REF!)", #found),
+        on_choice = function(yes)
+          if yes then refs.apply.run(found, { label = "delete: " .. name }) end
+          cb(yes)
+        end,
+      })
+      return
+    end
+
     confirm_choice(
       string.format("Trash %s (%d ref(s) found)", name, #found),
       { "Delete + remove refs", "Inspect first", "Delete, keep refs", "Cancel" },
