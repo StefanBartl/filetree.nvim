@@ -15,7 +15,10 @@
 --- Keymaps (in tree buffer, defaults):
 ---   gp   Open PDF with `default_mode` (default "buffer" = pdfport text view;
 ---        falls back to the system viewer when pdfport isn't installed).
----   The explicit-mode keys (text / system / terminal) are opt-in (default off).
+---   The explicit-mode keys (text / system / terminal / picker) are opt-in
+---   (default off) — set `default_mode = "picker"` (or bind `keymap_picker`)
+---   to get an interactive "how do you want this PDF opened?" chooser
+---   instead of a fixed mode; see `filetree.util.pdf`'s `M.pick_open`.
 
 local pdf    = require("filetree.util.pdf")
 local notify = require("filetree.util.notify").create("[filetree.pdf_open]")
@@ -32,6 +35,7 @@ local _cfg = {
   keymap_text     = false,      -- mode "buffer"   (pdfport text extraction)
   keymap_system   = false,      -- mode "system"   (OS viewer, dependency-free)
   keymap_terminal = false,      -- mode "terminal" (pdfport in a terminal)
+  keymap_picker   = false,      -- mode "picker"   (ask; see M.open_picker)
 }
 
 ---@type FiletreeAdapter?
@@ -53,6 +57,12 @@ end
 local function open(mode)
   local path = current_pdf()
   if not path then notify.warn("No PDF under cursor"); return end
+
+  if mode == "picker" then
+    pdf.pick_open(path, { title = "Open PDF: " .. vim.fn.fnamemodify(path, ":t") })
+    return
+  end
+
   local opts = { mode = mode }
   if mode == "buffer" then
     opts.split, opts.focus = "vsplit", true
@@ -68,6 +78,10 @@ function M.open_text()     open("buffer")   end
 function M.open_system()   open("system")   end
 ---Open the PDF under the cursor with pdfport in a terminal.
 function M.open_terminal() open("terminal") end
+---Ask how to open the PDF under the cursor (every mode/backend pdfport
+---knows about, plus "system application" — always available even without
+---pdfport, see `filetree.util.pdf`'s `M.pick_open`).
+function M.open_picker()   open("picker")   end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +102,7 @@ function M.setup(config, adapter)
     kmap(_cfg.keymap_text,     M.open_text,     "open PDF as text (pdfport)")
     kmap(_cfg.keymap_system,   M.open_system,   "open PDF in system viewer")
     kmap(_cfg.keymap_terminal, M.open_terminal, "open PDF in terminal (pdfport)")
+    kmap(_cfg.keymap_picker,   M.open_picker,   "open PDF — ask how (pdfport/system)")
   end)
 end
 

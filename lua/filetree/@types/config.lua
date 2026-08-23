@@ -533,6 +533,10 @@
 ---| "float"     Show extracted text in a floating window via pdfport.nvim.
 ---| "terminal"  Run pdfport.nvim's conversion in a terminal.
 ---| "system"    Open in the OS default PDF viewer (no external deps).
+---| "picker"    Ask (pdfport.nvim's own chooser: every mode/backend it knows
+---              about, plus "system application" — see `filetree.util.pdf`'s
+---              `M.pick_open`). Falls back to the system viewer with no
+---              prompt when pdfport.nvim is absent.
 
 ---@class FiletreePdfOpenConfig
 ---@field enabled         boolean
@@ -541,6 +545,7 @@
 ---@field keymap_text     string?  Force text extraction into a buffer (default nil, off).
 ---@field keymap_system   string?  Force the OS default viewer (default nil, off).
 ---@field keymap_terminal string?  Force pdfport's terminal mode (default nil, off).
+---@field keymap_picker   string?  Ask how to open it — `default_mode = "picker"` (default nil, off).
 
 -- ── pdf_create ────────────────────────────────────────────────────────────────
 

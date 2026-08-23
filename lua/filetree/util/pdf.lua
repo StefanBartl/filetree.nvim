@@ -195,4 +195,41 @@ function M.open(path, opts)
   return M.system_open(path)
 end
 
+---Ask how to open `path` (pdfport's own "open PDF as…" chooser: every
+---backend/mode pdfport knows about, PLUS "system application" — see
+---pdfport.util.picker's module docs for why that entry is guaranteed).
+---Falls back to `M.system_open` with no prompt when pdfport.nvim is absent
+---or exposes no `pick_open()` (older pdfport.nvim): a picker with nothing to
+---pick pdfport-side is not worth showing, and the whole point of this module
+---is that filetree never blocks a PDF open on pdfport being installed.
+---
+---The system entry is routed back through `M.system_open` (not pdfport's own
+---`system` renderer) so it stays the exact same code path as `mode ==
+---"system"` above — currently identical, but keeps room for a future
+---filetree-specific quirk (WSL path translation, say) without pdfport
+---needing to know about it.
+---@param path string
+---@param opts? { title?: string }
+---@return boolean handled
+function M.pick_open(path, opts)
+  opts = opts or {}
+  if not M.is_pdf(path) then
+    notify.warn("Not a PDF: " .. tostring(path))
+    return false
+  end
+
+  local ok, pp = pcall(require, "pdfport")
+  if not ok or type(pp.pick_open) ~= "function" then
+    notify.warn("pdfport.nvim not installed (or too old for pick_open()) — opening PDF in system viewer")
+    return M.system_open(path)
+  end
+
+  pp.pick_open(path, {
+    title = opts.title,
+    system_open = M.system_open,
+    system_first = true,
+  })
+  return true
+end
+
 return M

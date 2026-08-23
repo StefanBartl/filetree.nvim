@@ -84,6 +84,13 @@ opened directly can route through pdfport's own backend fallback chain
 reader. Soft dependency — without pdfport.nvim installed, `.pdf` nodes
 just open with the system reader, no prompt.
 
+`pdf_open`'s default keymap (`gp`) opens directly in `default_mode` (default
+"buffer"), no prompt. Set `default_mode = "picker"` (or bind
+`keymap_picker`) instead to get pdfport's own "open PDF as…" chooser —
+every backend/mode pdfport knows about, plus "system application", which is
+always offered even without pdfport.nvim installed (falls back to the
+system reader directly, no empty prompt).
+
 - **Module:** `lua/filetree/features/system/pdf_open/`,
   `lua/filetree/features/system/pdf_create/` (dispatch/creation sites,
   wired into `preview` — [UI.md](UI.md)); see
