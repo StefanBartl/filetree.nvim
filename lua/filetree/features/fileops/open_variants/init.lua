@@ -82,7 +82,10 @@ end
 function M.open_badd()
   local path = current_file_path()
   if not path then return end
-  vim.fn.bufadd(path)
+  -- bufadd() creates the buffer with 'buflisted' off, so it never shows up in
+  -- :ls, :bnext or any tab-cycling keymap. `:badd` sets the flag; do the same.
+  local bufnr = vim.fn.bufadd(path)
+  vim.bo[bufnr].buflisted = true
   notify.info("Added to buffer list: " .. vim.fn.fnamemodify(path, ":~:."))
 end
 
