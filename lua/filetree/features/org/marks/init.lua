@@ -8,21 +8,25 @@
 local notify = require("filetree.util.notify").create("[filetree.marks]")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local kit = require("lib.nvim.ui.kit")
 local M = {}
 
 ---@type FiletreeMarksConfig
 local _cfg = {
-  enabled          = false,
-  indicator        = "✓",
-  hl_group         = "DiagnosticOk",
-  keymap           = "m",
-  keymap_all       = "]m",
+  enabled = false,
+  indicator = "✓",
+  hl_group = "DiagnosticOk",
+  keymap = "m",
+  keymap_all = "]m",
   keymap_unmark_all = "[m",
-  keymap_clear     = "<C-m>",
-  keymap_show      = "<leader>ms",
+  keymap_clear = "<C-m>",
+  keymap_show = "<leader>ms",
+  -- Navigation between marks. `Ngm` jumps to the Nth marked node.
+  keymap_goto = "gm",
+  keymap_next = "]M",
+  keymap_prev = "[M",
 }
 
 ---@type FiletreeAdapter?
@@ -52,9 +56,9 @@ local function redraw()
       local line = node.line_number - 1
       if line >= 0 then
         pcall(vim.api.nvim_buf_set_extmark, bufnr, ns(), line, 0, {
-          virt_text     = { { _cfg.indicator .. " ", _cfg.hl_group } },
+          virt_text = { { _cfg.indicator .. " ", _cfg.hl_group } },
           virt_text_pos = "overlay",
-          priority      = 100,
+          priority = 100,
         })
       end
     end
@@ -99,7 +103,9 @@ end
 ---@return string[]
 function M.get_marked()
   local out = {}
-  for p in pairs(_marks) do out[#out + 1] = p end
+  for p in pairs(_marks) do
+    out[#out + 1] = p
+  end
   table.sort(out)
   return out
 end
@@ -108,7 +114,9 @@ end
 ---@return integer
 function M.count()
   local n = 0
-  for _ in pairs(_marks) do n = n + 1 end
+  for _ in pairs(_marks) do
+    n = n + 1
+  end
   return n
 end
 
@@ -138,6 +146,135 @@ function M.unmark_all_visible()
   redraw()
 end
 
+---Marked nodes that are actually on screen, in buffer order.
+---
+--- `get_marked()` returns paths sorted alphabetically, which is the right
+--- answer for "what is marked" and the wrong one for navigation: jumping
+--- between marks has to follow the tree as it is rendered, and a marked node
+--- inside a collapsed directory has no line to jump to at all.
+---@return { path: string, line: integer }[]
+---@internal
+local function visible_marks()
+  if not _adapter then return {} end
+  local out = {}
+  for _, node in ipairs(_adapter.get_visible_nodes()) do
+    if _marks[node.path] and node.line_number and node.line_number > 0 then
+      out[#out + 1] = { path = node.path, line = node.line_number }
+    end
+  end
+  table.sort(out, function(a, b)
+    return a.line < b.line
+  end)
+  return out
+end
+
+---@internal
+---@param line integer  1-based
+local function goto_line(line)
+  local is_open, bufnr = _adapter.is_open()
+  if not is_open or not bufnr then return end
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(win) == bufnr then
+      pcall(vim.api.nvim_win_set_cursor, win, { line, 0 })
+      return
+    end
+  end
+end
+
+---Jump to the `n`-th marked node (1-based, in render order).
+---
+--- Clamped rather than refused: with three marks, `9` going to the last one
+--- is more useful than an error, and matches how `G` treats an out-of-range
+--- count.
+---@param n integer|nil  defaults to 1
+---@return boolean moved
+function M.goto_mark(n)
+  local marks = visible_marks()
+  if #marks == 0 then
+    notify.info("No marked nodes visible")
+    return false
+  end
+  local idx = math.max(1, math.min(n or 1, #marks))
+  goto_line(marks[idx].line)
+  return true
+end
+
+---Jump to the next marked node below the cursor, wrapping to the first.
+---@param dir integer  1 forward, -1 backward
+---@return boolean moved
+function M.goto_adjacent_mark(dir)
+  local marks = visible_marks()
+  if #marks == 0 then
+    notify.info("No marked nodes visible")
+    return false
+  end
+
+  local is_open, bufnr = _adapter.is_open()
+  if not is_open or not bufnr then return false end
+  local cur = 0
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(win) == bufnr then
+      cur = vim.api.nvim_win_get_cursor(win)[1]
+      break
+    end
+  end
+
+  if dir > 0 then
+    for _, m in ipairs(marks) do
+      if m.line > cur then
+        goto_line(m.line)
+        return true
+      end
+    end
+    goto_line(marks[1].line) -- wrap
+  else
+    for i = #marks, 1, -1 do
+      if marks[i].line < cur then
+        goto_line(marks[i].line)
+        return true
+      end
+    end
+    goto_line(marks[#marks].line) -- wrap
+  end
+  return true
+end
+
+---Mark every node in the current Visual selection.
+---
+--- The tree had no Visual-mode keymaps at all: marking a run of files meant
+--- pressing `m` once per line. The selection's line range maps onto the
+--- rendered nodes directly, which is the one thing a tree buffer's Visual
+--- mode is genuinely good for.
+---@param unmark boolean|nil  # clear instead of set
+---@return integer changed
+function M.mark_visual(unmark)
+  if not _adapter then return 0 end
+  local s_line = vim.fn.line("v")
+  local e_line = vim.fn.line(".")
+  if s_line > e_line then
+    s_line, e_line = e_line, s_line
+  end
+
+  -- Leave Visual mode first: the marks redraw sets extmarks, and staying in
+  -- Visual over a buffer that just changed leaves a stale selection.
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+
+  local changed = 0
+  for _, node in ipairs(_adapter.get_visible_nodes()) do
+    local ln = node.line_number
+    if ln and ln >= s_line and ln <= e_line then
+      local now = unmark and nil or true
+      if _marks[node.path] ~= now then
+        _marks[node.path] = now
+        changed = changed + 1
+      end
+    end
+  end
+
+  redraw()
+  return changed
+end
+
 ---Show a floating summary of all marked paths.
 function M.show()
   local marked = M.get_marked()
@@ -154,7 +291,7 @@ function M.show()
     lines[#lines + 1] = string.format("[%02d] %s", i, p)
   end
 
-  local width  = math.min(80, vim.o.columns - 4)
+  local width = math.min(80, vim.o.columns - 4)
   local height = math.min(#lines + 1, vim.o.lines - 6)
 
   kit.viewer({
@@ -174,7 +311,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _augroup then au.del_group(_augroup) end
@@ -182,8 +319,8 @@ function M.setup(config, adapter)
 
   -- Redraw marks whenever the tree buffer is entered/refreshed
   au.acmd({ "BufEnter", "BufWritePost" }, {
-    group    = _augroup,
-    pattern  = "*",
+    group = _augroup,
+    pattern = "*",
     callback = function()
       vim.defer_fn(redraw, 50)
     end,
@@ -192,15 +329,46 @@ function M.setup(config, adapter)
   -- Keymaps inside tree buffer
   tree_attach.on_attach(function(buf)
     local function km(key, fn, desc)
-      if key and key ~= "" then
-        map("n", key, fn, { buffer = buf, silent = true, desc = desc })
-      end
+      if key and key ~= "" then map("n", key, fn, { buffer = buf, silent = true, desc = desc }) end
     end
-    km(_cfg.keymap,            function() M.toggle_current() end,  "Filetree: toggle mark")
-    km(_cfg.keymap_all,        M.mark_all_visible,                 "Filetree: mark all visible")
-    km(_cfg.keymap_unmark_all, M.unmark_all_visible,               "Filetree: unmark all visible")
-    km(_cfg.keymap_clear,      function() M.clear_all() end,       "Filetree: clear all marks")
-    km(_cfg.keymap_show,       function() M.show() end,            "Filetree: show marked nodes")
+    km(_cfg.keymap, function()
+      M.toggle_current()
+    end, "Filetree: toggle mark")
+    km(_cfg.keymap_all, M.mark_all_visible, "Filetree: mark all visible")
+    km(_cfg.keymap_unmark_all, M.unmark_all_visible, "Filetree: unmark all visible")
+    km(_cfg.keymap_clear, function()
+      M.clear_all()
+    end, "Filetree: clear all marks")
+    km(_cfg.keymap_show, function()
+      M.show()
+    end, "Filetree: show marked nodes")
+
+    -- Navigation between marks. `Ngm` jumps to the Nth mark, matching how a
+    -- count reads on `G`; `]M`/`[M` cycle, wrapping like every other
+    -- next/prev pair in this plugin.
+    km(_cfg.keymap_goto, function()
+      M.goto_mark(vim.v.count ~= 0 and vim.v.count or 1)
+    end, "Filetree: jump to the Nth marked node")
+    km(_cfg.keymap_next, function()
+      M.goto_adjacent_mark(1)
+    end, "Filetree: next marked node")
+    km(_cfg.keymap_prev, function()
+      M.goto_adjacent_mark(-1)
+    end, "Filetree: previous marked node")
+
+    -- Visual-mode marking. The only keymaps this plugin binds in Visual mode:
+    -- a line range over a rendered tree is exactly a set of nodes.
+    local function xm(key, fn, desc)
+      if key and key ~= "" then map("x", key, fn, { buffer = buf, silent = true, desc = desc }) end
+    end
+    xm(_cfg.keymap, function()
+      local n = M.mark_visual(false)
+      notify.info(("Marked %d node(s)"):format(n))
+    end, "Filetree: mark selection")
+    xm(_cfg.keymap_unmark_all, function()
+      local n = M.mark_visual(true)
+      notify.info(("Unmarked %d node(s)"):format(n))
+    end, "Filetree: unmark selection")
   end)
 end
 
@@ -208,9 +376,7 @@ function M.teardown()
   _marks = {}
   if _adapter then
     local _, bufnr = _adapter.is_open()
-    if bufnr then
-      pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns(), 0, -1)
-    end
+    if bufnr then pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns(), 0, -1) end
   end
   if _augroup then
     au.del_group(_augroup)

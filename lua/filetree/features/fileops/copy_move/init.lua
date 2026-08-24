@@ -23,22 +23,22 @@
 
 local notify = require("filetree.util.notify").create("[filetree.copy_move]")
 
-local map         = require("filetree.util.map")
-local au          = require("filetree.util.autocmd")
+local map = require("filetree.util.map")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
-local buffer      = require("filetree.util.buffer")
+local buffer = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
-local ui_confirm  = require("filetree.util.confirm")
+local ui_confirm = require("filetree.util.confirm")
 -- Destination-collision helpers (exists / remove_existing / unique_name) and
 -- the shared move-with-retry, both also used by the `move` feature.
-local conflict    = require("filetree.util.conflict")
-local mutate      = require("filetree.util.mutate")
+local conflict = require("filetree.util.conflict")
+local mutate = require("filetree.util.mutate")
 -- Cross-file references after a cut+paste (= move). Copies never break one,
 -- so only cuts are ever scanned — see filetree.refs.
-local refs        = require("filetree.refs")
+local refs = require("filetree.refs")
 -- Optional: progress indicator for a multi-item paste. No-op (returns nil)
 -- when lib.nvim isn't installed.
-local progress    = require("filetree.util.progress")
+local progress = require("filetree.util.progress")
 
 -- Central FS-mutation chokepoint (libuv-based, no shell). Retries transient
 -- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_copyfile would
@@ -49,17 +49,17 @@ local M = {}
 
 ---@type FiletreeCopyMoveConfig
 local _cfg = {
-  enabled    = false,
+  enabled = false,
   keymaps = {
-    copy  = "c",
-    cut   = "x",
+    copy = "c",
+    cut = "x",
     paste = "p",
-    show  = "P",
+    show = "P",
     clear = "<C-c>",
   },
-  confirm    = false,
+  confirm = false,
   use_safety = true,
-  dry_run    = false,
+  dry_run = false,
 }
 
 ---@type FiletreeAdapter?
@@ -94,9 +94,7 @@ end
 local function get_targets()
   -- Prefer marks if any are set
   local ok, marks = require("filetree.features").load("marks")
-  if ok and marks and marks.count() > 0 then
-    return marks.get_marked()
-  end
+  if ok and marks and marks.count() > 0 then return marks.get_marked() end
   -- Fall back to current node
   if not _adapter then return {} end
   local node = _adapter.get_current_node()
@@ -126,11 +124,11 @@ local function render_clipboard()
       local op = staged[node.path]
       if op then
         local text = op == "copy" and " C" or " X"
-        local hl   = op == "copy" and "DiagnosticHint" or "DiagnosticWarn"
+        local hl = op == "copy" and "DiagnosticHint" or "DiagnosticWarn"
         pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-          virt_text     = { { text, hl } },
+          virt_text = { { text, hl } },
           virt_text_pos = "eol",
-          priority      = 80,
+          priority = 80,
         })
       end
     end
@@ -163,8 +161,12 @@ function M.stage(op)
   notify.info(string.format("%s %d item(s) to clipboard", verb, #paths))
 end
 
-function M.stage_copy() M.stage("copy") end
-function M.stage_cut()  M.stage("cut")  end
+function M.stage_copy()
+  M.stage("copy")
+end
+function M.stage_cut()
+  M.stage("cut")
+end
 
 function M.clear()
   _clipboard = {}
@@ -180,8 +182,8 @@ function M.show()
   end
   local lines = { string.format("Clipboard (%d items):", #_clipboard), "" }
   for _, e in ipairs(_clipboard) do
-    lines[#lines + 1] = string.format("  [%s] %s", e.op:upper():sub(1,1),
-      vim.fn.fnamemodify(e.path, ":~"))
+    lines[#lines + 1] =
+      string.format("  [%s] %s", e.op:upper():sub(1, 1), vim.fn.fnamemodify(e.path, ":~"))
   end
   notify.info(table.concat(lines, "\n"))
 end
@@ -234,9 +236,7 @@ end
 ---@param dst string
 ---@return integer rc  0 on success, 1 on failure
 local function do_copy(src, dst)
-  if vim.fn.isdirectory(src) == 1 then
-    return copy_dir(src, dst)
-  end
+  if vim.fn.isdirectory(src) == 1 then return copy_dir(src, dst) end
   local ok = fsops.copy_file(src, dst)
   return ok and 0 or 1
 end
@@ -285,22 +285,26 @@ local function do_paste_impl(dst_dir, conflict_mode)
 
   refs_handle.await(function(scan_result)
     local prog = progress.create({ title = "[filetree.copy_move]" })
-    local errors    = 0
-    local done      = 0
-    local skipped   = 0
+    local errors = 0
+    local done = 0
+    local skipped = 0
     local relocated = 0
     -- old path → new path, filled in only once a cut has actually landed, so a
     -- failed or skipped item never gets its references rewritten.
-    local moves     = {}
-    local moved     = {} -- entry -> true, once its cut has actually landed
-    local claimed   = {} -- names already handed out by "Keep both" this batch
+    local moves = {}
+    local moved = {} -- entry -> true, once its cut has actually landed
+    local claimed = {} -- names already handed out by "Keep both" this batch
 
     for i, e in ipairs(_clipboard) do
       if prog then
-        prog:update({ text = vim.fn.fnamemodify(e.path, ":t"), current = i - 1, total = #_clipboard })
+        prog:update({
+          text = vim.fn.fnamemodify(e.path, ":t"),
+          current = i - 1,
+          total = #_clipboard,
+        })
       end
       local name = vim.fn.fnamemodify(e.path, ":t")
-      local dst  = dst_dir .. "/" .. name
+      local dst = dst_dir .. "/" .. name
 
       if conflict.exists(dst) then
         if conflict_mode == "Overwrite" then
@@ -329,7 +333,11 @@ local function do_paste_impl(dst_dir, conflict_mode)
       if dst then
         if e.op == "copy" then
           local rc = do_copy(e.path, dst)
-          if rc ~= 0 then errors = errors + 1 else done = done + 1 end
+          if rc ~= 0 then
+            errors = errors + 1
+          else
+            done = done + 1
+          end
         else
           local rc, moved_dst = do_move(e.path, dst)
           if rc ~= 0 or not moved_dst then
@@ -350,11 +358,13 @@ local function do_paste_impl(dst_dir, conflict_mode)
       end
     end
 
-    local msg = string.format("Pasted %d/%d item(s) into %s",
-      done, #_clipboard, vim.fn.fnamemodify(dst_dir, ":t"))
-    if skipped > 0 then
-      msg = msg .. string.format(" (%d skipped)", skipped)
-    end
+    local msg = string.format(
+      "Pasted %d/%d item(s) into %s",
+      done,
+      #_clipboard,
+      vim.fn.fnamemodify(dst_dir, ":t")
+    )
+    if skipped > 0 then msg = msg .. string.format(" (%d skipped)", skipped) end
     if relocated > 0 then
       msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
     end
@@ -403,8 +413,12 @@ local function paste_resolving_conflicts(dst_dir)
   end
 
   confirm_choice(
-    string.format("%d item(s) already exist in %s:\n  %s",
-      #conflicts, vim.fn.fnamemodify(dst_dir, ":t"), table.concat(names, ", ")),
+    string.format(
+      "%d item(s) already exist in %s:\n  %s",
+      #conflicts,
+      vim.fn.fnamemodify(dst_dir, ":t"),
+      table.concat(names, ", ")
+    ),
     { "Overwrite", "Keep both", "Skip", "Cancel" },
     function(choice)
       if choice == nil or choice == "Cancel" then
@@ -426,9 +440,7 @@ function M.paste()
   local node = _adapter.get_current_node()
   local dst_dir
   if node then
-    dst_dir = node.type == "directory"
-      and node.path
-      or vim.fn.fnamemodify(node.path, ":h")
+    dst_dir = node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
   else
     dst_dir = vim.fn.getcwd()
   end
@@ -445,9 +457,15 @@ function M.paste()
   if _cfg.confirm then
     ui_confirm({
       question = string.format(
-        "Paste %d item(s) into %s?", #_clipboard, vim.fn.fnamemodify(dst_dir, ":~")),
+        "Paste %d item(s) into %s?",
+        #_clipboard,
+        vim.fn.fnamemodify(dst_dir, ":~")
+      ),
       on_choice = function(yes)
-        if not yes then notify.info("Cancelled"); return end
+        if not yes then
+          notify.info("Cancelled")
+          return
+        end
         paste_resolving_conflicts(dst_dir)
       end,
     })
@@ -462,13 +480,26 @@ end
 ---@type integer?
 local _augroup = nil
 
+---Toggle dry-run for copy/move.
+---
+--- `dry_run` was config-only here, while `trash` and `safety` both had a
+--- runtime toggle. That asymmetry is the wrong way round: these two are the
+--- destructive bulk operations you most want to preview once before letting
+--- them run, and turning it on meant editing the config and reloading.
+---@return boolean dry_run  the new state
+function M.toggle_dry_run()
+  _cfg.dry_run = not _cfg.dry_run
+  notify.info("copy/move dry-run: " .. (_cfg.dry_run and "ON" or "OFF"))
+  return _cfg.dry_run
+end
+
 ---@param config FiletreeCopyMoveConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
-  _ns      = vim.api.nvim_create_namespace("filetree_copy_move")
+  _ns = vim.api.nvim_create_namespace("filetree_copy_move")
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_copy_move", true)
@@ -495,24 +526,25 @@ function M.setup(config, adapter)
         local prefix = key:sub(1, 1)
         if prefix ~= km.paste and prefix ~= km.show then
           map("n", prefix, "<Nop>", {
-            buffer = buf, silent = true,
-            desc   = "Filetree: unblock " .. desc .. " (" .. key .. ")",
+            buffer = buf,
+            silent = true,
+            desc = "Filetree: unblock " .. desc .. " (" .. key .. ")",
           })
         end
       end
     end
     unblock_prefix(km.copy, "stage copy")
-    unblock_prefix(km.cut,  "stage cut")
+    unblock_prefix(km.cut, "stage cut")
 
-    bind(km.copy,  M.stage_copy, "stage copy")
-    bind(km.cut,   M.stage_cut,  "stage cut")
-    bind(km.paste, M.paste,      "paste clipboard")
-    bind(km.show,  M.show,       "show clipboard")
-    bind(km.clear, M.clear,      "clear clipboard")
+    bind(km.copy, M.stage_copy, "stage copy")
+    bind(km.cut, M.stage_cut, "stage cut")
+    bind(km.paste, M.paste, "paste clipboard")
+    bind(km.show, M.show, "show clipboard")
+    bind(km.clear, M.clear, "clear clipboard")
   end)
 
   au.acmd("BufEnter", {
-    group   = _augroup,
+    group = _augroup,
     pattern = "*",
     callback = function(ev)
       local ft = vim.bo[ev.buf].filetype
@@ -523,7 +555,7 @@ end
 
 function M.teardown()
   _clipboard = {}
-  _adapter   = nil
+  _adapter = nil
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil

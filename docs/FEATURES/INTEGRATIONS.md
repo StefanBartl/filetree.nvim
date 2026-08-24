@@ -19,8 +19,36 @@ Toggle a mark on the node under the cursor (`m`), batch mark/unmark
 mechanism several fileops features (trash, copy/move, copy_file_list)
 build on for "act on more than one node at once".
 
-- **Module:** `lua/filetree/features/org/marks/`
-- **Keymaps:** `m`, `]m`, `[m`, `<C-m>`, `<leader>ms`
+### Navigating and selecting marks (2026-08-24)
+
+Marks were set one line at a time and, once set, had no way back to them.
+Two additions close the flag/option audit's entries:
+
+**Jumping.** `Ngm` goes to the Nth marked node in render order, `]M`/`[M`
+cycle to the next/previous one, wrapping. Navigation follows the tree *as
+rendered*, not `get_marked()`'s alphabetical order — that is the right answer
+for "what is marked" and the wrong one for moving around, and a marked node
+inside a collapsed directory has no line to jump to at all. An out-of-range
+count clamps to the last mark rather than erroring, the way `G` treats one.
+
+**Visual-mode marking.** `m` over a selection marks every node in it, `[m`
+unmarks. These are the only Visual-mode keymaps filetree binds, and the
+audit's entry about there being none was really about this: a line range over
+a rendered tree is exactly a set of nodes, which is the one thing a tree
+buffer's Visual mode is good for. Marking a run of files no longer means
+pressing `m` once per line.
+
+Diffing two marked files against each other was listed as missing, but
+`diff_marked()` has always done exactly that (it requires exactly two marks
+and diffs them against one another, not against the current buffer) — nothing
+to add.
+
+- **Module:** `lua/filetree/features/org/marks/` (`goto_mark`,
+  `goto_adjacent_mark`, `mark_visual`)
+- **Keymaps:** `m`, `]m`, `[m`, `<C-m>`, `<leader>ms`, `gm`, `]M`, `[M`,
+  plus `m`/`[m` in Visual mode
+- **Config:** `marks.keymap_goto` (default `gm`), `marks.keymap_next`
+  (`]M`), `marks.keymap_prev` (`[M`)
 
 ## Session
 

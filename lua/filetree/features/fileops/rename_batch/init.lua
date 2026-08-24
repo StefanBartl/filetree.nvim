@@ -22,14 +22,14 @@
 
 local notify = require("filetree.util.notify").create("[filetree.rename_batch]")
 
-local map         = require("filetree.util.map")
-local au          = require("filetree.util.autocmd")
+local map = require("filetree.util.map")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
-local buffer      = require("filetree.util.buffer")
-local ui_confirm  = require("filetree.util.confirm")
+local buffer = require("filetree.util.buffer")
+local ui_confirm = require("filetree.util.confirm")
 -- Cross-file references (markdown links, require()/import statements) after
 -- the batch: one scan, one chooser for the whole batch — see filetree.refs.
-local refs        = require("filetree.refs")
+local refs = require("filetree.refs")
 
 -- The one way this plugin moves a path: Windows sharing-lock retries (a batch
 -- rename touches many watched paths in a row, so it is a prime trigger) plus
@@ -40,11 +40,11 @@ local M = {}
 
 ---@type FiletreeRenameBatchConfig
 local _cfg = {
-  enabled    = false,
-  keymap     = "<leader>rb",
-  confirm    = false,
+  enabled = false,
+  keymap = "<leader>rb",
+  confirm = false,
   use_safety = true,
-  dry_run    = false,
+  dry_run = false,
 }
 
 ---@type FiletreeAdapter?
@@ -65,10 +65,10 @@ local function snapshot_nodes()
   local entries = {}
   for _, node in ipairs(nodes) do
     if node.type == "file" or node.type == "directory" then
-      local abs_dir  = vim.fn.fnamemodify(node.path, ":h")
+      local abs_dir = vim.fn.fnamemodify(node.path, ":h")
       local old_name = vim.fn.fnamemodify(node.path, ":t")
       entries[#entries + 1] = {
-        abs_dir  = abs_dir,
+        abs_dir = abs_dir,
         old_name = old_name,
         new_name = old_name,
       }
@@ -100,14 +100,16 @@ local function run_plan(plan, on_done)
   end
 
   local sources = {}
-  for _, op in ipairs(plan) do sources[#sources + 1] = op.src end
+  for _, op in ipairs(plan) do
+    sources[#sources + 1] = op.src
+  end
 
   refs.prefetch(sources, { op = "rename" }).await(function(scan_result)
-    local errors    = 0
+    local errors = 0
     local relocated = 0
     -- Only sources whose rename actually landed contribute references; a
     -- failed one must not have its links rewritten to a file that isn't there.
-    local moves     = {}
+    local moves = {}
 
     for _, op in ipairs(plan) do
       local ok = mutate.move(op.src, op.dst)
@@ -124,7 +126,7 @@ local function run_plan(plan, on_done)
     end
 
     local done = #plan - errors
-    local msg  = string.format("Renamed %d/%d item(s)", done, #plan)
+    local msg = string.format("Renamed %d/%d item(s)", done, #plan)
     if relocated > 0 then
       msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
     end
@@ -138,9 +140,7 @@ local function run_plan(plan, on_done)
     })
 
     -- Refresh tree
-    if _adapter and _adapter.refresh then
-      pcall(_adapter.refresh)
-    end
+    if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
 
     on_done(errors == 0)
   end)
@@ -189,8 +189,10 @@ local function execute_renames(entries, new_names, on_done)
   if _cfg.dry_run then
     local lines = { "-- Rename plan (dry-run) --" }
     for _, op in ipairs(plan) do
-      lines[#lines + 1] = "  " .. vim.fn.fnamemodify(op.src, ":t")
-              .. " → " .. vim.fn.fnamemodify(op.dst, ":t")
+      lines[#lines + 1] = "  "
+        .. vim.fn.fnamemodify(op.src, ":t")
+        .. " → "
+        .. vim.fn.fnamemodify(op.dst, ":t")
     end
     notify.info(table.concat(lines, "\n"))
     on_done(true)
@@ -226,22 +228,24 @@ function M.open()
   end
 
   local names = {}
-  for _, e in ipairs(entries) do names[#names + 1] = e.old_name end
+  for _, e in ipairs(entries) do
+    names[#names + 1] = e.old_name
+  end
 
   -- Open horizontal split with scratch buffer
   vim.cmd("new")
   local bufnr = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_name(bufnr, "filetree://rename")
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, names)
-  vim.api.nvim_set_option_value("buftype",  "acwrite", { buf = bufnr })
-  vim.api.nvim_set_option_value("bufhidden","wipe",    { buf = bufnr })
-  vim.api.nvim_set_option_value("swapfile", false,     { buf = bufnr })
+  vim.api.nvim_set_option_value("buftype", "acwrite", { buf = bufnr })
+  vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = bufnr })
+  vim.api.nvim_set_option_value("swapfile", false, { buf = bufnr })
 
   local augroup = au.group("filetree_rename_batch_" .. bufnr, true)
 
   -- BufWriteCmd fires when user does :w
   au.acmd("BufWriteCmd", {
-    group  = augroup,
+    group = augroup,
     buffer = bufnr,
     callback = function()
       local new_names = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
@@ -256,9 +260,9 @@ function M.open()
   })
 
   au.acmd("BufDelete", {
-    group  = augroup,
+    group = augroup,
     buffer = bufnr,
-    once   = true,
+    once = true,
     callback = function()
       au.del_group(augroup)
     end,
@@ -280,12 +284,12 @@ function M.open()
   au.del_group(augroup)
   augroup = au.group("filetree_rename_batch_" .. bufnr, true)
   au.acmd("BufWriteCmd", {
-    group  = augroup,
+    group = augroup,
     buffer = bufnr,
     callback = function()
       local all_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
       local new_names = {}
-      for i = 3, #all_lines do  -- skip 2-line header
+      for i = 3, #all_lines do -- skip 2-line header
         new_names[#new_names + 1] = all_lines[i]
       end
       execute_renames(entries, new_names, function(ok)
@@ -297,9 +301,9 @@ function M.open()
     end,
   })
   au.acmd("BufDelete", {
-    group  = augroup,
+    group = augroup,
     buffer = bufnr,
-    once   = true,
+    once = true,
     callback = function()
       au.del_group(augroup)
     end,
@@ -313,11 +317,24 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
+---Toggle dry-run for batch rename.
+---
+--- `dry_run` was config-only here, while `trash` and `safety` both had a
+--- runtime toggle. That asymmetry is the wrong way round: these two are the
+--- destructive bulk operations you most want to preview once before letting
+--- them run, and turning it on meant editing the config and reloading.
+---@return boolean dry_run  the new state
+function M.toggle_dry_run()
+  _cfg.dry_run = not _cfg.dry_run
+  notify.info("batch rename dry-run: " .. (_cfg.dry_run and "ON" or "OFF"))
+  return _cfg.dry_run
+end
+
 ---@param config FiletreeRenameBatchConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _cfg.keymap then
@@ -325,7 +342,7 @@ function M.setup(config, adapter)
       map("n", _cfg.keymap, M.open, {
         buffer = buf,
         silent = true,
-        desc   = "Filetree: open batch rename buffer",
+        desc = "Filetree: open batch rename buffer",
       })
     end)
   end

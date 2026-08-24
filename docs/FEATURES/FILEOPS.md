@@ -163,6 +163,26 @@ See [References](#references).
 - **Module:** `lua/filetree/features/fileops/trash/`
 - **Keymaps:** `d`, `U`, `<leader>th`
 
+## Dry run for copy/move and batch rename (2026-08-24)
+
+`:Filetree copymove dry-run` and `:Filetree renamebatch dry-run` toggle
+`dry_run` at runtime, logging the plan instead of executing it.
+
+`trash` and `safety` already had such a toggle; copy/move and batch rename
+had `dry_run` as a config key only, so previewing meant editing the config
+and reloading. That asymmetry was the wrong way round — these two are the
+destructive *bulk* operations you most want to see once before letting them
+run. Closes the flag/option audit's entry.
+
+The command is `renamebatch`, not `rename`: `rename` is already a leaf
+command that opens the batch-rename buffer, and declaring a table under the
+same key would simply be overwritten by it.
+
+- **Module:** `features/fileops/copy_move/init.lua`,
+  `features/fileops/rename_batch/init.lua` (`toggle_dry_run`)
+- **Usercmds:** `:Filetree copymove dry-run`,
+  `:Filetree renamebatch dry-run`
+
 ## References
 
 Moving a file breaks everything that pointed at it. The reference engine
