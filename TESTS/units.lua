@@ -26,7 +26,18 @@ if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) en
 -- Cross-platform scratch-dir root for the many `tmp = TMP_ROOT .. "/units-*"`
 -- fixtures below. $TEMP is Windows-only; POSIX runners (incl. CI) don't set
 -- it, which previously hard-errored ("attempt to concatenate a nil value").
+--
+-- Canonicalized, and that is load-bearing rather than tidiness: on Windows
+-- $TEMP is the 8.3 short form (`C:/Users/STEFAN~1/...`) for any profile name
+-- over eight characters, while the code under test resolves the same
+-- directory to its long form. Comparing a chdir'd `getcwd()` against a path
+-- built by concatenating the raw env var then fails on the spelling alone --
+-- 41 cases in cwd_mode.lua and 2 here, none of them a real defect.
 local TMP_ROOT = vim.env.TEMP or vim.env.TMPDIR or vim.env.TMP or "/tmp"
+do
+  local uv = vim.uv or vim.loop
+  TMP_ROOT = (uv.fs_realpath(TMP_ROOT) or TMP_ROOT):gsub("\\", "/")
+end
 
 -- Headless CI runners (no X11/Wayland session) commonly have no clipboard
 -- provider at all; without one, "+"/"*" register writes/reads don't

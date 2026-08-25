@@ -168,11 +168,34 @@ local function path_is_ignored(rel, ignored)
   return false
 end
 
+---Canonical spelling of `root`, for handing to Vim's glob.
+---
+---`vim.fn.glob`/`globpath` treat their argument as a *pattern*, and a `~` in
+---it is a home-directory reference. On Windows that makes an 8.3 short name
+---fatal: under `C:/Users/STEFAN~1/...` -- which is what `%TEMP%` expands to
+---for any profile name longer than eight characters -- glob tries to resolve
+---`~1` as a user and returns **nothing at all**. No error, no warning, just
+---an empty list and a "No files found" that is not true.
+---
+---`fs_realpath` gives back the long form, which globs correctly. It only
+---works on a path that exists; a root that does not is left alone, since
+---glob would find nothing there either way.
+---@internal
+---@param root string
+---@return string
+local function globbable(root)
+  local uv = vim.uv or vim.loop
+  if not root:find("~", 1, true) then return root end
+  local real = uv.fs_realpath(root)
+  return real and (real:gsub("\\", "/")) or root
+end
+
 ---@internal
 ---Find files via vim.fn.globpath + vim.ui.select (dependency-free fallback).
 ---@param root string
 ---@return boolean handled
 local function via_builtin(root)
+  root = globbable(root)
   -- vim.fn.glob all files, present via vim.ui.select
   local prog = new_progress()
   if prog then prog:update({ text = "scanning " .. root .. "…" }) end
