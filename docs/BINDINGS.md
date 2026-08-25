@@ -25,6 +25,9 @@ what actually runs. Inspect it live with:
 ## Table of content
 
   - [What is bound where](#what-is-bound-where)
+    - [Keymaps](#keymaps)
+    - [User commands](#user-commands)
+    - [Autocommands](#autocommands)
   - [Keymap prefixes at a glance](#keymap-prefixes-at-a-glance)
   - [Known conflicts](#known-conflicts)
   - [Remapping and disabling](#remapping-and-disabling)
@@ -33,6 +36,8 @@ what actually runs. Inspect it live with:
 ---
 
 ## What is bound where
+
+### Keymaps
 
 **Keymaps are buffer-local to the tree window.** They are not global keys: they
 exist only while the cursor is in the tree, which is why a single letter like
@@ -45,11 +50,15 @@ autocommand. Dispatch is deferred with `vim.schedule()` so the callbacks land
 after the adapter (neo-tree and friends) has finished its own render-time
 keymap setup.
 
+### User commands
+
 **Commands are global.** There is exactly one: `:Filetree`, built with
 `lib.nvim.usercmd.composer`, with sub-command dispatch and tab completion at
 every level. `:Ft` is registered as an alias out of the box — `:Ft marks show`
 is `:Filetree marks show`. Both the name and the aliases are configurable via
 `setup({ command = … })`.
+
+### Autocommands
 
 **Behavioural autocommands** are the second category: reveal, cwd sync, git
 refresh, diagnostics, breadcrumbs and so on. Each belongs to a feature and each
