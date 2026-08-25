@@ -57,9 +57,7 @@ Beyond navigation (cwd modes, auto-reveal, tree traversal) and tree UI (preview,
     "StefanBartl/lib.nvim",
     "nvim-neo-tree/neo-tree.nvim", -- or: "nvim-tree/nvim-tree.lua"
   },
-  config = function()
-    require("filetree").setup({ adapter = "neotree" })
-  end,
+  opts = { adapter = "neotree" }, -- or leave it out: "auto" detects the tree
 }
 ```
 
