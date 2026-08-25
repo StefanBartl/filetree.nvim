@@ -3383,6 +3383,31 @@ do
 end
 
 -- ── Report ────────────────────────────────────────────────────────────────────
+-- ── trash: AppleScript quoting ────────────────────────
+--
+-- The macOS fallback embeds the path in an AppleScript string literal, where
+-- a backslash escapes like it does in C. Escaping only the quote left a path
+-- ending in a backslash reading as one literal backslash followed by a quote
+-- that closes the string early, with `do shell script` one word away in what
+-- follows. Both characters are legal in a macOS filename.
+do
+  local file =
+    vim.api.nvim_get_runtime_file("lua/filetree/features/fileops/trash/platform.lua", false)[1]
+  check("trash: platform.lua is on the runtimepath", file ~= nil)
+  if file then
+    local src = table.concat(vim.fn.readfile(file), "\n")
+    local body = src:match("local function applescript_string%(s%).-\nend")
+    check("trash: applescript_string is still where the test looks for it", body ~= nil)
+    if body then
+      local esc = assert(load(body .. "\nreturn applescript_string"))()
+      local payload = '/tmp/a\\" & (do shell script "id") & "'
+      check("trash: no quote is left unescaped", esc(payload):find('[^\\]"') == nil)
+      check("trash: a lone backslash is doubled", esc([[a\\b]]) == [[a\\\\b]])
+      check("trash: an ordinary path is unchanged", esc("plain/path.txt") == "plain/path.txt")
+    end
+  end
+end
+
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")

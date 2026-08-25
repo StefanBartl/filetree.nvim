@@ -67,6 +67,17 @@ local function trash_windows(path, cb)
   )
 end
 
+---@internal
+---Escape `s` for embedding in an AppleScript double-quoted string literal.
+---
+---Order matters: the backslash first, or the escapes added for `"` are
+---themselves re-escaped and the result is wrong in the other direction.
+---@param s string
+---@return string
+local function applescript_string(s)
+  return (s:gsub("\\", "\\\\"):gsub('"', '\\"'))
+end
+
 -- ── macOS ─────────────────────────────────────────────────────────────────────
 
 ---@param path string
@@ -80,10 +91,18 @@ local function trash_mac(path, cb)
   -- AppleScript fallback. This used to be an os.execute() shell string; as an
   -- argv list osascript gets the script as one argument and no shell is
   -- involved, so the path no longer has to survive shell quoting.
+  --
+  -- It does still have to survive *AppleScript* quoting, and the backslash has
+  -- to be escaped before the quote, not after. AppleScript escapes with `\`
+  -- like C does, so escaping only `"` leaves a path ending in a backslash
+  -- reading as `\\"` -- a literal backslash followed by a quote that closes
+  -- the string early. Everything after it is then AppleScript source, and
+  -- `do shell script` is one word away. Both characters are legal in a macOS
+  -- filename, so a crafted name in a cloned repo is enough.
   run({
     "osascript",
     "-e",
-    string.format('tell app "Finder" to delete POSIX file "%s"', path:gsub('"', '\\"')),
+    string.format('tell app "Finder" to delete POSIX file "%s"', applescript_string(path)),
   }, "AppleScript trash failed", cb)
 end
 
