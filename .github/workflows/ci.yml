@@ -30,7 +30,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y luarocks && sudo luarocks install luacheck
 
       - name: luacheck
-        run: luacheck lua docs/BINDINGS.lua test
+        run: luacheck lua docs/BINDINGS.lua TESTS
 
   # Real gate: the headless test suite (smoke, units, menu, cwd_mode). lib.nvim
   # is checked out as a sibling so the suites' own sibling-checkout lookup
@@ -61,7 +61,7 @@ jobs:
         working-directory: filetree.nvim
         run: |
           set -e
-          nvim --clean --headless -u NONE -l test/smoke.lua
-          nvim --clean --headless -u NONE -l test/units.lua
-          nvim --clean --headless -u NONE -l test/menu.lua
-          nvim --clean --headless -u NONE -l test/cwd_mode.lua
+          nvim --clean --headless -u NONE -l TESTS/smoke.lua
+          nvim --clean --headless -u NONE -l TESTS/units.lua
+          nvim --clean --headless -u NONE -l TESTS/menu.lua
+          nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua

@@ -23,7 +23,7 @@ bindings, [`docs/BINDINGS/`](BINDINGS/).
 
 ## Known issues not tracked in any of the above
 
-- **The suites fail on Windows.** `test/units.lua` (4) and `test/cwd_mode.lua`
+- **The suites fail on Windows.** `TESTS/units.lua` (4) and `TESTS/cwd_mode.lua`
   (41) compare temp-directory paths and hit 8.3 short paths against long paths
   (`C:/Users/STEFAN~1/…` vs `C:/Users/StefanBartl/…`). Linux CI is green, so
   this is an expectation problem in the tests, not a defect in the plugin — but

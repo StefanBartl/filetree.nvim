@@ -1,4 +1,4 @@
-# filetree.nvim — Integration Test Guide
+# filetree.nvim — Manual integration test guide
 
 Manueller Testlauf: neotree + filetree.nvim ohne echte User-Config.
 
@@ -27,11 +27,11 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   command wiring incl. enum completion. Uses a stub adapter and a temp tree.
 
 ```
-cd e:/repos/filetree.nvim
-nvim --clean --headless -u NONE -l test/smoke.lua
-nvim --clean --headless -u NONE -l test/units.lua
-nvim --clean --headless -u NONE -l test/menu.lua
-nvim --clean --headless -u NONE -l test/cwd_mode.lua
+cd /path/to/filetree.nvim
+nvim --clean --headless -u NONE -l TESTS/smoke.lua
+nvim --clean --headless -u NONE -l TESTS/units.lua
+nvim --clean --headless -u NONE -l TESTS/menu.lua
+nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
 ```
 
 **lib.nvim resolution:** the suites put a sibling `../lib.nvim` checkout on the
@@ -39,8 +39,8 @@ runtimepath. Set `FILETREE_LIB_NVIM` to point somewhere else — e.g. a lib.nvim
 worktree carrying modules a new feature depends on that are not merged yet:
 
 ```
-FILETREE_LIB_NVIM=e:/repos/lib.nvim/.claude/worktrees/<name> \
-  nvim --clean --headless -u NONE -l test/cwd_mode.lua
+FILETREE_LIB_NVIM=/path/to/lib.nvim/.claude/worktrees/<name> \
+  nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
 ```
 
 ---
@@ -48,8 +48,8 @@ FILETREE_LIB_NVIM=e:/repos/lib.nvim/.claude/worktrees/<name> \
 ## Setup
 
 ```
-cd e:/repos/filetree.nvim
-nvim --clean -u test/minimal_neotree.lua .
+cd /path/to/filetree.nvim
+nvim --clean -u TESTS/minimal_neotree.lua .
 ```
 
 Beim ersten Start lädt lazy.nvim neo-tree und alle Abhängigkeiten in
@@ -129,7 +129,7 @@ Testet: `nvim_buf_set_extmark`, EOL-Virt-Text.
 | # | Test | Erwartung |
 |---|------|-----------|
 | C.5 | Datei editieren und speichern (`:w`) | Nach ~300 ms erscheint `~` (modified) am Ende der Tree-Zeile |
-| C.6 | Neue Datei anlegen (`:e test/newfile.lua`, `:w`) | Zeigt `?` (untracked) im Tree |
+| C.6 | Neue Datei anlegen (`:e TESTS/newfile.lua`, `:w`) | Zeigt `?` (untracked) im Tree |
 | C.7 | `git add` in Terminal, dann Tree-Cursor bewegen | Zeigt `+` (staged) |
 
 ---

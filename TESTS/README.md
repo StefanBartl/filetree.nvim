@@ -1,10 +1,25 @@
 # TESTS/
 
-Fixture-based regression tests that need real, on-disk multi-file projects —
-too heavy for the unit-style checks in `test/` (which run against in-memory
-stubs). Each subfolder is self-contained: fixtures + a runnable `run.lua`.
+Everything CI runs, plus the manual pass it cannot.
+
+| | |
+| --- | --- |
+| [`smoke.lua`](smoke.lua) | integration: every feature module loads, opt-out defaults resolve, registry resolver + binding catalog work |
+| [`units.lua`](units.lua) | unit: util layer, neo-tree adapter helpers, the reference engine's apply/undo layer and the chooser |
+| [`menu.lua`](menu.lua) | unit: `integrations/menu.lua`, against a stubbed `filetree` module |
+| [`cwd_mode.lua`](cwd_mode.lua) | unit: the cwd/root policy feature, against a stub adapter and a temp tree |
+| [`refs/`](refs/) | fixture-based: real on-disk multi-file projects, described below |
+| [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
+
+The four `.lua` suites are headless and need no tree plugin (stub adapter);
+exit 0 is a pass. `MANUAL.md` describes each in more detail and carries the
+lib.nvim resolution notes.
 
 ## refs/
+
+Fixture-based regression tests that need real, on-disk multi-file projects —
+too heavy for the unit-style checks above, which run against in-memory stubs.
+Self-contained: fixtures plus a runnable `run.lua`.
 
 Verifies the reference engine ([`lua/filetree/refs/`](../lua/filetree/refs/))
 and the features that drive it: cross-file references — markdown links,
@@ -27,7 +42,7 @@ open buffer are patched in memory, not only on disk), the `M` move feature,
 and `refs undo`.
 
 The engine runs in `auto` mode there: the chooser is UI, covered by
-`test/units.lua`; this suite is about what lands on disk.
+`TESTS/units.lua`; this suite is about what lands on disk.
 
 Currently covers Lua, Python, TS/JS (incl. `.tsx`/dynamic `import()`) and
 Markdown (inline links, HTML `href=`, reference definitions).
