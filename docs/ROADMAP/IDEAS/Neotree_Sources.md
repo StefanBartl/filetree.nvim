@@ -1,7 +1,7 @@
-# Neotee sources
+# Neotree sources
 
-| **sources/ + icons/** | Lazy Source Registry, 3 Icon-Familien (nerd/codicons/common), responsive Größe |
+| **sources/ + icons/** | A lazy source registry, 3 icon families (nerd/codicons/common), responsive sizing |
 
-`sources`-Feature von neotree nachbilden — 🔲 **Phase 4, niedrige Priorität.** Verifiziert: `lua/config/neotree/sources/registry.lua` ist aktuell ein simpler Lazy-Loader (register/load/is_loaded/list), kein Template-System — der Wunsch existiert im Code noch nicht. Statt eines vollen Template-Engines: erstmal eine kleine Recipe-/Copy-Paste-Config-Sammlung (2-3 gängige Source-Setups) im `filetree.nvim`-README oder `docs/` — deckt den eigentlichen Schmerzpunkt ("Einrichtung war Pain") günstiger ab als ein neues System.
+Reproduce neotree's `sources` feature — 🔲 **phase 4, low priority.** Verified: `lua/config/neotree/sources/registry.lua` is currently a simple lazy loader (register/load/is_loaded/list), not a template system — the wish does not exist in the code yet. Instead of a full template engine: first a small collection of recipes / copy-paste configs (2-3 common source setups) in the `filetree.nvim` README or in `docs/` — it covers the actual pain point ("setting it up was a pain") more cheaply than a new system.
 
-Feedback: Es wäre aber super, wenn jemand filetree.nvim verwendet und neotreee als engine benutzt, dass man dann in der filetree.nvim user config (spec) die sources einfach enablen/disablen kann
+Feedback: it would be great, though, if somebody using filetree.nvim with neotree as the engine could simply enable/disable the sources from the filetree.nvim user config (the spec).

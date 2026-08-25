@@ -1,147 +1,149 @@
-# Konzept: pdfport.nvim × filetree.nvim × Filetree-Manager
+# Concept: pdfport.nvim × filetree.nvim × filetree manager
 
-> Zuständigkeits-Aufteilung für das „PDF aus dem Tree öffnen"-Feature.
-> Status: Konzept / Entscheidungsvorlage. Betrifft `filetree.nvim` (neues Feature)
-> und `pdfport.nvim` (keine Pflicht­änderung).
+> The division of responsibility for the "open a PDF from the tree" feature.
+> Status: concept / decision paper. Concerns `filetree.nvim` (a new feature)
+> and `pdfport.nvim` (no mandatory change).
 >
-> **Korrektur (2026-08-07):** Dieses Dokument ging durchgehend von einem
-> Modulnamen `pdfport_nvim` aus. Das Modul heißt tatsächlich `pdfport`
-> (`lua/pdfport/`) — der Fehler wurde unverändert in `util/pdf.lua` und
-> `health.lua` übernommen und sorgte dort dafür, dass `has_pdfport()` bei
-> installiertem pdfport.nvim trotzdem immer `false` lieferte. Beide Stellen
-> sind gefixt; die `pdfport_nvim`-Vorkommen unten sind historisch belassen,
-> außer wo sie den tatsächlichen Modulnamen dokumentieren sollten.
+> **Correction (2026-08-07):** this document assumed a module name
+> `pdfport_nvim` throughout. The module is in fact called `pdfport`
+> (`lua/pdfport/`) — the error was carried over unchanged into `util/pdf.lua`
+> and `health.lua`, where it made `has_pdfport()` always return `false` even
+> with pdfport.nvim installed. Both places are fixed; the `pdfport_nvim`
+> occurrences below are left in place as history, except where they were
+> meant to document the actual module name.
 >
-> **Ergänzung (2026-08-09) — Schreibrichtung:** Dieses Dokument beschreibt nur
-> die Leserichtung („PDF aus dem Tree öffnen"). Die Gegenrichtung („Datei(en)
-> aus dem Tree als PDF erzeugen") ist jetzt ebenfalls angebunden, nach exakt
-> demselben Muster: `filetree.util.pdf.create(paths, opts)` ruft
-> `pdfport.create()` pro Eingabedatei auf (überspringt Dateien ohne
-> passenden pdfport-Producer, statt abzubrechen), und das neue Feature
-> `features/system/pdf_create` (Ziel-Ermittlung wie bei `trash`/`copy_move`:
-> markierte Knoten, sonst aktueller Knoten; ein Ordner-Knoten expandiert zu
-> seinen direkten Kind-Dateien, nicht rekursiv) fragt vor jeder Erstellung
-> über `filetree.util.confirm` (= `lib.nvim.ui.kit.confirm`) nach — einzelne
-> Datei als Ja/Nein, mehrere Dateien mit einer Vorschau der ersten paar
-> Namen. Default-Keymap `gP` (Großbuchstabe; kollidiert nicht mit `pdf_open`s
-> `gp`). Siehe [docs/BINDINGS/KEYMAPS.md](../BINDINGS/KEYMAPS.md) und, für den
-> vollen Producer-/Ausbaustufen-Kontext, `pdfport.nvim`s eigenes
+> **Addition (2026-08-09) — the writing direction:** this document describes
+> only the reading direction ("open a PDF from the tree"). The opposite
+> direction ("produce a PDF from file(s) in the tree") is now wired up as
+> well, following exactly the same pattern:
+> `filetree.util.pdf.create(paths, opts)` calls `pdfport.create()` per input
+> file (skipping files without a matching pdfport producer, rather than
+> aborting), and the new feature `features/system/pdf_create` (target
+> determination as with `trash`/`copy_move`: marked nodes, otherwise the
+> current node; a folder node expands to its direct child files, not
+> recursively) asks before every creation through `filetree.util.confirm`
+> (= `lib.nvim.ui.kit.confirm`) — a single file as yes/no, several files with
+> a preview of the first few names. Default keymap `gP` (upper case; it does
+> not collide with `pdf_open`'s `gp`). See
+> [docs/BINDINGS/KEYMAPS.md](../BINDINGS/KEYMAPS.md) and, for the full
+> producer/expansion-stage context, `pdfport.nvim`'s own
 > `docs/ROADMAP/PDF_CREATE.md`.
 
 ---
 
-## 1. Das Problem: doppelte Tree-Abstraktion
+## 1. The problem: a duplicated tree abstraction
 
-Beide Plugins lösen heute **unabhängig dieselbe Aufgabe** — „gib mir den Pfad des
-Nodes unter dem Cursor in Filetree X":
+Both plugins today solve **the same task independently** — "give me the path
+of the node under the cursor in tree X":
 
-| Plugin          | Ort                                            | Mechanismus                          |
+| Plugin          | Where                                          | Mechanism                            |
 | --------------- | ---------------------------------------------- | ------------------------------------ |
-| `pdfport.nvim`  | `integrations/{neotree,nvim_tree,netrw,oil}.lua` + `integrations/init.lua` | `current_pdf_path()` per `filetype`-Switch |
-| `filetree.nvim` | `adapter/{neotree,nvimtree,netrw,oil,mini_files}.lua` | `FiletreeAdapter.get_current_node()` (echter Port) |
+| `pdfport.nvim`  | `integrations/{neotree,nvim_tree,netrw,oil}.lua` + `integrations/init.lua` | `current_pdf_path()` through a `filetype` switch |
+| `filetree.nvim` | `adapter/{neotree,nvimtree,netrw,oil,mini_files}.lua` | `FiletreeAdapter.get_current_node()` (a real port) |
 
-`pdfport` erfindet damit — schlechter, per `ft ==`-Verzweigung — neu, was
-`filetree` bereits als sauberen Port/Adapter besitzt. Sobald ein weiterer Tree
-dazukommt, muss er an **zwei** Stellen gepflegt werden. Diese N×2-Matrix ist die
-Redundanz, die wir auflösen.
+`pdfport` thereby reinvents — worse, through an `ft ==` branch — what
+`filetree` already owns as a clean port/adapter. As soon as another tree
+comes along, it has to be maintained in **two** places. That N×2 matrix is
+the redundancy we are dissolving.
 
 ---
 
-## 2. Zielarchitektur: Port/Adapter, erweitert
+## 2. The target architecture: port/adapter, extended
 
-Deine Vermutung ist korrekt. Drei Ebenen mit klaren, nicht-überlappenden Rollen:
+Your assumption is correct. Three levels with clear, non-overlapping roles:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  pdfport.nvim  —  CORE / Domänenlogik                             │
-│  "Öffne/konvertiere PDF an Pfad P"                                │
+│  pdfport.nvim  —  CORE / domain logic                             │
+│  "open/convert the PDF at path P"                                 │
 │  fallback_chain: pdftotext → pdfplumber → marker → … → claude     │
 │  Public API:  require("pdfport_nvim").open{ path=P, mode=… }      │
-│  ▸ weiß NICHTS von Filetrees (für den filetree-Pfad)             │
+│  ▸ knows NOTHING about filetrees (for the filetree path)         │
 └──────────────────────────────────────────────────────────────────┘
-                              ▲  optionaler require (pcall)
+                              ▲  optional require (pcall)
                               │
 ┌──────────────────────────────────────────────────────────────────┐
 │  filetree.nvim  —  PORT + ADAPTER + BRIDGE                        │
-│  ▸ adapter/*  : kennt jeden Tree (existiert bereits)             │
-│  ▸ feature 'pdf_open' : Node-unter-Cursor → is_pdf? → pdfport    │
-│    bindet Keymaps buffer-lokal am Tree-FileType                   │
+│  ▸ adapter/*  : knows every tree (already exists)                │
+│  ▸ feature 'pdf_open' : node under cursor → is_pdf? → pdfport    │
+│    binds keymaps buffer-locally on the tree's FileType            │
 └──────────────────────────────────────────────────────────────────┘
-                              ▲  fertiges Feature / Keymap
+                              ▲  a finished feature / keymap
                               │
 ┌──────────────────────────────────────────────────────────────────┐
 │  neotree / nvimtree / oil / …  —  HOST                            │
-│  empfängt das fertige Feature, weiß sonst nichts davon            │
+│  receives the finished feature, otherwise knows nothing of it     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Kernidee:** `filetree.nvim` bekommt ein neues Feature `pdf_open` — Bauart
-identisch zum bestehenden `open_with` (`features/system/open_with/init.lua`). Es
-nutzt **den vorhandenen Adapter** für den Node-Pfad (kein `filetype`-Switch mehr!)
-und ruft **nur die Core-API** von pdfport auf.
+**The core idea:** `filetree.nvim` gets a new feature `pdf_open` — built
+identically to the existing `open_with` (`features/system/open_with/init.lua`).
+It uses **the existing adapter** for the node path (no more `filetype`
+switch!) and calls **only pdfport's core API**.
 
 ---
 
-## 3. Abhängigkeitsrichtung
+## 3. The direction of dependency
 
-* `filetree.nvim` → **optional** `pdfport.nvim` (via `pcall(require, "pdfport_nvim")`).
-  Kein Hard-Dep. Fehlt pdfport, ist das Feature ein No-Op (Health-Warnung, wenn
-  explizit `enabled = true`). Gleiches Soft-Dep-Muster wie markdown.nvim in
-  color_my_ascii.
-* `pdfport.nvim` → **hängt an nichts** aus filetree. Bleibt eigenständig
-  (Telescope/fzf/eigene Tree-Integrationen für Standalone-User).
+* `filetree.nvim` → **optionally** `pdfport.nvim` (via `pcall(require, "pdfport_nvim")`).
+  No hard dependency. If pdfport is missing, the feature is a no-op (a health
+  warning when `enabled = true` explicitly). The same soft-dependency pattern
+  as markdown.nvim in color_my_ascii.
+* `pdfport.nvim` → **depends on nothing** from filetree. It stays standalone
+  (Telescope/fzf/its own tree integrations for standalone users).
 
-Der Pfeil, den du vorgeschlagen hast (`filetree → pdfport als Dependency`), ist
-also richtig — aber **optional**, einseitig, und filetree ruft ausschließlich
-`pdfport_nvim.open{}` auf, **nicht** `pdfport.neotree()` / `.integrations()`.
+The arrow you proposed (`filetree → pdfport as a dependency`) is therefore
+right — but **optional**, one-way, and filetree calls exclusively
+`pdfport_nvim.open{}`, **not** `pdfport.neotree()` / `.integrations()`.
 
 ---
 
-## 4. Was bleibt wo (Zuständigkeitsmatrix)
+## 4. What stays where (the responsibility matrix)
 
 | Concern                                                   | Owner                                     |
 | -------------------------------------------------------- | ----------------------------------------- |
-| PDF → Text/Render, `fallback_chain`, Backends            | **pdfport.nvim** core                     |
-| „Welcher Node liegt unter dem Cursor in Tree X"          | **filetree.nvim** adapter (existiert)     |
-| „Cursor-auf-PDF → mit pdfport öffnen" + Keymaps im Tree  | **filetree.nvim** feature `pdf_open` (neu)|
-| pdfport **standalone** im Tree (ohne filetree.nvim)      | **pdfport.nvim** `integrations/*` (bleibt)|
-| Dummer Host sein                                          | neotree / nvimtree / …                    |
+| PDF → text/render, `fallback_chain`, backends            | **pdfport.nvim** core                     |
+| "which node lies under the cursor in tree X"             | **filetree.nvim** adapter (exists)        |
+| "cursor on a PDF → open with pdfport" + keymaps in the tree | **filetree.nvim** feature `pdf_open` (new)|
+| pdfport **standalone** in a tree (without filetree.nvim) | **pdfport.nvim** `integrations/*` (stays) |
+| being a dumb host                                         | neotree / nvimtree / …                    |
 
-Wichtig: die `integrations/*`-Module in pdfport **bleiben erhalten** — sie sind
-der Komfort für User, die pdfport **ohne** filetree.nvim in einem Tree nutzen.
-filetree-User nutzen sie nicht; sie bekommen `pdf_open`.
-
----
-
-## 5. Die Sorge mit der fallback_chain (dein Punkt 2 & 3)
-
-> „nicht jeder filetree-User will pdftotext/marker/docling/ollama/claude installieren"
-
-Muss er nicht:
-
-1. **pdfport ist selbst optionale Dependency.** Wer pdfport nie installiert,
-   bekommt das Feature einfach nicht — null Zusatz-Tools.
-2. **filetree gibt keine Backends vor.** `pdf_open` ruft nur `.open{path, mode}`;
-   *welche* Backends greifen, entscheidet allein pdfports eigenes `setup()`.
-   filetree kennt die Chain nicht einmal.
-3. **Default = `mode = "system"`** → öffnet im OS-PDF-Viewer, braucht kein
-   einziges externes CLI. Text-Extraktion (`mode = "buffer"`) ist opt-in pro
-   Keymap. Damit ist „default aktiv, aber nur mit hauseigenen Mitteln; einzelne
-   Tools opt-in" exakt erfüllt. Und pdfports Chain degradiert ohnehin graziös.
+Important: the `integrations/*` modules in pdfport **stay** — they are the
+convenience for users who use pdfport in a tree **without** filetree.nvim.
+filetree users do not use them; they get `pdf_open`.
 
 ---
 
-## 6. Config-Oberfläche in filetree.nvim
+## 5. The worry about the fallback_chain (your points 2 and 3)
+
+> "not every filetree user wants to install pdftotext/marker/docling/ollama/claude"
+
+They do not have to:
+
+1. **pdfport is itself an optional dependency.** Whoever never installs
+   pdfport simply does not get the feature — zero additional tools.
+2. **filetree prescribes no backends.** `pdf_open` only calls
+   `.open{path, mode}`; *which* backends apply is decided solely by pdfport's
+   own `setup()`. filetree does not even know the chain.
+3. **Default = `mode = "system"`** → opens in the OS PDF viewer, needs not a
+   single external CLI. Text extraction (`mode = "buffer"`) is opt-in per
+   keymap. That satisfies "on by default, but only with in-house means;
+   individual tools opt-in" exactly. And pdfport's chain degrades gracefully
+   anyway.
+
+---
+
+## 6. The config surface in filetree.nvim
 
 ```lua
 require("filetree").setup({
   features = {
     pdf_open = {
-      enabled      = true,        -- inert, falls pdfport.nvim fehlt
+      enabled      = true,        -- inert if pdfport.nvim is missing
       default_mode = "system",    -- "system"|"buffer"|"float"|"terminal"
       keymaps = {
-        open     = "P",           -- Default-Aktion = default_mode
-        text     = false,         -- Text-Extraktion in Buffer (braucht Text-Backend)
+        open     = "P",           -- the default action = default_mode
+        text     = false,         -- text extraction into a buffer (needs a text backend)
         system   = false,
         terminal = false,
       },
@@ -150,30 +152,30 @@ require("filetree").setup({
 })
 ```
 
-filetree reicht `mode`/`backend_id` **durch** an pdfport, benennt aber nie ein
-Backend selbst.
+filetree passes `mode`/`backend_id` **through** to pdfport, but never names a
+backend itself.
 
-### Optionale Kür: Handler-Port statt fester pdfport-Kopplung
+### An optional flourish: a handler port instead of a fixed pdfport coupling
 
-Für reines Hexagonal: `pdf_open` definiert einen winzigen „PDF-Handler-Port".
-Default-Handler = `pcall` auf pdfport; ein User könnte via Config einen eigenen
-`open = function(path, opts) … end` injizieren. Spiegelt filetrees Adapter-Philo­
-sophie. Der `pcall`-pdfport-Default ist der pragmatische Kern; der Port ist die
-Erweiterung, falls je ein zweites PDF-Backend auftaucht.
+For pure hexagonal: `pdf_open` defines a tiny "PDF handler port". The default
+handler = a `pcall` on pdfport; a user could inject their own
+`open = function(path, opts) … end` through the config. That mirrors
+filetree's adapter philosophy. The `pcall` pdfport default is the pragmatic
+core; the port is the extension, should a second PDF backend ever appear.
 
 ---
 
-## 7. Implementierungs-Skizze `features/system/pdf_open/init.lua`
+## 7. Implementation sketch, `features/system/pdf_open/init.lua`
 
-Analog zu `open_with` (gleiche `setup(config, adapter)`-Signatur, gleiche
-FileType-Keymap-Registrierung):
+Analogous to `open_with` (the same `setup(config, adapter)` signature, the
+same FileType keymap registration):
 
 ```lua
 local _adapter, _cfg = nil, { enabled = false, default_mode = "system", keymaps = {} }
 
 local function current_pdf()
   if not _adapter then return nil end
-  local node = _adapter.get_current_node()            -- ← Port, kein ft-Switch
+  local node = _adapter.get_current_node()            -- ← the port, no ft switch
   local path = node and node.path or nil
   if path and path:lower():match("%.pdf$") then return path end
   return nil
@@ -181,77 +183,82 @@ end
 
 local function open(mode)
   local path = current_pdf()
-  if not path then notify.warn("Kein PDF unter dem Cursor"); return end
-  local ok, pdfport = pcall(require, "pdfport_nvim")   -- ← optionale Dependency
-  if not ok then notify.warn("pdfport.nvim nicht installiert"); return end
+  if not path then notify.warn("No PDF under the cursor"); return end
+  local ok, pdfport = pcall(require, "pdfport_nvim")   -- ← optional dependency
+  if not ok then notify.warn("pdfport.nvim is not installed"); return end
   pdfport.open({ path = path, mode = mode or _cfg.default_mode })
 end
 
 function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg, _adapter = vim.tbl_deep_extend("force", _cfg, config), adapter
-  -- FileType-Autocmd auf _adapter.filetypes → keymaps buffer-lokal binden
-  -- (Muster 1:1 aus open_with übernehmen)
+  -- a FileType autocommand on _adapter.filetypes → bind keymaps buffer-locally
+  -- (take the pattern 1:1 from open_with)
 end
 ```
 
-Vorteil gegenüber pdfports heutigem `integrations/init.lua`: **keine einzige
-Tree-spezifische Zeile** — `get_current_node()` abstrahiert neotree/nvimtree/
-oil/… bereits weg. Ein neuer Tree = ein neuer filetree-Adapter, sonst nichts.
+The advantage over pdfport's current `integrations/init.lua`: **not a single
+tree-specific line** — `get_current_node()` already abstracts
+neotree/nvimtree/oil/… away. A new tree = a new filetree adapter, nothing
+else.
 
 ---
 
-## 8. Migrationsschritte
+## 8. Migration steps
 
-1. **nvim-Config**: alte pdfport-Neotree-Wiring ist bereits entfernt
-   (`config/neotree/keymaps/filesystem/init.lua` dokumentiert das; das frühere
-   `…/filesystem/pdfport.lua` existiert nicht mehr). ✔ nichts zu tun.
+1. **nvim config**: the old pdfport neotree wiring is already removed
+   (`config/neotree/keymaps/filesystem/init.lua` documents it; the former
+   `…/filesystem/pdfport.lua` no longer exists). ✔ nothing to do.
 2. **filetree.nvim**:
-   - `lua/filetree/features/system/pdf_open/init.lua` anlegen.
-   - In `features/init.lua` registrieren: `pdf_open = { mod = "…system.pdf_open", category = "system" }`.
-   - `@types` + `config/DEFAULTS.lua` (Default `enabled = false` oder `true`+inert — s. u.).
-   - `health.lua`: warnen, wenn `pdf_open.enabled` aber `pdfport_nvim` fehlt.
-   - `cheatsheet`-Feature zeigt die neuen Keys im `?`-Overlay automatisch (prüfen).
-   - Docs: `BINDINGS/KEYMAPS.md` + README (optionale pdfport-Dependency).
-3. **pdfport.nvim**: keine Pflichtänderung. Optional README-Hinweis: „filetree.nvim-
-   User aktivieren `pdf_open` statt pdfports Neotree-Integration zu verdrahten."
+   - create `lua/filetree/features/system/pdf_open/init.lua`.
+   - register it in `features/init.lua`: `pdf_open = { mod = "…system.pdf_open", category = "system" }`.
+   - `@types` plus `config/DEFAULTS.lua` (default `enabled = false`, or `true` and inert — see below).
+   - `health.lua`: warn when `pdf_open.enabled` but `pdfport_nvim` is missing.
+   - the `cheatsheet` feature shows the new keys in the `?` overlay automatically (verify).
+   - docs: `BINDINGS/KEYMAPS.md` plus the README (the optional pdfport dependency).
+3. **pdfport.nvim**: no mandatory change. Optionally a README note:
+   "filetree.nvim users enable `pdf_open` instead of wiring up pdfport's
+   neotree integration."
 
-### Umgesetzte Entscheidungen (Stand Implementierung)
+### Decisions taken (as implemented)
 
-* **`enabled` default = ON** (nicht in `DEFAULT_DISABLED`), passt zum opt-out-Modell
-  und zu „default aktiv". Ohne pdfport bleibt es nutzbar (System-Viewer-Fallback).
-* **`default_mode = "buffer"`** (leichte Abweichung vom ursprünglichen Vorschlag
-  „system"): die Kern-Wertschöpfung von pdfport ist die Textextraktion in nvim.
-  Ohne pdfport fällt der Opener automatisch auf den OS-Viewer zurück → „zero-dep
-  funktioniert" bleibt erfüllt. `default_mode = "system"` ist per Config ein
-  Einzeiler, wer den reinen Viewer will.
-* **Default-Keymap `gp`** („get pdf") für `default_mode`; text/system/terminal sind
-  opt-in (default off). `gp` kollidiert mit keiner bestehenden Belegung
-  (`P` ist von `copy_move` belegt).
+* **`enabled` defaults to ON** (not in `DEFAULT_DISABLED`), which fits the
+  opt-out model and "on by default". Without pdfport it stays usable (the
+  system-viewer fallback).
+* **`default_mode = "buffer"`** (a slight deviation from the original
+  proposal of "system"): pdfport's core value is text extraction into nvim.
+  Without pdfport the opener falls back to the OS viewer automatically → "it
+  works with zero dependencies" stays satisfied. `default_mode = "system"` is
+  a one-liner in the config for whoever wants the pure viewer.
+* **The default keymap `gp`** ("get pdf") for `default_mode`;
+  text/system/terminal are opt-in (off by default). `gp` collides with no
+  existing binding (`P` is taken by `copy_move`).
 
-### Gemeinsamer Opener statt verstreuter pdfport-Calls
+### A shared opener instead of scattered pdfport calls
 
-Die Bridge lebt in **`filetree.util.pdf`** (`open(path, opts)` / `system_open` /
-`is_pdf` / `has_pdfport`). Sie kapselt den korrekten `require("pdfport_nvim")` und
-die **Table**-Signatur `pp.open({ path, mode, … })`. Zwei Konsumenten:
+The bridge lives in **`filetree.util.pdf`** (`open(path, opts)` /
+`system_open` / `is_pdf` / `has_pdfport`). It encapsulates the correct
+`require("pdfport_nvim")` and the **table** signature
+`pp.open({ path, mode, … })`. Two consumers:
 
-* das neue `pdf_open`-Feature, und
-* das bestehende `preview`-Feature (`<Tab>`/`<CR>`-Dispatch).
+* the new `pdf_open` feature, and
+* the existing `preview` feature (the `<Tab>`/`<CR>` dispatch).
 
-> **Nebenfund/Fix:** `preview/open_pdf` war doppelt kaputt — `require("pdfport")`
-> (Modul heißt `pdfport_nvim`, kein Shim vorhanden) und `pp.open(path)` (String
-> statt Table). Es fiel dadurch bei *jeder* PDF still auf den System-Viewer zurück.
-> Durch die Umstellung auf `filetree.util.pdf` ist beides behoben.
+> **Side finding/fix:** `preview/open_pdf` was broken twice over —
+> `require("pdfport")` (the module is called `pdfport_nvim`, and no shim
+> exists) and `pp.open(path)` (a string instead of a table). It therefore fell
+> back silently to the system viewer on *every* PDF. Switching to
+> `filetree.util.pdf` fixes both.
 
 ---
 
-## 9. Warum das die richtige Aufteilung ist
+## 9. Why this is the right division
 
-* **Eine** Tree-Abstraktion statt zwei (filetrees Adapter gewinnt, pdfports
-  ft-Switch entfällt für filetree-User).
-* pdfport bleibt **framework-frei** und standalone-nutzbar (Telescope/fzf/eigene
-  Integrationen unangetastet).
-* filetree gewinnt beliebig viele Trees für das Feature „gratis" dazu — jeder
-  neue Adapter bringt `pdf_open` automatisch mit.
-* Neue PDF-Backends? Nur pdfport-Sache. Neue Trees? Nur filetree-Sache. Der Host
-  bleibt dumm. Saubere, einseitige, **optionale** Kopplung.
+* **One** tree abstraction instead of two (filetree's adapter wins,
+  pdfport's ft switch falls away for filetree users).
+* pdfport stays **framework-free** and usable standalone (Telescope/fzf/its
+  own integrations untouched).
+* filetree gains arbitrarily many trees for the feature "for free" — every
+  new adapter brings `pdf_open` along automatically.
+* New PDF backends? Purely a pdfport matter. New trees? Purely a filetree
+  matter. The host stays dumb. A clean, one-way, **optional** coupling.
