@@ -87,7 +87,7 @@ local function lsp_will_rename(old_path, new_path, cb)
   local pending = #clients
   local merged  = {}
   for _, client in ipairs(clients) do
-    client.request("workspace/willRenameFiles", params, function(err, result)
+    client:request("workspace/willRenameFiles", params, function(err, result)
       pending = pending - 1
       if not err and result then
         merged = vim.tbl_deep_extend("force", merged, result)
@@ -104,7 +104,7 @@ local function lsp_did_rename(old_path, new_path)
     local cap = vim.tbl_get(client, "server_capabilities", "workspace",
                              "fileOperations", "didRename")
     if cap then
-      client.notify("workspace/didRenameFiles", params)
+      client:notify("workspace/didRenameFiles", params)
     end
   end
 end
