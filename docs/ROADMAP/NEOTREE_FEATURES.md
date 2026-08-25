@@ -112,21 +112,23 @@ filetree.nvim, and **status** — whether filetree.nvim already covers it.
 
 ## Gaps — port targets not yet in filetree.nvim
 
-These have **no** filetree.nvim counterpart and are the concrete work items:
+**Reviewed 2026-08-25.** The first two have since been built; only the two
+source-model entries below are still open.
 
-1. **Markdown-link bridge** ❌ — `commands/markdown/links.lua`. Turns tree
-   node(s) into Markdown links via `markdown_nvim.commands.markdown_links`:
-   single node, recursive (`-r`), or all explicitly-marked nodes → clipboard.
-   → New feature, likely `integration.markdown_links` (depends on markdown.nvim;
-   guard it as a soft dependency). Cross-plugin, so keep it adapter-agnostic:
-   operate on the selected node path(s) the adapter exposes.
+1. **Markdown-link bridge** ✅ **shipped** — `commands/markdown/links.lua`.
+   Turns tree node(s) into Markdown links: single node, recursive, or all
+   explicitly-marked nodes → clipboard.
+   → Landed as `paths.markdown_links` (`ML` / `MR` / `MM`), not under
+   `integration.*`: it writes `[name](relative/path)` itself rather than calling
+   into markdown.nvim, so it has no dependency to guard and belongs with the
+   other path-to-clipboard features.
 
-2. **pdfport integration** ❌ — `actions/pdfport/` (via `:NeoTreePdfPort` /
-   `:NeoTreePdfPortQuick` in `usercmds/init.lua`). Opens a PDF node as text
-   (mode picker, or direct `pdftotext`).
-   → New feature, e.g. `system.open_with` extension or `integration.pdfport`.
-   Already shells out per-OS, so fold it into the cross-platform `system.*`
-   opener rather than a bespoke path.
+2. **pdfport integration** ✅ **shipped** — `actions/pdfport/`. Opens a PDF node
+   as text.
+   → Landed as `system.pdf_open`, plus `system.pdf_create` (converting nodes
+   *to* PDF), which the audit did not anticipate. pdfport.nvim is a soft
+   dependency; without it the node goes to the OS viewer. Both go through the
+   adapter, so they are tree-agnostic. See `PDFPORT_INTEGRATION.md`.
 
 3. **Buffers source: `dd` = buffer_delete** 🟡 — `keymaps/buffers.lua`. Neo-tree's
    buffers source with a delete-buffer mapping (plus many `noop` guards that
@@ -150,8 +152,8 @@ These have **no** filetree.nvim counterpart and are the concrete work items:
 - Cross-platform: the gaps that shell out (pdfport, open-in-system-app) must go
   through `util/platform.lua`, not inline `xdg-open`/`start`/`open` branches.
 - The bulk of the config's features (✅ above) are **already implemented** in
-  filetree.nvim's 62-feature registry — this audit's real yield is the four gaps
-  in the section above.
+  filetree.nvim's registry (56 features as of 2026-08-25) — this audit's real
+  yield was the four gaps in the section above, of which two have since shipped.
 
 ---
 
