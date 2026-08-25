@@ -23,6 +23,7 @@ local notify = require("filetree.util.notify").create("[filetree.find_files]")
 local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
+local globbable = require("lib.nvim.fs.globbable")
 local ignore = require("filetree.util.ignore")
 local M = {}
 
@@ -166,28 +167,6 @@ local function path_is_ignored(rel, ignored)
     if ignored(seg) then return true end
   end
   return false
-end
-
----Canonical spelling of `root`, for handing to Vim's glob.
----
----`vim.fn.glob`/`globpath` treat their argument as a *pattern*, and a `~` in
----it is a home-directory reference. On Windows that makes an 8.3 short name
----fatal: under `C:/Users/STEFAN~1/...` -- which is what `%TEMP%` expands to
----for any profile name longer than eight characters -- glob tries to resolve
----`~1` as a user and returns **nothing at all**. No error, no warning, just
----an empty list and a "No files found" that is not true.
----
----`fs_realpath` gives back the long form, which globs correctly. It only
----works on a path that exists; a root that does not is left alone, since
----glob would find nothing there either way.
----@internal
----@param root string
----@return string
-local function globbable(root)
-  local uv = vim.uv or vim.loop
-  if not root:find("~", 1, true) then return root end
-  local real = uv.fs_realpath(root)
-  return real and (real:gsub("\\", "/")) or root
 end
 
 ---@internal
