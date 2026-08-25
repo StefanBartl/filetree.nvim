@@ -45,7 +45,8 @@ function M.unique_name(dir, name, claimed, is_dir)
   if not base or base == "" then
     base, ext = name, ""
   end
-  local candidate, n = name, 2
+  local candidate
+  local n = 2
   repeat
     candidate = string.format("%s (%d)%s", base, n, ext)
     n = n + 1
