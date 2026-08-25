@@ -69,28 +69,13 @@ return {
     -- Root policy in front of cwd_sync. Enabled but inert: mode "follow" means
     -- "no policy", and cwd_mode then stays out of cwd_sync's resolution
     -- entirely. Switch modes at runtime with :Filetree cwd …
-    cwd_mode = {
-      enabled = true,
-      mode = "follow", -- follow | project | nearest | lock | manual | tree_leads
-      scope = "global", -- global | tab | win
-      project = {
-        markers = { ".git", ".hg", ".svn" },
-        skip_dirs = { "node_modules", ".venv", "vendor" },
-        sticky = true, -- a file with no root of its own doesn't move the cwd
-      },
-      lock = {
-        enforce = true, -- revert foreign :cd (dir_guard)
-        follow_manual_root = true, -- `+`/`-` moves the lock instead of fighting it
-      },
-      reveal_outside = "skip", -- file outside the held root: leave the tree alone
-      persist = false, -- remember mode/scope/pin per project across restarts
-      indicator = {
-        enabled = true,
-        mode = "auto", -- statusline, or float under laststatus=3
-        show_path = "lock",
-        style = "text", -- text | short | numeric | icon (see :h filetree-cwd-mode)
-      },
-    },
+    --
+    -- The table itself lives with the feature, and is required rather than
+    -- copied: this file used to carry a hand-maintained subset of it and had
+    -- already fallen behind — `nearest`'s fifteen package markers, a whole
+    -- mode's configuration surface, appeared here as if it did not exist. Same
+    -- arrangement as `refs` above.
+    cwd_mode = require("filetree.features.nav.cwd_mode.DEFAULTS"),
     current_hl = {
       enabled = false,
       file_hl = { fg = "#7aa2f7", bold = true },
