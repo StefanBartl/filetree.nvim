@@ -23,7 +23,7 @@
 --- without a real UI attached makes VeryLazy fire unpredictably relative to
 --- a scripted test). Confirmed working in real interactive use.
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local M = {}
 
 local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles" }
@@ -39,7 +39,9 @@ local function tree_filetypes()
   local ft = _adapter and _adapter.filetypes
   local list = (type(ft) == "table" and #ft > 0) and ft or DEFAULT_FILETYPES
   local set = {}
-  for _, f in ipairs(list) do set[f] = true end
+  for _, f in ipairs(list) do
+    set[f] = true
+  end
   return set
 end
 
@@ -58,8 +60,12 @@ function M.setup(config, adapter)
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
     local ok, cur = pcall(vim.api.nvim_get_option_value, "winhighlight", { win = win })
     local base = (ok and cur ~= "") and (cur .. ",") or ""
-    pcall(vim.api.nvim_set_option_value, "winhighlight",
-      base .. "Cursor:FiletreeCursorHidden", { win = win })
+    pcall(
+      vim.api.nvim_set_option_value,
+      "winhighlight",
+      base .. "Cursor:FiletreeCursorHidden",
+      { win = win }
+    )
   end
 
   local function apply_show(win, buf)
@@ -82,7 +88,9 @@ function M.setup(config, adapter)
     group = _augroup,
     callback = function(ev)
       local win = vim.api.nvim_get_current_win()
-      vim.schedule(function() apply_hide(win, ev.buf) end)
+      vim.schedule(function()
+        apply_hide(win, ev.buf)
+      end)
     end,
   })
 
@@ -90,7 +98,9 @@ function M.setup(config, adapter)
     group = _augroup,
     callback = function(ev)
       local win = vim.api.nvim_get_current_win()
-      vim.schedule(function() apply_show(win, ev.buf) end)
+      vim.schedule(function()
+        apply_show(win, ev.buf)
+      end)
     end,
   })
 end

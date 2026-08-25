@@ -244,8 +244,10 @@ function M.check()
     if vim.fn.executable("rg") == 1 then
       vim.health.ok("ripgrep found — reference scans use the fast pre-filter")
     else
-      vim.health.warn("ripgrep not found — reference scans fall back to a capped "
-        .. "directory walk (slower; raise refs.scan.max_files if it stops early)")
+      vim.health.warn(
+        "ripgrep not found — reference scans fall back to a capped "
+          .. "directory walk (slower; raise refs.scan.max_files if it stops early)"
+      )
     end
   end
 

@@ -20,22 +20,22 @@
 ---   to get an interactive "how do you want this PDF opened?" chooser
 ---   instead of a fixed mode; see `filetree.util.pdf`'s `M.pick_open`.
 
-local pdf    = require("filetree.util.pdf")
+local pdf = require("filetree.util.pdf")
 local notify = require("filetree.util.notify").create("[filetree.pdf_open]")
-local map    = require("filetree.util.map")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 
 local M = {}
 
 ---@type FiletreePdfOpenConfig
 local _cfg = {
-  enabled         = false,
-  default_mode    = "buffer",   -- mode used by keymap_open
-  keymap_open     = "gp",
-  keymap_text     = false,      -- mode "buffer"   (pdfport text extraction)
-  keymap_system   = false,      -- mode "system"   (OS viewer, dependency-free)
-  keymap_terminal = false,      -- mode "terminal" (pdfport in a terminal)
-  keymap_picker   = false,      -- mode "picker"   (ask; see M.open_picker)
+  enabled = false,
+  default_mode = "buffer", -- mode used by keymap_open
+  keymap_open = "gp",
+  keymap_text = false, -- mode "buffer"   (pdfport text extraction)
+  keymap_system = false, -- mode "system"   (OS viewer, dependency-free)
+  keymap_terminal = false, -- mode "terminal" (pdfport in a terminal)
+  keymap_picker = false, -- mode "picker"   (ask; see M.open_picker)
 }
 
 ---@type FiletreeAdapter?
@@ -56,7 +56,10 @@ end
 ---@param mode FiletreePdfOpenMode
 local function open(mode)
   local path = current_pdf()
-  if not path then notify.warn("No PDF under cursor"); return end
+  if not path then
+    notify.warn("No PDF under cursor")
+    return
+  end
 
   if mode == "picker" then
     pdf.pick_open(path, { title = "Open PDF: " .. vim.fn.fnamemodify(path, ":t") })
@@ -71,17 +74,27 @@ local function open(mode)
 end
 
 ---Open the PDF under the cursor using the configured `default_mode`.
-function M.open_default()  open(_cfg.default_mode or "buffer") end
+function M.open_default()
+  open(_cfg.default_mode or "buffer")
+end
 ---Open the PDF under the cursor with pdfport's text extraction ("buffer" mode).
-function M.open_text()     open("buffer")   end
+function M.open_text()
+  open("buffer")
+end
 ---Open the PDF under the cursor in the OS default viewer.
-function M.open_system()   open("system")   end
+function M.open_system()
+  open("system")
+end
 ---Open the PDF under the cursor with pdfport in a terminal.
-function M.open_terminal() open("terminal") end
+function M.open_terminal()
+  open("terminal")
+end
 ---Ask how to open the PDF under the cursor (every mode/backend pdfport
 ---knows about, plus "system application" — always available even without
 ---pdfport, see `filetree.util.pdf`'s `M.pick_open`).
-function M.open_picker()   open("picker")   end
+function M.open_picker()
+  open("picker")
+end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -89,7 +102,7 @@ function M.open_picker()   open("picker")   end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   tree_attach.on_attach(function(buf)
@@ -98,11 +111,11 @@ function M.setup(config, adapter)
         map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
       end
     end
-    kmap(_cfg.keymap_open,     M.open_default,  "open PDF (pdfport)")
-    kmap(_cfg.keymap_text,     M.open_text,     "open PDF as text (pdfport)")
-    kmap(_cfg.keymap_system,   M.open_system,   "open PDF in system viewer")
+    kmap(_cfg.keymap_open, M.open_default, "open PDF (pdfport)")
+    kmap(_cfg.keymap_text, M.open_text, "open PDF as text (pdfport)")
+    kmap(_cfg.keymap_system, M.open_system, "open PDF in system viewer")
     kmap(_cfg.keymap_terminal, M.open_terminal, "open PDF in terminal (pdfport)")
-    kmap(_cfg.keymap_picker,   M.open_picker,   "open PDF — ask how (pdfport/system)")
+    kmap(_cfg.keymap_picker, M.open_picker, "open PDF — ask how (pdfport/system)")
   end)
 end
 

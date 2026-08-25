@@ -114,8 +114,12 @@ function M.plan(old_path, ctx)
           provider = M.name,
           source = old_path,
           suffix = is_child and mod:sub(#old_mod + 1) or "",
-          display = string.format("%s:%d: %s",
-            vim.fn.fnamemodify(file, ":."), lineno, vim.trim(text)),
+          display = string.format(
+            "%s:%d: %s",
+            vim.fn.fnamemodify(file, ":."),
+            lineno,
+            vim.trim(text)
+          ),
         }
       end)
       return refs

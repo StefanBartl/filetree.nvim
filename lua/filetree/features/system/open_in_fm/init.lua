@@ -47,10 +47,10 @@
 ---                             folder), so it reuses the window on its parent
 ---                             directory. Default false.
 
-local notify   = require("filetree.util.notify").create("[filetree.open_in_fm]")
+local notify = require("filetree.util.notify").create("[filetree.open_in_fm]")
 local platform = require("filetree.util.platform")
-local path     = require("filetree.util.path")
-local map      = require("filetree.util.map")
+local path = require("filetree.util.path")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 
 local M = {}
@@ -92,8 +92,14 @@ local function launch(target, override)
   local reuse = _reuse_existing and platform.is_windows() and not override
 
   local reveal_in_fm = require("lib.nvim.cross.reveal_in_fm")
-  dbg(("launch: reveal_in_fm target=%s reveal=%s reuse=%s command=%s")
-    :format(target, tostring(_reveal), tostring(reuse), tostring(override)))
+  dbg(
+    ("launch: reveal_in_fm target=%s reveal=%s reuse=%s command=%s"):format(
+      target,
+      tostring(_reveal),
+      tostring(reuse),
+      tostring(override)
+    )
+  )
 
   local ok, err = reveal_in_fm(target, { reveal = _reveal, reuse = reuse, command = override })
   if not ok then
@@ -145,20 +151,24 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  local keymap = config.keymap  or "<leader>fm"
-  _adapter        = adapter
-  _cmd            = config.command   -- nil unless the user overrides the launcher
-  _debug          = config.debug == true
+  local keymap = config.keymap or "<leader>fm"
+  _adapter = adapter
+  _cmd = config.command -- nil unless the user overrides the launcher
+  _debug = config.debug == true
   _reuse_existing = config.reuse_existing == true
-  _reveal         = config.reveal ~= false
+  _reveal = config.reveal ~= false
 
   tree_attach.on_attach(function(buf)
-    map("n", keymap, M.open, { buffer = buf },
-      "Filetree: open node directory in system file manager")
+    map(
+      "n",
+      keymap,
+      M.open,
+      { buffer = buf },
+      "Filetree: open node directory in system file manager"
+    )
   end)
 end
 
-function M.teardown()
-end
+function M.teardown() end
 
 return M

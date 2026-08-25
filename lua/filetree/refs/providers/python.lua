@@ -84,7 +84,9 @@ local function relative_anchor(mod, file)
   local dots = mod:match("^(%.+)")
   if not dots then return nil, nil end
   local dir = ftpath.parent(file)
-  for _ = 2, #dots do dir = ftpath.parent(dir) end
+  for _ = 2, #dots do
+    dir = ftpath.parent(dir)
+  end
   return dir, mod:sub(#dots + 1)
 end
 
@@ -160,8 +162,12 @@ function M.plan(old_path, ctx)
           relative = relative,
           anchor = base,
           resolved = resolved,
-          display = string.format("%s:%d: %s",
-            vim.fn.fnamemodify(file, ":."), lineno, vim.trim(text)),
+          display = string.format(
+            "%s:%d: %s",
+            vim.fn.fnamemodify(file, ":."),
+            lineno,
+            vim.trim(text)
+          ),
         }
       end)
       return refs
@@ -184,8 +190,11 @@ function M.plan(old_path, ctx)
       -- the anchor this import climbs to.
       if not pathutil.under(dest, ref.anchor) then return nil end
       local dots = ref.target:match("^(%.+)") or "."
-      local rest = pathutil.relative(dest, ref.anchor)
-        :gsub("%.pyi?$", ""):gsub("/__init__$", ""):gsub("/", ".")
+      local rest = pathutil
+        .relative(dest, ref.anchor)
+        :gsub("%.pyi?$", "")
+        :gsub("/__init__$", "")
+        :gsub("/", ".")
       if rest == "" or rest == "." then return dots end
       return dots .. rest
     end,

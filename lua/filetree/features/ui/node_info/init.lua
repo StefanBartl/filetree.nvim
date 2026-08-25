@@ -106,9 +106,7 @@ end
 ---@return string[]
 function M.info_lines(path)
   local stat = vim.uv.fs_stat(path)
-  if not stat then
-    return { "  No stat info for:", "  " .. path }
-  end
+  if not stat then return { "  No stat info for:", "  " .. path } end
 
   local lines = {}
   lines[#lines + 1] = "  Path:     " .. path
@@ -121,18 +119,19 @@ function M.info_lines(path)
     local plus = info.truncated and "+" or ""
     lines[#lines + 1] = string.format(
       "  Items:    %d file%s, %d folder%s%s",
-      info.files, info.files == 1 and "" or "s",
-      info.dirs,  info.dirs  == 1 and "" or "s",
-      info.truncated and "  (truncated)" or "")
+      info.files,
+      info.files == 1 and "" or "s",
+      info.dirs,
+      info.dirs == 1 and "" or "s",
+      info.truncated and "  (truncated)" or ""
+    )
     lines[#lines + 1] = "  Size:     " .. fmt_bytes(info.bytes) .. plus
   else
     lines[#lines + 1] = "  Size:     " .. fmt_bytes(stat.size)
   end
 
   -- Permissions (POSIX mode bits, lower 9 bits)
-  if stat.mode then
-    lines[#lines + 1] = "  Mode:     " .. fmt_permissions(stat.mode)
-  end
+  if stat.mode then lines[#lines + 1] = "  Mode:     " .. fmt_permissions(stat.mode) end
 
   -- Modified time
   if stat.mtime then
@@ -142,7 +141,7 @@ function M.info_lines(path)
 
   -- Line count for files
   if _cfg.show_lines ~= false and stat.type == "file" then
-    local e     = path:match("%.([^.]+)$") or ""
+    local e = path:match("%.([^.]+)$") or ""
     local count = line_count.count(path, e)
     if count then
       lines[#lines + 1] = "  Lines:    " .. line_count.format(count)
@@ -200,22 +199,23 @@ end
 
 ---@type FiletreeNodeInfoConfig
 local DEFAULTS = {
-  keymap      = "I",
-  show_lines  = true,
+  keymap = "I",
+  show_lines = true,
   max_entries = 100000, -- cap for the recursive directory scan behind Items/Size
 }
 
 ---@param cfg FiletreeNodeInfoConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = vim.tbl_extend("force", DEFAULTS, cfg or {})
-  cfg      = _cfg
+  _cfg = vim.tbl_extend("force", DEFAULTS, cfg or {})
+  cfg = _cfg
   _adapter = adapter
 
   if cfg.keymap then
     tree_attach.on_attach(function(buf)
-      map("n", cfg.keymap, function() M.show_current() end,
-        { buffer = buf, desc = "filetree: node info", silent = true })
+      map("n", cfg.keymap, function()
+        M.show_current()
+      end, { buffer = buf, desc = "filetree: node info", silent = true })
     end)
   end
 end

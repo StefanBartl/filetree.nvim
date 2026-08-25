@@ -31,9 +31,7 @@ end
 ---Register a callback to run once for each tree buffer when it attaches.
 ---@param fn fun(buf: integer)
 function M.on_attach(fn)
-  if type(fn) == "function" then
-    _callbacks[#_callbacks + 1] = fn
-  end
+  if type(fn) == "function" then _callbacks[#_callbacks + 1] = fn end
 end
 
 ---Install the single FileType autocmd that dispatches to all callbacks.
@@ -45,11 +43,11 @@ function M.install(adapter)
   _augroup = au.group("filetree_tree_attach", true)
 
   local pattern = (adapter and type(adapter.filetypes) == "table" and #adapter.filetypes > 0)
-    and adapter.filetypes
+      and adapter.filetypes
     or { "neo-tree", "NvimTree" }
 
   au.acmd("FileType", {
-    group   = _augroup,
+    group = _augroup,
     pattern = pattern,
     callback = function(ev)
       local buf = ev.buf

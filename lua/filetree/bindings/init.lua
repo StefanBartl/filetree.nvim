@@ -12,7 +12,7 @@
 
 local M = {}
 
-M.keymaps  = require("filetree.bindings.keymaps")
+M.keymaps = require("filetree.bindings.keymaps")
 M.autocmds = require("filetree.bindings.autocmds")
 
 ---Return every registered `:Filetree` sub-command path (live from the dispatcher).
@@ -30,14 +30,17 @@ function M.catalog()
   local cmd_name = "Filetree"
   if cfg_ok then
     local c = config.get and config.get().command
-    if type(c) == "string" then cmd_name = c
-    elseif type(c) == "table" and c.name then cmd_name = c.name end
+    if type(c) == "string" then
+      cmd_name = c
+    elseif type(c) == "table" and c.name then
+      cmd_name = c.name
+    end
   end
   return {
-    command      = cmd_name,
-    keymaps      = M.keymaps,
+    command = cmd_name,
+    keymaps = M.keymaps,
     usercommands = M.usercommands(),
-    autocmds     = M.autocmds,
+    autocmds = M.autocmds,
   }
 end
 
@@ -56,13 +59,13 @@ function M.setup_which_key()
   local ok, wk = pcall(require, "which-key")
   if not ok then return end
 
-  if type(wk.add) == "function" then           -- which-key v3
+  if type(wk.add) == "function" then -- which-key v3
     local spec = {}
     for _, g in ipairs(WK_GROUPS) do
       spec[#spec + 1] = { g[1], group = g[2] }
     end
     pcall(wk.add, spec)
-  elseif type(wk.register) == "function" then   -- which-key v2
+  elseif type(wk.register) == "function" then -- which-key v2
     local spec = {}
     for _, g in ipairs(WK_GROUPS) do
       spec[g[1]] = { name = g[2] }

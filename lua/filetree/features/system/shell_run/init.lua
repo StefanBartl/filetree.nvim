@@ -21,8 +21,8 @@
 ---   height       integer?  Terminal height in lines when split="split" (default 12).
 
 local notify = require("filetree.util.notify").create("[filetree.shell_run]")
-local path   = require("filetree.util.path")
-local map    = require("filetree.util.map")
+local path = require("filetree.util.path")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 
 local M = {}
@@ -34,9 +34,7 @@ local M = {}
 ---@return string
 local function resolve_dir(adapter)
   local node = adapter.get_current_node and adapter.get_current_node()
-  if node and node.path and node.path ~= "" then
-    return path.ensure_dir(node.path)
-  end
+  if node and node.path and node.path ~= "" then return path.ensure_dir(node.path) end
   return vim.fn.getcwd()
 end
 
@@ -59,16 +57,14 @@ local function run_in_terminal(dir, cmd, close_on_ok, split, height)
 
   local term_buf = vim.api.nvim_get_current_buf()
   local job = vim.fn.termopen(cmd, {
-    cwd     = dir,
+    cwd = dir,
     on_exit = function(_, code)
       if close_on_ok and code == 0 then
         pcall(vim.api.nvim_buf_delete, term_buf, { force = true })
       end
     end,
   })
-  if not job or job <= 0 then
-    notify.warn("Could not run command: " .. cmd)
-  end
+  if not job or job <= 0 then notify.warn("Could not run command: " .. cmd) end
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -101,18 +97,16 @@ function M.setup(config, adapter)
   local keymap = config.keymap or "i"
   _adapter = adapter
   _opts = {
-    close_on_ok = config.close_on_ok ~= false,   -- default true
-    split       = config.split       or "split",
-    height      = config.height      or 12,
+    close_on_ok = config.close_on_ok ~= false, -- default true
+    split = config.split or "split",
+    height = config.height or 12,
   }
 
   tree_attach.on_attach(function(buf)
-    map("n", keymap, M.run, { buffer = buf },
-      "Filetree: run shell command in node directory")
+    map("n", keymap, M.run, { buffer = buf }, "Filetree: run shell command in node directory")
   end)
 end
 
-function M.teardown()
-end
+function M.teardown() end
 
 return M

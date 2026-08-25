@@ -28,9 +28,7 @@ function M.resolve(name)
     -- Lazy-load built-in adapter module if not yet registered
     if not _registry[name] then
       local ok, mod = pcall(require, "filetree.adapter." .. name)
-      if ok and mod then
-        _registry[name] = mod
-      end
+      if ok and mod then _registry[name] = mod end
     end
     local adapter = _registry[name]
     if not adapter then
@@ -48,9 +46,7 @@ function M.resolve(name)
   -- auto: try known built-ins in priority order
   local candidates = { "neotree", "nvimtree", "netrw", "oil", "mini_files" }
   for _, candidate in ipairs(candidates) do
-    if not _registry[candidate] then
-      pcall(require, "filetree.adapter." .. candidate)
-    end
+    if not _registry[candidate] then pcall(require, "filetree.adapter." .. candidate) end
     local adapter = _registry[candidate]
     if adapter and adapter.is_available() then
       _active = adapter
@@ -58,7 +54,9 @@ function M.resolve(name)
     end
   end
 
-  notify.error("No supported filetree plugin found (tried: " .. table.concat(candidates, ", ") .. ")")
+  notify.error(
+    "No supported filetree plugin found (tried: " .. table.concat(candidates, ", ") .. ")"
+  )
   return nil
 end
 

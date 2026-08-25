@@ -78,7 +78,10 @@ end
 ---@param dir string
 ---@return string|nil
 local function find_config(dir)
-  local found = vim.fs.find({ "tsconfig.json", "jsconfig.json" }, { upward = true, path = dir, type = "file" })
+  local found = vim.fs.find(
+    { "tsconfig.json", "jsconfig.json" },
+    { upward = true, path = dir, type = "file" }
+  )
   return found and found[1] or nil
 end
 
@@ -238,9 +241,7 @@ end
 ---@return string? matched
 local function resolves_to(resolved, wanted, is_dir)
   if is_dir then
-    if pathutil.same(resolved, wanted) or pathutil.under(resolved, wanted) then
-      return resolved
-    end
+    if pathutil.same(resolved, wanted) or pathutil.under(resolved, wanted) then return resolved end
     return nil
   end
   if pathutil.same(resolved, wanted) then return resolved end
@@ -277,9 +278,7 @@ function M.plan(old_path, ctx)
   -- string to pre-filter on.
   local stem = strip_ext(name)
   local needle = stem
-  if stem == "index" and not ctx.is_dir then
-    needle = ftpath.basename(ftpath.parent(old_path))
-  end
+  if stem == "index" and not ctx.is_dir then needle = ftpath.basename(ftpath.parent(old_path)) end
   if needle == "" then return nil end
 
   M.reset_cache()
@@ -315,8 +314,12 @@ function M.plan(old_path, ctx)
           source = old_path,
           kind = kind,
           resolved = matched,
-          display = string.format("%s:%d: %s",
-            vim.fn.fnamemodify(file, ":."), lineno, vim.trim(text)),
+          display = string.format(
+            "%s:%d: %s",
+            vim.fn.fnamemodify(file, ":."),
+            lineno,
+            vim.trim(text)
+          ),
         }
       end)
       return refs

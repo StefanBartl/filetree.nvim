@@ -19,16 +19,16 @@
 
 local notify = require("filetree.util.notify").create("[filetree.session]")
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeSessionConfig
 local _cfg = {
-  enabled       = false,
-  auto_save     = true,
-  auto_restore  = true,
-  max_sessions  = 50,
+  enabled = false,
+  auto_save = true,
+  auto_restore = true,
+  max_sessions = 50,
 }
 
 ---@type FiletreeAdapter?
@@ -84,7 +84,7 @@ end
 local function project_key()
   local ok_pr, pr = require("filetree.features").load("project_root")
   if ok_pr and type(pr.find) == "function" then
-    local buf  = vim.api.nvim_get_current_buf()
+    local buf = vim.api.nvim_get_current_buf()
     local name = vim.api.nvim_buf_get_name(buf)
     return pr.find(name ~= "" and name or vim.fn.getcwd())
   end
@@ -96,29 +96,27 @@ end
 function M.save()
   if not _adapter then return end
 
-  local winid  = _adapter.get_winid and _adapter.get_winid() or -1
+  local winid = _adapter.get_winid and _adapter.get_winid() or -1
 
   local topline = 1
-  local cursor  = 1
+  local cursor = 1
   if winid > 0 and vim.api.nvim_win_is_valid(winid) then
     topline = vim.fn.line("w0", winid)
-    cursor  = vim.api.nvim_win_get_cursor(winid)[1]
+    cursor = vim.api.nvim_win_get_cursor(winid)[1]
   end
 
   -- Best-effort: ask adapter for expanded paths (optional API)
   local expanded = {}
-  if _adapter.get_expanded_paths then
-    expanded = _adapter.get_expanded_paths() or {}
-  end
+  if _adapter.get_expanded_paths then expanded = _adapter.get_expanded_paths() or {} end
 
   local root = _adapter.get_root and _adapter.get_root() or nil
 
   local key = project_key()
   _sessions[key] = {
-    adapter  = _adapter.name,
-    root     = root,
-    topline  = topline,
-    cursor   = cursor,
+    adapter = _adapter.name,
+    root = root,
+    topline = topline,
+    cursor = cursor,
     expanded = expanded,
     saved_at = os.time(),
   }
@@ -128,20 +126,16 @@ end
 function M.restore()
   if not _adapter then return end
 
-  local key   = project_key()
+  local key = project_key()
   local entry = _sessions[key]
   if not entry then return end
 
   -- Only restore if adapter matches
-  if entry.adapter and entry.adapter ~= _adapter.name then
-    return
-  end
+  if entry.adapter and entry.adapter ~= _adapter.name then return end
 
   vim.defer_fn(function()
     -- Restore tree root
-    if entry.root and _adapter.set_root then
-      pcall(_adapter.set_root, entry.root)
-    end
+    if entry.root and _adapter.set_root then pcall(_adapter.set_root, entry.root) end
 
     -- Restore expanded dirs
     if entry.expanded and #entry.expanded > 0 and _adapter.expand_paths then
@@ -185,8 +179,8 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg      = vim.tbl_deep_extend("force", _cfg, config)
-  _adapter  = adapter
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _adapter = adapter
   _store_path = vim.fn.stdpath("data") .. "/filetree/sessions.json"
 
   load_store()
@@ -196,12 +190,12 @@ function M.setup(config, adapter)
 
   if _cfg.auto_save then
     au.acmd("VimLeavePre", {
-      group    = _augroup,
+      group = _augroup,
       callback = M.save,
     })
     -- Also save when the tree buffer is hidden
     au.acmd("BufHidden", {
-      group   = _augroup,
+      group = _augroup,
       pattern = "*",
       callback = function(ev)
         local ft = vim.bo[ev.buf].filetype
@@ -219,7 +213,6 @@ function M.setup(config, adapter)
       M.restore()
     end)
   end
-
 end
 
 function M.teardown()

@@ -30,7 +30,7 @@ local path = require("filetree.util.path")
 local lib_debounce = require("lib.nvim.debounce")
 local chdir = require("lib.nvim.fs.chdir")
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local M = {}
 
 ---@class CwdSyncState
@@ -40,8 +40,8 @@ local M = {}
 
 ---@type CwdSyncState
 local S = {
-  last_path      = nil,
-  paused_until   = 0,
+  last_path = nil,
+  paused_until = 0,
   user_navigated = false,
 }
 
@@ -208,7 +208,12 @@ local function do_reveal(path_)
   -- honoured here at all. It also validates the path and returns an error
   -- instead of throwing.
   local cwd_changed = false
-  if allow_chdir and _cfg.change_dir ~= false and root ~= "" and not same_dir(root, vim.fn.getcwd()) then
+  if
+    allow_chdir
+    and _cfg.change_dir ~= false
+    and root ~= ""
+    and not same_dir(root, vim.fn.getcwd())
+  then
     local ok, err = chdir(root, { scope = chdir_scope() })
     if ok then
       cwd_changed = true
@@ -233,9 +238,11 @@ local function do_reveal(path_)
   -- show/reveal round-trip (which rescans the filesystem and re-renders). This is
   -- the common case — opening files within the same project — and is what caused
   -- the "nvim hangs when opening files" lag.
-  if not cwd_changed
+  if
+    not cwd_changed
     and type(_adapter.get_node_line) == "function"
-    and type(_adapter.scroll_to_line) == "function" then
+    and type(_adapter.scroll_to_line) == "function"
+  then
     local line = _adapter.get_node_line(path_)
     if line then
       _adapter.scroll_to_line(line)
@@ -256,9 +263,7 @@ local function do_reveal(path_)
     -- Restore focus to the editor window after a brief delay
     local cur_win = vim.api.nvim_get_current_win()
     vim.defer_fn(function()
-      if vim.api.nvim_win_is_valid(cur_win) then
-        vim.api.nvim_set_current_win(cur_win)
-      end
+      if vim.api.nvim_win_is_valid(cur_win) then vim.api.nvim_set_current_win(cur_win) end
     end, 50)
   end
 end
@@ -274,12 +279,10 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = config
+  _cfg = config
   _adapter = adapter
 
-  if _debounce then
-    _debounce.cancel()
-  end
+  if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(do_reveal, _cfg.debounce_ms or 150)
 
   -- Build the cached stable-root finder unless disabled (root_markers = false).
@@ -289,18 +292,14 @@ function M.setup(config, adapter)
   if markers == nil then markers = { ".git" } end
   if markers ~= false then
     local ok, find_root = pcall(require, "lib.nvim.fs.find_root")
-    if ok and type(find_root) == "function" then
-      _root_finder = find_root({ markers = markers })
-    end
+    if ok and type(find_root) == "function" then _root_finder = find_root({ markers = markers }) end
   end
 
-  if _augroup then
-    au.del_group(_augroup)
-  end
+  if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_cwd_sync", true)
 
   au.acmd({ "BufEnter", "WinEnter" }, {
-    group    = _augroup,
+    group = _augroup,
     callback = function()
       -- Skip if cursor is inside the tree window
       local tree_winid = adapter.get_winid()
@@ -338,24 +337,22 @@ function M.setup(config, adapter)
     vim.schedule(debounced_reveal)
   else
     au.acmd("VimEnter", {
-      group    = _augroup,
-      once     = true,
+      group = _augroup,
+      once = true,
       callback = debounced_reveal,
     })
   end
 end
 
 function M.teardown()
-  if _debounce then
-    _debounce.cancel()
-  end
+  if _debounce then _debounce.cancel() end
   _root_finder = nil
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil
   end
-  S.last_path      = nil
-  S.paused_until   = 0
+  S.last_path = nil
+  S.paused_until = 0
   S.user_navigated = false
 end
 

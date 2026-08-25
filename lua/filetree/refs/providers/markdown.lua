@@ -42,7 +42,9 @@ local EXTENSIONS = { "md", "markdown", "mdx", "mdown", "qmd", "rmd" }
 ---@param s string
 ---@return string
 local function url_decode(s)
-  return (s:gsub("%%(%x%x)", function(h) return string.char(tonumber(h, 16)) end))
+  return (s:gsub("%%(%x%x)", function(h)
+    return string.char(tonumber(h, 16))
+  end))
 end
 
 ---@internal
@@ -50,7 +52,9 @@ end
 ---@param s string
 ---@return string
 local function url_encode(s)
-  return (s:gsub("[ ()]", function(c) return string.format("%%%02X", string.byte(c)) end))
+  return (s:gsub("[ ()]", function(c)
+    return string.format("%%%02X", string.byte(c))
+  end))
 end
 
 ---@internal
@@ -195,8 +199,7 @@ function M.plan(old_path, ctx)
           resolved, style, omitted_ext =
             wiki_match(url_decode(target), file, ctx.root, old_path, ctx.is_dir)
         else
-          resolved, style = pathutil.match(
-            url_decode(target), file, ctx.root, old_path, ctx.is_dir)
+          resolved, style = pathutil.match(url_decode(target), file, ctx.root, old_path, ctx.is_dir)
         end
         if not resolved then return end
 
@@ -212,8 +215,12 @@ function M.plan(old_path, ctx)
           resolved = resolved,
           kind = kind,
           omitted_ext = omitted_ext,
-          display = string.format("%s:%d: %s",
-            vim.fn.fnamemodify(file, ":."), lineno, vim.trim(text)),
+          display = string.format(
+            "%s:%d: %s",
+            vim.fn.fnamemodify(file, ":."),
+            lineno,
+            vim.trim(text)
+          ),
         }
       end)
       return refs

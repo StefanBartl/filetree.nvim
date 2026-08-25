@@ -58,13 +58,13 @@
 ---
 --- Keymap (default): "A" in tree buffer.
 
-local notify  = require("filetree.util.notify").create("[filetree.create_from_template]")
-local path_u  = require("filetree.util.path")
+local notify = require("filetree.util.notify").create("[filetree.create_from_template]")
+local path_u = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
-local win_u   = require("filetree.util.window")
-local json    = require("lib.nvim.fs.json")
+local win_u = require("filetree.util.window")
+local json = require("lib.nvim.fs.json")
 
-local map    = require("filetree.util.map")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
 local ui_confirm = require("filetree.util.confirm")
@@ -81,18 +81,20 @@ local has_kit_picker = _ok_kit and type(kit) == "table" and type(kit.picker) == 
 -- preview at all. Soft dependency, same pattern as the kit check above —
 -- absent, and pick_template() falls back to the kit.picker/ui_select flow.
 local _ok_pickers, pickers_engines = pcall(require, "pickers.engines")
-local has_pickers = _ok_pickers and type(pickers_engines) == "table" and type(pickers_engines.load) == "function"
+local has_pickers = _ok_pickers
+  and type(pickers_engines) == "table"
+  and type(pickers_engines.load) == "function"
 
 local M = {}
 
 ---@type FiletreeCreateFromTemplateConfig
 local _cfg = {
-  enabled      = false,
-  keymap       = "A",
-  template_dir = nil,  -- defaults to stdpath("data")/filetree/templates/
-  author       = nil,  -- defaults to $USER/$USERNAME
-  open_after   = true, -- open file in editor after creation
-  prefer       = "auto", -- auto | telescope | fzf | snacks | builtin
+  enabled = false,
+  keymap = "A",
+  template_dir = nil, -- defaults to stdpath("data")/filetree/templates/
+  author = nil, -- defaults to $USER/$USERNAME
+  open_after = true, -- open file in editor after creation
+  prefer = "auto", -- auto | telescope | fzf | snacks | builtin
 }
 
 ---@type FiletreeAdapter?
@@ -102,8 +104,7 @@ local _adapter = nil
 
 ---@internal
 local function template_dir()
-  local dir = _cfg.template_dir
-    or (vim.fn.stdpath("data") .. "/filetree/templates")
+  local dir = _cfg.template_dir or (vim.fn.stdpath("data") .. "/filetree/templates")
   if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, "p") end
   return dir
 end
@@ -122,9 +123,7 @@ end
 ---@return string?
 local _builtin_dir
 local function builtin_dir()
-  if _builtin_dir ~= nil then
-    return _builtin_dir ~= false and _builtin_dir or nil
-  end
+  if _builtin_dir ~= nil then return _builtin_dir ~= false and _builtin_dir or nil end
   local found = vim.api.nvim_get_runtime_file("lua/filetree/assets/templates/", true)
   _builtin_dir = found[1] or false
   return found[1]
@@ -161,13 +160,11 @@ local function module_path(abs_path)
 
   local ok_pr, pr = require("filetree.features").load("project_root")
   local root
-  if ok_pr and type(pr.find) == "function" then
-    root = pr.find(abs_path)
-  end
-  root = root or vim.fn.getcwd()  -- project_root.find() may return nil (no marker found)
+  if ok_pr and type(pr.find) == "function" then root = pr.find(abs_path) end
+  root = root or vim.fn.getcwd() -- project_root.find() may return nil (no marker found)
   local rel = path_u.relative(abs_path, root)
-  rel = rel:gsub("%.[^./\\]+$", "")  -- strip whatever extension is actually there
-  return (rel:gsub("[/\\]", "."):gsub("%.init$", ""))  -- parens: gsub returns (str, count)
+  rel = rel:gsub("%.[^./\\]+$", "") -- strip whatever extension is actually there
+  return (rel:gsub("[/\\]", "."):gsub("%.init$", "")) -- parens: gsub returns (str, count)
 end
 
 ---@internal
@@ -175,23 +172,25 @@ end
 ---@param new_path string
 ---@return string
 local function substitute(content, new_path)
-  local base = vim.fn.fnamemodify(new_path, ":t:r")  -- name without ext
-  local ext  = vim.fn.fnamemodify(new_path, ":e")
-  local now  = os.date("*t")
+  local base = vim.fn.fnamemodify(new_path, ":t:r") -- name without ext
+  local ext = vim.fn.fnamemodify(new_path, ":e")
+  local now = os.date("*t")
   local vars = {
     filename = base,
-    ext      = ext,
-    date     = os.date("%Y-%m-%d"),
-    year     = tostring(now.year),
-    month    = string.format("%02d", now.month),
-    day      = string.format("%02d", now.day),
-    time     = os.date("%H:%M:%S"),
-    author   = author(),
-    module   = module_path(new_path),
+    ext = ext,
+    date = os.date("%Y-%m-%d"),
+    year = tostring(now.year),
+    month = string.format("%02d", now.month),
+    day = string.format("%02d", now.day),
+    time = os.date("%H:%M:%S"),
+    author = author(),
+    module = module_path(new_path),
   }
-  return (content:gsub("%${(%w+)}", function(key)
-    return vars[key] or ("${" .. key .. "}")
-  end))
+  return (
+    content:gsub("%${(%w+)}", function(key)
+      return vars[key] or ("${" .. key .. "}")
+    end)
+  )
 end
 
 -- ── Display order (persisted, user-reorderable) ─────────────────────────────────
@@ -209,9 +208,7 @@ end
 ---@return string[]
 local function load_order()
   local ok, decoded = pcall(json.read, order_file())
-  if not ok or type(decoded) ~= "table" or type(decoded.order) ~= "table" then
-    return {}
-  end
+  if not ok or type(decoded) ~= "table" or type(decoded.order) ~= "table" then return {} end
   return decoded.order
 end
 
@@ -235,14 +232,16 @@ local function scan_dir(dir, builtin)
   if not ok then return {} end
   local tmpl = {}
   for _, e in ipairs(entries) do
-    if not e:match("^%.") then  -- skip .order.json and any other dotfile
+    if not e:match("^%.") then -- skip .order.json and any other dotfile
       local full = dir .. "/" .. e
       if vim.fn.filereadable(full) == 1 then
         tmpl[#tmpl + 1] = { name = e, path = full, builtin = builtin }
       end
     end
   end
-  table.sort(tmpl, function(a, b) return a.name < b.name end)
+  table.sort(tmpl, function(a, b)
+    return a.name < b.name
+  end)
   return tmpl
 end
 
@@ -269,11 +268,11 @@ local function raw_templates()
     by_name[t.name] = t
   end
   for _, t in ipairs(builtin) do
-    if not by_name[t.name] then
-      by_name[t.name] = t
-    end
+    if not by_name[t.name] then by_name[t.name] = t end
   end
-  for name in pairs(by_name) do out[#out + 1] = name end
+  for name in pairs(by_name) do
+    out[#out + 1] = name
+  end
   table.sort(out)
 
   local tmpl = {}
@@ -291,7 +290,9 @@ end
 local function list_templates()
   local all = raw_templates()
   local by_name = {}
-  for _, t in ipairs(all) do by_name[t.name] = t end
+  for _, t in ipairs(all) do
+    by_name[t.name] = t
+  end
 
   local ordered, seen = {}, {}
   for _, name in ipairs(load_order()) do
@@ -346,8 +347,8 @@ local function create_from(tmpl_path, dest_path)
     notify.error("Cannot read template: " .. tmpl_path)
     return false
   end
-  local content   = table.concat(lines, "\n")
-  local rendered  = substitute(content, dest_path)
+  local content = table.concat(lines, "\n")
+  local rendered = substitute(content, dest_path)
   local rendered_lines = {}
   for l in (rendered .. "\n"):gmatch("([^\n]*)\n") do
     rendered_lines[#rendered_lines + 1] = l
@@ -405,7 +406,9 @@ local function pick_template_reorderable(templates, on_select)
 
   local function render(handle)
     local lines = {}
-    for _, t in ipairs(list) do lines[#lines + 1] = display_name(t) end
+    for _, t in ipairs(list) do
+      lines[#lines + 1] = display_name(t)
+    end
     handle.set_results(lines)
   end
 
@@ -453,7 +456,7 @@ local function pick_template_reorderable(templates, on_select)
     local tmpl = idx and list[idx]
     if not tmpl or not M.move(tmpl.name, delta) then return end
 
-    templates = list_templates()  -- reload: reflects the just-persisted order
+    templates = list_templates() -- reload: reflects the just-persisted order
     list = templates
     render(handle)
 
@@ -465,8 +468,12 @@ local function pick_template_reorderable(templates, on_select)
   end
 
   local mo = { buffer = handle.slots.prompt.bufnr, nowait = true }
-  map({ "i", "n" }, "<M-j>", function() move(1)  end, mo, "Filetree: move template down")
-  map({ "i", "n" }, "<M-k>", function() move(-1) end, mo, "Filetree: move template up")
+  map({ "i", "n" }, "<M-j>", function()
+    move(1)
+  end, mo, "Filetree: move template down")
+  map({ "i", "n" }, "<M-k>", function()
+    move(-1)
+  end, mo, "Filetree: move template up")
 end
 
 ---Delegate to pickers.nvim for real fuzzy search + a native content preview
@@ -510,7 +517,11 @@ local function pick_template(templates, on_select)
     return
   end
 
-  if _cfg.prefer ~= "builtin" and has_pickers and pick_template_via_pickers(templates, on_select) then
+  if
+    _cfg.prefer ~= "builtin"
+    and has_pickers
+    and pick_template_via_pickers(templates, on_select)
+  then
     return
   end
 
@@ -536,9 +547,7 @@ local function filter_by_extension(templates, filename)
 
   local matched = {}
   for _, t in ipairs(templates) do
-    if vim.fn.fnamemodify(t.name, ":e") == ext then
-      matched[#matched + 1] = t
-    end
+    if vim.fn.fnamemodify(t.name, ":e") == ext then matched[#matched + 1] = t end
   end
   return #matched > 0 and matched or templates
 end
@@ -552,7 +561,7 @@ function M.open(dest_dir)
     title = "New file (in " .. vim.fn.fnamemodify(dest_dir, ":t") .. "): ",
     on_submit = function(name)
       if not name or name == "" then return end
-      name = path_u.slashify(name)  -- accept "/" or "\" if creating into a subdir
+      name = path_u.slashify(name) -- accept "/" or "\" if creating into a subdir
       local dest = dest_dir .. "/" .. name
 
       local templates = filter_by_extension(list_templates(), name)
@@ -582,7 +591,9 @@ function M.open(dest_dir)
         if vim.fn.filereadable(dest) == 1 then
           ui_confirm({
             question = "File exists. Overwrite?",
-            on_choice = function(yes) if yes then proceed() end end,
+            on_choice = function(yes)
+              if yes then proceed() end
+            end,
           })
         else
           proceed()
@@ -596,8 +607,8 @@ end
 function M.open_current()
   if not _adapter then return end
   local node = _adapter.get_current_node()
-  local dir  = node
-    and (node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h"))
+  local dir = node
+      and (node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h"))
     or vim.fn.getcwd()
   M.open(dir)
 end
@@ -612,10 +623,12 @@ end
 ---@param name    string  Template filename.
 ---@param content string  Template content.
 function M.add_template(name, content)
-  local dir  = template_dir()
+  local dir = template_dir()
   local path = dir .. "/" .. name
   local lines = {}
-  for l in (content .. "\n"):gmatch("([^\n]*)\n") do lines[#lines+1] = l end
+  for l in (content .. "\n"):gmatch("([^\n]*)\n") do
+    lines[#lines + 1] = l
+  end
   vim.fn.writefile(lines, path)
   notify.info("Template added: " .. name)
 end
@@ -626,13 +639,15 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _cfg.keymap then
     tree_attach.on_attach(function(buf)
       map("n", _cfg.keymap, M.open_current, {
-        buffer = buf, silent = true, desc = "Filetree: create from template",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: create from template",
       })
     end)
   end

@@ -19,7 +19,7 @@
 ---   keymap_next   string?   Next buffer in adjacent window (default "<C-n>").
 ---   keymap_prev   string?   Previous buffer in adjacent window (default "<C-p>").
 
-local notify  = require("filetree.util.notify").create("[filetree.buffer_cycle]")
+local notify = require("filetree.util.notify").create("[filetree.buffer_cycle]")
 local bufutil = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
@@ -39,9 +39,7 @@ local function cycle(cmd)
   local ok, err = pcall(vim.api.nvim_win_call, win, function()
     vim.cmd(cmd)
   end)
-  if not ok then
-    notify.warn("Buffer cycle failed: " .. tostring(err))
-  end
+  if not ok then notify.warn("Buffer cycle failed: " .. tostring(err)) end
 end
 
 ---Switch the adjacent editor window to the next buffer.
@@ -66,7 +64,7 @@ function M.setup(config, _adapter)
       map("n", keymap_next, M.next, {
         buffer = buf,
         silent = true,
-        desc   = "Filetree: next buffer in adjacent editor window",
+        desc = "Filetree: next buffer in adjacent editor window",
       })
     end
 
@@ -74,13 +72,12 @@ function M.setup(config, _adapter)
       map("n", keymap_prev, M.prev, {
         buffer = buf,
         silent = true,
-        desc   = "Filetree: previous buffer in adjacent editor window",
+        desc = "Filetree: previous buffer in adjacent editor window",
       })
     end
   end)
 end
 
-function M.teardown()
-end
+function M.teardown() end
 
 return M

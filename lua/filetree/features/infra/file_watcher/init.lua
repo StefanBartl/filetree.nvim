@@ -20,48 +20,50 @@
 
 local notify = require("filetree.util.notify").create("[filetree.file_watcher]")
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeFileWatcherConfig
 local _cfg = {
-  enabled         = false,
-  debounce_ms     = 500,
+  enabled = false,
+  debounce_ms = 500,
   watch_recursive = true,
-  ignore_events   = {},
+  ignore_events = {},
 }
 
 ---@type FiletreeAdapter?
 local _adapter = nil
 
-local _handle  = nil   -- uv fs_event handle
-local _debounce = nil  -- lib.nvim.debounce handle, built in M.setup()
-local _watched = nil   -- current watched path
+local _handle = nil -- uv fs_event handle
+local _debounce = nil -- lib.nvim.debounce handle, built in M.setup()
+local _watched = nil -- current watched path
 
 -- ── uv helpers ────────────────────────────────────────────────────────────────
 
-local function uv() return vim.uv or vim.loop end
+local function uv()
+  return vim.uv or vim.loop
+end
 
 local function stop_handle()
   if _handle then
-    pcall(function() _handle:stop() end)
-    pcall(function() _handle:close() end)
+    pcall(function()
+      _handle:stop()
+    end)
+    pcall(function()
+      _handle:close()
+    end)
     _handle = nil
   end
 end
 
 local function stop_timer()
-  if _debounce then
-    _debounce.cancel()
-  end
+  if _debounce then _debounce.cancel() end
 end
 
 local function do_refresh()
-  if _adapter and _adapter.refresh then
-    pcall(_adapter.refresh)
-  end
+  if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
 end
 
 local function trigger_refresh()
@@ -108,8 +110,8 @@ function M.enter(path)
     if _adapter and _adapter.get_current_node then
       local node = _adapter.get_current_node()
       if node then
-        path = vim.fn.isdirectory(node.path or "") == 1
-          and node.path or vim.fn.fnamemodify(node.path or "", ":h")
+        path = vim.fn.isdirectory(node.path or "") == 1 and node.path
+          or vim.fn.fnamemodify(node.path or "", ":h")
       end
     end
     path = path or vim.fn.getcwd()
@@ -127,10 +129,14 @@ function M.exit()
 end
 
 ---@return string?
-function M.watched_path() return _watched end
+function M.watched_path()
+  return _watched
+end
 
 ---@return boolean
-function M.is_active() return _handle ~= nil end
+function M.is_active()
+  return _handle ~= nil
+end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -141,7 +147,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _debounce then _debounce.cancel() end
@@ -157,7 +163,7 @@ function M.setup(config, adapter)
   end)
 
   au.acmd("DirChanged", {
-    group    = _augroup,
+    group = _augroup,
     callback = function()
       watch(vim.fn.getcwd())
     end,

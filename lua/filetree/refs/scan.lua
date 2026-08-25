@@ -28,9 +28,17 @@ local M = {}
 -- which the user may legitimately want to differ from what a reference scan
 -- traverses.
 local PRUNE_DIRS = {
-  [".git"] = true, ["node_modules"] = true, [".venv"] = true, ["venv"] = true,
-  ["dist"] = true, ["build"] = true, ["target"] = true, ["vendor"] = true,
-  [".next"] = true, [".cache"] = true, ["__pycache__"] = true,
+  [".git"] = true,
+  ["node_modules"] = true,
+  [".venv"] = true,
+  ["venv"] = true,
+  ["dist"] = true,
+  ["build"] = true,
+  ["target"] = true,
+  ["vendor"] = true,
+  [".next"] = true,
+  [".cache"] = true,
+  ["__pycache__"] = true,
 }
 
 -- ── Line access ───────────────────────────────────────────────────────────────
@@ -56,9 +64,7 @@ end
 ---@return string[]|nil
 function M.lines_of(file)
   local bufnr = M.buffer_for(file)
-  if bufnr then
-    return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-  end
+  if bufnr then return vim.api.nvim_buf_get_lines(bufnr, 0, -1, false) end
   local ok, lines = pcall(vim.fn.readfile, file)
   if not ok or type(lines) ~= "table" then return nil end
   return lines
@@ -71,7 +77,9 @@ end
 ---@return table<string, boolean>
 local function ext_set(exts)
   local set = {}
-  for _, e in ipairs(exts) do set[e:lower()] = true end
+  for _, e in ipairs(exts) do
+    set[e:lower()] = true
+  end
   return set
 end
 
@@ -89,17 +97,18 @@ local function candidates_rg(root, needles, exts, cfg, cb)
   -- there is nothing to quote and no dependency on &shell — the same
   -- reasoning as the scan this replaces in smart_rename.
   local cmd = { "rg", "--files-with-matches", "--fixed-strings", "--color=never", "--ignore-case" }
-  if cfg.scan and cfg.scan.respect_gitignore == false then
-    cmd[#cmd + 1] = "--no-ignore"
-  end
+  if cfg.scan and cfg.scan.respect_gitignore == false then cmd[#cmd + 1] = "--no-ignore" end
   for _, e in ipairs(exts) do
-    cmd[#cmd + 1] = "-g"; cmd[#cmd + 1] = "*." .. e
+    cmd[#cmd + 1] = "-g"
+    cmd[#cmd + 1] = "*." .. e
   end
   for dir in pairs(PRUNE_DIRS) do
-    cmd[#cmd + 1] = "-g"; cmd[#cmd + 1] = "!" .. dir .. "/*"
+    cmd[#cmd + 1] = "-g"
+    cmd[#cmd + 1] = "!" .. dir .. "/*"
   end
   for _, n in ipairs(needles) do
-    cmd[#cmd + 1] = "-e"; cmd[#cmd + 1] = n
+    cmd[#cmd + 1] = "-e"
+    cmd[#cmd + 1] = n
   end
   cmd[#cmd + 1] = "--"
   cmd[#cmd + 1] = root
@@ -144,8 +153,12 @@ local function candidates_walk(root, needles, exts, cfg, cb)
     if ext and wanted[ext:lower()] then
       seen = seen + 1
       if seen > max_files then
-        notify.warn(string.format(
-          "reference scan stopped at %d files (install ripgrep for the fast path)", max_files))
+        notify.warn(
+          string.format(
+            "reference scan stopped at %d files (install ripgrep for the fast path)",
+            max_files
+          )
+        )
         break
       end
       local lines = M.lines_of(file)
@@ -154,7 +167,10 @@ local function candidates_walk(root, needles, exts, cfg, cb)
         for _, line in ipairs(lines) do
           local lower = line:lower()
           for _, n in ipairs(needles) do
-            if lower:find(n:lower(), 1, true) then hit = true; break end
+            if lower:find(n:lower(), 1, true) then
+              hit = true
+              break
+            end
           end
           if hit then break end
         end
@@ -163,7 +179,9 @@ local function candidates_walk(root, needles, exts, cfg, cb)
     end
   end
 
-  vim.schedule(function() cb(out) end)
+  vim.schedule(function()
+    cb(out)
+  end)
 end
 
 ---Files that may contain a reference matching `needles`.
@@ -194,7 +212,9 @@ function M.run_plan(plan, ctx, cb)
       if lines then
         for i, text in ipairs(lines) do
           local found = plan.extract(file, i, text)
-          for _, r in ipairs(found or {}) do refs[#refs + 1] = r end
+          for _, r in ipairs(found or {}) do
+            refs[#refs + 1] = r
+          end
         end
       end
     end

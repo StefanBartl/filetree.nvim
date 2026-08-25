@@ -17,7 +17,7 @@
 --- its `open()` takes a *table* (`{ path = …, mode = … }`), not a bare path.
 
 local platform = require("filetree.util.platform")
-local notify   = require("filetree.util.notify").create("[filetree.pdf]")
+local notify = require("filetree.util.notify").create("[filetree.pdf]")
 
 local M = {}
 
@@ -74,12 +74,23 @@ end
 ---second-guess what pdfport itself resolves once a path is actually sent.
 ---@type table<string, string>
 local EXT_KIND = {
-  png = "image", jpg = "image", jpeg = "image", gif = "image", bmp = "image",
-  webp = "image", tiff = "image", tif = "image",
-  md = "markdown", markdown = "markdown",
-  html = "html", htm = "html",
+  png = "image",
+  jpg = "image",
+  jpeg = "image",
+  gif = "image",
+  bmp = "image",
+  webp = "image",
+  tiff = "image",
+  tif = "image",
+  md = "markdown",
+  markdown = "markdown",
+  html = "html",
+  htm = "html",
   txt = "text",
-  docx = "office", odt = "office", xlsx = "office", pptx = "office",
+  docx = "office",
+  odt = "office",
+  xlsx = "office",
+  pptx = "office",
 }
 
 ---Guess pdfport's input kind for `path` from its extension, or nil when
@@ -173,18 +184,16 @@ function M.open(path, opts)
   local mode = opts.mode or "buffer"
 
   -- "system" is intentionally dependency-free: never touch pdfport for it.
-  if mode == "system" then
-    return M.system_open(path)
-  end
+  if mode == "system" then return M.system_open(path) end
 
   local ok, pp = pcall(require, "pdfport")
   if ok and type(pp.open) == "function" then
     local ok2, err = pcall(pp.open, {
-      path       = path,
-      mode       = mode,
+      path = path,
+      mode = mode,
       backend_id = opts.backend,
-      split      = opts.split,
-      focus      = opts.focus,
+      split = opts.split,
+      focus = opts.focus,
     })
     if ok2 then return true end
     notify.warn("pdfport open failed (" .. tostring(err) .. ") — falling back to system viewer")
@@ -220,7 +229,9 @@ function M.pick_open(path, opts)
 
   local ok, pp = pcall(require, "pdfport")
   if not ok or type(pp.pick_open) ~= "function" then
-    notify.warn("pdfport.nvim not installed (or too old for pick_open()) — opening PDF in system viewer")
+    notify.warn(
+      "pdfport.nvim not installed (or too old for pick_open()) — opening PDF in system viewer"
+    )
     return M.system_open(path)
   end
 

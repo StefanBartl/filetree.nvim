@@ -106,16 +106,10 @@ end
 ---@param p string
 ---@return string
 function M.ensure_dir(p)
-  if p == nil or p == "" then
-    return platform.get_cwd()
-  end
-  if vim.fn.isdirectory(p) == 1 then
-    return p
-  end
+  if p == nil or p == "" then return platform.get_cwd() end
+  if vim.fn.isdirectory(p) == 1 then return p end
   local parent = M.parent(p)
-  if parent == "" or parent == "." then
-    return platform.get_cwd()
-  end
+  if parent == "" or parent == "." then return platform.get_cwd() end
   return parent
 end
 
@@ -126,7 +120,7 @@ end
 ---@return string
 function M.relative(p, base)
   base = base or platform.get_cwd()
-  local abs_p    = M.to_unix(p):gsub("/$", "")
+  local abs_p = M.to_unix(p):gsub("/$", "")
   local abs_base = M.to_unix(base):gsub("/$", "")
 
   -- Descendant check happens locally first (not by inspecting lib.nvim's
@@ -136,9 +130,7 @@ function M.relative(p, base)
   if abs_p:sub(1, #abs_base) == abs_base then
     if _has_lib_relpath then
       local ok, rel = pcall(_lib_relpath, abs_p, abs_base)
-      if ok and type(rel) == "string" then
-        return rel
-      end
+      if ok and type(rel) == "string" then return rel end
     end
     local rel = abs_p:sub(#abs_base + 2)
     return rel == "" and "." or rel
@@ -162,9 +154,7 @@ end
 ---@param p string
 ---@return string
 function M.escape_shell_arg(p)
-  if platform.is_windows() then
-    return '"' .. p:gsub('"', '""') .. '"'
-  end
+  if platform.is_windows() then return '"' .. p:gsub('"', '""') .. '"' end
   return "'" .. p:gsub("'", "'\\''") .. "'"
 end
 
@@ -172,9 +162,7 @@ end
 ---@param p string
 ---@return string
 function M.quote_if_needed(p)
-  if p:find("%s") then
-    return '"' .. p .. '"'
-  end
+  if p:find("%s") then return '"' .. p .. '"' end
   return p
 end
 

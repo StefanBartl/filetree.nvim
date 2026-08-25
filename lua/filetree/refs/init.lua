@@ -151,7 +151,9 @@ function M.prefetch(paths, opts)
     state.done = true
     local waiters = state.waiters
     state.waiters = {}
-    for _, w in ipairs(waiters) do w(result) end
+    for _, w in ipairs(waiters) do
+      w(result)
+    end
   end
 
   ---@type FiletreeRefScanResult
@@ -164,8 +166,11 @@ function M.prefetch(paths, opts)
     finish(result)
     return {
       await = function(cb)
-        if state.done then cb(state.result)
-        else state.waiters[#state.waiters + 1] = cb end
+        if state.done then
+          cb(state.result)
+        else
+          state.waiters[#state.waiters + 1] = cb
+        end
       end,
     }
   end
@@ -181,8 +186,14 @@ function M.prefetch(paths, opts)
         result.plans[path][provider.name] = plan
         jobs[#jobs + 1] = { plan = plan, ctx = ctx }
       elseif not ok then
-        notify.debug(string.format("provider '%s' failed to plan for %s: %s",
-          provider.name, path, tostring(plan)))
+        notify.debug(
+          string.format(
+            "provider '%s' failed to plan for %s: %s",
+            provider.name,
+            path,
+            tostring(plan)
+          )
+        )
       end
     end
   end
@@ -193,7 +204,9 @@ function M.prefetch(paths, opts)
     local pending = #jobs
     for _, job in ipairs(jobs) do
       scan.run_plan(job.plan, job.ctx, function(refs)
-        for _, r in ipairs(refs) do result.refs[#result.refs + 1] = r end
+        for _, r in ipairs(refs) do
+          result.refs[#result.refs + 1] = r
+        end
         pending = pending - 1
         if pending == 0 then finish(result) end
       end)
@@ -202,8 +215,11 @@ function M.prefetch(paths, opts)
 
   return {
     await = function(cb)
-      if state.done then cb(state.result)
-      else state.waiters[#state.waiters + 1] = cb end
+      if state.done then
+        cb(state.result)
+      else
+        state.waiters[#state.waiters + 1] = cb
+      end
     end,
   }
 end
@@ -244,8 +260,7 @@ function M.resolve(result, moves, opts)
     -- (markdown has no server, lua_ls does not implement willRenameFiles) opt
     -- out of the skip via `lsp_exempt`.
     local provider = registry.get(ref.provider)
-    local skip_lsp = opts.lsp_handled and _cfg.prefer_lsp
-      and not (provider and provider.lsp_exempt)
+    local skip_lsp = opts.lsp_handled and _cfg.prefer_lsp and not (provider and provider.lsp_exempt)
 
     if new_path and plan and not skip_lsp then
       local ok, target = pcall(plan.retarget, ref, new_path)
@@ -276,13 +291,19 @@ function M.handle_result(result, moves, opts, done)
 
   local resolved, unresolved = M.resolve(result, moves, opts)
   if unresolved > 0 then
-    notify.warn(string.format(
-      "%d reference(s) could not be rewritten automatically (left untouched)", unresolved))
+    notify.warn(
+      string.format(
+        "%d reference(s) could not be rewritten automatically (left untouched)",
+        unresolved
+      )
+    )
   end
   if #resolved == 0 then return done(0) end
 
   local names = {}
-  for old in pairs(moves) do names[#names + 1] = ftpath.basename(old) end
+  for old in pairs(moves) do
+    names[#names + 1] = ftpath.basename(old)
+  end
 
   ui.confirm_and_apply(resolved, {
     mode = M.mode(opts.op or "move", opts.mode),
@@ -300,7 +321,9 @@ end
 ---@param done? fun(applied: integer)
 function M.handle_move(handle, moves, opts, done)
   if not handle then return (done or function() end)(0) end
-  handle.await(function(result) M.handle_result(result, moves, opts, done) end)
+  handle.await(function(result)
+    M.handle_result(result, moves, opts, done)
+  end)
 end
 
 ---References that would break if `paths` were deleted, each pre-set to the
@@ -340,8 +363,14 @@ function M.undo()
   local label = apply.last_label()
   local restored, files = apply.undo()
   if restored > 0 then
-    notify.info(string.format("Reverted %d reference(s) in %d file(s) (%s)",
-      restored, files, label or "reference update"))
+    notify.info(
+      string.format(
+        "Reverted %d reference(s) in %d file(s) (%s)",
+        restored,
+        files,
+        label or "reference update"
+      )
+    )
   else
     notify.warn("Nothing was reverted (files changed since the update?)")
   end
@@ -352,20 +381,25 @@ end
 function M.status()
   local lines = {
     string.format("enabled: %s", tostring(_cfg.enabled)),
-    string.format("rename: %s   move: %s   delete: %s   copy: %s",
-      _cfg.on_rename, _cfg.on_move, _cfg.on_delete, tostring(_cfg.copy)),
-    string.format("scan root: %s   ripgrep: %s",
+    string.format(
+      "rename: %s   move: %s   delete: %s   copy: %s",
+      _cfg.on_rename,
+      _cfg.on_move,
+      _cfg.on_delete,
+      tostring(_cfg.copy)
+    ),
+    string.format(
+      "scan root: %s   ripgrep: %s",
       (_cfg.scan and _cfg.scan.root) or "project",
-      vim.fn.executable("rg") == 1 and "yes" or "no (capped fallback walk)"),
+      vim.fn.executable("rg") == 1 and "yes" or "no (capped fallback walk)"
+    ),
     "providers:",
   }
   local flags = _cfg.providers or {}
   for _, p in ipairs(registry.all()) do
-    lines[#lines + 1] = string.format("  %s %s",
-      flags[p.name] ~= false and "●" or "○", p.name)
+    lines[#lines + 1] = string.format("  %s %s", flags[p.name] ~= false and "●" or "○", p.name)
   end
-  lines[#lines + 1] = apply.can_undo()
-    and ("undo available: " .. (apply.last_label() or "?"))
+  lines[#lines + 1] = apply.can_undo() and ("undo available: " .. (apply.last_label() or "?"))
     or "undo available: —"
   return lines
 end

@@ -5,8 +5,7 @@
 --- feature automatically opens a new empty window so the user is never
 --- trapped inside the tree with no place to edit files.
 
-
-local au     = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local window = require("filetree.util.window")
 
 local M = {}
@@ -52,7 +51,7 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_layout_guard", true)
 
   au.acmd({ "BufDelete", "BufWipeout", "WinClosed" }, {
-    group    = _augroup,
+    group = _augroup,
     callback = function()
       vim.defer_fn(function()
         if not adapter.is_open() then return end

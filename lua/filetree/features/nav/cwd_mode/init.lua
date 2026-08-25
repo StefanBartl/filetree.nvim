@@ -52,29 +52,29 @@ local M = {}
 ---for validating a persisted value, so a mode can only be added in one place.
 ---@type table<FiletreeCwdModeName, true>
 local MODES = {
-  follow     = true,
-  project    = true,
-  nearest    = true,
-  lock       = true,
-  manual     = true,
+  follow = true,
+  project = true,
+  nearest = true,
+  lock = true,
+  manual = true,
   tree_leads = true,
 }
 
 ---@type FiletreeCwdModeConfig
 local DEFAULTS = {
   enabled = true,
-  mode    = "follow",
-  scope   = "global",
+  mode = "follow",
+  scope = "global",
 
   project = {
     -- VCS markers only by default: `project` mode is about "which repository
     -- am I in". Adding package.json / Cargo.toml here turns it into
     -- nearest-package (monorepo) behaviour, which is a deliberate choice, not
     -- the default one.
-    markers   = { ".git", ".hg", ".svn" },
+    markers = { ".git", ".hg", ".svn" },
     skip_dirs = { "node_modules", ".venv", "vendor" },
     max_depth = nil,
-    sticky    = true,
+    sticky = true,
   },
 
   -- `nearest` differs from `project` only in where it stops walking: the
@@ -82,8 +82,15 @@ local DEFAULTS = {
   -- else (skip_dirs, sticky) is shared, so there is one place to configure it.
   nearest = {
     markers = {
-      "package.json", "Cargo.toml", "go.mod", "pyproject.toml", "setup.py",
-      "*.rockspec", "mix.exs", "build.zig", "CMakeLists.txt",
+      "package.json",
+      "Cargo.toml",
+      "go.mod",
+      "pyproject.toml",
+      "setup.py",
+      "*.rockspec",
+      "mix.exs",
+      "build.zig",
+      "CMakeLists.txt",
       -- Last resort: without a VCS marker a file outside any package would
       -- walk to the filesystem root before giving up.
       ".git",
@@ -91,7 +98,7 @@ local DEFAULTS = {
   },
 
   lock = {
-    enforce            = true,
+    enforce = true,
     follow_manual_root = true,
   },
 
@@ -102,9 +109,9 @@ local DEFAULTS = {
   persist = false,
 
   indicator = {
-    enabled   = true,
-    mode      = "auto",
-    align     = "left",
+    enabled = true,
+    mode = "auto",
+    align = "left",
     show_path = "lock",
     -- Which label set below the badge is built from. "numeric" is the only
     -- style that shows something for `follow` — the point of the digit row
@@ -112,33 +119,53 @@ local DEFAULTS = {
     -- styles keep treating follow as the inert, nothing-to-report default.
     style = "text", -- "text" | "short" | "numeric" | "icon"
     labels = {
-      follow = "", project = "PROJECT", nearest = "PKG",
-      lock = "LOCK", manual = "MANUAL", tree_leads = "TREE",
+      follow = "",
+      project = "PROJECT",
+      nearest = "PKG",
+      lock = "LOCK",
+      manual = "MANUAL",
+      tree_leads = "TREE",
     },
     labels_short = {
-      follow = "", project = "P", nearest = "N",
-      lock = "L", manual = "M", tree_leads = "T",
+      follow = "",
+      project = "P",
+      nearest = "N",
+      lock = "L",
+      manual = "M",
+      tree_leads = "T",
     },
     labels_numeric = {
-      follow = "0", project = "1", nearest = "2",
-      lock = "3", manual = "4", tree_leads = "5",
+      follow = "0",
+      project = "1",
+      nearest = "2",
+      lock = "3",
+      manual = "4",
+      tree_leads = "5",
     },
     -- Nerd Font glyphs. Swap any of these in your own config if one renders
     -- as tofu with your font — badge_text() falls back to "" either way if a
     -- key is missing, so a partial override is always safe.
     icons = {
-      follow = "", project = "", nearest = "",
-      lock = "", manual = "", tree_leads = "",
+      follow = "",
+      project = "",
+      nearest = "",
+      lock = "",
+      manual = "",
+      tree_leads = "",
     },
     hl = {
-      follow  = "Comment",        project = "DiagnosticInfo", nearest = "DiagnosticInfo",
-      lock    = "DiagnosticWarn", manual  = "Comment",        tree_leads = "DiagnosticHint",
+      follow = "Comment",
+      project = "DiagnosticInfo",
+      nearest = "DiagnosticInfo",
+      lock = "DiagnosticWarn",
+      manual = "Comment",
+      tree_leads = "DiagnosticHint",
     },
   },
 
   cycle = { "follow", "project", "lock" },
 
-  keymap_cycle     = "L",
+  keymap_cycle = "L",
   keymap_lock_here = "gp",
 }
 
@@ -156,9 +183,9 @@ local _adapter = nil
 
 ---@type FiletreeCwdModeState
 local S = {
-  mode      = "follow",
-  pinned    = nil,
-  guard     = nil,
+  mode = "follow",
+  pinned = nil,
+  guard = nil,
   prev_mode = "follow",
 }
 
@@ -252,9 +279,7 @@ function M.decide(file)
 
   local mode = S.mode
 
-  if mode == "follow" then
-    return nil
-  end
+  if mode == "follow" then return nil end
 
   if mode == "manual" then
     -- Explicit action only: no chdir, no re-root, no reveal.
@@ -289,9 +314,7 @@ function M.decide(file)
   end
 
   if mode == "project" or mode == "nearest" then
-    if inside(file, S.pinned) then
-      return { root = S.pinned, chdir = true, reveal = true }
-    end
+    if inside(file, S.pinned) then return { root = S.pinned, chdir = true, reveal = true } end
 
     local root = root_of(file, mode)
     if root then
@@ -345,7 +368,9 @@ local function install_guard(root)
 
   local handle, err = dir_guard.hold(root, {
     scope = _cfg.scope,
-    on_error = function(e) notify.warn("lock could not be restored: " .. e) end,
+    on_error = function(e)
+      notify.warn("lock could not be restored: " .. e)
+    end,
   })
   if not handle then
     notify.error(err or ("could not lock the cwd to " .. root))
@@ -388,11 +413,11 @@ local function persist_save()
   if not s then return end
   pcall(s.save, STORE_KEY, {
     version = 1,
-    mode    = S.mode,
-    scope   = _cfg.scope,
+    mode = S.mode,
+    scope = _cfg.scope,
     -- Only a lock's pin is worth keeping: project mode derives its root from
     -- the buffer, follow and manual hold nothing that outlives the session.
-    pinned  = (S.mode == "lock") and S.pinned or nil,
+    pinned = (S.mode == "lock") and S.pinned or nil,
   }, { path = _persist_path })
 end
 
@@ -415,9 +440,7 @@ local function persist_restore()
   -- A stored lock whose directory has since been deleted or moved must not
   -- take the session hostage: fall through to the configured mode instead.
   if mode == "lock" then
-    if not data.pinned or vim.fn.isdirectory(data.pinned) == 0 then
-      return false
-    end
+    if not data.pinned or vim.fn.isdirectory(data.pinned) == 0 then return false end
     return M.set_mode("lock", data.pinned)
   end
 
@@ -446,8 +469,10 @@ end
 function M.root()
   -- Every mode that holds a root answers with it; `follow` holds none and
   -- `manual` deliberately does not claim authority over anything.
-  if S.pinned and (S.mode == "lock" or S.mode == "project"
-    or S.mode == "nearest" or S.mode == "tree_leads") then
+  if
+    S.pinned
+    and (S.mode == "lock" or S.mode == "project" or S.mode == "nearest" or S.mode == "tree_leads")
+  then
     return S.pinned
   end
   return canon(vim.fn.getcwd()) or vim.fn.getcwd()
@@ -546,9 +571,13 @@ local function warn_if_cwd_sync_missing(mode)
   local ok, filetree = pcall(require, "filetree")
   if ok and filetree.feature("cwd_sync") then return end
 
-  notify.warn(("%s mode needs features.cwd_sync = { enabled = true } to follow "
-    .. "buffer switches — without it the root is set once now and will not "
-    .. "move again"):format(mode))
+  notify.warn(
+    (
+      "%s mode needs features.cwd_sync = { enabled = true } to follow "
+      .. "buffer switches — without it the root is set once now and will not "
+      .. "move again"
+    ):format(mode)
+  )
 end
 
 ---Switch modes.
@@ -708,7 +737,10 @@ end
 ---Which `indicator.*` table a given style reads labels from.
 ---@type table<string, string>
 local LABEL_SET_BY_STYLE = {
-  text = "labels", short = "labels_short", numeric = "labels_numeric", icon = "icons",
+  text = "labels",
+  short = "labels_short",
+  numeric = "labels_numeric",
+  icon = "icons",
 }
 
 ---The badge text for the current mode, e.g. `LOCK  …/Notes`.
@@ -731,9 +763,7 @@ local function badge_text()
       width = vim.api.nvim_win_get_width(_badge_win)
     end
     local budget = width - #label - 3
-    if budget > 6 then
-      text = label .. "  " .. path_shorten(S.pinned, budget)
-    end
+    if budget > 6 then text = label .. "  " .. path_shorten(S.pinned, budget) end
   end
   return text, cfg.hl[S.mode]
 end
@@ -766,7 +796,9 @@ local _last_hl = nil
 ---@internal
 local function announce_change()
   pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "FiletreeCwdModeChanged" })
-  vim.schedule(function() pcall(vim.cmd, "redrawstatus") end)
+  vim.schedule(function()
+    pcall(vim.cmd, "redrawstatus")
+  end)
 end
 
 ---Re-attach (if the tree window changed) and redraw the badge; announce the
@@ -796,7 +828,7 @@ function M.refresh_indicator()
   if _badge_win ~= win then
     detach_badge()
     local segment, err = ui_statusline.attach(win, {
-      mode  = _cfg.indicator.mode,
+      mode = _cfg.indicator.mode,
       align = _cfg.indicator.align,
     })
     if not segment then
@@ -853,25 +885,25 @@ function M.setup(config, adapter)
   -- describe the filesystem (vendor trees, how far to climb), not the question
   -- being asked, and duplicating them would only let them drift.
   _finder = find_root({
-    markers     = _cfg.project.markers,
-    skip_dirs   = _cfg.project.skip_dirs,
-    max_depth   = _cfg.project.max_depth,
+    markers = _cfg.project.markers,
+    skip_dirs = _cfg.project.skip_dirs,
+    max_depth = _cfg.project.max_depth,
     cache_chain = true,
   })
   _finder_nearest = find_root({
-    markers     = _cfg.nearest.markers,
-    skip_dirs   = _cfg.project.skip_dirs,
-    max_depth   = _cfg.project.max_depth,
+    markers = _cfg.nearest.markers,
+    skip_dirs = _cfg.project.skip_dirs,
+    max_depth = _cfg.project.max_depth,
     cache_chain = true,
   })
 
   drop_guard()
   detach_badge()
-  S.mode      = "follow"
+  S.mode = "follow"
   S.prev_mode = "follow"
-  S.pinned    = nil
-  _last_text  = nil
-  _last_hl    = nil
+  S.pinned = nil
+  _last_text = nil
+  _last_hl = nil
 
   -- Captured before anything can move the cwd, so the persistence key is the
   -- workspace Neovim was opened in — not wherever a restored lock points.
@@ -883,18 +915,22 @@ function M.setup(config, adapter)
   -- The tree window comes and goes; the badge follows it. These are the events
   -- after which a different window (or none) may be the tree.
   au.acmd({ "WinEnter", "BufWinEnter", "WinClosed", "TabEnter" }, {
-    group    = _augroup,
-    callback = function() vim.schedule(M.refresh_indicator) end,
+    group = _augroup,
+    callback = function()
+      vim.schedule(M.refresh_indicator)
+    end,
   })
 
   tree_attach.on_attach(function(buf)
     if _cfg.keymap_cycle and _cfg.keymap_cycle ~= "" then
-      map("n", _cfg.keymap_cycle, function() M.cycle() end,
-        { buffer = buf, desc = "filetree: cycle cwd mode", silent = true })
+      map("n", _cfg.keymap_cycle, function()
+        M.cycle()
+      end, { buffer = buf, desc = "filetree: cycle cwd mode", silent = true })
     end
     if _cfg.keymap_lock_here and _cfg.keymap_lock_here ~= "" then
-      map("n", _cfg.keymap_lock_here, function() M.lock_here() end,
-        { buffer = buf, desc = "filetree: lock cwd here", silent = true })
+      map("n", _cfg.keymap_lock_here, function()
+        M.lock_here()
+      end, { buffer = buf, desc = "filetree: lock cwd here", silent = true })
     end
   end)
 
@@ -908,9 +944,7 @@ function M.setup(config, adapter)
   -- applies as usual.
   vim.schedule(function()
     if persist_restore() then return end
-    if _cfg.mode and _cfg.mode ~= "follow" then
-      M.set_mode(_cfg.mode)
-    end
+    if _cfg.mode and _cfg.mode ~= "follow" then M.set_mode(_cfg.mode) end
   end)
 end
 
@@ -921,9 +955,9 @@ function M.teardown()
   _finder_nearest = nil
   _adapter = nil
   _persist_path = nil
-  S.mode      = "follow"
+  S.mode = "follow"
   S.prev_mode = "follow"
-  S.pinned    = nil
+  S.pinned = nil
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil

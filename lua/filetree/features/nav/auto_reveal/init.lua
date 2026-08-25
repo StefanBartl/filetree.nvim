@@ -26,20 +26,29 @@
 ---   :FiletreeAutoRevealResume       Resume immediately.
 ---   :FiletreeRevealCurrent          Force reveal now.
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
 local _cfg = {
-  enabled      = false,
-  debounce_ms  = 150,
-  ignore_ft    = {
-    "neo-tree", "NvimTree", "netrw",
-    "TelescopePrompt", "fzf",
-    "lazy", "mason", "trouble", "qf",
-    "help", "man", "terminal",
-    "nofile", "prompt",
+  enabled = false,
+  debounce_ms = 150,
+  ignore_ft = {
+    "neo-tree",
+    "NvimTree",
+    "netrw",
+    "TelescopePrompt",
+    "fzf",
+    "lazy",
+    "mason",
+    "trouble",
+    "qf",
+    "help",
+    "man",
+    "terminal",
+    "nofile",
+    "prompt",
   },
   only_if_open = true,
 }
@@ -129,8 +138,7 @@ local function do_reveal(path)
 
   -- Fast path: the file is already rendered (its parent dirs are expanded) —
   -- just move the tree cursor to it (cheap; the adapter caches the path→line map).
-  if type(_adapter.get_node_line) == "function"
-    and type(_adapter.scroll_to_line) == "function" then
+  if type(_adapter.get_node_line) == "function" and type(_adapter.scroll_to_line) == "function" then
     local line = _adapter.get_node_line(path)
     if line then
       _adapter.scroll_to_line(line)
@@ -177,10 +185,8 @@ end
 ---Force-reveal the current buffer right now.
 function M.reveal_current()
   local bufnr = vim.api.nvim_get_current_buf()
-  local path  = vim.api.nvim_buf_get_name(bufnr)
-  if path and path ~= "" and vim.fn.filereadable(path) == 1 then
-    do_reveal(path)
-  end
+  local path = vim.api.nvim_buf_get_name(bufnr)
+  if path and path ~= "" and vim.fn.filereadable(path) == 1 then do_reveal(path) end
 end
 
 ---@return boolean
@@ -197,7 +203,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _debounce then _debounce.cancel() end
@@ -207,19 +213,17 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_auto_reveal", true)
 
   au.acmd("BufEnter", {
-    group    = _augroup,
+    group = _augroup,
     callback = function(ev)
       if should_ignore(ev.buf) then return end
       local path = vim.api.nvim_buf_get_name(ev.buf)
-      if path and path ~= "" and vim.fn.filereadable(path) == 1 then
-        schedule_reveal(path)
-      end
+      if path and path ~= "" and vim.fn.filereadable(path) == 1 then schedule_reveal(path) end
     end,
   })
 
   -- Auto-pause when user enters the tree window
   au.acmd("WinEnter", {
-    group    = _augroup,
+    group = _augroup,
     callback = function()
       local ft = vim.bo.filetype
       if ft == "neo-tree" or ft == "NvimTree" then
@@ -229,7 +233,6 @@ function M.setup(config, adapter)
       end
     end,
   })
-
 end
 
 function M.teardown()

@@ -15,20 +15,20 @@
 
 local notify = require("filetree.util.notify").create("[filetree.breadcrumbs]")
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local ui_statusline = require("lib.nvim.ui.statusline")
 local M = {}
 
 ---@type FiletreeBreadcrumbsConfig
 local _cfg = {
-  enabled     = false,
-  mode        = "winbar",  -- "winbar"|"float"|"statusline"
-  separator   = "  ",
-  max_depth   = 5,
-  hl_dir      = "Comment",
-  hl_file     = "Normal",
-  hl_sep      = "NonText",
-  winbar_hl   = "WinBar",
+  enabled = false,
+  mode = "winbar", -- "winbar"|"float"|"statusline"
+  separator = "  ",
+  max_depth = 5,
+  hl_dir = "Comment",
+  hl_file = "Normal",
+  hl_sep = "NonText",
+  winbar_hl = "WinBar",
 }
 
 ---@type FiletreeAdapter?
@@ -58,7 +58,7 @@ local function build(path)
   -- Compute parts relative to root
   local rel = path
   if root and path:sub(1, #root) == root then
-    rel = path:sub(#root + 2)  -- skip trailing slash
+    rel = path:sub(#root + 2) -- skip trailing slash
   end
 
   local parts = {}
@@ -84,9 +84,7 @@ local function build(path)
     parts = trimmed
   end
 
-  if #parts == 0 then
-    return vim.fn.fnamemodify(root or path, ":t"), ""
-  end
+  if #parts == 0 then return vim.fn.fnamemodify(root or path, ":t"), "" end
 
   local plain = table.concat(parts, _cfg.separator)
 
@@ -96,9 +94,7 @@ local function build(path)
     local is_last = (i == #parts)
     local hl = is_last and _cfg.hl_file or _cfg.hl_dir
     hl_parts[#hl_parts + 1] = "%#" .. hl .. "#" .. p
-    if not is_last then
-      hl_parts[#hl_parts + 1] = "%#" .. _cfg.hl_sep .. "#" .. _cfg.separator
-    end
+    if not is_last then hl_parts[#hl_parts + 1] = "%#" .. _cfg.hl_sep .. "#" .. _cfg.separator end
   end
   local highlighted = table.concat(hl_parts) .. "%#" .. _cfg.winbar_hl .. "#"
 
@@ -113,11 +109,10 @@ local function update_winbar(highlighted, target_win)
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     if win ~= target_win and vim.api.nvim_win_is_valid(win) then
       local cfg = vim.api.nvim_win_get_config(win)
-      if cfg.relative == "" then  -- not floating
+      if cfg.relative == "" then -- not floating
         local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
         if ft ~= "neo-tree" and ft ~= "NvimTree" then
-          pcall(vim.api.nvim_set_option_value, "winbar",
-            " " .. highlighted, { win = win })
+          pcall(vim.api.nvim_set_option_value, "winbar", " " .. highlighted, { win = win })
         end
       end
     end
@@ -150,9 +145,9 @@ local function update_float(plain)
   if _float_win ~= tree_win then
     close_float()
     local segment, err = ui_statusline.attach(tree_win, {
-      mode   = "float",
+      mode = "float",
       anchor = "top",
-      align  = "left",
+      align = "left",
       zindex = 10,
     })
     if not segment then
@@ -199,7 +194,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _augroup then au.del_group(_augroup) end
@@ -207,7 +202,7 @@ function M.setup(config, adapter)
 
   -- Update when cursor moves in tree
   au.acmd("CursorMoved", {
-    group   = _augroup,
+    group = _augroup,
     pattern = "*",
     callback = function()
       local ft = vim.bo.filetype
@@ -220,7 +215,7 @@ function M.setup(config, adapter)
 
   -- Update when editor buffer changes
   au.acmd("BufEnter", {
-    group    = _augroup,
+    group = _augroup,
     callback = function(ev)
       if vim.bo[ev.buf].buftype ~= "" then return end
       local path = vim.api.nvim_buf_get_name(ev.buf)
@@ -231,7 +226,7 @@ function M.setup(config, adapter)
   -- Close float when tree is closed
   if _cfg.mode == "float" then
     au.acmd("WinClosed", {
-      group    = _augroup,
+      group = _augroup,
       callback = function(ev)
         if not _adapter then return end
         local tree_win = _adapter.get_winid and _adapter.get_winid() or -1
@@ -243,8 +238,8 @@ end
 
 function M.teardown()
   close_float()
-  _current  = ""
-  _adapter  = nil
+  _current = ""
+  _adapter = nil
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil

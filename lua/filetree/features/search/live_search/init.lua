@@ -31,13 +31,13 @@ local M = {}
 
 ---@type FiletreeLiveSearchConfig
 local _cfg = {
-  enabled          = false,
-  keymap           = "gs",
-  match            = "name",
-  hl_match         = "Search",
-  hl_dim           = "Comment",
+  enabled = false,
+  keymap = "gs",
+  match = "name",
+  hl_match = "Search",
+  hl_dim = "Comment",
   commit_to_filter = true,
-  debounce_ms      = 80,
+  debounce_ms = 80,
 }
 
 ---@type FiletreeAdapter?
@@ -64,12 +64,11 @@ local function apply_overlay(tree_bufnr, query)
   if not query or query == "" then return end
 
   local nodes = _adapter and _adapter.get_visible_nodes and _adapter.get_visible_nodes() or {}
-  local pat   = query:lower()
+  local pat = query:lower()
 
   for _, node in ipairs(nodes) do
     if not node.path or not node.line then goto continue end
-    local subject = _cfg.match == "path"
-      and node.path:lower()
+    local subject = _cfg.match == "path" and node.path:lower()
       or vim.fn.fnamemodify(node.path, ":t"):lower()
 
     local matched = subject:find(pat, 1, true)
@@ -77,13 +76,13 @@ local function apply_overlay(tree_bufnr, query)
       -- Highlight match
       pcall(vim.api.nvim_buf_set_extmark, tree_bufnr, _ns, node.line - 1, 0, {
         line_hl_group = _cfg.hl_match,
-        priority      = 200,
+        priority = 200,
       })
     else
       -- Dim non-match
       pcall(vim.api.nvim_buf_set_extmark, tree_bufnr, _ns, node.line - 1, 0, {
         line_hl_group = _cfg.hl_dim,
-        priority      = 200,
+        priority = 200,
       })
     end
     ::continue::
@@ -97,21 +96,19 @@ end
 ---@param tree_bufnr integer
 local function open_input_bar(tree_winid, tree_bufnr)
   local win_width = vim.api.nvim_win_get_width(tree_winid)
-  local win_pos   = vim.api.nvim_win_get_position(tree_winid)
-  local win_h     = vim.api.nvim_win_get_height(tree_winid)
+  local win_pos = vim.api.nvim_win_get_position(tree_winid)
+  local win_h = vim.api.nvim_win_get_height(tree_winid)
 
   local function return_to_tree()
-    if vim.api.nvim_win_is_valid(tree_winid) then
-      vim.api.nvim_set_current_win(tree_winid)
-    end
+    if vim.api.nvim_win_is_valid(tree_winid) then vim.api.nvim_set_current_win(tree_winid) end
   end
 
   kit.live_input({
-    title    = "/ search",
+    title = "/ search",
     relative = "editor",
-    width    = win_width - 2,
-    row      = win_pos[1] + win_h - 1,
-    col      = win_pos[2] + 1,
+    width = win_width - 2,
+    row = win_pos[1] + win_h - 1,
+    col = win_pos[2] + 1,
     filetype = "filetree_search",
     debounce = _cfg.debounce_ms,
     on_change = function(query)
@@ -143,10 +140,12 @@ function M.open()
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
 
   if winid < 0 or not vim.api.nvim_win_is_valid(winid) then
-    notify.warn("Tree window not found"); return
+    notify.warn("Tree window not found")
+    return
   end
   if bufnr < 0 or not vim.api.nvim_buf_is_valid(bufnr) then
-    notify.warn("Tree buffer not found"); return
+    notify.warn("Tree buffer not found")
+    return
   end
 
   open_input_bar(winid, bufnr)
@@ -165,14 +164,15 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _cfg.keymap then
     tree_attach.on_attach(function(buf)
       map("n", _cfg.keymap, M.open, {
-        buffer = buf, silent = true,
-        desc   = "Filetree: live search",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: live search",
       })
     end)
   end

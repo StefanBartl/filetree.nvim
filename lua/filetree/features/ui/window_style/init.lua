@@ -30,7 +30,7 @@
 ---   statusline           boolean  Blank statusline in tree windows (default true).
 ---   highlights_isolate   boolean  Link tree HL groups to editor groups (default false).
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
@@ -41,8 +41,8 @@ local M = {}
 
 ---@type FiletreeWindowStyleConfig
 local _cfg = {
-  enabled            = false,
-  statusline         = true,
+  enabled = false,
+  statusline = true,
   highlights_isolate = false,
 }
 
@@ -54,11 +54,11 @@ local _adapter = nil
 -- Fallbacks used when the active adapter does not declare the capability.
 local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles" }
 local DEFAULT_HL_GROUPS = {
-  NeoTreeNormal       = "Normal",
-  NeoTreeNormalNC     = "NormalNC",
-  NeoTreeEndOfBuffer  = "EndOfBuffer",
-  NvimTreeNormal      = "Normal",
-  NvimTreeNormalNC    = "NormalNC",
+  NeoTreeNormal = "Normal",
+  NeoTreeNormalNC = "NormalNC",
+  NeoTreeEndOfBuffer = "EndOfBuffer",
+  NvimTreeNormal = "Normal",
+  NvimTreeNormalNC = "NormalNC",
   NvimTreeEndOfBuffer = "EndOfBuffer",
 }
 
@@ -73,7 +73,9 @@ end
 ---Blank the statusline in every tree window of the current tabpage.
 local function apply_statusline()
   local want = {}
-  for _, f in ipairs(tree_filetypes()) do want[f] = true end
+  for _, f in ipairs(tree_filetypes()) do
+    want[f] = true
+  end
   for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
     if vim.api.nvim_win_is_valid(win) then
       local buf = vim.api.nvim_win_get_buf(win)
@@ -87,9 +89,7 @@ end
 ---Link tree highlight groups to the editor's own so the sidebar blends in.
 local function isolate_highlights()
   local groups = _adapter and _adapter.hl_groups
-  if type(groups) ~= "table" or next(groups) == nil then
-    groups = DEFAULT_HL_GROUPS
-  end
+  if type(groups) ~= "table" or next(groups) == nil then groups = DEFAULT_HL_GROUPS end
   for group, target in pairs(groups) do
     pcall(vim.api.nvim_set_hl, 0, group, { link = target })
   end
@@ -100,7 +100,7 @@ end
 ---@param config FiletreeWindowStyleConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config or {})
+  _cfg = vim.tbl_deep_extend("force", _cfg, config or {})
   _adapter = adapter
   if not _cfg.enabled then return end
   -- Nothing to do unless at least one effect is opted into.
@@ -110,20 +110,26 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_window_style", true)
 
   if _cfg.statusline then
-    tree_attach.on_attach(function() apply_statusline() end)
+    tree_attach.on_attach(function()
+      apply_statusline()
+    end)
     -- Fallback re-application: some statusline plugins (re)assert their own
     -- value on BufWinEnter/WinEnter after FileType has already fired once for
     -- a given buffer, which would otherwise win the last-write race.
     au.acmd({ "BufWinEnter", "WinEnter" }, {
-      group    = _augroup,
-      callback = function() vim.schedule(apply_statusline) end,
+      group = _augroup,
+      callback = function()
+        vim.schedule(apply_statusline)
+      end,
     })
   end
 
   if _cfg.highlights_isolate then
     au.acmd("ColorScheme", {
-      group    = _augroup,
-      callback = function() vim.schedule(isolate_highlights) end,
+      group = _augroup,
+      callback = function()
+        vim.schedule(isolate_highlights)
+      end,
     })
     vim.schedule(isolate_highlights)
   end

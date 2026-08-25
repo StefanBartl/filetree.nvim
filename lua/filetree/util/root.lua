@@ -40,32 +40,22 @@ function M.find(path)
     -- `pinned()` rather than `root()`: root() falls back to the cwd, which
     -- would swallow the marker walks below in follow mode.
     local ok, held = pcall(mode.pinned)
-    if ok and held and held ~= "" then
-      return held
-    end
+    if ok and held and held ~= "" then return held end
   end
 
   local target = path
-  if not target or target == "" then
-    target = vim.api.nvim_buf_get_name(0)
-  end
-  if not target or target == "" then
-    target = vim.fn.getcwd()
-  end
+  if not target or target == "" then target = vim.api.nvim_buf_get_name(0) end
+  if not target or target == "" then target = vim.fn.getcwd() end
 
   if mode and type(mode.resolve) == "function" then
     local ok, root = pcall(mode.resolve, target)
-    if ok and root and root ~= "" then
-      return root
-    end
+    if ok and root and root ~= "" then return root end
   end
 
   local ok_pr, pr = registry.load("project_root")
   if ok_pr and pr and type(pr.find) == "function" then
     local ok, root = pcall(pr.find, target)
-    if ok and root and root ~= "" then
-      return root
-    end
+    if ok and root and root ~= "" then return root end
   end
 
   return vim.fn.getcwd()

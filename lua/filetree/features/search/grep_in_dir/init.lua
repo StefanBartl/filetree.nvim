@@ -35,13 +35,13 @@ end
 
 ---@type FiletreeGrepInDirConfig
 local _cfg = {
-  enabled          = false,
-  keymap           = "gr",
-  keymap_cword     = nil,
+  enabled = false,
+  keymap = "gr",
+  keymap_cword = nil,
   keymap_telescope = "tg",
-  prefer           = "auto",   -- "auto"|"telescope"|"fzf-lua"|"builtin"
-  hidden           = false,
-  extra_args       = {},
+  prefer = "auto", -- "auto"|"telescope"|"fzf-lua"|"builtin"
+  hidden = false,
+  extra_args = {},
 }
 
 ---@type FiletreeAdapter?
@@ -61,9 +61,7 @@ local function get_dir()
   if not _adapter then return require("filetree.util.root").find() end
   local node = _adapter.get_current_node()
   if not node then return require("filetree.util.root").find() end
-  return node.type == "directory"
-    and node.path
-    or vim.fn.fnamemodify(node.path, ":h")
+  return node.type == "directory" and node.path or vim.fn.fnamemodify(node.path, ":h")
 end
 
 -- ── Backends ──────────────────────────────────────────────────────────────────
@@ -77,9 +75,9 @@ local function via_telescope(dir, pattern)
   local ok, tel = pcall(require, "telescope.builtin")
   if not ok then return false end
   local opts = {
-    cwd            = dir,
-    search         = pattern or nil,
-    hidden         = _cfg.hidden,
+    cwd = dir,
+    search = pattern or nil,
+    hidden = _cfg.hidden,
     additional_args = _cfg.extra_args,
   }
   if pattern and pattern ~= "" then
@@ -99,7 +97,7 @@ local function via_fzflua(dir, pattern)
   local ok, fzf = pcall(require, "fzf-lua")
   if not ok then return false end
   local opts = {
-    cwd    = dir,
+    cwd = dir,
     hidden = _cfg.hidden,
   }
   if pattern and pattern ~= "" then
@@ -136,9 +134,9 @@ local function builtin_search_done(dir, pattern, output, exit_code, prog)
     if file then
       qf_items[#qf_items + 1] = {
         filename = file,
-        lnum     = tonumber(lnum),
-        col      = tonumber(col),
-        text     = text,
+        lnum = tonumber(lnum),
+        col = tonumber(col),
+        text = text,
       }
     end
   end
@@ -177,7 +175,9 @@ local function run_builtin_search(dir, pattern)
   if has_rg then
     args = { "rg", "--vimgrep", "--color=never" }
     if _cfg.hidden then args[#args + 1] = "--hidden" end
-    for _, a in ipairs(_cfg.extra_args) do args[#args + 1] = a end
+    for _, a in ipairs(_cfg.extra_args) do
+      args[#args + 1] = a
+    end
     args[#args + 1] = "--"
     args[#args + 1] = pattern
     args[#args + 1] = dir
@@ -233,9 +233,18 @@ function M.grep(dir, pattern)
   dir = dir or get_dir()
   local prefer = _cfg.prefer or "auto"
 
-  if prefer == "telescope" then via_telescope(dir, pattern); return end
-  if prefer == "fzf-lua"   then via_fzflua(dir, pattern);   return end
-  if prefer == "builtin"   then via_builtin(dir, pattern);   return end
+  if prefer == "telescope" then
+    via_telescope(dir, pattern)
+    return
+  end
+  if prefer == "fzf-lua" then
+    via_fzflua(dir, pattern)
+    return
+  end
+  if prefer == "builtin" then
+    via_builtin(dir, pattern)
+    return
+  end
 
   if not via_telescope(dir, pattern) and not via_fzflua(dir, pattern) then
     via_builtin(dir, pattern)
@@ -252,9 +261,7 @@ end
 ---@param pattern? string
 function M.grep_telescope(dir, pattern)
   dir = dir or get_dir()
-  if not via_telescope(dir, pattern) then
-    notify.warn("telescope.nvim not available")
-  end
+  if not via_telescope(dir, pattern) then notify.warn("telescope.nvim not available") end
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -263,23 +270,29 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   tree_attach.on_attach(function(buf)
     if _cfg.keymap then
       map("n", _cfg.keymap, M.grep, {
-        buffer = buf, silent = true, desc = "Filetree: grep in node directory",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: grep in node directory",
       })
     end
     if _cfg.keymap_cword then
       map("n", _cfg.keymap_cword, M.grep_cword, {
-        buffer = buf, silent = true, desc = "Filetree: grep cword in node directory",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: grep cword in node directory",
       })
     end
     if _cfg.keymap_telescope then
       map("n", _cfg.keymap_telescope, M.grep_telescope, {
-        buffer = buf, silent = true, desc = "Filetree: grep via telescope specifically",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: grep via telescope specifically",
       })
     end
   end)

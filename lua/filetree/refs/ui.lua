@@ -66,8 +66,12 @@ function M.summary(refs)
     parts[#parts + 1] = string.format("%d %s", counts[name], name)
   end
 
-  return string.format("%d reference(s) in %d file(s) (%s)",
-    #refs, #files, table.concat(parts, ", "))
+  return string.format(
+    "%d reference(s) in %d file(s) (%s)",
+    #refs,
+    #files,
+    table.concat(parts, ", ")
+  )
 end
 
 -- ── Diff view ─────────────────────────────────────────────────────────────────
@@ -103,7 +107,9 @@ function M.show_diff(refs, on_close)
     filetype = "diff",
   })
   if surf and surf.on_close then
-    surf:on_close(function() vim.schedule(on_close) end)
+    surf:on_close(function()
+      vim.schedule(on_close)
+    end)
   else
     on_close()
   end
@@ -117,9 +123,16 @@ end
 local function do_apply(refs, opts)
   local applied, files_changed = apply.run(refs, { label = opts.label })
   if applied > 0 then
-    notify.info(string.format("Updated %d reference(s) in %d file(s)%s",
-      applied, files_changed,
-      applied < #refs and string.format(" (%d skipped: line changed since the scan)", #refs - applied) or ""))
+    notify.info(
+      string.format(
+        "Updated %d reference(s) in %d file(s)%s",
+        applied,
+        files_changed,
+        applied < #refs
+            and string.format(" (%d skipped: line changed since the scan)", #refs - applied)
+          or ""
+      )
+    )
   else
     notify.warn("No reference could be updated (lines changed since the scan?)")
   end
@@ -134,9 +147,7 @@ function M.confirm_and_apply(refs, opts, done)
   done = done or function() end
   if #refs == 0 or opts.mode == "off" then return done(0) end
 
-  if opts.mode == "auto" then
-    return done(do_apply(refs, opts))
-  end
+  if opts.mode == "auto" then return done(do_apply(refs, opts)) end
 
   local title = opts.title or "References"
   notify.info(M.summary(refs) .. ": " .. table.concat(M.unique_files(refs), ", "))
@@ -148,7 +159,6 @@ function M.confirm_and_apply(refs, opts, done)
       function(choice)
         if choice == "Update all" then
           done(do_apply(refs, opts))
-
         elseif choice == "Select…" then
           refs_picker().pick(
             refs,
@@ -156,12 +166,12 @@ function M.confirm_and_apply(refs, opts, done)
             function(selected)
               done(#selected > 0 and do_apply(selected, opts) or 0)
             end,
-            function() done(0) end -- Esc: the mutation already happened, nothing to undo
+            function()
+              done(0)
+            end -- Esc: the mutation already happened, nothing to undo
           )
-
         elseif choice == "Show diff" then
           M.show_diff(refs, ask) -- back to the chooser once the diff closes
-
         else
           done(0) -- "Leave as-is" or dismissed
         end

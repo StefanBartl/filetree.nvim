@@ -55,9 +55,9 @@ local function trash_windows(path, cb)
   -- outer OS shell never re-parses/re-quotes it.
   local script = string.format(
     "$sh = New-Object -ComObject Shell.Application; "
-    .. "$item = $sh.Namespace(0).ParseName('%s'); "
-    .. "if ($item) { $item.InvokeVerb('delete') } "
-    .. "else { exit 1 }",
+      .. "$item = $sh.Namespace(0).ParseName('%s'); "
+      .. "if ($item) { $item.InvokeVerb('delete') } "
+      .. "else { exit 1 }",
     win_path
   )
   run(
@@ -80,11 +80,11 @@ local function trash_mac(path, cb)
   -- AppleScript fallback. This used to be an os.execute() shell string; as an
   -- argv list osascript gets the script as one argument and no shell is
   -- involved, so the path no longer has to survive shell quoting.
-  run(
-    { "osascript", "-e", string.format('tell app "Finder" to delete POSIX file "%s"', path:gsub('"', '\\"')) },
-    "AppleScript trash failed",
-    cb
-  )
+  run({
+    "osascript",
+    "-e",
+    string.format('tell app "Finder" to delete POSIX file "%s"', path:gsub('"', '\\"')),
+  }, "AppleScript trash failed", cb)
 end
 
 -- ── Linux ─────────────────────────────────────────────────────────────────────
@@ -104,11 +104,9 @@ local function trash_linux(path, cb)
   end
   -- Manual: move to XDG Trash
   local trash_dir = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash/files"
-  if vim.fn.isdirectory(trash_dir) == 0 then
-    vim.fn.mkdir(trash_dir, "p")
-  end
+  if vim.fn.isdirectory(trash_dir) == 0 then vim.fn.mkdir(trash_dir, "p") end
   local base = vim.fn.fnamemodify(path, ":t")
-  local dst  = trash_dir .. "/" .. base
+  local dst = trash_dir .. "/" .. base
   run({ "mv", path, dst }, "mv to XDG Trash failed", cb)
 end
 
@@ -150,9 +148,9 @@ end
 ---@param cb fun(result: TrashResult)
 ---@return nil
 function M.send(path, cb)
-  if platform.is_wsl()     then return trash_wsl(path, cb)     end
+  if platform.is_wsl() then return trash_wsl(path, cb) end
   if platform.is_windows() then return trash_windows(path, cb) end
-  if platform.is_mac()     then return trash_mac(path, cb)     end
+  if platform.is_mac() then return trash_mac(path, cb) end
   return trash_linux(path, cb)
 end
 
@@ -168,10 +166,12 @@ end
 ---Return a short description of the platform's trash backend.
 ---@return string
 function M.backend_name()
-  if platform.is_wsl()     then return "PowerShell Recycle Bin (via WSL)" end
+  if platform.is_wsl() then return "PowerShell Recycle Bin (via WSL)" end
   if platform.is_windows() then return "PowerShell Recycle Bin" end
-  if platform.is_mac()     then return vim.fn.executable("trash") == 1 and "trash CLI" or "AppleScript Finder" end
-  if vim.fn.executable("gio") == 1       then return "gio" end
+  if platform.is_mac() then
+    return vim.fn.executable("trash") == 1 and "trash CLI" or "AppleScript Finder"
+  end
+  if vim.fn.executable("gio") == 1 then return "gio" end
   if vim.fn.executable("trash-put") == 1 then return "trash-cli" end
   return "XDG Trash (mv)"
 end

@@ -11,7 +11,7 @@ local _cfg = {}
 local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.copy_file_list]")
-local fs     = require("filetree.util.fs")
+local fs = require("filetree.util.fs")
 local ignore = require("filetree.util.ignore")
 
 ---Recursively collect all file paths under a path. Skips `.git`,
@@ -22,7 +22,9 @@ local ignore = require("filetree.util.ignore")
 local function collect_files(path, relative)
   local raw = fs.collect_files((path:gsub("\\", "/")), ignore.predicate())
   if not relative then
-    return vim.tbl_map(function(p) return p:gsub("\\", "/") end, raw)
+    return vim.tbl_map(function(p)
+      return p:gsub("\\", "/")
+    end, raw)
   end
   local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
   return vim.tbl_map(function(p)
@@ -39,7 +41,9 @@ end
 local function collect_dirs(path, relative)
   local raw = fs.collect_folders((path:gsub("\\", "/")), ignore.predicate())
   if not relative then
-    return vim.tbl_map(function(p) return p:gsub("\\", "/") end, raw)
+    return vim.tbl_map(function(p)
+      return p:gsub("\\", "/")
+    end, raw)
   end
   local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
   return vim.tbl_map(function(p)
@@ -67,9 +71,7 @@ local function copy_to_reg(lines)
   for i = 1, math.min(limit, #lines) do
     preview[#preview + 1] = "  " .. lines[i]
   end
-  if #lines > limit then
-    preview[#preview + 1] = "  ... (" .. (#lines - limit) .. " more)"
-  end
+  if #lines > limit then preview[#preview + 1] = "  ... (" .. (#lines - limit) .. " more)" end
 
   notify.info(string.format("Copied %d path(s):\n%s", #lines, table.concat(preview, "\n")))
 end
@@ -130,29 +132,27 @@ end
 local DEFAULTS = {
   keymap_files_abs = "[f",
   keymap_files_rel = "]f",
-  keymap_dirs_abs  = "[F",
-  keymap_dirs_rel  = "]F",
+  keymap_dirs_abs = "[F",
+  keymap_dirs_rel = "]F",
 }
 
 ---@param cfg FiletreeCopyFileListConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = vim.tbl_extend("force", DEFAULTS, cfg or {})
-  cfg      = _cfg
+  _cfg = vim.tbl_extend("force", DEFAULTS, cfg or {})
+  cfg = _cfg
   _adapter = adapter
 
   local keymaps = {
     { key = cfg.keymap_files_abs, fn = M.copy_files_abs, desc = "filetree: copy file list (abs)" },
     { key = cfg.keymap_files_rel, fn = M.copy_files_rel, desc = "filetree: copy file list (rel)" },
-    { key = cfg.keymap_dirs_abs,  fn = M.copy_dirs_abs,  desc = "filetree: copy dir list (abs)"  },
-    { key = cfg.keymap_dirs_rel,  fn = M.copy_dirs_rel,  desc = "filetree: copy dir list (rel)"  },
+    { key = cfg.keymap_dirs_abs, fn = M.copy_dirs_abs, desc = "filetree: copy dir list (abs)" },
+    { key = cfg.keymap_dirs_rel, fn = M.copy_dirs_rel, desc = "filetree: copy dir list (rel)" },
   }
 
   local function set_keymaps(buf)
     for _, km in ipairs(keymaps) do
-      if km.key then
-        map("n", km.key, km.fn, { buffer = buf, desc = km.desc, silent = true })
-      end
+      if km.key then map("n", km.key, km.fn, { buffer = buf, desc = km.desc, silent = true }) end
     end
   end
 

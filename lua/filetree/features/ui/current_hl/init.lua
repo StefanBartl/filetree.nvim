@@ -6,7 +6,7 @@
 --- Highlight groups are resolved from the config spec which accepts hex colors,
 --- linked groups ("link:GroupName"), or named colors ("red", "darkred", etc.).
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
@@ -51,16 +51,16 @@ local function ensure_hl_group(name, spec)
   return nil
 end
 
-local FILE_HL   = "FiletreeCurrentFile"
+local FILE_HL = "FiletreeCurrentFile"
 local PARENT_HL = "FiletreeCurrentParent"
-local ICON_HL   = "FiletreeCurrentIcon"
+local ICON_HL = "FiletreeCurrentIcon"
 
 local function setup_hl_groups()
-  ensure_hl_group(FILE_HL,   _cfg.file_hl   or { fg = "#7aa2f7", bold = true })
+  ensure_hl_group(FILE_HL, _cfg.file_hl or { fg = "#7aa2f7", bold = true })
   ensure_hl_group(PARENT_HL, _cfg.parent_hl or { fg = "#565f89" })
   -- The icon gets its own group so it can be coloured independently of the
   -- line highlight; defaults to linking the file highlight.
-  ensure_hl_group(ICON_HL,   _cfg.icon_hl   or ("link:" .. FILE_HL))
+  ensure_hl_group(ICON_HL, _cfg.icon_hl or ("link:" .. FILE_HL))
 end
 
 -- ── Highlight application ─────────────────────────────────────────────────────
@@ -72,10 +72,8 @@ local function clear_old()
       _adapter.unsign_node(_last_file)
     end
   end
-  if _last_parent and _adapter then
-    _adapter.unhighlight_node(_last_parent)
-  end
-  _last_file   = nil
+  if _last_parent and _adapter then _adapter.unhighlight_node(_last_parent) end
+  _last_file = nil
   _last_parent = nil
 end
 
@@ -90,7 +88,7 @@ local function apply()
   clear_old()
   setup_hl_groups()
 
-  _adapter.highlight_node(path,   FILE_HL)
+  _adapter.highlight_node(path, FILE_HL)
   _adapter.highlight_node(parent, PARENT_HL)
 
   -- Optional sign-column marker on the current file's line (distinguishes the
@@ -99,7 +97,7 @@ local function apply()
     _adapter.sign_node(path, _cfg.icon, ICON_HL)
   end
 
-  _last_file   = path
+  _last_file = path
   _last_parent = parent
 end
 
@@ -113,7 +111,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = config
+  _cfg = config
   _adapter = adapter
 
   if _debounce then _debounce.cancel() end
@@ -121,19 +119,17 @@ function M.setup(config, adapter)
 
   setup_hl_groups()
 
-  if _augroup then
-    au.del_group(_augroup)
-  end
+  if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_current_hl", true)
 
   au.acmd({ "BufEnter", "WinEnter", "BufWritePost" }, {
-    group    = _augroup,
+    group = _augroup,
     callback = debounced_apply,
   })
 
   -- Re-apply after colorscheme changes
   au.acmd("ColorScheme", {
-    group    = _augroup,
+    group = _augroup,
     callback = function()
       setup_hl_groups()
       apply()

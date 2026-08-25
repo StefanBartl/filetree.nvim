@@ -1,24 +1,24 @@
 ---@module 'filetree.features.fileops.smart_create'
 --- Enhanced file/directory creation with clipboard paste and LuaLS templates.
 
-local map     = require("filetree.util.map")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local confirm_choice = require("filetree.util.confirm_choice")
-local path    = require("filetree.util.path")
+local path = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
-local window  = require("filetree.util.window")
+local window = require("filetree.util.window")
 local M = {}
 
 ---@type FiletreeSmartCreateConfig
 local _cfg = {
   enabled = false,
-  keymap  = "a",
+  keymap = "a",
   -- LuaLS scaffolding for new files — all OFF by default (opt in per key):
-  auto_module_annot   = false,  -- new .lua files get a `---@module '<derived>'` header
-  auto_types_template = false,  -- files under an `@types` path get `---@meta` + `---@module`
-  auto_init_lua       = false,  -- creating a directory also creates init.lua (with the header)
-  ask_clipboard       = false,  -- if the clipboard is non-empty, offer to paste it into the file
-  notify_level        = "verbose",  -- "verbose" | "short" | "off" — success message verbosity
+  auto_module_annot = false, -- new .lua files get a `---@module '<derived>'` header
+  auto_types_template = false, -- files under an `@types` path get `---@meta` + `---@module`
+  auto_init_lua = false, -- creating a directory also creates init.lua (with the header)
+  ask_clipboard = false, -- if the clipboard is non-empty, offer to paste it into the file
+  notify_level = "verbose", -- "verbose" | "short" | "off" — success message verbosity
 }
 ---@type FiletreeAdapter?
 local _adapter = nil
@@ -36,9 +36,7 @@ local function find_lua_root(filepath)
     if parent == cur then break end
     local candidate = parent .. "/lua"
     local stat = vim.uv.fs_stat(candidate)
-    if stat and stat.type == "directory" then
-      return candidate
-    end
+    if stat and stat.type == "directory" then return candidate end
     cur = parent
   end
   return vim.fn.stdpath("config") .. "/lua"
@@ -114,9 +112,7 @@ end
 local function build_template(filepath, paste_clipboard)
   if paste_clipboard then
     local clip = vim.fn.getreg("+")
-    if clip and clip ~= "" then
-      return vim.split(clip, "\n", { plain = true })
-    end
+    if clip and clip ~= "" then return vim.split(clip, "\n", { plain = true }) end
   end
 
   local lines = {}
@@ -159,7 +155,11 @@ function M.create()
   -- pre-filling the absolute path — the user only types the new name. Always
   -- displayed with "/" regardless of OS (see path.slashify).
   local display = path.relative(parent)
-  if display == "" or display == "." then display = "./" else display = display .. "/" end
+  if display == "" or display == "." then
+    display = "./"
+  else
+    display = display .. "/"
+  end
 
   require("lib.nvim.ui.kit").input({
     title = "Create in " .. display .. "  (append / for a directory): ",
@@ -171,7 +171,7 @@ function M.create()
       input = path.slashify(input)
 
       local is_dir = input:sub(-1) == "/"
-      local name   = input:gsub("/?$", "")  -- strip trailing slash for ops
+      local name = input:gsub("/?$", "") -- strip trailing slash for ops
 
       -- Relative names are created inside the parent dir; an absolute path (or
       -- Windows drive path) is honoured as-is.
@@ -215,9 +215,7 @@ function M.create()
                 local lines = build_template(target, paste)
                 create_with_content(target, lines)
                 notify_created("file", target)
-                if _adapter and _adapter.refresh then
-                  pcall(_adapter.refresh)
-                end
+                if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
               end
             )
             return
@@ -229,9 +227,7 @@ function M.create()
         notify_created("file", target)
       end
 
-      if _adapter and _adapter.refresh then
-        pcall(_adapter.refresh)
-      end
+      if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
     end,
   })
 end
@@ -241,13 +237,14 @@ end
 ---@param cfg FiletreeSmartCreateConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = vim.tbl_deep_extend("force", _cfg, cfg or {})
+  _cfg = vim.tbl_deep_extend("force", _cfg, cfg or {})
   _adapter = adapter
 
   if _cfg.keymap then
     tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, function() M.create() end,
-        { buffer = buf, desc = "filetree: smart create", silent = true })
+      map("n", _cfg.keymap, function()
+        M.create()
+      end, { buffer = buf, desc = "filetree: smart create", silent = true })
     end)
   end
 end

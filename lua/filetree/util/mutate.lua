@@ -31,7 +31,9 @@ local M = {}
 ---@return string? err
 function M.move(src, dst)
   local ok, err = fsops.rename_file(src, dst, {
-    on_retry = function() watch.release(src) end,
+    on_retry = function()
+      watch.release(src)
+    end,
   })
   if ok then return true, nil end
 

@@ -23,8 +23,8 @@ local M = {}
 ---@type FiletreeWindowSizeCyclerConfig
 local _cfg = {
   enabled = false,
-  keymap  = "w",
-  sizes   = { 30, 50, 15 },
+  keymap = "w",
+  sizes = { 30, 50, 15 },
 }
 
 ---@type FiletreeAdapter?
@@ -49,17 +49,18 @@ end
 
 local function apply_width(w)
   local winid = get_winid()
-  if winid > 0 and vim.api.nvim_win_is_valid(winid) then
-    vim.api.nvim_win_set_width(winid, w)
-  end
+  if winid > 0 and vim.api.nvim_win_is_valid(winid) then vim.api.nvim_win_set_width(winid, w) end
 end
 
 local function nearest_idx()
-  local w   = current_width()
+  local w = current_width()
   local best, best_d = 0, math.huge
   for i, sz in ipairs(_cfg.sizes) do
     local d = math.abs(sz - w)
-    if d < best_d then best_d = d; best = i end
+    if d < best_d then
+      best_d = d
+      best = i
+    end
   end
   return best
 end
@@ -93,7 +94,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   -- Start at the preset closest to the current window width
@@ -102,8 +103,9 @@ function M.setup(config, adapter)
   tree_attach.on_attach(function(buf)
     if _cfg.keymap then
       map("n", _cfg.keymap, M.cycle, {
-        buffer = buf, silent = true,
-        desc   = "Filetree: cycle tree width (count N: jump to preset N)",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: cycle tree width (count N: jump to preset N)",
       })
     end
   end)

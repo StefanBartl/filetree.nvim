@@ -22,9 +22,7 @@ end
 ---@param path string
 ---@return boolean ok
 function M.remove_existing(path)
-  if vim.fn.isdirectory(path) == 1 then
-    return vim.fn.delete(path, "rf") == 0
-  end
+  if vim.fn.isdirectory(path) == 1 then return vim.fn.delete(path, "rf") == 0 end
   return vim.fn.delete(path) == 0
 end
 

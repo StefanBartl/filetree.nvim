@@ -68,7 +68,9 @@ end
 ---@param refs FiletreeRef[]
 ---@return string new_line, integer applied
 local function rewrite_line(line, refs)
-  table.sort(refs, function(a, b) return (a.col or 0) > (b.col or 0) end)
+  table.sort(refs, function(a, b)
+    return (a.col or 0) > (b.col or 0)
+  end)
   local applied = 0
   for _, ref in ipairs(refs) do
     local new_line = rewrite(line, ref)
@@ -88,9 +90,15 @@ local function group(refs)
   local by_file = {}
   for _, r in ipairs(refs) do
     local per_file = by_file[r.file]
-    if not per_file then per_file = {}; by_file[r.file] = per_file end
+    if not per_file then
+      per_file = {}
+      by_file[r.file] = per_file
+    end
     local per_line = per_file[r.line]
-    if not per_line then per_line = {}; per_file[r.line] = per_line end
+    if not per_line then
+      per_line = {}
+      per_file[r.line] = per_line
+    end
     per_line[#per_line + 1] = r
   end
   return by_file
@@ -133,7 +141,6 @@ function M.run(refs, opts)
           vim.cmd("silent noautocmd keepjumps write")
         end)
       end
-
     else
       local ok, lines = pcall(vim.fn.readfile, file)
       if ok and type(lines) == "table" then
@@ -166,7 +173,9 @@ function M.run(refs, opts)
       files = files_changed,
       label = opts.label or "reference update",
     }
-    while #_undo_stack > UNDO_DEPTH do table.remove(_undo_stack, 1) end
+    while #_undo_stack > UNDO_DEPTH do
+      table.remove(_undo_stack, 1)
+    end
   end
 
   return applied, files_changed
@@ -208,7 +217,6 @@ function M.undo()
           vim.cmd("silent noautocmd keepjumps write")
         end)
       end
-
     else
       local ok, lines = pcall(vim.fn.readfile, entry.file)
       if ok and type(lines) == "table" then

@@ -32,11 +32,7 @@ end
 ---@return integer?
 local function find_oil_buf()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_is_loaded(buf)
-      and vim.bo[buf].filetype == "oil"
-    then
-      return buf
-    end
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == "oil" then return buf end
   end
   return nil
 end
@@ -47,9 +43,7 @@ end
 ---@return integer?
 local function buf_to_win(bufnr)
   for _, win in ipairs(vim.api.nvim_list_wins()) do
-    if vim.api.nvim_win_get_buf(win) == bufnr then
-      return win
-    end
+    if vim.api.nvim_win_get_buf(win) == bufnr then return win end
   end
   return nil
 end
@@ -109,11 +103,11 @@ function M.get_current_node()
   local line_nr = win and vim.api.nvim_win_get_cursor(win)[1] or 0
 
   return {
-    id          = path,
-    name        = entry.name,
-    path        = path,
-    type        = ntype,
-    depth       = 1,
+    id = path,
+    name = entry.name,
+    path = path,
+    type = ntype,
+    depth = 1,
     line_number = line_nr,
     is_expanded = ntype == "directory" and false or nil,
   }
@@ -145,18 +139,19 @@ function M.get_visible_nodes(filter)
   for line_n = 1, line_count do
     local ok_entry, entry = pcall(oil.get_entry_on_line, buf, line_n)
     if ok_entry and entry and entry.name then
-      local ntype  = (entry.type == "directory") and "directory" or "file"
-      local include = filter == nil or filter == "all"
-        or (filter == "files"   and ntype == "file")
+      local ntype = (entry.type == "directory") and "directory" or "file"
+      local include = filter == nil
+        or filter == "all"
+        or (filter == "files" and ntype == "file")
         or (filter == "folders" and ntype == "directory")
       if include then
         local path = dir .. entry.name
         nodes[#nodes + 1] = {
-          id          = path,
-          name        = entry.name,
-          path        = path,
-          type        = ntype,
-          depth       = 1,
+          id = path,
+          name = entry.name,
+          path = path,
+          type = ntype,
+          depth = 1,
           line_number = line_n,
           is_expanded = nil,
         }
@@ -184,11 +179,15 @@ end
 
 ---@param _node FiletreeNode
 ---@return boolean
-function M.expand_node(_node) return false end
+function M.expand_node(_node)
+  return false
+end
 
 ---@param _node FiletreeNode
 ---@return boolean
-function M.collapse_node(_node) return false end
+function M.collapse_node(_node)
+  return false
+end
 
 ---@param path string
 ---@param mode? FiletreeOpenMode
@@ -300,7 +299,7 @@ function M.highlight_node(path, hl_group)
   if not buf then return false end
   local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns(), line - 1, 0, {
     line_hl_group = hl_group,
-    priority      = 150,
+    priority = 150,
   })
   if ok then _hl_marks[path] = id end
   return ok

@@ -22,9 +22,7 @@ local sibling_lib = vim.env.FILETREE_LIB_NVIM
 if not sibling_lib or sibling_lib == "" then
   sibling_lib = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
 end
-if vim.fn.isdirectory(sibling_lib) == 1 then
-  vim.opt.rtp:prepend(sibling_lib)
-end
+if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) end
 
 local passed, failed = 0, 0
 local function check(name, ok, detail)
@@ -41,11 +39,19 @@ end
 local function stub_adapter()
   return setmetatable({
     name = "stub",
-    is_available = function() return true end,
-  }, { __index = function() return function() return false end end })
+    is_available = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
 end
 
-local ft  = require("filetree")
+local ft = require("filetree")
 local reg = require("filetree.features")
 ft.register_adapter(stub_adapter())
 
@@ -60,7 +66,11 @@ end
 
 -- 2) setup is clean and opt-out resolves (default-on minus the opt-in few)
 local DEFAULT_OFF = {
-  "cwd_sync", "current_hl", "safety", "auto_resize", "handle_guard",
+  "cwd_sync",
+  "current_hl",
+  "safety",
+  "auto_resize",
+  "handle_guard",
 }
 do
   local warnings = 0
@@ -80,8 +90,11 @@ do
   for name in pairs(reg.FEATURES) do
     if ft.feature(name) then active = active + 1 end
   end
-  check("opt-out active count = total - " .. #DEFAULT_OFF,
-    active == total - #DEFAULT_OFF, ("active=%d total=%d"):format(active, total))
+  check(
+    "opt-out active count = total - " .. #DEFAULT_OFF,
+    active == total - #DEFAULT_OFF,
+    ("active=%d total=%d"):format(active, total)
+  )
 
   local off_ok = true
   for _, n in ipairs(DEFAULT_OFF) do
@@ -92,7 +105,10 @@ end
 
 -- 3) explicit enable/disable overrides the default in both directions
 do
-  ft.setup({ adapter = "stub", features = { marks = { enabled = false }, auto_resize = { enabled = true } } })
+  ft.setup({
+    adapter = "stub",
+    features = { marks = { enabled = false }, auto_resize = { enabled = true } },
+  })
   check("explicit { enabled=false } disables a default-on feature", ft.feature("marks") == nil)
   check("explicit { enabled=true } enables a default-off feature", ft.feature("auto_resize") ~= nil)
   ft.setup({ adapter = "stub" })
@@ -101,8 +117,11 @@ end
 -- 4) registry resolver
 do
   check("registry.require resolves a feature", reg.require("preview") ~= nil)
-  check("registry.mod_path returns the category path",
-    reg.mod_path("marks") == "filetree.features.org.marks", reg.mod_path("marks"))
+  check(
+    "registry.mod_path returns the category path",
+    reg.mod_path("marks") == "filetree.features.org.marks",
+    reg.mod_path("marks")
+  )
   check("registry.require(unknown) is nil", reg.require("does_not_exist") == nil)
 end
 
@@ -113,8 +132,10 @@ do
   check("catalog has usercommands (walked live)", #cat.usercommands > 50, "#=" .. #cat.usercommands)
   check("catalog has keymaps for several categories", vim.tbl_count(cat.keymaps) >= 8)
   check("catalog has autocmd entries", #cat.autocmds > 0)
-  check("docs/BINDINGS.lua returns the catalog",
-    type(dofile(root .. "/docs/BINDINGS.lua")) == "table")
+  check(
+    "docs/BINDINGS.lua returns the catalog",
+    type(dofile(root .. "/docs/BINDINGS.lua")) == "table"
+  )
 end
 
 -- 6) no two default-on, tree-scoped keymaps target the same physical key ────
@@ -126,9 +147,12 @@ end
 -- instead of firing — this guards against that class of bug recurring.
 do
   local ALIASES = {
-    ["<c-i>"] = "<tab>", ["<tab>"] = "<tab>",
-    ["<c-m>"] = "<cr>",  ["<cr>"]  = "<cr>",
-    ["<c-[>"] = "<esc>", ["<esc>"] = "<esc>",
+    ["<c-i>"] = "<tab>",
+    ["<tab>"] = "<tab>",
+    ["<c-m>"] = "<cr>",
+    ["<cr>"] = "<cr>",
+    ["<c-[>"] = "<esc>",
+    ["<esc>"] = "<esc>",
   }
   local function canonical(lhs)
     -- Only fold via the specific known alias pairs (case-insensitively, since
@@ -160,7 +184,7 @@ do
   }
 
   local b = require("filetree.bindings")
-  local seen = {}   -- canonical key -> feature name that claimed it first
+  local seen = {} -- canonical key -> feature name that claimed it first
   local collisions = {}
   for _, entries in pairs(b.keymaps) do
     for _, e in ipairs(entries) do
@@ -168,11 +192,18 @@ do
         local key = canonical(e.lhs)
         if seen[key] and seen[key] ~= e.feature then
           local a, z = seen[key], e.feature
-          if a > z then a, z = z, a end
+          if a > z then
+            a, z = z, a
+          end
           local accepted_key = a .. ":" .. z .. ":" .. key
           if not ACCEPTED[accepted_key] then
-            collisions[#collisions + 1] = ("%s (%s) vs %s (%s) both target %q")
-              :format(seen[key], key, e.feature, e.lhs, key)
+            collisions[#collisions + 1] = ("%s (%s) vs %s (%s) both target %q"):format(
+              seen[key],
+              key,
+              e.feature,
+              e.lhs,
+              key
+            )
           end
         else
           seen[key] = e.feature
@@ -180,14 +211,17 @@ do
       end
     end
   end
-  check("no default-on tree keymaps collide on an alias-equivalent physical key",
-    #collisions == 0, table.concat(collisions, "; "))
+  check(
+    "no default-on tree keymaps collide on an alias-equivalent physical key",
+    #collisions == 0,
+    table.concat(collisions, "; ")
+  )
 end
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim smoke: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
-  vim.cmd("cq")   -- non-zero exit
+  vim.cmd("cq") -- non-zero exit
 else
   vim.cmd("qa!")
 end

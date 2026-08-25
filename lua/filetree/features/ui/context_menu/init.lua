@@ -24,7 +24,7 @@ local M = {}
 ---@type FiletreeContextMenuConfig
 local _cfg = {
   enabled = true,
-  keymap  = "<RightMouse>",
+  keymap = "<RightMouse>",
 }
 
 ---@type boolean
@@ -39,7 +39,11 @@ local function move_to_click()
   local ok, pos = pcall(vim.fn.getmousepos)
   if not ok or not pos or pos.winid == 0 then return end
   if pos.winid ~= vim.api.nvim_get_current_win() then return end
-  pcall(vim.api.nvim_win_set_cursor, pos.winid, { math.max(1, pos.line), math.max(0, pos.column - 1) })
+  pcall(
+    vim.api.nvim_win_set_cursor,
+    pos.winid,
+    { math.max(1, pos.line), math.max(0, pos.column - 1) }
+  )
 end
 
 local function open_menu()
@@ -48,7 +52,9 @@ local function open_menu()
   local ok_menu, menu = pcall(require, "menu")
   if not ok_menu or type(menu.open) ~= "function" then
     if not _warned_missing then
-      notify.info("nvzone/menu not installed — context_menu has nothing to open (install it, or set features.context_menu.enabled = false)")
+      notify.info(
+        "nvzone/menu not installed — context_menu has nothing to open (install it, or set features.context_menu.enabled = false)"
+      )
       _warned_missing = true
     end
     return
@@ -56,7 +62,7 @@ local function open_menu()
 
   local ok_items, items_mod = pcall(require, "filetree.integrations.menu")
   local items = ok_items and items_mod.items() or {}
-  if #items == 0 then return end  -- nothing enabled/available to show
+  if #items == 0 then return end -- nothing enabled/available to show
 
   menu.open(items, { mouse = true })
 end
@@ -75,7 +81,9 @@ function M.setup(config, adapter)
 
   tree_attach.on_attach(function(buf)
     map("n", _cfg.keymap, open_menu, {
-      buffer = buf, silent = true, desc = "Filetree: right-click context menu",
+      buffer = buf,
+      silent = true,
+      desc = "Filetree: right-click context menu",
     })
   end)
 end

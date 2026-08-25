@@ -45,11 +45,11 @@ local M = {}
 ---@field fn     function
 ---@field once   boolean
 
-local _next_id   = 1
+local _next_id = 1
 ---@type table<integer, FiletreeHookHandler>
-local _handlers  = {}
+local _handlers = {}
 ---@type table<string, integer[]>  event → [ids]
-local _by_event  = {}
+local _by_event = {}
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
@@ -89,7 +89,10 @@ function M.off(id)
   local list = _by_event[h.event]
   if list then
     for i, eid in ipairs(list) do
-      if eid == id then table.remove(list, i); break end
+      if eid == id then
+        table.remove(list, i)
+        break
+      end
     end
   end
   return true
@@ -104,10 +107,10 @@ function M.emit(event, data)
   local ids = _by_event[event]
   if not ids or #ids == 0 then return 0 end
 
-  local count     = 0
+  local count = 0
   local to_remove = {}
 
-  for _, id in ipairs(vim.list_slice(ids)) do  -- copy so removals mid-loop are safe
+  for _, id in ipairs(vim.list_slice(ids)) do -- copy so removals mid-loop are safe
     local h = _handlers[id]
     if h then
       count = count + 1
@@ -121,7 +124,9 @@ function M.emit(event, data)
     end
   end
 
-  for _, id in ipairs(to_remove) do M.off(id) end
+  for _, id in ipairs(to_remove) do
+    M.off(id)
+  end
   return count
 end
 
@@ -130,7 +135,9 @@ end
 function M.clear(event)
   if event then
     local ids = _by_event[event] or {}
-    for _, id in ipairs(ids) do _handlers[id] = nil end
+    for _, id in ipairs(ids) do
+      _handlers[id] = nil
+    end
     _by_event[event] = {}
   else
     _handlers = {}
@@ -143,9 +150,7 @@ end
 function M.events()
   local out = {}
   for ev in pairs(_by_event) do
-    if _by_event[ev] and #_by_event[ev] > 0 then
-      out[#out + 1] = ev
-    end
+    if _by_event[ev] and #_by_event[ev] > 0 then out[#out + 1] = ev end
   end
   table.sort(out)
   return out
@@ -158,11 +163,15 @@ function M.count(event)
   if event then
     local ids = _by_event[event] or {}
     local n = 0
-    for _, id in ipairs(ids) do if _handlers[id] then n = n + 1 end end
+    for _, id in ipairs(ids) do
+      if _handlers[id] then n = n + 1 end
+    end
     return n
   end
   local n = 0
-  for _ in pairs(_handlers) do n = n + 1 end
+  for _ in pairs(_handlers) do
+    n = n + 1
+  end
   return n
 end
 

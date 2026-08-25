@@ -21,43 +21,43 @@
 ---   <leader>th   Show trash history
 
 local trash_platform = require("filetree.features.fileops.trash.platform")
-local undo           = require("filetree.features.fileops.trash.undo")
-local notify         = require("filetree.util.notify").create("[filetree.trash]")
+local undo = require("filetree.features.fileops.trash.undo")
+local notify = require("filetree.util.notify").create("[filetree.trash]")
 
-local map         = require("filetree.util.map")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
-local buffer      = require("filetree.util.buffer")
+local buffer = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
-local ui_confirm  = require("filetree.util.confirm")
+local ui_confirm = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
 -- References that would dangle once the file is gone: the engine finds them
 -- (markdown links only — see refs.for_delete) and this feature decides what to
 -- do with them before the delete happens.
-local refs        = require("filetree.refs")
+local refs = require("filetree.refs")
 -- Optional: progress indicator for a multi-item batch (no other feedback
 -- otherwise while several files are sent to trash one after another).
 -- No-op (returns nil) when lib.nvim isn't installed.
-local progress    = require("filetree.util.progress")
+local progress = require("filetree.util.progress")
 -- Release neo-tree's directory-watcher handle before the external trash command
 -- touches the path. No-op unless the handle_guard feature installed the registry.
-local watch       = require("lib.nvim.neotree.watch")
+local watch = require("lib.nvim.neotree.watch")
 
 local M = {}
 
 ---@type FiletreeTrashConfig
 local _cfg = {
-  enabled        = false,
+  enabled = false,
   -- Deliberately true, unlike copy_move/rename_batch's confirm=false default:
   -- trashing is the one destructive action here whose target files aren't
   -- necessarily what the user thinks they are (mis-clicks on the wrong node,
   -- accidental multi-mark deletes) and it's meaningfully harder to notice/
   -- undo than a move or rename. Override with `confirmations = false` (or
   -- `features.trash.confirm = false`) to opt back out.
-  confirm        = true,
-  use_safety     = false,
-  dry_run        = false,
-  keymap         = "d",
-  keymap_undo    = "U",
+  confirm = true,
+  use_safety = false,
+  dry_run = false,
+  keymap = "d",
+  keymap_undo = "U",
   keymap_history = "<leader>th",
 }
 
@@ -77,10 +77,7 @@ local _adapter = nil
 ---@param path string
 ---@return boolean confirmed
 local function confirm(path)
-  local answer = vim.fn.confirm(
-    "Send to trash?\n  " .. path,
-    "&Yes\n&No", 2
-  )
+  local answer = vim.fn.confirm("Send to trash?\n  " .. path, "&Yes\n&No", 2)
   return answer == 1
 end
 
@@ -121,7 +118,7 @@ local function do_trash(path, cb)
       end
 
       undo.record(path)
-      buffer.close_for_path(path)   -- close any buffer(s) for the now-deleted file
+      buffer.close_for_path(path) -- close any buffer(s) for the now-deleted file
       cb(true)
     end)
   end
@@ -168,8 +165,8 @@ local function confirm_popup(path, cb)
   refs.for_delete({ path }, nil, function(found)
     if #found == 0 then
       ui_confirm({
-        title    = " Trash ",
-        body     = info_body(path),
+        title = " Trash ",
+        body = info_body(path),
         question = "Send to trash?",
         on_choice = cb,
       })
@@ -177,8 +174,7 @@ local function confirm_popup(path, cb)
     end
 
     local name = vim.fn.fnamemodify(path, ":t")
-    notify.info(refs.ui.summary(found) .. ": "
-      .. table.concat(refs.ui.unique_files(found), ", "))
+    notify.info(refs.ui.summary(found) .. ": " .. table.concat(refs.ui.unique_files(found), ", "))
 
     -- `refs.on_delete = "auto"` means "don't ask about the references" -- not
     -- "don't ask about the delete". So the ordinary confirmation still runs,
@@ -186,8 +182,8 @@ local function confirm_popup(path, cb)
     -- must not leave blanked-out links behind.
     if refs.mode("delete") == "auto" then
       ui_confirm({
-        title    = " Trash ",
-        body     = info_body(path),
+        title = " Trash ",
+        body = info_body(path),
         question = string.format("Send to trash? (%d ref(s) will be marked REF!)", #found),
         on_choice = function(yes)
           if yes then refs.apply.run(found, { label = "delete: " .. name }) end
@@ -209,12 +205,12 @@ local function confirm_popup(path, cb)
             found,
             { prefer = refs.config().picker, title = "References to " .. name },
             function(selected)
-              if #selected > 0 then
-                refs.apply.run(selected, { label = "delete: " .. name })
-              end
+              if #selected > 0 then refs.apply.run(selected, { label = "delete: " .. name }) end
               cb(true)
             end,
-            function() confirm_popup(path, cb) end -- Esc/cancel -> back to this same chooser
+            function()
+              confirm_popup(path, cb)
+            end -- Esc/cancel -> back to this same chooser
           )
         elseif choice == "Delete, keep refs" then
           cb(true)
@@ -328,9 +324,7 @@ function M.delete(path, on_done)
     notify.warn("path does not exist: " .. path)
     return done(false)
   end
-  if _cfg.confirm and not confirm(path) then
-    return done(false)
-  end
+  if _cfg.confirm and not confirm(path) then return done(false) end
   do_trash(path, function(ok)
     if ok and _adapter then pcall(_adapter.refresh) end
     done(ok)
@@ -343,9 +337,7 @@ end
 ---@return string[]
 local function gather_paths()
   local ok_m, marks = require("filetree.features").load("marks")
-  if ok_m and marks and marks.count() > 0 then
-    return marks.get_marked()
-  end
+  if ok_m and marks and marks.count() > 0 then return marks.get_marked() end
   local node = _adapter and _adapter.get_current_node()
   return (node and node.path) and { node.path } or {}
 end
@@ -424,7 +416,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if not trash_platform.available() then
@@ -439,9 +431,9 @@ function M.setup(config, adapter)
         map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
       end
     end
-    kmap(_cfg.keymap,         M.delete_current, "trash current node")
-    kmap(_cfg.keymap_undo,    M.undo_last,      "undo last trash")
-    kmap(_cfg.keymap_history, M.show_history,   "show trash history")
+    kmap(_cfg.keymap, M.delete_current, "trash current node")
+    kmap(_cfg.keymap_undo, M.undo_last, "undo last trash")
+    kmap(_cfg.keymap_history, M.show_history, "show trash history")
   end)
 end
 

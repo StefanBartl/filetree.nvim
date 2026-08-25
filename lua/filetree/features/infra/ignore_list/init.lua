@@ -19,22 +19,41 @@
 ---   nvimtree → `H` (toggle_dotfiles) shows/hides dot-files.
 ---   Others   → filetree falls back to extmark-dim (same as ignore_patterns).
 
-
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local M = {}
 
 -- ── Built-in name list (mirrored from lib.nvim's canonical ignore list) ───────
 
 local _BUILTIN = {
-  ".git", ".github", ".hg", ".svn", ".svc", ".stfolder", ".stversions",
-  "node_modules", ".pnpm-store", ".yarn",
-  ".venv", ".direnv",
-  "__pycache__", ".mypy_cache", ".pytest_cache",
-  ".cache", ".sass-cache",
-  "build", "dist", "out", "target", "bin", "obj",
-  "zig-cache", "zig-out",
-  ".DS_Store", "thumbs.db",
-  ".vscode", ".idea",
+  ".git",
+  ".github",
+  ".hg",
+  ".svn",
+  ".svc",
+  ".stfolder",
+  ".stversions",
+  "node_modules",
+  ".pnpm-store",
+  ".yarn",
+  ".venv",
+  ".direnv",
+  "__pycache__",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".cache",
+  ".sass-cache",
+  "build",
+  "dist",
+  "out",
+  "target",
+  "bin",
+  "obj",
+  "zig-cache",
+  "zig-out",
+  ".DS_Store",
+  "thumbs.db",
+  ".vscode",
+  ".idea",
 }
 
 ---Resolve the effective name list: user override → lib.nvim → built-in.
@@ -97,9 +116,9 @@ local function merge_hide_by_name(existing, names)
   if type(existing) == "table" then
     for k, v in pairs(existing) do
       if type(k) == "string" then
-        dict[k] = v            -- already dict-shaped (converted by neo-tree)
+        dict[k] = v -- already dict-shaped (converted by neo-tree)
       elseif type(v) == "string" then
-        dict[v] = true         -- still array-shaped (not yet converted)
+        dict[v] = true -- still array-shaped (not yet converted)
       end
     end
   end
@@ -117,14 +136,17 @@ local function apply_neotree(names, adapter)
   -- The merged neo-tree config lives on require("neo-tree").config after its
   -- setup() has run (require("neo-tree.config") does NOT exist in v3.x).
   local ok, nt = pcall(require, "neo-tree")
-  local ncfg = ok and (nt.config or (type(nt.ensure_config) == "function" and nt.ensure_config())) or nil
+  local ncfg = ok and (nt.config or (type(nt.ensure_config) == "function" and nt.ensure_config()))
+    or nil
   if not ncfg or not ncfg.filesystem then
     -- neo-tree.setup() hasn't run yet (e.g. lazy=false startup race).
     -- Retry once after VimEnter when all plugin configs have executed.
     au.acmd("VimEnter", {
-      once     = true,
+      once = true,
       callback = function()
-        vim.defer_fn(function() apply_neotree(names, adapter) end, 50)
+        vim.defer_fn(function()
+          apply_neotree(names, adapter)
+        end, 50)
       end,
     })
     return
@@ -149,14 +171,17 @@ local function apply_neotree(names, adapter)
   if ok_mgr and type(mgr._get_all_states) == "function" then
     for _, state in ipairs(mgr._get_all_states()) do
       if state.filtered_items then
-        state.filtered_items.hide_by_name = merge_hide_by_name(state.filtered_items.hide_by_name, names)
+        state.filtered_items.hide_by_name =
+          merge_hide_by_name(state.filtered_items.hide_by_name, names)
         state.filtered_items.visible = false
       end
     end
   end
 
   if type(adapter.refresh) == "function" then
-    vim.defer_fn(function() pcall(adapter.refresh) end, 100)
+    vim.defer_fn(function()
+      pcall(adapter.refresh)
+    end, 100)
   end
 end
 
@@ -167,7 +192,9 @@ local _ns = vim.api.nvim_create_namespace("filetree_ignore_list")
 ---@param names string[]
 local function apply_dim(names)
   local set = {}
-  for _, n in ipairs(names) do set[n:lower()] = true end
+  for _, n in ipairs(names) do
+    set[n:lower()] = true
+  end
 
   local function render(bufnr)
     pcall(vim.api.nvim_buf_clear_namespace, bufnr, _ns, 0, -1)
@@ -177,7 +204,7 @@ local function apply_dim(names)
       if name ~= "" and set[name] then
         pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, i - 1, 0, {
           line_hl_group = "Comment",
-          priority      = 89,
+          priority = 89,
         })
       end
     end
@@ -185,9 +212,11 @@ local function apply_dim(names)
 
   local aug = au.group("filetree_ignore_list_dim", true)
   au.acmd({ "BufEnter", "TextChanged" }, {
-    group   = aug,
+    group = aug,
     pattern = { "neo-tree://*", "NvimTree_*" },
-    callback = function(ev) render(ev.buf) end,
+    callback = function(ev)
+      render(ev.buf)
+    end,
   })
 end
 
@@ -222,7 +251,9 @@ end
 ---@return fun(name: string): boolean
 function M.predicate()
   if not _names_set then
-    return function() return false end
+    return function()
+      return false
+    end
   end
   local names, patterns = _names_set, _patterns
   return function(name)

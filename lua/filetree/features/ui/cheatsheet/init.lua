@@ -20,16 +20,16 @@
 --- whose native help is already complete.
 
 local bindings_mod = require("filetree.bindings")
-local map    = require("filetree.util.map")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
-local kit    = require("lib.nvim.ui.kit")
+local kit = require("lib.nvim.ui.kit")
 
 local M = {}
 
 ---@type FiletreeCheatsheetConfig
 local _cfg = {
   enabled = true,
-  keymap  = "?",
+  keymap = "?",
 }
 
 ---@type Lib.UI.Kit.Surface|nil
@@ -45,9 +45,10 @@ end
 ---@return string[]
 local function build_lines()
   local ok_ft, ft = pcall(require, "filetree")
-  local is_enabled = (ok_ft and type(ft.is_feature_enabled) == "function")
-    and ft.is_feature_enabled
-    or function() return true end
+  local is_enabled = (ok_ft and type(ft.is_feature_enabled) == "function") and ft.is_feature_enabled
+    or function()
+      return true
+    end
 
   local ok_reg, registry = pcall(require, "filetree.features")
   local order = (ok_reg and registry.CATEGORY_ORDER) or {}
@@ -98,7 +99,9 @@ function M.show()
   local max_w = math.floor(vim.o.columns * 0.9)
   local max_h = math.floor(vim.o.lines * 0.8)
   local content_w = 20
-  for _, l in ipairs(lines) do content_w = math.max(content_w, vim.fn.strdisplaywidth(l)) end
+  for _, l in ipairs(lines) do
+    content_w = math.max(content_w, vim.fn.strdisplaywidth(l))
+  end
 
   _surf = kit.viewer({
     lines = lines,
@@ -108,7 +111,9 @@ function M.show()
     height = math.min(#lines, max_h),
   })
   if not _surf then return end
-  _surf:on_close(function() _surf = nil end)
+  _surf:on_close(function()
+    _surf = nil
+  end)
 
   -- kit.viewer's own nice_quit only binds q/<Esc>; also close on a second
   -- press of the toggle key itself (e.g. a second `?`).
@@ -135,8 +140,12 @@ function M.setup(config, adapter)
   if not _cfg.keymap then return end
 
   tree_attach.on_attach(function(buf)
-    map("n", _cfg.keymap, M.show,
-      { buffer = buf, desc = "filetree: keymap cheatsheet", silent = true })
+    map(
+      "n",
+      _cfg.keymap,
+      M.show,
+      { buffer = buf, desc = "filetree: keymap cheatsheet", silent = true }
+    )
   end)
 end
 

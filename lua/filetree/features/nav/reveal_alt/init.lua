@@ -45,12 +45,11 @@ function M.setup(config, adapter)
     end, {
       buffer = buf,
       silent = true,
-      desc   = "Filetree: reveal alternate buffer in tree",
+      desc = "Filetree: reveal alternate buffer in tree",
     })
   end)
 end
 
-function M.teardown()
-end
+function M.teardown() end
 
 return M

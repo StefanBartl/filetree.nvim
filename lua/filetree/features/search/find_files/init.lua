@@ -39,13 +39,13 @@ end
 
 ---@type FiletreeFindFilesConfig
 local _cfg = {
-  enabled          = false,
-  keymap_tree      = "f",
+  enabled = false,
+  keymap_tree = "f",
   keymap_telescope = "tf",
-  keymap_global    = nil,
-  prefer           = "auto",  -- "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
-  reveal_on_open   = true,
-  hidden           = false,
+  keymap_global = nil,
+  prefer = "auto", -- "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
+  reveal_on_open = true,
+  hidden = false,
 }
 
 ---@type FiletreeAdapter?
@@ -60,8 +60,7 @@ local _adapter = nil
 ---@return string
 local function get_root(from_node)
   if from_node then
-    return from_node.type == "directory"
-      and from_node.path
+    return from_node.type == "directory" and from_node.path
       or vim.fn.fnamemodify(from_node.path, ":h")
   end
   -- util.root asks cwd_mode's held root first, then falls back to the same
@@ -84,7 +83,9 @@ local function on_select(path)
   end
   vim.cmd("edit " .. vim.fn.fnameescape(path))
   if _cfg.reveal_on_open and _adapter and _adapter.reveal then
-    vim.defer_fn(function() pcall(_adapter.reveal, path) end, 50)
+    vim.defer_fn(function()
+      pcall(_adapter.reveal, path)
+    end, 50)
   end
 end
 
@@ -98,11 +99,11 @@ local function via_telescope(root)
   local ok, tel = pcall(require, "telescope.builtin")
   if not ok then return false end
   tel.find_files({
-    cwd            = root,
-    hidden         = _cfg.hidden,
+    cwd = root,
+    hidden = _cfg.hidden,
     attach_mappings = function(_, map_fn)
       local actions = require("telescope.actions")
-      local state   = require("telescope.actions.state")
+      local state = require("telescope.actions.state")
       map_fn("i", "<CR>", function(prompt_bufnr)
         local sel = state.get_selected_entry()
         actions.close(prompt_bufnr)
@@ -122,13 +123,11 @@ local function via_fzflua(root)
   local ok, fzf = pcall(require, "fzf-lua")
   if not ok then return false end
   fzf.files({
-    cwd     = root,
-    hidden  = _cfg.hidden,
+    cwd = root,
+    hidden = _cfg.hidden,
     actions = {
       ["default"] = function(selected)
-        if selected and #selected > 0 then
-          on_select(root .. "/" .. selected[1])
-        end
+        if selected and #selected > 0 then on_select(root .. "/" .. selected[1]) end
       end,
     },
   })
@@ -201,9 +200,7 @@ local function via_builtin(root)
       filtered[#filtered + 1] = f
       if #filtered >= 10000 then break end
     end
-    if prog and i % 500 == 0 then
-      prog:update({ current = i, total = total })
-    end
+    if prog and i % 500 == 0 then prog:update({ current = i, total = total }) end
   end
 
   if prog then prog:finish(string.format("%d file(s) found under %s", #filtered, root)) end
@@ -219,7 +216,9 @@ local function via_builtin(root)
   end
   ui_select(display, {
     prompt = "Find files: ",
-    format_item = function(item) return item end,
+    format_item = function(item)
+      return item
+    end,
   }, function(choice, idx)
     if choice and idx then on_select(filtered[idx]) end
   end)
@@ -235,10 +234,22 @@ function M.find(root)
   root = root or get_root(node)
 
   local prefer = _cfg.prefer or "auto"
-  if prefer == "telescope" then via_telescope(root); return end
-  if prefer == "fzf-lua"   then via_fzflua(root);   return end
-  if prefer == "mini.pick" then via_minipick(root);  return end
-  if prefer == "builtin"   then via_builtin(root);   return end
+  if prefer == "telescope" then
+    via_telescope(root)
+    return
+  end
+  if prefer == "fzf-lua" then
+    via_fzflua(root)
+    return
+  end
+  if prefer == "mini.pick" then
+    via_minipick(root)
+    return
+  end
+  if prefer == "builtin" then
+    via_builtin(root)
+    return
+  end
 
   -- auto
   if not via_telescope(root) and not via_fzflua(root) and not via_minipick(root) then
@@ -251,9 +262,7 @@ end
 function M.find_telescope(root)
   local node = _adapter and _adapter.get_current_node()
   root = root or get_root(node)
-  if not via_telescope(root) then
-    notify.warn("telescope.nvim not available")
-  end
+  if not via_telescope(root) then notify.warn("telescope.nvim not available") end
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -262,7 +271,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   -- Keymap inside tree
@@ -271,13 +280,13 @@ function M.setup(config, adapter)
       map("n", _cfg.keymap_tree, M.find, {
         buffer = buf,
         silent = true,
-        desc   = "Filetree: find files from current node",
+        desc = "Filetree: find files from current node",
       })
       if _cfg.keymap_telescope then
         map("n", _cfg.keymap_telescope, M.find_telescope, {
           buffer = buf,
           silent = true,
-          desc   = "Filetree: find files via telescope specifically",
+          desc = "Filetree: find files via telescope specifically",
         })
       end
     end)
@@ -287,17 +296,14 @@ function M.setup(config, adapter)
   if _cfg.keymap_global then
     map("n", _cfg.keymap_global, M.find, {
       silent = true,
-      desc   = "Filetree: find files",
+      desc = "Filetree: find files",
     })
   end
-
 end
 
 function M.teardown()
   _adapter = nil
-  if _cfg.keymap_global then
-    pcall(vim.keymap.del, "n", _cfg.keymap_global)
-  end
+  if _cfg.keymap_global then pcall(vim.keymap.del, "n", _cfg.keymap_global) end
 end
 
 return M

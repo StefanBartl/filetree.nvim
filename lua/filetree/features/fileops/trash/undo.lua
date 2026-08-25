@@ -1,7 +1,7 @@
 ---@module 'filetree.features.trash.undo'
 ---@brief In-session trash history and restore support.
 
-local notify   = require("filetree.util.notify").create("[filetree.trash.undo]")
+local notify = require("filetree.util.notify").create("[filetree.trash.undo]")
 local platform = require("filetree.util.platform")
 
 local kit = require("lib.nvim.ui.kit")
@@ -23,14 +23,12 @@ local _history = {}
 function M.record(original_path)
   local entry = {
     original_path = original_path,
-    name          = vim.fn.fnamemodify(original_path, ":t"),
-    trashed_at    = os.date("%Y-%m-%d %H:%M:%S"),
-    platform      = platform.current(),
+    name = vim.fn.fnamemodify(original_path, ":t"),
+    trashed_at = os.date("%Y-%m-%d %H:%M:%S"),
+    platform = platform.current(),
   }
   table.insert(_history, 1, entry)
-  if #_history > MAX_HISTORY then
-    table.remove(_history, MAX_HISTORY + 1)
-  end
+  if #_history > MAX_HISTORY then table.remove(_history, MAX_HISTORY + 1) end
 end
 
 ---Return the full trash history (newest first).
@@ -86,44 +84,58 @@ local function restore_windows(name, original_path)
   -- outer OS shell never re-parses/re-quotes it.
   local script = string.format(
     [[$sh = New-Object -ComObject Shell.Application; ]]
-    .. [[$bin = $sh.Namespace(0xa); ]]
-    .. [[$target = $null; ]]
-    .. [[foreach ($item in $bin.Items()) { ]]
-    .. [[  try { $df = $item.ExtendedProperty('System.Recycle.DeletedFrom') } catch { $df = $null }; ]]
-    .. [[  if ($df -and ($df -eq '%s')) { $target = $item; break } ]]
-    .. [[}; ]]
-    .. [[if (-not $target) { ]]
-    .. [[  foreach ($item in $bin.Items()) { if ($item.Name -eq '%s') { $target = $item; break } } ]]
-    .. [[}; ]]
-    .. [[if (-not $target) { exit 1 }; ]]
-    .. [[$dst = '%s'; ]]
-    .. [[if (Test-Path -LiteralPath $dst) { exit 3 }; ]]
-    .. [[$moved = $false; ]]
-    .. [[try { ]]
-    .. [[  $src = $target.Path; ]]
-    .. [[  $dstDir = Split-Path -Parent $dst; ]]
-    .. [[  if ($dstDir -and -not (Test-Path -LiteralPath $dstDir)) { New-Item -ItemType Directory -Path $dstDir -Force | Out-Null }; ]]
-    .. [[  Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop; ]]
-    .. [[  $moved = $true ]]
-    .. [[} catch { $moved = $false }; ]]
-    .. [[if (-not $moved) { ]]
-    .. [[  $verb = $target.Verbs() | Where-Object { ($_.Name -replace '&','') -match '%s' } | Select-Object -First 1; ]]
-    .. [[  if ($verb) { $verb.DoIt(); $moved = (Test-Path -LiteralPath $dst) } ]]
-    .. [[}; ]]
-    .. [[if ($moved) { exit 0 } else { exit 2 }]],
-    win_path, esc_name, win_path, RESTORE_VERB_PATTERN
+      .. [[$bin = $sh.Namespace(0xa); ]]
+      .. [[$target = $null; ]]
+      .. [[foreach ($item in $bin.Items()) { ]]
+      .. [[  try { $df = $item.ExtendedProperty('System.Recycle.DeletedFrom') } catch { $df = $null }; ]]
+      .. [[  if ($df -and ($df -eq '%s')) { $target = $item; break } ]]
+      .. [[}; ]]
+      .. [[if (-not $target) { ]]
+      .. [[  foreach ($item in $bin.Items()) { if ($item.Name -eq '%s') { $target = $item; break } } ]]
+      .. [[}; ]]
+      .. [[if (-not $target) { exit 1 }; ]]
+      .. [[$dst = '%s'; ]]
+      .. [[if (Test-Path -LiteralPath $dst) { exit 3 }; ]]
+      .. [[$moved = $false; ]]
+      .. [[try { ]]
+      .. [[  $src = $target.Path; ]]
+      .. [[  $dstDir = Split-Path -Parent $dst; ]]
+      .. [[  if ($dstDir -and -not (Test-Path -LiteralPath $dstDir)) { New-Item -ItemType Directory -Path $dstDir -Force | Out-Null }; ]]
+      .. [[  Move-Item -LiteralPath $src -Destination $dst -Force -ErrorAction Stop; ]]
+      .. [[  $moved = $true ]]
+      .. [[} catch { $moved = $false }; ]]
+      .. [[if (-not $moved) { ]]
+      .. [[  $verb = $target.Verbs() | Where-Object { ($_.Name -replace '&','') -match '%s' } | Select-Object -First 1; ]]
+      .. [[  if ($verb) { $verb.DoIt(); $moved = (Test-Path -LiteralPath $dst) } ]]
+      .. [[}; ]]
+      .. [[if ($moved) { exit 0 } else { exit 2 }]],
+    win_path,
+    esc_name,
+    win_path,
+    RESTORE_VERB_PATTERN
   )
-  local ok, err = require("lib.nvim.cross.run_argv").run_blocking(
-    { "powershell", "-NoProfile", "-NonInteractive", "-Command", script }
-  )
+  local ok, err = require("lib.nvim.cross.run_argv").run_blocking({
+    "powershell",
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    script,
+  })
   if ok then return true, nil end
   -- The script has no stderr output of its own, so on failure run_argv's
   -- err is exactly "exit code N" -- recover our script's exit code from it
   -- to keep the specific, actionable messages below.
   local code = tonumber((err or ""):match("exit code (%d+)"))
-  if code == 1 then return false, "Item not found in Recycle Bin (may already be restored, or bin was emptied)" end
-  if code == 2 then return false, "Found the item, but could not move it back (and no restore verb matched either) -- restore it manually from the Recycle Bin" end
-  if code == 3 then return false, "A file already exists at the original location -- not overwriting it" end
+  if code == 1 then
+    return false, "Item not found in Recycle Bin (may already be restored, or bin was emptied)"
+  end
+  if code == 2 then
+    return false,
+      "Found the item, but could not move it back (and no restore verb matched either) -- restore it manually from the Recycle Bin"
+  end
+  if code == 3 then
+    return false, "A file already exists at the original location -- not overwriting it"
+  end
   return false, "PowerShell restore failed: " .. (err or "unknown error")
 end
 
@@ -136,11 +148,18 @@ local function restore_linux_mac(original_path)
     local info_dir = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash/info"
     local info_file = info_dir .. "/" .. name .. ".trashinfo"
     if vim.fn.filereadable(info_file) == 1 then
-      local ok = run_argv.run_blocking({ "gio", "trash", "--restore", "trash:///" .. vim.fn.fnameescape(name) })
+      local ok = run_argv.run_blocking({
+        "gio",
+        "trash",
+        "--restore",
+        "trash:///" .. vim.fn.fnameescape(name),
+      })
       if ok then return true, nil end
     end
     -- Direct restore from files dir
-    local trash_files = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash/files/" .. name
+    local trash_files = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share"))
+      .. "/Trash/files/"
+      .. name
     if vim.fn.filereadable(trash_files) == 1 or vim.fn.isdirectory(trash_files) == 1 then
       local ok = run_argv.run_blocking({ "mv", trash_files, original_path })
       if ok then return true, nil end
@@ -154,9 +173,7 @@ end
 ---@return string? err
 function M.restore_last()
   local entry = _history[1]
-  if not entry then
-    return false, "Trash history is empty"
-  end
+  if not entry then return false, "Trash history is empty" end
   local ok, err = M.restore(entry)
   if ok then table.remove(_history, 1) end
   return ok, err
@@ -195,7 +212,7 @@ function M.show_history()
     lines[#lines + 1] = "      " .. e.original_path
   end
 
-  local width  = math.min(80, vim.o.columns - 4)
+  local width = math.min(80, vim.o.columns - 4)
   local height = math.min(#lines, vim.o.lines - 6)
 
   kit.viewer({

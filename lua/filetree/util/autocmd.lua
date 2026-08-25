@@ -38,9 +38,7 @@ end
 ---@param opts   table|nil
 function M.create(event, callback, opts)
   opts = opts or {}
-  if has_lib and type(lib.create) == "function" then
-    return lib.create(event, callback, opts)
-  end
+  if has_lib and type(lib.create) == "function" then return lib.create(event, callback, opts) end
   local o = vim.tbl_extend("force", {}, opts)
   o.callback = callback
   return vim.api.nvim_create_autocmd(event, o)

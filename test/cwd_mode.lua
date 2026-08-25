@@ -23,8 +23,13 @@ if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) en
 
 local passed, failed = 0, 0
 local function check(name, ok, detail)
-  if ok then passed = passed + 1; print("  ok   " .. name)
-  else failed = failed + 1; print("  FAIL " .. name .. (detail and ("  — " .. detail) or "")) end
+  if ok then
+    passed = passed + 1
+    print("  ok   " .. name)
+  else
+    failed = failed + 1
+    print("  FAIL " .. name .. (detail and ("  — " .. detail) or ""))
+  end
 end
 local function eq(name, got, want)
   check(name, got == want, ("got %q want %q"):format(tostring(got), tostring(want)))
@@ -54,8 +59,12 @@ local function stub_adapter(winid)
     get_winid = function()
       return (winid and vim.api.nvim_win_is_valid(winid)) and winid or nil
     end,
-    get_current_node = function() return nil end,
-    get_root_path = function() return base end,
+    get_current_node = function()
+      return nil
+    end,
+    get_root_path = function()
+      return base
+    end,
   }
 end
 
@@ -68,8 +77,10 @@ local silent = { enabled = true, indicator = { enabled = false } }
 do
   cwd_mode.setup(vim.deepcopy(silent), stub_adapter(nil))
   eq("starts in follow mode", cwd_mode.mode(), "follow")
-  check("follow returns no decision (cwd_sync keeps its own resolution)",
-    cwd_mode.decide(base .. "/proj_a/src/one.lua") == nil)
+  check(
+    "follow returns no decision (cwd_sync keeps its own resolution)",
+    cwd_mode.decide(base .. "/proj_a/src/one.lua") == nil
+  )
 end
 
 -- ── project ───────────────────────────────────────────────────────────────────
@@ -93,7 +104,8 @@ do
 
   cwd_mode.setup(
     vim.tbl_deep_extend("force", vim.deepcopy(silent), { project = { sticky = false } }),
-    stub_adapter(nil))
+    stub_adapter(nil)
+  )
   vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base .. "/proj_a"))
   cwd_mode.set_mode("project")
   d = cwd_mode.decide(base .. "/loose/four.md")
@@ -106,8 +118,13 @@ do
   vim.fn.mkdir(mono .. "/.git", "p")
   vim.fn.mkdir(mono .. "/packages/app/src", "p")
   vim.fn.mkdir(mono .. "/packages/lib", "p")
-  for _, rel in ipairs({ ".git/HEAD", "package.json", "packages/app/package.json",
-                         "packages/app/src/main.ts", "packages/lib/package.json" }) do
+  for _, rel in ipairs({
+    ".git/HEAD",
+    "package.json",
+    "packages/app/package.json",
+    "packages/app/src/main.ts",
+    "packages/lib/package.json",
+  }) do
     local h = assert(io.open(mono .. "/" .. rel, "w"), "could not create " .. rel)
     h:write("x")
     h:close()
@@ -133,7 +150,9 @@ do
 
   -- A file that belongs to no package falls back to the repo (".git" is the
   -- last-resort marker), not to the filesystem root.
-  local h = io.open(mono .. "/README.md", "w"); h:write("x"); h:close()
+  local h = io.open(mono .. "/README.md", "w")
+  h:write("x")
+  h:close()
   d = cwd_mode.decide(mono .. "/README.md")
   eq("nearest: a file outside any package lands on the repo", d.root, mono)
 
@@ -144,7 +163,9 @@ end
 do
   local tree_root = base .. "/proj_a"
   local adapter = stub_adapter(nil)
-  adapter.get_root_path = function() return tree_root end
+  adapter.get_root_path = function()
+    return tree_root
+  end
 
   vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base .. "/loose"))
   cwd_mode.setup(vim.deepcopy(silent), adapter)
@@ -190,8 +211,11 @@ do
   eq("the guard reverts a foreign :cd", normkey(vim.fn.getcwd()), base .. "/proj_a")
 
   cwd_mode.notify_manual_root(base .. "/proj_b")
-  eq("a manual re-root moves the lock instead of being reverted",
-    cwd_mode.root(), base .. "/proj_b")
+  eq(
+    "a manual re-root moves the lock instead of being reverted",
+    cwd_mode.root(),
+    base .. "/proj_b"
+  )
   eq("the cwd follows the manual re-root", normkey(vim.fn.getcwd()), base .. "/proj_b")
 
   cwd_mode.unlock()
@@ -202,7 +226,8 @@ do
   -- enforce = false still pins the root, it just stops reverting.
   cwd_mode.setup(
     vim.tbl_deep_extend("force", vim.deepcopy(silent), { lock = { enforce = false } }),
-    stub_adapter(nil))
+    stub_adapter(nil)
+  )
   cwd_mode.lock(base .. "/proj_a")
   vim.cmd("cd " .. vim.fn.fnameescape(base .. "/proj_b"))
   eq("enforce=false: a foreign :cd stands", normkey(vim.fn.getcwd()), base .. "/proj_b")
@@ -211,13 +236,18 @@ end
 
 -- ── scope: global / tab / win ─────────────────────────────────────────────────
 do
-  local function global_cwd() return normkey(vim.fn.getcwd(-1, -1)) end
-  local function win_cwd()    return normkey(vim.fn.getcwd(0, 0)) end
+  local function global_cwd()
+    return normkey(vim.fn.getcwd(-1, -1))
+  end
+  local function win_cwd()
+    return normkey(vim.fn.getcwd(0, 0))
+  end
 
   vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base .. "/loose"))
   cwd_mode.setup(
     vim.tbl_deep_extend("force", vim.deepcopy(silent), { scope = "win" }),
-    stub_adapter(nil))
+    stub_adapter(nil)
+  )
   eq("scope is reported", cwd_mode.scope(), "win")
 
   cwd_mode.lock(base .. "/proj_a")
@@ -256,9 +286,12 @@ end
 -- ── cycle ─────────────────────────────────────────────────────────────────────
 do
   cwd_mode.setup(vim.deepcopy(silent), stub_adapter(nil))
-  cwd_mode.cycle(); eq("cycle: follow → project", cwd_mode.mode(), "project")
-  cwd_mode.cycle(); eq("cycle: project → lock", cwd_mode.mode(), "lock")
-  cwd_mode.cycle(); eq("cycle wraps back to follow", cwd_mode.mode(), "follow")
+  cwd_mode.cycle()
+  eq("cycle: follow → project", cwd_mode.mode(), "project")
+  cwd_mode.cycle()
+  eq("cycle: project → lock", cwd_mode.mode(), "lock")
+  cwd_mode.cycle()
+  eq("cycle wraps back to follow", cwd_mode.mode(), "follow")
   cwd_mode.teardown()
 end
 
@@ -282,7 +315,10 @@ do
 
   local original_laststatus = vim.o.laststatus
   vim.o.laststatus = 2
-  cwd_mode.setup({ enabled = true, indicator = { mode = "statusline", show_path = "never" } }, adapter)
+  cwd_mode.setup(
+    { enabled = true, indicator = { mode = "statusline", show_path = "never" } },
+    adapter
+  )
 
   cwd_mode.set_mode("project")
   eq("badge: PROJECT", stl(), "%#DiagnosticInfo#PROJECT%*")
@@ -293,14 +329,23 @@ do
   cwd_mode.set_mode("follow")
   eq("badge: follow shows nothing", stl(), "")
 
-  cwd_mode.setup({ enabled = true, indicator = { mode = "statusline", show_path = "lock" } }, adapter)
+  cwd_mode.setup(
+    { enabled = true, indicator = { mode = "statusline", show_path = "lock" } },
+    adapter
+  )
   cwd_mode.lock(base .. "/proj_a")
-  check("badge: show_path appends the pinned directory",
-    stl():find("LOCK", 1, true) ~= nil and stl():find("proj_a", 1, true) ~= nil, stl())
+  check(
+    "badge: show_path appends the pinned directory",
+    stl():find("LOCK", 1, true) ~= nil and stl():find("proj_a", 1, true) ~= nil,
+    stl()
+  )
   check("component() exposes the badge text", cwd_mode.component():find("LOCK", 1, true) == 1)
 
   -- ── indicator.style ──
-  cwd_mode.setup({ enabled = true, indicator = { mode = "statusline", show_path = "never", style = "short" } }, adapter)
+  cwd_mode.setup(
+    { enabled = true, indicator = { mode = "statusline", show_path = "never", style = "short" } },
+    adapter
+  )
   cwd_mode.set_mode("project")
   eq("style=short: project", stl(), "%#DiagnosticInfo#P%*")
   cwd_mode.lock(base .. "/proj_a")
@@ -308,7 +353,10 @@ do
   cwd_mode.set_mode("follow")
   eq("style=short: follow still hidden", stl(), "")
 
-  cwd_mode.setup({ enabled = true, indicator = { mode = "statusline", show_path = "never", style = "numeric" } }, adapter)
+  cwd_mode.setup(
+    { enabled = true, indicator = { mode = "statusline", show_path = "never", style = "numeric" } },
+    adapter
+  )
   cwd_mode.set_mode("project")
   eq("style=numeric: project shows 1", stl(), "%#DiagnosticInfo#1%*")
   cwd_mode.lock(base .. "/proj_a")
@@ -316,15 +364,21 @@ do
   cwd_mode.set_mode("follow")
   eq("style=numeric: follow shows 0 (the only style that does)", stl(), "%#Comment#0%*")
 
-  cwd_mode.setup({ enabled = true, indicator = { mode = "statusline", show_path = "never", style = "icon" } }, adapter)
+  cwd_mode.setup(
+    { enabled = true, indicator = { mode = "statusline", show_path = "never", style = "icon" } },
+    adapter
+  )
   cwd_mode.lock(base .. "/proj_a")
   -- Not asserting the exact Nerd Font codepoint here (fragile to encode/
   -- compare in a plain Lua string) — just that the default table actually
   -- has *something* non-empty wired up for lock. `labels_short override`
   -- below covers exact-match behaviour with a plain ASCII override instead.
   local icon_stl = stl()
-  check("style=icon: lock shows a non-empty glyph",
-    icon_stl:match("^%%#DiagnosticWarn#(.+)%%%*$") ~= nil, icon_stl)
+  check(
+    "style=icon: lock shows a non-empty glyph",
+    icon_stl:match("^%%#DiagnosticWarn#(.+)%%%*$") ~= nil,
+    icon_stl
+  )
   cwd_mode.set_mode("follow")
   eq("style=icon: follow still hidden", stl(), "")
 
@@ -340,7 +394,9 @@ do
   cwd_mode.setup({
     enabled = true,
     indicator = {
-      mode = "statusline", show_path = "never", style = "short",
+      mode = "statusline",
+      show_path = "never",
+      style = "short",
       labels_short = { lock = "X" },
     },
   }, adapter)
@@ -374,7 +430,8 @@ do
     vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base .. "/proj_b"))
     cwd_mode.setup(
       vim.tbl_deep_extend("force", vim.deepcopy(silent), { persist = true }, extra or {}),
-      stub_adapter(nil))
+      stub_adapter(nil)
+    )
   end
 
   fresh()
@@ -384,14 +441,18 @@ do
   -- A fresh setup() is what a restart looks like from the feature's side.
   fresh()
   eq("nothing is restored synchronously", cwd_mode.mode(), "follow")
-  vim.wait(200, function() return cwd_mode.mode() == "lock" end)
+  vim.wait(200, function()
+    return cwd_mode.mode() == "lock"
+  end)
   eq("the saved lock is restored", cwd_mode.mode(), "lock")
   eq("the saved pin is restored", cwd_mode.root(), base .. "/proj_a")
 
   -- The saved policy outranks a configured mode: it is the later, explicit
   -- choice of the same user.
   fresh({ mode = "project" })
-  vim.wait(200, function() return cwd_mode.mode() ~= "follow" end)
+  vim.wait(200, function()
+    return cwd_mode.mode() ~= "follow"
+  end)
   eq("a saved policy wins over the configured mode", cwd_mode.mode(), "lock")
 
   -- A lock whose directory disappeared must not take the session hostage.
@@ -404,14 +465,18 @@ do
   vim.cmd("noautocmd cd " .. vim.fn.fnameescape(base))
   vim.fn.delete(base .. "/gone_soon", "d")
   fresh({ mode = "project" })
-  vim.wait(200, function() return cwd_mode.mode() ~= "follow" end)
+  vim.wait(200, function()
+    return cwd_mode.mode() ~= "follow"
+  end)
   eq("a stale lock is declined, the configured mode applies", cwd_mode.mode(), "project")
 
   -- Scope round-trips too.
   cwd_mode.set_mode("follow")
   cwd_mode.set_scope("tab")
   fresh()
-  vim.wait(200, function() return cwd_mode.scope() == "tab" end)
+  vim.wait(200, function()
+    return cwd_mode.scope() == "tab"
+  end)
   eq("the saved scope is restored", cwd_mode.scope(), "tab")
   cwd_mode.set_scope("global")
 
@@ -419,7 +484,9 @@ do
   cwd_mode.lock(base .. "/proj_a")
   cwd_mode.forget()
   fresh({ mode = "manual" })
-  vim.wait(200, function() return cwd_mode.mode() ~= "follow" end)
+  vim.wait(200, function()
+    return cwd_mode.mode() ~= "follow"
+  end)
   eq("after forget the configured mode applies", cwd_mode.mode(), "manual")
   cwd_mode.forget()
 
@@ -443,36 +510,48 @@ do
   -- follow mode: no held root, so the buffer's own project root decides —
   -- exactly the behaviour that existed before cwd_mode.
   vim.cmd("noautocmd edit " .. vim.fn.fnameescape(base .. "/proj_b/three.lua"))
-  eq("follow: util.root resolves from the buffer",
-    normkey(util_root.find()), base .. "/proj_b")
-  eq("follow: an explicit path wins over the buffer",
-    normkey(util_root.find(base .. "/proj_a/src/one.lua")), base .. "/proj_a")
+  eq("follow: util.root resolves from the buffer", normkey(util_root.find()), base .. "/proj_b")
+  eq(
+    "follow: an explicit path wins over the buffer",
+    normkey(util_root.find(base .. "/proj_a/src/one.lua")),
+    base .. "/proj_a"
+  )
 
   -- locked: the held root wins even though the focused buffer belongs to
   -- another project. This is the case find_files/grep/git_status got wrong.
   cwd_mode.lock(base .. "/proj_a")
-  eq("locked: util.root returns the lock, not the buffer's project",
-    normkey(util_root.find()), base .. "/proj_a")
-  eq("locked: an explicit path does not escape the lock either",
-    normkey(util_root.find(base .. "/proj_b/three.lua")), base .. "/proj_a")
+  eq(
+    "locked: util.root returns the lock, not the buffer's project",
+    normkey(util_root.find()),
+    base .. "/proj_a"
+  )
+  eq(
+    "locked: an explicit path does not escape the lock either",
+    normkey(util_root.find(base .. "/proj_b/three.lua")),
+    base .. "/proj_a"
+  )
 
   cwd_mode.unlock()
-  eq("after unlock: back to the buffer's project",
-    normkey(util_root.find()), base .. "/proj_b")
+  eq("after unlock: back to the buffer's project", normkey(util_root.find()), base .. "/proj_b")
 
   -- One walk governs both the cwd and anything project-scoped. project_root's
   -- broader marker set would answer "the package" here; cwd_mode's VCS set
   -- answers "the repository", and that is what the cwd is anchored to too.
-  eq("follow: a vendored file resolves past node_modules",
-    normkey(util_root.find(mono .. "/packages/app/src/main.ts")), mono)
+  eq(
+    "follow: a vendored file resolves past node_modules",
+    normkey(util_root.find(mono .. "/packages/app/src/main.ts")),
+    mono
+  )
 
   cwd_mode.teardown()
 
   -- With cwd_mode torn down, resolve() declines and the old chain applies —
   -- project_root's own walk, which stops at the package.json.
-  eq("without cwd_mode: project_root decides again",
+  eq(
+    "without cwd_mode: project_root decides again",
     normkey(util_root.find(mono .. "/packages/app/src/main.ts")),
-    mono .. "/packages/app")
+    mono .. "/packages/app"
+  )
 
   vim.cmd("noautocmd enew")
 end
@@ -489,9 +568,7 @@ do
   -- work — otherwise there would be no way to consume the mode externally
   -- without the tree window also showing it. show_path is covered by its own
   -- test above; kept off here so the text assertions are just the label.
-  cwd_mode.setup(
-    { enabled = true, indicator = { enabled = false, show_path = "never" } },
-    adapter)
+  cwd_mode.setup({ enabled = true, indicator = { enabled = false, show_path = "never" } }, adapter)
 
   local b = cwd_mode.badge()
   eq("badge(): follow has no text", b.text, "")
@@ -513,8 +590,10 @@ do
     if vim.api.nvim_win_get_config(w).relative ~= "" then has_float = true end
   end
   check("indicator.enabled=false attaches no float", not has_float)
-  check("indicator.enabled=false sets no tree statusline",
-    vim.api.nvim_get_option_value("statusline", { win = tree_win, scope = "local" }) == "")
+  check(
+    "indicator.enabled=false sets no tree statusline",
+    vim.api.nvim_get_option_value("statusline", { win = tree_win, scope = "local" }) == ""
+  )
 
   cwd_mode.teardown()
 end
@@ -526,7 +605,9 @@ do
   vim.api.nvim_create_autocmd("User", {
     group = group,
     pattern = "FiletreeCwdModeChanged",
-    callback = function() fires = fires + 1 end,
+    callback = function()
+      fires = fires + 1
+    end,
   })
 
   cwd_mode.setup({ enabled = true, indicator = { enabled = false } }, stub_adapter(nil))
@@ -604,16 +685,23 @@ do
   local real_ft = require("filetree")
   real_ft.register_adapter(setmetatable({
     name = "cwd-mode-warn-stub",
-    is_available = function() return true end,
-  }, { __index = function() return function() return false end end }))
+    is_available = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  }))
 
   captured = {}
   real_ft.setup({
     adapter = "cwd-mode-warn-stub",
     features = { cwd_sync = { enabled = true } },
   })
-  check("cwd_sync is genuinely active via filetree.feature()",
-    real_ft.feature("cwd_sync") ~= nil)
+  check("cwd_sync is genuinely active via filetree.feature()", real_ft.feature("cwd_sync") ~= nil)
 
   captured = {}
   real_ft.feature("cwd_mode").set_mode("project")
@@ -627,18 +715,32 @@ end
 do
   local commands = require("filetree.commands")
   local paths = table.concat(commands.command_paths(), "\n")
-  for _, want in ipairs({ "cwd mode", "cwd scope", "cwd lock", "cwd here",
-                          "cwd unlock", "cwd toggle", "cwd status", "cwd forget" }) do
+  for _, want in ipairs({
+    "cwd mode",
+    "cwd scope",
+    "cwd lock",
+    "cwd here",
+    "cwd unlock",
+    "cwd toggle",
+    "cwd status",
+    "cwd forget",
+  }) do
     check("command path registered: :Filetree " .. want, paths:find(want, 1, true) ~= nil)
   end
 
   commands.setup()
   local completions = vim.fn.getcompletion("Filetree cwd mode ", "cmdline")
-  check("`:Filetree cwd mode` completes its enum",
+  check(
+    "`:Filetree cwd mode` completes its enum",
     vim.tbl_contains(completions, "project") and vim.tbl_contains(completions, "manual"),
-    vim.inspect(completions))
+    vim.inspect(completions)
+  )
 end
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim cwd_mode: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end

@@ -91,9 +91,7 @@ end
 local function sweep(tree_winid)
   vim.schedule(function()
     for _, winid in ipairs(vim.api.nvim_list_wins()) do
-      if winid ~= tree_winid then
-        redirect_if_stray(winid, vim.api.nvim_win_get_buf(winid))
-      end
+      if winid ~= tree_winid then redirect_if_stray(winid, vim.api.nvim_win_get_buf(winid)) end
     end
   end)
 end
@@ -116,7 +114,9 @@ function M.setup(config, adapter)
 
   au.acmd({ "BufAdd", "BufDelete", "BufWipeout" }, {
     group = _augroup,
-    callback = function() sweep(adapter.get_winid()) end,
+    callback = function()
+      sweep(adapter.get_winid())
+    end,
   })
 end
 

@@ -20,9 +20,9 @@
 ---   :Filetree open system
 ---   :Filetree open pick       (floating picker of configured apps)
 
-local notify   = require("filetree.util.notify").create("[filetree.open_with]")
+local notify = require("filetree.util.notify").create("[filetree.open_with]")
 local platform = require("filetree.util.platform")
-local map      = require("filetree.util.map")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
 
@@ -31,8 +31,8 @@ local M = {}
 ---@type FiletreeOpenWithConfig
 local _cfg = {
   enabled = false,
-  keymap  = "<leader>sm",
-  apps    = {},
+  keymap = "<leader>sm",
+  apps = {},
 }
 
 ---@type FiletreeAdapter?
@@ -49,7 +49,7 @@ local function system_open_cmd()
   -- truncates a path containing an unescaped `&` (cmd.exe treats a bare
   -- `&` outside quotes as a command separator).
   if platform.is_windows() then return { "explorer.exe" } end
-  if platform.is_mac()     then return { "open" } end
+  if platform.is_mac() then return { "open" } end
   if platform.is_wsl() or platform.has_executable("wslview") then return { "wslview" } end
   return { "xdg-open" }
 end
@@ -95,7 +95,10 @@ end
 ---Open the current node with the system default application.
 function M.open_system()
   local path = current_path()
-  if not path then notify.warn("No node under cursor"); return end
+  if not path then
+    notify.warn("No node under cursor")
+    return
+  end
   system_open(path)
   notify.info("Opening: " .. vim.fn.fnamemodify(path, ":t"))
 end
@@ -104,12 +107,17 @@ end
 ---@param app_name string
 function M.open_app(app_name)
   local path = current_path()
-  if not path then notify.warn("No node under cursor"); return end
+  if not path then
+    notify.warn("No node under cursor")
+    return
+  end
 
   for _, app in ipairs(_cfg.apps) do
     if app.name == app_name or app.cmd == app_name then
       local cmd = { app.cmd }
-      for _, a in ipairs(app.args or {}) do cmd[#cmd + 1] = a end
+      for _, a in ipairs(app.args or {}) do
+        cmd[#cmd + 1] = a
+      end
       open_with_cmd(cmd, path)
       notify.info(string.format("Opening with %s: %s", app.name, vim.fn.fnamemodify(path, ":t")))
       return
@@ -121,21 +129,28 @@ end
 ---Open a floating picker to choose an application.
 function M.pick()
   local path = current_path()
-  if not path then notify.warn("No node under cursor"); return end
+  if not path then
+    notify.warn("No node under cursor")
+    return
+  end
 
   local apps = vim.list_slice(_cfg.apps)
   table.insert(apps, 1, { name = "System default", cmd = "_system" })
 
   ui_select(apps, {
     prompt = "Open with",
-    format_item = function(a) return a.name end,
+    format_item = function(a)
+      return a.name
+    end,
   }, function(app)
     if not app then return end
     if app.cmd == "_system" then
       system_open(path)
     else
       local cmd = { app.cmd }
-      for _, a in ipairs(app.args or {}) do cmd[#cmd + 1] = a end
+      for _, a in ipairs(app.args or {}) do
+        cmd[#cmd + 1] = a
+      end
       open_with_cmd(cmd, path)
     end
     notify.info(string.format("Opening with %s: %s", app.name, vim.fn.fnamemodify(path, ":t")))
@@ -148,20 +163,20 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   tree_attach.on_attach(function(buf)
     if _cfg.keymap then
-      map("n", _cfg.keymap, M.open_system, { buffer = buf },
-        "Filetree: open with system default")
+      map("n", _cfg.keymap, M.open_system, { buffer = buf }, "Filetree: open with system default")
     end
     -- Register per-app keymaps
     for _, app in ipairs(_cfg.apps) do
       if app.keymap then
         local app_copy = app
-        map("n", app.keymap, function() M.open_app(app_copy.name) end,
-          { buffer = buf }, "Filetree: open with " .. app.name)
+        map("n", app.keymap, function()
+          M.open_app(app_copy.name)
+        end, { buffer = buf }, "Filetree: open with " .. app.name)
       end
     end
   end)

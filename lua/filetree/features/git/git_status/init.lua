@@ -17,24 +17,24 @@
 ---
 --- Updates on: BufEnter (tree buffer), BufWritePost (any buffer), FocusGained.
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeGitStatusConfig
 local _cfg = {
-  enabled      = false,
-  debounce_ms  = 300,
+  enabled = false,
+  debounce_ms = 300,
   show_ignored = false,
   signs = {
-    modified  = { text = "●", hl = "DiagnosticWarn"  },
-    added     = { text = "+", hl = "DiagnosticOk"    },
-    deleted   = { text = "-", hl = "DiagnosticError" },
-    renamed   = { text = "»", hl = "DiagnosticHint"  },
-    untracked = { text = "?", hl = "Comment"         },
-    ignored   = { text = "·", hl = "Comment"         },
-    conflict  = { text = "✗", hl = "DiagnosticError" },
+    modified = { text = "●", hl = "DiagnosticWarn" },
+    added = { text = "+", hl = "DiagnosticOk" },
+    deleted = { text = "-", hl = "DiagnosticError" },
+    renamed = { text = "»", hl = "DiagnosticHint" },
+    untracked = { text = "?", hl = "Comment" },
+    ignored = { text = "·", hl = "Comment" },
+    conflict = { text = "✗", hl = "DiagnosticError" },
   },
 }
 
@@ -62,45 +62,47 @@ local _render_debounce = nil
 ---@param root string  git repo root directory
 local function run_git(root)
   local args = { "git", "-C", root, "status", "--porcelain", "-u" }
-  if _cfg.show_ignored then
-    args[#args + 1] = "--ignored"
-  end
+  if _cfg.show_ignored then args[#args + 1] = "--ignored" end
 
-  vim.system(args, { text = true }, vim.schedule_wrap(function(result)
-    if result.code ~= 0 then return end
-    local new_map = {}
-    for line in (result.stdout or ""):gmatch("[^\n]+") do
-      if #line >= 4 then
-        local xy   = line:sub(1, 2)
-        local path = line:sub(4):gsub('"', "")
-        -- handle rename "old -> new"
-        local rename_target = path:match("^.+ %-> (.+)$")
-        if rename_target then path = rename_target end
-        local abs = root .. "/" .. path
-        abs = abs:gsub("\\", "/")
+  vim.system(
+    args,
+    { text = true },
+    vim.schedule_wrap(function(result)
+      if result.code ~= 0 then return end
+      local new_map = {}
+      for line in (result.stdout or ""):gmatch("[^\n]+") do
+        if #line >= 4 then
+          local xy = line:sub(1, 2)
+          local path = line:sub(4):gsub('"', "")
+          -- handle rename "old -> new"
+          local rename_target = path:match("^.+ %-> (.+)$")
+          if rename_target then path = rename_target end
+          local abs = root .. "/" .. path
+          abs = abs:gsub("\\", "/")
 
-        local code
-        if xy:find("U") or xy == "AA" or xy == "DD" then
-          code = "C"
-        elseif xy:sub(1,1) == "?" then
-          code = "?"
-        elseif xy:sub(1,1) == "!" then
-          code = "!"
-        elseif xy:sub(1,1) == "R" or xy:sub(2,2) == "R" then
-          code = "R"
-        elseif xy:sub(1,1) == "A" or xy:sub(2,2) == "A" then
-          code = "A"
-        elseif xy:sub(1,1) == "D" or xy:sub(2,2) == "D" then
-          code = "D"
-        else
-          code = "M"
+          local code
+          if xy:find("U") or xy == "AA" or xy == "DD" then
+            code = "C"
+          elseif xy:sub(1, 1) == "?" then
+            code = "?"
+          elseif xy:sub(1, 1) == "!" then
+            code = "!"
+          elseif xy:sub(1, 1) == "R" or xy:sub(2, 2) == "R" then
+            code = "R"
+          elseif xy:sub(1, 1) == "A" or xy:sub(2, 2) == "A" then
+            code = "A"
+          elseif xy:sub(1, 1) == "D" or xy:sub(2, 2) == "D" then
+            code = "D"
+          else
+            code = "M"
+          end
+          new_map[abs] = code
         end
-        new_map[abs] = code
       end
-    end
-    _status_map = new_map
-    M._render()
-  end))
+      _status_map = new_map
+      M._render()
+    end)
+  )
 end
 
 -- ── Rendering ─────────────────────────────────────────────────────────────────
@@ -133,9 +135,9 @@ function M._render()
         local sign = sign_key and _cfg.signs[sign_key]
         if sign then
           pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-            virt_text       = { { " " .. sign.text, sign.hl } },
-            virt_text_pos   = "eol",
-            priority        = 50,
+            virt_text = { { " " .. sign.text, sign.hl } },
+            virt_text_pos = "eol",
+            priority = 50,
           })
         end
       end
@@ -161,9 +163,7 @@ function M.refresh()
 
   -- Verify it is actually a git repo
   local git_dir = root_path .. "/.git"
-  if vim.fn.isdirectory(git_dir) == 0 and vim.fn.filereadable(git_dir) == 0 then
-    return
-  end
+  if vim.fn.isdirectory(git_dir) == 0 and vim.fn.filereadable(git_dir) == 0 then return end
 
   run_git(root_path)
 end
@@ -187,9 +187,9 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
-  _ns      = vim.api.nvim_create_namespace("filetree_git_status")
+  _ns = vim.api.nvim_create_namespace("filetree_git_status")
 
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(M.refresh, _cfg.debounce_ms)
@@ -207,16 +207,20 @@ function M.setup(config, adapter)
   tree_attach.on_attach(function(buf)
     debounce_refresh()
     au.acmd("CursorMoved", {
-      group    = _augroup,
-      buffer   = buf,
-      callback = function() _render_debounce.call() end,
+      group = _augroup,
+      buffer = buf,
+      callback = function()
+        _render_debounce.call()
+      end,
     })
   end)
 
   -- Re-query on file save or focus return
   au.acmd({ "BufWritePost", "FocusGained" }, {
-    group    = _augroup,
-    callback = function() debounce_refresh() end,
+    group = _augroup,
+    callback = function()
+      debounce_refresh()
+    end,
   })
 
   M.refresh()

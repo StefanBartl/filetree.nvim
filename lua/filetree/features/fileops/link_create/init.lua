@@ -45,9 +45,13 @@ end
 ---@param err string|nil
 ---@return string
 local function friendly_error(err)
-  if platform.is_windows() and type(err) == "string"
-    and (err:find("EPERM", 1, true) or err:find("privilege", 1, true)) then
-    return tostring(err) .. " (creating a symlink on Windows needs Developer Mode, "
+  if
+    platform.is_windows()
+    and type(err) == "string"
+    and (err:find("EPERM", 1, true) or err:find("privilege", 1, true))
+  then
+    return tostring(err)
+      .. " (creating a symlink on Windows needs Developer Mode, "
       .. "or an elevated Neovim; a hardlink to a file doesn't need either)"
   end
   return tostring(err)
@@ -72,9 +76,7 @@ local function do_create(target, link_path, kind, is_dir)
   end
 
   notify.info(kind .. " created: " .. path.relative(link_path) .. " -> " .. path.relative(target))
-  if _adapter and _adapter.refresh then
-    pcall(_adapter.refresh)
-  end
+  if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
 end
 
 ---Prompt for a target path and create a link to it inside the current tree
@@ -83,7 +85,11 @@ function M.create()
   local parent = resolve_parent_dir()
 
   local display = path.relative(parent)
-  if display == "" or display == "." then display = "./" else display = display .. "/" end
+  if display == "" or display == "." then
+    display = "./"
+  else
+    display = display .. "/"
+  end
 
   require("lib.nvim.ui.kit").input({
     title = "Link target (path to link to), created in " .. display .. ": ",
@@ -96,9 +102,7 @@ function M.create()
       -- then strip it, or path.basename() below returns "" and the link
       -- would be misnamed (e.g. its own parent directory).
       local target = path.slashify(path.to_absolute(path.slashify(input)))
-      if #target > 1 and target:sub(-1) == "/" then
-        target = target:sub(1, -2)
-      end
+      if #target > 1 and target:sub(-1) == "/" then target = target:sub(1, -2) end
       local stat = vim.uv.fs_stat(target)
       if not stat then
         notify.error("Target does not exist: " .. path.relative(target))
@@ -119,14 +123,10 @@ function M.create()
         -- no meaningful choice to offer, just create the symlink.
         do_create(target, link_path, "Symlink", true)
       else
-        confirm_choice(
-          "Link \"" .. name .. "\" as:",
-          { "Symlink", "Hardlink" },
-          function(choice)
-            if not choice then return end
-            do_create(target, link_path, choice, false)
-          end
-        )
+        confirm_choice('Link "' .. name .. '" as:', { "Symlink", "Hardlink" }, function(choice)
+          if not choice then return end
+          do_create(target, link_path, choice, false)
+        end)
       end
     end,
   })
@@ -142,8 +142,9 @@ function M.setup(cfg, adapter)
 
   if _cfg.keymap then
     tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, function() M.create() end,
-        { buffer = buf, silent = true }, "filetree: create link")
+      map("n", _cfg.keymap, function()
+        M.create()
+      end, { buffer = buf, silent = true }, "filetree: create link")
     end)
   end
 end

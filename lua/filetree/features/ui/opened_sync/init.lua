@@ -34,9 +34,7 @@ local _cfg = {}
 local function redraw_now()
   if not _adapter then return end
   if not _adapter.is_open() then return end
-  if type(_adapter.redraw) == "function" then
-    pcall(_adapter.redraw)
-  end
+  if type(_adapter.redraw) == "function" then pcall(_adapter.redraw) end
 end
 
 local function debounced_redraw()
@@ -49,7 +47,7 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   -- Nothing to sync if the adapter can't cheaply re-render.
   if type(adapter.redraw) ~= "function" then return end
-  _cfg     = config
+  _cfg = config
   _adapter = adapter
 
   if _debounce then _debounce.cancel() end
@@ -63,7 +61,7 @@ function M.setup(config, adapter)
   -- far too chatty for a redraw); the set below already covers add/remove and
   -- window (un)display of a buffer.
   au.acmd({ "BufAdd", "BufDelete", "BufWipeout", "BufWinEnter", "BufWinLeave" }, {
-    group    = _augroup,
+    group = _augroup,
     callback = debounced_redraw,
   })
 end

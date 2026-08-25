@@ -22,16 +22,15 @@
 --- Commands (via :Filetree dispatcher):
 ---   :Filetree resize [width]
 
-
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeAutoResizeConfig
 local _cfg = {
-  enabled     = false,
+  enabled = false,
   breakpoints = {
-    { cols = 0,   width = 25 },
+    { cols = 0, width = 25 },
     { cols = 100, width = 30 },
     { cols = 140, width = 35 },
   },
@@ -56,7 +55,7 @@ end
 ---@internal
 ---@return integer
 local function target_width()
-  local cols  = vim.o.columns
+  local cols = vim.o.columns
   local width = _cfg.breakpoints[1] and _cfg.breakpoints[1].width or 30
   for _, bp in ipairs(_cfg.breakpoints) do
     if cols >= bp.cols then width = bp.width end
@@ -69,9 +68,7 @@ end
 local function apply_width(w)
   if not _adapter then return end
   local winid = _adapter.get_winid and _adapter.get_winid() or -1
-  if winid > 0 and vim.api.nvim_win_is_valid(winid) then
-    vim.api.nvim_win_set_width(winid, w)
-  end
+  if winid > 0 and vim.api.nvim_win_is_valid(winid) then vim.api.nvim_win_set_width(winid, w) end
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -105,22 +102,28 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   -- Sort breakpoints ascending by cols so the last match wins
-  table.sort(_cfg.breakpoints, function(a, b) return a.cols < b.cols end)
+  table.sort(_cfg.breakpoints, function(a, b)
+    return a.cols < b.cols
+  end)
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_auto_resize", true)
 
   au.acmd("VimResized", {
-    group    = _augroup,
-    callback = function() M.apply() end,
+    group = _augroup,
+    callback = function()
+      M.apply()
+    end,
   })
 
   -- Also apply when the tree window opens / gets focus
-  tree_attach.on_attach(function() M.apply() end)
+  tree_attach.on_attach(function()
+    M.apply()
+  end)
 
   -- Apply immediately
   vim.schedule(M.apply)

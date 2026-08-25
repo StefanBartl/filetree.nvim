@@ -13,18 +13,74 @@
 
 ---@type FiletreeAutocmdEntry[]
 return {
-  { event = "FileType",                    feature = "*",          desc = "Bind each enabled feature's tree-buffer keymaps" },
-  { event = "CursorMoved",                 feature = "preview",    desc = "Live-update the preview as the cursor moves" },
-  { event = "CursorMoved",                 feature = "current_hl", desc = "Re-highlight the current node line" },
-  { event = { "BufEnter", "WinEnter" },    feature = "cwd_sync",   desc = "Reveal the current buffer's file in the tree" },
-  { event = { "BufEnter", "WinEnter" },    feature = "auto_reveal",desc = "Scroll/highlight the current file (no cwd change)" },
-  { event = { "BufLeave", "WinLeave" },    feature = "preview",    desc = "End/close the preview when leaving the tree" },
-  { event = "BufWritePost",                feature = "marks",      desc = "Redraw mark indicators after writes" },
-  { event = "ColorScheme",                 feature = "current_hl", desc = "Re-apply highlight groups after colorscheme change" },
-  { event = "ColorScheme",                 feature = "window_style", desc = "Re-isolate tree highlight groups" },
-  { event = "VimResized",                  feature = "auto_resize",desc = "Adjust tree width to the new column count" },
-  { event = { "BufDelete", "BufWipeout", "WinClosed" }, feature = "layout_guard", desc = "Open an editor window if the tree is left alone" },
-  { event = "BufWinEnter", feature = "no_name_guard", desc = "Redirect a stray [No Name] editor window to a real buffer, then wipe it" },
-  { event = { "BufAdd", "BufDelete", "BufWipeout", "BufWinEnter", "BufWinLeave" }, feature = "opened_sync", desc = "Redraw the tree so opened-file highlights stay in sync" },
-  { event = "BufDelete",                   feature = "*",          desc = "Invalidate the buffer-validation cache (util.buffer)" },
+  {
+    event = "FileType",
+    feature = "*",
+    desc = "Bind each enabled feature's tree-buffer keymaps",
+  },
+  {
+    event = "CursorMoved",
+    feature = "preview",
+    desc = "Live-update the preview as the cursor moves",
+  },
+  {
+    event = "CursorMoved",
+    feature = "current_hl",
+    desc = "Re-highlight the current node line",
+  },
+  {
+    event = { "BufEnter", "WinEnter" },
+    feature = "cwd_sync",
+    desc = "Reveal the current buffer's file in the tree",
+  },
+  {
+    event = { "BufEnter", "WinEnter" },
+    feature = "auto_reveal",
+    desc = "Scroll/highlight the current file (no cwd change)",
+  },
+  {
+    event = { "BufLeave", "WinLeave" },
+    feature = "preview",
+    desc = "End/close the preview when leaving the tree",
+  },
+  {
+    event = "BufWritePost",
+    feature = "marks",
+    desc = "Redraw mark indicators after writes",
+  },
+  {
+    event = "ColorScheme",
+    feature = "current_hl",
+    desc = "Re-apply highlight groups after colorscheme change",
+  },
+  {
+    event = "ColorScheme",
+    feature = "window_style",
+    desc = "Re-isolate tree highlight groups",
+  },
+  {
+    event = "VimResized",
+    feature = "auto_resize",
+    desc = "Adjust tree width to the new column count",
+  },
+  {
+    event = { "BufDelete", "BufWipeout", "WinClosed" },
+    feature = "layout_guard",
+    desc = "Open an editor window if the tree is left alone",
+  },
+  {
+    event = "BufWinEnter",
+    feature = "no_name_guard",
+    desc = "Redirect a stray [No Name] editor window to a real buffer, then wipe it",
+  },
+  {
+    event = { "BufAdd", "BufDelete", "BufWipeout", "BufWinEnter", "BufWinLeave" },
+    feature = "opened_sync",
+    desc = "Redraw the tree so opened-file highlights stay in sync",
+  },
+  {
+    event = "BufDelete",
+    feature = "*",
+    desc = "Invalidate the buffer-validation cache (util.buffer)",
+  },
 }

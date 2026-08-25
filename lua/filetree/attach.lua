@@ -46,32 +46,107 @@ local M = {}
 ---@type table<string, FiletreeAttachEntry[]>
 local SPEC = {
   tree_traverse = {
-    { field = "keymap_up",   method = "up",   desc = "filetree: parent dir (up)",       default = "-" },
-    { field = "keymap_down", method = "down", desc = "filetree: set dir as root (down)", default = "+" },
+    {
+      field = "keymap_up",
+      method = "up",
+      desc = "filetree: parent dir (up)",
+      default = "-",
+    },
+    {
+      field = "keymap_down",
+      method = "down",
+      desc = "filetree: set dir as root (down)",
+      default = "+",
+    },
   },
   marks = {
-    { field = "keymap",            method = "toggle_current",     desc = "filetree: toggle mark",       default = "m" },
-    { field = "keymap_all",        method = "mark_all_visible",   desc = "filetree: mark all visible",  default = "]m" },
-    { field = "keymap_unmark_all", method = "unmark_all_visible", desc = "filetree: unmark all visible", default = "[m" },
-    { field = "keymap_clear",      method = "clear_all",          desc = "filetree: clear all marks",   default = "<C-m>" },
-    { field = "keymap_show",       method = "show",               desc = "filetree: show marked nodes", default = "<leader>ms" },
+    {
+      field = "keymap",
+      method = "toggle_current",
+      desc = "filetree: toggle mark",
+      default = "m",
+    },
+    {
+      field = "keymap_all",
+      method = "mark_all_visible",
+      desc = "filetree: mark all visible",
+      default = "]m",
+    },
+    {
+      field = "keymap_unmark_all",
+      method = "unmark_all_visible",
+      desc = "filetree: unmark all visible",
+      default = "[m",
+    },
+    {
+      field = "keymap_clear",
+      method = "clear_all",
+      desc = "filetree: clear all marks",
+      default = "<C-m>",
+    },
+    {
+      field = "keymap_show",
+      method = "show",
+      desc = "filetree: show marked nodes",
+      default = "<leader>ms",
+    },
   },
   path_copy = {
-    { field = "keymap_abs",          method = "copy_absolute",         desc = "filetree: copy absolute path",            default = "[a" },
-    { field = "keymap_dirname",      method = "copy_dirname",          desc = "filetree: copy absolute parent directory", default = "]a" },
-    { field = "keymap_project_root", method = "copy_project_root",     desc = "filetree: copy absolute project root",    default = "[R" },
-    { field = "keymap_project_rel",  method = "copy_project_relative", desc = "filetree: copy path relative to project root", default = "]R" },
+    {
+      field = "keymap_abs",
+      method = "copy_absolute",
+      desc = "filetree: copy absolute path",
+      default = "[a",
+    },
+    {
+      field = "keymap_dirname",
+      method = "copy_dirname",
+      desc = "filetree: copy absolute parent directory",
+      default = "]a",
+    },
+    {
+      field = "keymap_project_root",
+      method = "copy_project_root",
+      desc = "filetree: copy absolute project root",
+      default = "[R",
+    },
+    {
+      field = "keymap_project_rel",
+      method = "copy_project_relative",
+      desc = "filetree: copy path relative to project root",
+      default = "]R",
+    },
   },
   trash = {
-    { field = "keymap",         method = "delete_current", desc = "filetree: trash current node",  default = "d" },
-    { field = "keymap_undo",    method = "undo_last",       desc = "filetree: undo last trash",     default = "U" },
-    { field = "keymap_history", method = "show_history",    desc = "filetree: show trash history",  default = "<leader>th" },
+    {
+      field = "keymap",
+      method = "delete_current",
+      desc = "filetree: trash current node",
+      default = "d",
+    },
+    {
+      field = "keymap_undo",
+      method = "undo_last",
+      desc = "filetree: undo last trash",
+      default = "U",
+    },
+    {
+      field = "keymap_history",
+      method = "show_history",
+      desc = "filetree: show trash history",
+      default = "<leader>th",
+    },
   },
   node_info = {
     { field = "keymap", method = "show_current", desc = "filetree: node info", default = "I" },
   },
   preview = {
-    { field = "keymap", method = "toggle_or_open", desc = "filetree: toggle preview", default = "<Tab>" },
+    {
+      field = "keymap",
+      method = "toggle_or_open",
+      desc = "filetree: toggle preview",
+      default = "<Tab>",
+    },
   },
   filter = {
     { field = "keymap", method = "enter", desc = "filetree: filter tree", default = "/" },
@@ -83,48 +158,163 @@ local SPEC = {
     { field = "keymap", method = "cycle", desc = "filetree: cycle window size", default = "w" },
   },
   buffer_cycle = {
-    { field = "keymap_next", method = "next", desc = "filetree: next buffer in adjacent window",     default = "<C-n>" },
-    { field = "keymap_prev", method = "prev", desc = "filetree: previous buffer in adjacent window", default = "<C-p>" },
+    {
+      field = "keymap_next",
+      method = "next",
+      desc = "filetree: next buffer in adjacent window",
+      default = "<C-n>",
+    },
+    {
+      field = "keymap_prev",
+      method = "prev",
+      desc = "filetree: previous buffer in adjacent window",
+      default = "<C-p>",
+    },
   },
   copy_file_list = {
-    { field = "keymap_files_abs", method = "copy_files_abs", desc = "filetree: copy file list (abs)", default = "[f" },
-    { field = "keymap_files_rel", method = "copy_files_rel", desc = "filetree: copy file list (rel)", default = "]f" },
-    { field = "keymap_dirs_abs",  method = "copy_dirs_abs",  desc = "filetree: copy dir list (abs)",  default = "[F" },
-    { field = "keymap_dirs_rel",  method = "copy_dirs_rel",  desc = "filetree: copy dir list (rel)",  default = "]F" },
+    {
+      field = "keymap_files_abs",
+      method = "copy_files_abs",
+      desc = "filetree: copy file list (abs)",
+      default = "[f",
+    },
+    {
+      field = "keymap_files_rel",
+      method = "copy_files_rel",
+      desc = "filetree: copy file list (rel)",
+      default = "]f",
+    },
+    {
+      field = "keymap_dirs_abs",
+      method = "copy_dirs_abs",
+      desc = "filetree: copy dir list (abs)",
+      default = "[F",
+    },
+    {
+      field = "keymap_dirs_rel",
+      method = "copy_dirs_rel",
+      desc = "filetree: copy dir list (rel)",
+      default = "]F",
+    },
   },
   markdown_links = {
-    { field = "keymap",             method = "link_current",    desc = "filetree: markdown link for current node", default = "ML" },
-    { field = "keymap_recursive",   method = "link_recursive",  desc = "filetree: markdown links recursively",     default = "MR" },
-    { field = "keymap_from_marked", method = "link_from_marked", desc = "filetree: markdown links from marked",    default = "MM" },
+    {
+      field = "keymap",
+      method = "link_current",
+      desc = "filetree: markdown link for current node",
+      default = "ML",
+    },
+    {
+      field = "keymap_recursive",
+      method = "link_recursive",
+      desc = "filetree: markdown links recursively",
+      default = "MR",
+    },
+    {
+      field = "keymap_from_marked",
+      method = "link_from_marked",
+      desc = "filetree: markdown links from marked",
+      default = "MM",
+    },
   },
   buffer_save = {
-    { field = "keymap_adjacent", method = "save_adjacent", desc = "filetree: save adjacent buffer", default = "<C-s>" },
-    { field = "keymap_node",     method = "save_node",     desc = "filetree: save node buffer",     default = "<M-s>" },
+    {
+      field = "keymap_adjacent",
+      method = "save_adjacent",
+      desc = "filetree: save adjacent buffer",
+      default = "<C-s>",
+    },
+    {
+      field = "keymap_node",
+      method = "save_node",
+      desc = "filetree: save node buffer",
+      default = "<M-s>",
+    },
   },
   open_replace = {
-    { field = "keymap", method = "open_replace", desc = "filetree: open (replace buffer)", default = "O" },
+    {
+      field = "keymap",
+      method = "open_replace",
+      desc = "filetree: open (replace buffer)",
+      default = "O",
+    },
   },
   open_variants = {
-    { field = "keymap_vsplit",   method = "open_vsplit", desc = "filetree: open in vertical split",   default = "sg" },
-    { field = "keymap_split",    method = "open_split",  desc = "filetree: open in horizontal split", default = "sv" },
-    { field = "keymap_tabnew",   method = "open_tabnew", desc = "filetree: open in new tab",          default = "st" },
-    { field = "keymap_badd",     method = "open_badd",   desc = "filetree: add to buffer list (no focus switch)", default = "gb" },
-    { field = "keymap_badd_alt", method = "open_badd",   desc = "filetree: add to buffer list (no focus switch)", default = "<S-CR>" },
+    {
+      field = "keymap_vsplit",
+      method = "open_vsplit",
+      desc = "filetree: open in vertical split",
+      default = "sg",
+    },
+    {
+      field = "keymap_split",
+      method = "open_split",
+      desc = "filetree: open in horizontal split",
+      default = "sv",
+    },
+    {
+      field = "keymap_tabnew",
+      method = "open_tabnew",
+      desc = "filetree: open in new tab",
+      default = "st",
+    },
+    {
+      field = "keymap_badd",
+      method = "open_badd",
+      desc = "filetree: add to buffer list (no focus switch)",
+      default = "gb",
+    },
+    {
+      field = "keymap_badd_alt",
+      method = "open_badd",
+      desc = "filetree: add to buffer list (no focus switch)",
+      default = "<S-CR>",
+    },
   },
   open_in_fm = {
-    { field = "keymap", method = "open", desc = "filetree: open in file manager", default = "<leader>fm" },
+    {
+      field = "keymap",
+      method = "open",
+      desc = "filetree: open in file manager",
+      default = "<leader>fm",
+    },
   },
   shell_run = {
     { field = "keymap", method = "run", desc = "filetree: run shell command", default = "i" },
   },
   lua_require_copy = {
-    { field = "keymap", method = "copy_require", desc = "filetree: copy as require()", default = "rq" },
+    {
+      field = "keymap",
+      method = "copy_require",
+      desc = "filetree: copy as require()",
+      default = "rq",
+    },
   },
   pdf_open = {
-    { field = "keymap_open",     method = "open_default",  desc = "filetree: open PDF (pdfport)",      default = "gp" },
-    { field = "keymap_text",     method = "open_text",     desc = "filetree: open PDF as text",        default = nil  },
-    { field = "keymap_system",   method = "open_system",   desc = "filetree: open PDF in system viewer", default = nil  },
-    { field = "keymap_terminal", method = "open_terminal", desc = "filetree: open PDF in terminal",    default = nil  },
+    {
+      field = "keymap_open",
+      method = "open_default",
+      desc = "filetree: open PDF (pdfport)",
+      default = "gp",
+    },
+    {
+      field = "keymap_text",
+      method = "open_text",
+      desc = "filetree: open PDF as text",
+      default = nil,
+    },
+    {
+      field = "keymap_system",
+      method = "open_system",
+      desc = "filetree: open PDF in system viewer",
+      default = nil,
+    },
+    {
+      field = "keymap_terminal",
+      method = "open_terminal",
+      desc = "filetree: open PDF in terminal",
+      default = nil,
+    },
   },
 }
 
@@ -137,7 +327,7 @@ local SPEC = {
 ---@return string?
 local function resolve_key(feat_cfg, entry)
   local v = feat_cfg[entry.field]
-  if v == false then return nil end        -- explicitly disabled
+  if v == false then return nil end -- explicitly disabled
   if type(v) == "string" and v ~= "" then return v end
   if v == nil then return entry.default end
   return nil
@@ -154,9 +344,7 @@ local function make_handler(feature, method)
     local ok, mod = require("filetree.features").load(feature)
     if not ok then return end
     local fn = mod[method]
-    if type(fn) == "function" then
-      pcall(fn)
-    end
+    if type(fn) == "function" then pcall(fn) end
   end
 end
 
@@ -254,9 +442,7 @@ function M.inject(config, adapter)
   if type(ncfg.window) == "table" then windows[#windows + 1] = ncfg.window end
   for _, src in ipairs({ "filesystem", "buffers", "git_status", "document_symbols" }) do
     local s = ncfg[src]
-    if type(s) == "table" and type(s.window) == "table" then
-      windows[#windows + 1] = s.window
-    end
+    if type(s) == "table" and type(s.window) == "table" then windows[#windows + 1] = s.window end
   end
   merge_into_windows(windows, mappings)
 
@@ -268,7 +454,9 @@ function M.inject(config, adapter)
     for _, state in ipairs(mgr._get_all_states()) do
       if type(state.window) == "table" then
         state.window.mappings = state.window.mappings or {}
-        for k, v in pairs(mappings) do state.window.mappings[k] = v end
+        for k, v in pairs(mappings) do
+          state.window.mappings[k] = v
+        end
         state.resolved_mappings = nil
         patched_live = true
       end
@@ -277,7 +465,9 @@ function M.inject(config, adapter)
 
   -- 3. Refresh so the open tree re-renders and rebinds/re-resolves mappings.
   if patched_live and adapter and type(adapter.refresh) == "function" then
-    vim.defer_fn(function() pcall(adapter.refresh) end, 50)
+    vim.defer_fn(function()
+      pcall(adapter.refresh)
+    end, 50)
   end
 
   return true
@@ -298,9 +488,7 @@ local _popup_augroup = nil
 ---@param keys string[]?  Keys to hand back to native behaviour (default { "/" }).
 function M.native_search_in_help(keys)
   keys = keys or { "/" }
-  if _popup_augroup then
-    au.del_group(_popup_augroup)
-  end
+  if _popup_augroup then au.del_group(_popup_augroup) end
   _popup_augroup = au.group("filetree_neotree_popup_search", true)
   au.create("FileType", function(ev)
     local buf = ev.buf

@@ -18,27 +18,21 @@ local M = {}
 ---@return function|nil
 local function try_lib(name)
   local ok, fn = pcall(require, "lib.nvim.cross.platform." .. name)
-  if ok and type(fn) == "function" then
-    return fn
-  end
+  if ok and type(fn) == "function" then return fn end
   return nil
 end
 
 ---@return boolean
 function M.is_windows()
   local lib_fn = try_lib("is_windows")
-  if lib_fn then
-    return lib_fn()
-  end
+  if lib_fn then return lib_fn() end
   return vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
 end
 
 ---@return boolean
 function M.is_wsl()
   local lib_fn = try_lib("is_wsl")
-  if lib_fn then
-    return lib_fn()
-  end
+  if lib_fn then return lib_fn() end
   local uv = vim.uv or vim.loop
   local version = (uv and uv.os_uname and uv.os_uname().version) or ""
   if version:match("[Mm]icrosoft") then return true end
@@ -48,18 +42,14 @@ end
 ---@return boolean
 function M.is_mac()
   local lib_fn = try_lib("is_macos")
-  if lib_fn then
-    return lib_fn()
-  end
+  if lib_fn then return lib_fn() end
   return vim.fn.has("macunix") == 1
 end
 
 ---@return boolean
 function M.is_linux()
   local lib_fn = try_lib("is_linux")
-  if lib_fn then
-    return lib_fn()
-  end
+  if lib_fn then return lib_fn() end
   return vim.fn.has("unix") == 1 and not M.is_mac() and not M.is_wsl()
 end
 
@@ -69,14 +59,12 @@ function M.current()
   if lib_is then
     local platform = lib_is() ---@type string
     if platform == "macos" then return "mac" end
-    if platform == "windows" or platform == "wsl" or platform == "linux" then
-      return platform
-    end
+    if platform == "windows" or platform == "wsl" or platform == "linux" then return platform end
   end
 
   if M.is_windows() then return "windows" end
-  if M.is_wsl()     then return "wsl"     end
-  if M.is_mac()     then return "mac"     end
+  if M.is_wsl() then return "wsl" end
+  if M.is_mac() then return "mac" end
   return "linux"
 end
 

@@ -1,0 +1,8 @@
+# Shipped file templates, not source. The *.lua ones use placeholder syntax
+# ("${name}", "$1") and do not parse as Lua -- stylua aborts the whole run on
+# the first of them, which is why `stylua .` could not be used here at all.
+# .luacheckrc excludes the same directory, for the same reason.
+lua/filetree/assets/templates/
+
+# Sample projects for the smart_rename_refs harness, not part of the plugin.
+TESTS/smart_rename_refs/fixtures/

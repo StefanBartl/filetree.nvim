@@ -19,7 +19,7 @@
 ---   keymap_node      string?   Save buffer for node under cursor (default "<M-s>").
 ---   force            boolean   Use write! instead of update (default true).
 
-local notify  = require("filetree.util.notify").create("[filetree.buffer_save]")
+local notify = require("filetree.util.notify").create("[filetree.buffer_save]")
 local bufutil = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
@@ -92,10 +92,10 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  local keymap_adj  = config.keymap_adjacent or "<C-s>"
-  local keymap_node = config.keymap_node     or "<M-s>"
+  local keymap_adj = config.keymap_adjacent or "<C-s>"
+  local keymap_node = config.keymap_node or "<M-s>"
   _adapter = adapter
-  _force   = config.force ~= false  -- default true
+  _force = config.force ~= false -- default true
 
   tree_attach.on_attach(function(buf)
     -- <C-s>: save the last adjacent editor buffer
@@ -103,7 +103,7 @@ function M.setup(config, adapter)
       map("n", keymap_adj, M.save_adjacent, {
         buffer = buf,
         silent = true,
-        desc   = "Filetree: force-save adjacent editor buffer",
+        desc = "Filetree: force-save adjacent editor buffer",
       })
     end
 
@@ -112,13 +112,12 @@ function M.setup(config, adapter)
       map("n", keymap_node, M.save_node, {
         buffer = buf,
         silent = true,
-        desc   = "Filetree: force-save buffer matching node under cursor",
+        desc = "Filetree: force-save buffer matching node under cursor",
       })
     end
   end)
 end
 
-function M.teardown()
-end
+function M.teardown() end
 
 return M

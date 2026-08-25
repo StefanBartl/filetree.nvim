@@ -2,15 +2,18 @@
 ---@brief Buffer validation and window-context utilities.
 
 local path = require("filetree.util.path")
-local au   = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 
 local M = {}
 
 ---Filetypes treated as tree/explorer windows — never valid editor targets.
 ---@type table<string, true>
 M.TREE_FT = {
-  ["neo-tree"] = true, ["NvimTree"] = true,
-  ["netrw"]    = true, ["oil"]      = true, ["minifiles"] = true,
+  ["neo-tree"] = true,
+  ["NvimTree"] = true,
+  ["netrw"] = true,
+  ["oil"] = true,
+  ["minifiles"] = true,
 }
 
 -- Buffer-validity cache. Deliberately a TTL + explicit-invalidation cache, NOT
@@ -31,20 +34,24 @@ function M.is_valid_file_buffer(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 
   local cached = _cache[bufnr]
-  local now    = (vim.uv or vim.loop).now()
-  if cached and (now - cached.timestamp < CACHE_TTL) then
-    return cached.valid
-  end
+  local now = (vim.uv or vim.loop).now()
+  if cached and (now - cached.timestamp < CACHE_TTL) then return cached.valid end
 
   local valid = true
-  if not vim.api.nvim_buf_is_valid(bufnr)  then valid = false
-  elseif not vim.api.nvim_buf_is_loaded(bufnr) then valid = false
-  elseif vim.bo[bufnr].buftype ~= ""           then valid = false
-  elseif not vim.bo[bufnr].buflisted           then valid = false
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    valid = false
+  elseif not vim.api.nvim_buf_is_loaded(bufnr) then
+    valid = false
+  elseif vim.bo[bufnr].buftype ~= "" then
+    valid = false
+  elseif not vim.bo[bufnr].buflisted then
+    valid = false
   else
     local name = vim.api.nvim_buf_get_name(bufnr)
-    if not name or name == ""                 then valid = false
-    elseif vim.fn.filereadable(name) ~= 1     then valid = false
+    if not name or name == "" then
+      valid = false
+    elseif vim.fn.filereadable(name) ~= 1 then
+      valid = false
     end
   end
 
@@ -95,7 +102,8 @@ end
 ---@return integer?
 function M.find_named_buffer(exclude)
   local function usable(b)
-    return b and b > 0
+    return b
+      and b > 0
       and not exclude[b]
       and vim.api.nvim_buf_is_valid(b)
       and vim.api.nvim_buf_is_loaded(b)
@@ -121,9 +129,7 @@ function M.find_last_normal_buffer(exclude_win)
     local win = wins[i]
     if win ~= exclude_win and vim.api.nvim_win_is_valid(win) then
       local buf = vim.api.nvim_win_get_buf(win)
-      if M.is_valid_file_buffer(buf) then
-        return buf, win
-      end
+      if M.is_valid_file_buffer(buf) then return buf, win end
     end
   end
   return nil, nil
@@ -155,7 +161,9 @@ function M.find_editor_win(exclude_win)
 end
 
 -- Auto-invalidate cache when buffers are deleted
-au.create("BufDelete", function(args) M.invalidate(args.buf) end, {
+au.create("BufDelete", function(args)
+  M.invalidate(args.buf)
+end, {
   group = au.group("FiletreeBufferCache", true),
 })
 
@@ -195,7 +203,7 @@ au.create("BufDelete", function(args) M.invalidate(args.buf) end, {
 function M.relocate(old_path, new_path)
   local old_key = path.slashify(old_path)
   local new_key = path.slashify(new_path)
-  local prefix  = old_key .. "/"
+  local prefix = old_key .. "/"
 
   local count = 0
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
@@ -222,8 +230,11 @@ function M.relocate(old_path, new_path)
             end
           else
             local notify = require("filetree.util.notify").create("[filetree.buffer]")
-            notify.warn("could not relocate buffer to " .. target
-              .. " (a different open buffer already uses that name)")
+            notify.warn(
+              "could not relocate buffer to "
+                .. target
+                .. " (a different open buffer already uses that name)"
+            )
           end
         end
       end
@@ -261,7 +272,7 @@ end
 ---@return integer  count of buffers closed
 function M.close_for_path(target_path)
   local slashify = require("filetree.util.path").slashify
-  local key    = slashify(target_path)
+  local key = slashify(target_path)
   local prefix = key .. "/"
 
   -- Collect the buffers to close.
@@ -289,7 +300,8 @@ function M.close_for_path(target_path)
   ---@return integer?
   local function replacement()
     local function usable(b)
-      return b and b > 0
+      return b
+        and b > 0
         and not doomed_set[b]
         and vim.api.nvim_buf_is_valid(b)
         and vim.api.nvim_buf_is_loaded(b)
@@ -322,9 +334,7 @@ function M.close_for_path(target_path)
         if repl then pcall(vim.api.nvim_win_set_buf, win, repl) end
       end
     end
-    if pcall(vim.api.nvim_buf_delete, bufnr, { force = true }) then
-      count = count + 1
-    end
+    if pcall(vim.api.nvim_buf_delete, bufnr, { force = true }) then count = count + 1 end
   end
   return count
 end

@@ -65,9 +65,7 @@ function M.is_open()
   local state = get_state()
   if state == nil then return false, nil end
   local win = last_win_id(state)
-  if win and vim.api.nvim_win_is_valid(win) then
-    return true, vim.api.nvim_win_get_buf(win)
-  end
+  if win and vim.api.nvim_win_is_valid(win) then return true, vim.api.nvim_win_get_buf(win) end
   -- Fallback: current buf if mini.files is active
   return true, nil
 end
@@ -106,15 +104,15 @@ function M.get_current_node()
 
   local ntype = (entry.fs_type == "directory") and "directory" or "file"
 
-  local win  = M.get_winid()
+  local win = M.get_winid()
   local line_nr = win and vim.api.nvim_win_get_cursor(win)[1] or 0
 
   return {
-    id          = entry.path,
-    name        = entry.name,
-    path        = entry.path,
-    type        = ntype,
-    depth       = 1,
+    id = entry.path,
+    name = entry.name,
+    path = entry.path,
+    type = ntype,
+    depth = 1,
     line_number = line_nr,
     is_expanded = ntype == "directory" and false or nil,
   }
@@ -129,9 +127,9 @@ function M.get_visible_nodes(filter)
   local win = M.get_winid()
   if not win then return {} end
 
-  local buf    = vim.api.nvim_win_get_buf(win)
-  local count  = vim.api.nvim_buf_line_count(buf)
-  local nodes  = {}
+  local buf = vim.api.nvim_win_get_buf(win)
+  local count = vim.api.nvim_buf_line_count(buf)
+  local nodes = {}
 
   for line = 1, count do
     -- MiniFiles.get_fs_entry(buf_id, line) takes positional args, not a table
@@ -142,16 +140,17 @@ function M.get_visible_nodes(filter)
     local ok, entry = pcall(mf.get_fs_entry, buf, line)
     if ok and entry then
       local ntype = (entry.fs_type == "directory") and "directory" or "file"
-      local include = filter == nil or filter == "all"
-        or (filter == "files"   and ntype == "file")
+      local include = filter == nil
+        or filter == "all"
+        or (filter == "files" and ntype == "file")
         or (filter == "folders" and ntype == "directory")
       if include then
         nodes[#nodes + 1] = {
-          id          = entry.path,
-          name        = entry.name,
-          path        = entry.path,
-          type        = ntype,
-          depth       = 1,
+          id = entry.path,
+          name = entry.name,
+          path = entry.path,
+          type = ntype,
+          depth = 1,
           line_number = line,
           is_expanded = nil,
         }
@@ -193,11 +192,15 @@ end
 
 ---@param _node FiletreeNode
 ---@return boolean
-function M.expand_node(_node) return false end
+function M.expand_node(_node)
+  return false
+end
 
 ---@param _node FiletreeNode
 ---@return boolean
-function M.collapse_node(_node) return false end
+function M.collapse_node(_node)
+  return false
+end
 
 ---@param path string
 ---@param mode? FiletreeOpenMode
@@ -219,7 +222,7 @@ function M.open_reveal(path, _parent_levels)
   local mf = get_mf()
   if not mf then return false end
   local dir = vim.fn.fnamemodify(path, ":h")
-  local ok  = pcall(mf.open, dir)
+  local ok = pcall(mf.open, dir)
   return ok
 end
 
@@ -253,8 +256,8 @@ function M.refresh()
   local mf = get_mf()
   if not mf then return false end
   local root = M.get_root_path()
-  local ok1  = pcall(mf.close)
-  local ok2  = pcall(mf.open, root)
+  local ok1 = pcall(mf.close)
+  local ok2 = pcall(mf.open, root)
   return ok1 and ok2
 end
 
@@ -281,7 +284,7 @@ function M.highlight_node(path, hl_group)
   if not buf then return false end
   local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns(), line - 1, 0, {
     line_hl_group = hl_group,
-    priority      = 150,
+    priority = 150,
   })
   if ok then _hl_marks[path] = id end
   return ok

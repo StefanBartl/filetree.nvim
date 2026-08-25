@@ -2,7 +2,7 @@
 ---@brief File backup engine — copies files to a backup directory before destructive operations.
 
 local notify = require("filetree.util.notify").create("[filetree.safety.backup]")
-local path   = require("filetree.util.path")
+local path = require("filetree.util.path")
 
 local M = {}
 
@@ -16,12 +16,9 @@ local _dir = ""
 ---@param config FiletreeSafetyConfig
 function M.init(config)
   _cfg = config
-  _dir = config.backup_dir
-    and path.to_absolute(config.backup_dir)
+  _dir = config.backup_dir and path.to_absolute(config.backup_dir)
     or (vim.fn.stdpath("data") .. "/filetree/backups")
-  if vim.fn.isdirectory(_dir) == 0 then
-    vim.fn.mkdir(_dir, "p")
-  end
+  if vim.fn.isdirectory(_dir) == 0 then vim.fn.mkdir(_dir, "p") end
 end
 
 ---Return a unique backup destination path for `src`.
@@ -29,8 +26,8 @@ end
 ---@param src string  Absolute source path.
 ---@return string
 local function backup_path(src)
-  local ts    = os.date("%Y%m%d_%H%M%S")
-  local base  = path.basename(src)
+  local ts = os.date("%Y%m%d_%H%M%S")
+  local base = path.basename(src)
   return _dir .. "/" .. ts .. "_" .. base
 end
 

@@ -19,10 +19,10 @@ local M = {}
 ---@return fun(name: string): boolean
 function M.predicate()
   local ok, ig = require("filetree.features").load("ignore_list")
-  if ok and ig and type(ig.predicate) == "function" then
-    return ig.predicate()
+  if ok and ig and type(ig.predicate) == "function" then return ig.predicate() end
+  return function()
+    return false
   end
-  return function() return false end
 end
 
 return M

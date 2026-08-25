@@ -61,7 +61,9 @@ local function add_group(out, group)
   end
   if #compact == 0 then return false end
   if #out > 0 then out[#out + 1] = { name = "separator" } end
-  for _, e in ipairs(compact) do out[#out + 1] = e end
+  for _, e in ipairs(compact) do
+    out[#out + 1] = e
+  end
   return true
 end
 
@@ -75,7 +77,9 @@ function M.items()
   if mcfg.enable == false then return {} end
 
   local out = {}
-  local on = function(group) return mcfg[group] ~= false end
+  local on = function(group)
+    return mcfg[group] ~= false
+  end
 
   if on("fileops") then
     add_group(out, {

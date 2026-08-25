@@ -16,8 +16,8 @@ local M = {}
 ---@type FiletreeDiffConfig
 local _cfg = {
   enabled = false,
-  split   = "vsplit",
-  keymap  = "D",
+  split = "vsplit",
+  keymap = "D",
 }
 
 ---@type FiletreeAdapter?
@@ -141,7 +141,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _cfg.keymap then
@@ -149,15 +149,15 @@ function M.setup(config, adapter)
       map("n", _cfg.keymap, M.stage_or_diff_current, {
         buffer = buf,
         silent = true,
-        desc   = "Filetree: stage/diff current file",
+        desc = "Filetree: stage/diff current file",
       })
     end)
   end
 end
 
 function M.teardown()
-  _staged   = nil
-  _adapter  = nil
+  _staged = nil
+  _adapter = nil
 end
 
 return M

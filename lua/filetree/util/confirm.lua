@@ -28,11 +28,13 @@ local kit = require("lib.nvim.ui.kit")
 return function(opts)
   opts = opts or {}
   local on_choice = opts.on_choice or function() end
-  local body      = opts.body or {}
-  local question  = opts.question or "Confirm?"
+  local body = opts.body or {}
+  local question = opts.question or "Confirm?"
 
   local lines = {}
-  for _, l in ipairs(body) do lines[#lines + 1] = l end
+  for _, l in ipairs(body) do
+    lines[#lines + 1] = l
+  end
   lines[#lines + 1] = question
 
   kit.confirm({

@@ -13,16 +13,16 @@
 ---   - CursorHold inside tree buffer (re-renders cached values)
 ---   - :FiletreeSizeRefresh
 
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local M = {}
 
 ---@type FiletreeSizeInfoConfig
 local _cfg = {
-  enabled       = false,
-  show_files    = true,
-  show_dirs     = true,
-  hl_group      = "Comment",
-  dir_async     = true,  -- use du for dirs (async; may be slow on large trees)
+  enabled = false,
+  show_files = true,
+  show_dirs = true,
+  hl_group = "Comment",
+  dir_async = true, -- use du for dirs (async; may be slow on large trees)
 }
 
 ---@type FiletreeAdapter?
@@ -54,7 +54,9 @@ local function query_dir_size(path, callback)
   local cmd
   if vim.fn.has("win32") == 1 then
     cmd = {
-      "powershell", "-NoProfile", "-Command",
+      "powershell",
+      "-NoProfile",
+      "-Command",
       string.format(
         "(Get-ChildItem -Recurse -Force '%s' -ErrorAction SilentlyContinue | Measure-Object -Sum Length).Sum",
         path:gsub("'", "''")
@@ -64,29 +66,33 @@ local function query_dir_size(path, callback)
     cmd = { "du", "-sb", path }
   end
 
-  vim.system(cmd, { text = true }, vim.schedule_wrap(function(result)
-    _pending[path] = nil
-    if result.code ~= 0 then return end
-    local out = result.stdout or ""
-    local bytes
-    if vim.fn.has("win32") == 1 then
-      bytes = tonumber(vim.trim(out))
-    else
-      bytes = tonumber(out:match("^(%d+)"))
-    end
-    if bytes then
-      _cache[path] = fmt_bytes(bytes)
-      M._render()
-    end
-    callback(bytes)
-  end))
+  vim.system(
+    cmd,
+    { text = true },
+    vim.schedule_wrap(function(result)
+      _pending[path] = nil
+      if result.code ~= 0 then return end
+      local out = result.stdout or ""
+      local bytes
+      if vim.fn.has("win32") == 1 then
+        bytes = tonumber(vim.trim(out))
+      else
+        bytes = tonumber(out:match("^(%d+)"))
+      end
+      if bytes then
+        _cache[path] = fmt_bytes(bytes)
+        M._render()
+      end
+      callback(bytes)
+    end)
+  )
 end
 
 -- ── File size (sync via uv.fs_stat) ──────────────────────────────────────────
 
 local function get_file_size(path)
   if _cache[path] then return _cache[path] end
-  local uv  = vim.uv or vim.loop
+  local uv = vim.uv or vim.loop
   local stat = uv.fs_stat(path)
   if stat then
     local s = fmt_bytes(stat.size)
@@ -114,7 +120,6 @@ function M._render()
 
       if node.type == "file" and _cfg.show_files then
         size_str = get_file_size(node.path)
-
       elseif node.type == "directory" and _cfg.show_dirs then
         size_str = _cache[node.path]
         if not size_str and _cfg.dir_async then
@@ -126,9 +131,9 @@ function M._render()
 
       if size_str then
         pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-          virt_text     = { { " " .. size_str, _cfg.hl_group } },
+          virt_text = { { " " .. size_str, _cfg.hl_group } },
           virt_text_pos = "eol",
-          priority      = 40,
+          priority = 40,
         })
       end
     end
@@ -137,7 +142,7 @@ end
 
 ---Clear the size cache and re-render.
 function M.refresh()
-  _cache   = {}
+  _cache = {}
   _pending = {}
   M._render()
 end
@@ -151,15 +156,15 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
-  _ns      = vim.api.nvim_create_namespace("filetree_size_info")
+  _ns = vim.api.nvim_create_namespace("filetree_size_info")
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_size_info", true)
 
   au.acmd({ "BufEnter" }, {
-    group   = _augroup,
+    group = _augroup,
     pattern = "*",
     callback = function(ev)
       local ft = vim.bo[ev.buf].filetype
@@ -168,7 +173,7 @@ function M.setup(config, adapter)
   })
 
   au.acmd("CursorHold", {
-    group   = _augroup,
+    group = _augroup,
     pattern = "*",
     callback = function()
       local ft = vim.bo.filetype
@@ -186,13 +191,12 @@ function M.teardown()
       vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)
     end
   end
-  _cache   = {}
+  _cache = {}
   _adapter = nil
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil
   end
-
 end
 
 return M

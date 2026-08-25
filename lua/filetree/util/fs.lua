@@ -32,9 +32,7 @@ function M.collect_recursive(root_path, collect_type, ignore_fn)
   if vim.fn.isdirectory(root_path) ~= 1 then
     if collect_type == "files" and vim.fn.filereadable(root_path) == 1 then
       local name = root_path:match("([^/\\]+)$") or root_path
-      if not (ignore_fn and ignore_fn(name)) then
-        return { root_path }
-      end
+      if not (ignore_fn and ignore_fn(name)) then return { root_path } end
     end
     return {}
   end

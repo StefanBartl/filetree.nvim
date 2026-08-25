@@ -14,7 +14,6 @@
 ---   :FiletreeFilter [query]
 ---   :FiletreeFilterClear
 
-
 local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local kit = require("lib.nvim.ui.kit")
@@ -22,12 +21,12 @@ local M = {}
 
 ---@type FiletreeFilterConfig
 local _cfg = {
-  enabled          = false,
-  keymap           = "/",
-  keymap_clear     = "<C-c>",
-  case_sensitive   = false,
-  dim_hl_group     = "Comment",
-  debounce_ms      = 80,
+  enabled = false,
+  keymap = "/",
+  keymap_clear = "<C-c>",
+  case_sensitive = false,
+  dim_hl_group = "Comment",
+  debounce_ms = 80,
 }
 
 ---@type FiletreeAdapter?
@@ -93,9 +92,7 @@ local function dim_non_matching(query)
   vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)
   if not query or query == "" then return end
 
-  local pattern = _cfg.case_sensitive
-    and query
-    or query:lower()
+  local pattern = _cfg.case_sensitive and query or query:lower()
 
   if not _adapter.get_node_at_line then return end
   local line_count = vim.api.nvim_buf_line_count(bufnr)
@@ -106,10 +103,10 @@ local function dim_non_matching(query)
     if not test:find(pattern, 1, true) then
       -- Dim entire line
       pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, 0, {
-        end_col    = #(vim.api.nvim_buf_get_lines(bufnr, linenr, linenr + 1, false)[1] or ""),
-        hl_group   = _cfg.dim_hl_group,
-        hl_eol     = true,
-        priority   = 10,
+        end_col = #(vim.api.nvim_buf_get_lines(bufnr, linenr, linenr + 1, false)[1] or ""),
+        hl_group = _cfg.dim_hl_group,
+        hl_eol = true,
+        priority = 10,
       })
     end
   end
@@ -120,9 +117,7 @@ end
 ---@param query string?
 local function apply(query)
   _query = query or ""
-  if not try_native_filter(query) then
-    dim_non_matching(query)
-  end
+  if not try_native_filter(query) then dim_non_matching(query) end
 end
 
 -- ── Floating input ────────────────────────────────────────────────────────────
@@ -142,8 +137,8 @@ function M.enter()
   local row, col, width
   if tree_win > 0 and vim.api.nvim_win_is_valid(tree_win) then
     local pos = vim.api.nvim_win_get_position(tree_win)
-    row   = pos[1] + vim.api.nvim_win_get_height(tree_win) - 1
-    col   = pos[2]
+    row = pos[1] + vim.api.nvim_win_get_height(tree_win) - 1
+    col = pos[2]
     width = vim.api.nvim_win_get_width(tree_win)
   else
     row, col, width = vim.o.lines - 3, 0, 30
@@ -156,12 +151,12 @@ function M.enter()
   end
 
   _surf = kit.live_input({
-    title    = "Filter",
+    title = "Filter",
     relative = "editor",
-    row      = row,
-    col      = col,
-    width    = math.max(width, 20),
-    default  = _query,
+    row = row,
+    col = col,
+    width = math.max(width, 20),
+    default = _query,
     debounce = _cfg.debounce_ms,
     on_change = apply,
     on_submit = function(query)
@@ -173,9 +168,9 @@ function M.enter()
       return_to_tree()
     end,
   })
-  if _surf then
-    _surf:on_close(function() _surf = nil end)
-  end
+  if _surf then _surf:on_close(function()
+    _surf = nil
+  end) end
 end
 
 ---Clear the current filter.
@@ -196,9 +191,9 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
-  _ns      = vim.api.nvim_create_namespace("filetree_filter")
+  _ns = vim.api.nvim_create_namespace("filetree_filter")
 
   if _cfg.keymap or _cfg.keymap_clear then
     tree_attach.on_attach(function(buf)
@@ -206,14 +201,14 @@ function M.setup(config, adapter)
         map("n", _cfg.keymap, M.enter, {
           buffer = buf,
           silent = true,
-          desc   = "Filetree: enter filter mode",
+          desc = "Filetree: enter filter mode",
         })
       end
       if _cfg.keymap_clear then
         map("n", _cfg.keymap_clear, M.clear, {
           buffer = buf,
           silent = true,
-          desc   = "Filetree: clear filter",
+          desc = "Filetree: clear filter",
         })
       end
     end)

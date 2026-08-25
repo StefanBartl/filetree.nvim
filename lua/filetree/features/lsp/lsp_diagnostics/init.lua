@@ -10,24 +10,23 @@
 ---
 --- Updates on DiagnosticChanged and when the tree buffer is entered.
 
-
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeLspDiagnosticsConfig
 local _cfg = {
-  enabled       = false,
-  show_errors   = true,
+  enabled = false,
+  show_errors = true,
   show_warnings = true,
-  show_hints    = false,
-  show_info     = false,
-  format        = function(counts)
+  show_hints = false,
+  show_info = false,
+  format = function(counts)
     local parts = {}
-    if counts.error   > 0 then parts[#parts + 1] = "E:" .. counts.error   end
+    if counts.error > 0 then parts[#parts + 1] = "E:" .. counts.error end
     if counts.warning > 0 then parts[#parts + 1] = "W:" .. counts.warning end
-    if counts.hint    > 0 then parts[#parts + 1] = "H:" .. counts.hint    end
-    if counts.info    > 0 then parts[#parts + 1] = "I:" .. counts.info    end
+    if counts.hint > 0 then parts[#parts + 1] = "H:" .. counts.hint end
+    if counts.info > 0 then parts[#parts + 1] = "I:" .. counts.info end
     return #parts > 0 and table.concat(parts, " ") or nil
   end,
   debounce_ms = 300,
@@ -50,9 +49,13 @@ local _ns = -1
 ---@type table<string, DiagCounts>  abs_path → counts
 local _counts = {}
 
-local sev = vim.diagnostic and vim.diagnostic.severity or {
-  ERROR = 1, WARN = 2, INFO = 3, HINT = 4,
-}
+local sev = vim.diagnostic and vim.diagnostic.severity
+  or {
+    ERROR = 1,
+    WARN = 2,
+    INFO = 3,
+    HINT = 4,
+  }
 
 ---@internal
 local function recompute()
@@ -64,10 +67,14 @@ local function recompute()
       local path = vim.api.nvim_buf_get_name(bufnr)
       if path and path ~= "" then
         local c = new_counts[path] or { error = 0, warning = 0, hint = 0, info = 0 }
-        if d.severity == sev.ERROR   then c.error   = c.error   + 1
-        elseif d.severity == sev.WARN  then c.warning = c.warning + 1
-        elseif d.severity == sev.HINT  then c.hint    = c.hint    + 1
-        elseif d.severity == sev.INFO  then c.info    = c.info    + 1
+        if d.severity == sev.ERROR then
+          c.error = c.error + 1
+        elseif d.severity == sev.WARN then
+          c.warning = c.warning + 1
+        elseif d.severity == sev.HINT then
+          c.hint = c.hint + 1
+        elseif d.severity == sev.INFO then
+          c.info = c.info + 1
         end
         new_counts[path] = c
       end
@@ -82,9 +89,9 @@ end
 ---@param counts DiagCounts
 ---@return string
 local function sev_hl(counts)
-  if counts.error   > 0 then return "DiagnosticError" end
-  if counts.warning > 0 then return "DiagnosticWarn"  end
-  if counts.hint    > 0 then return "DiagnosticHint"  end
+  if counts.error > 0 then return "DiagnosticError" end
+  if counts.warning > 0 then return "DiagnosticWarn" end
+  if counts.hint > 0 then return "DiagnosticHint" end
   return "DiagnosticInfo"
 end
 
@@ -110,10 +117,10 @@ function M._render()
         for path, pc in pairs(_counts) do
           local np = path:gsub("\\", "/")
           if np:sub(1, #prefix) == prefix then
-            agg.error   = agg.error   + pc.error
+            agg.error = agg.error + pc.error
             agg.warning = agg.warning + pc.warning
-            agg.hint    = agg.hint    + pc.hint
-            agg.info    = agg.info    + pc.info
+            agg.hint = agg.hint + pc.hint
+            agg.info = agg.info + pc.info
           end
         end
         if agg.error + agg.warning + agg.hint + agg.info > 0 then c = agg end
@@ -123,27 +130,28 @@ function M._render()
 
       if c then
         local filtered = {
-          error   = _cfg.show_errors   and c.error   or 0,
+          error = _cfg.show_errors and c.error or 0,
           warning = _cfg.show_warnings and c.warning or 0,
-          hint    = _cfg.show_hints    and c.hint    or 0,
-          info    = _cfg.show_info     and c.info    or 0,
+          hint = _cfg.show_hints and c.hint or 0,
+          info = _cfg.show_info and c.info or 0,
         }
         local total = filtered.error + filtered.warning + filtered.hint + filtered.info
         if total > 0 then
-          local fmt = type(_cfg.format) == "function"
-            and _cfg.format(filtered)
+          local fmt = type(_cfg.format) == "function" and _cfg.format(filtered)
             or table.concat(
               (function()
                 local p = {}
-                if filtered.error   > 0 then p[#p+1] = "E:" .. filtered.error   end
-                if filtered.warning > 0 then p[#p+1] = "W:" .. filtered.warning end
+                if filtered.error > 0 then p[#p + 1] = "E:" .. filtered.error end
+                if filtered.warning > 0 then p[#p + 1] = "W:" .. filtered.warning end
                 return p
-              end)(), " ")
+              end)(),
+              " "
+            )
           if fmt then
             pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-              virt_text     = { { " " .. fmt, sev_hl(filtered) } },
+              virt_text = { { " " .. fmt, sev_hl(filtered) } },
               virt_text_pos = "eol",
-              priority      = 60,
+              priority = 60,
             })
           end
         end
@@ -178,9 +186,9 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("keep", config, _cfg)
+  _cfg = vim.tbl_deep_extend("keep", config, _cfg)
   _adapter = adapter
-  _ns      = vim.api.nvim_create_namespace("filetree_lsp_diagnostics")
+  _ns = vim.api.nvim_create_namespace("filetree_lsp_diagnostics")
 
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(do_update, _cfg.debounce_ms)
@@ -189,12 +197,12 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_lsp_diagnostics", true)
 
   au.acmd("DiagnosticChanged", {
-    group    = _augroup,
+    group = _augroup,
     callback = schedule_update,
   })
 
   au.acmd({ "BufEnter", "BufWritePost" }, {
-    group   = _augroup,
+    group = _augroup,
     pattern = "*",
     callback = function(ev)
       local ft = vim.bo[ev.buf].filetype
@@ -218,9 +226,12 @@ function M.teardown()
   if bufnr >= 0 and vim.api.nvim_buf_is_valid(bufnr) then
     vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)
   end
-  _counts  = {}
+  _counts = {}
   _adapter = nil
-  if _debounce then _debounce.cancel(); _debounce = nil end
+  if _debounce then
+    _debounce.cancel()
+    _debounce = nil
+  end
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil

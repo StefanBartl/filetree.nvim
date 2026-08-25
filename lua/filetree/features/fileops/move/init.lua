@@ -61,9 +61,7 @@ local _adapter = nil
 ---@return string[]
 local function get_targets()
   local ok, marks = require("filetree.features").load("marks")
-  if ok and marks and marks.count() > 0 then
-    return marks.get_marked()
-  end
+  if ok and marks and marks.count() > 0 then return marks.get_marked() end
   if not _adapter then return {} end
   local node = _adapter.get_current_node()
   return node and node.path and { node.path } or {}
@@ -120,7 +118,9 @@ local function run(plan, resolution, scan_result)
   if _cfg.use_safety then
     local ok_s, safety = require("filetree.features").load("safety")
     if ok_s and safety then
-      for _, op in ipairs(plan.ops) do pcall(safety.before_move, op.src, op.dst) end
+      for _, op in ipairs(plan.ops) do
+        pcall(safety.before_move, op.src, op.dst)
+      end
     end
   end
 
@@ -143,8 +143,9 @@ local function run(plan, resolution, scan_result)
         end
       elseif resolution == "Keep both" then
         local dir = path.parent(dst)
-        dst = dir .. "/" .. conflict.unique_name(
-          dir, path.basename(dst), claimed, vim.fn.isdirectory(op.src) == 1)
+        dst = dir
+          .. "/"
+          .. conflict.unique_name(dir, path.basename(dst), claimed, vim.fn.isdirectory(op.src) == 1)
       else
         notify.error("Target exists, skipping: " .. path.relative(dst))
         errors = errors + 1
@@ -155,8 +156,14 @@ local function run(plan, resolution, scan_result)
     if dst then
       local ok, err = mutate.move(op.src, dst)
       if not ok then
-        notify.error(string.format("Failed: %s → %s (%s)",
-          path.relative(op.src), path.relative(dst), tostring(err)))
+        notify.error(
+          string.format(
+            "Failed: %s → %s (%s)",
+            path.relative(op.src),
+            path.relative(dst),
+            tostring(err)
+          )
+        )
         errors = errors + 1
       else
         relocated = relocated + buffer.relocate(op.src, dst)
@@ -166,11 +173,8 @@ local function run(plan, resolution, scan_result)
   end
 
   local done = #plan.ops - errors
-  local msg = string.format("Moved %d/%d item(s) to %s",
-    done, #plan.ops, path.relative(plan.dir))
-  if relocated > 0 then
-    msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated)
-  end
+  local msg = string.format("Moved %d/%d item(s) to %s", done, #plan.ops, path.relative(plan.dir))
+  if relocated > 0 then msg = msg .. string.format(" (%d open buffer(s) repointed)", relocated) end
   if prog then prog:finish(msg) end
   notify.info(msg)
 
@@ -196,8 +200,12 @@ local function resolve_conflicts_and_run(plan, scan_result)
   end
 
   confirm_choice(
-    string.format("%d item(s) already exist in %s:\n  %s",
-      #clashing, path.relative(plan.dir), table.concat(clashing, ", ")),
+    string.format(
+      "%d item(s) already exist in %s:\n  %s",
+      #clashing,
+      path.relative(plan.dir),
+      table.concat(clashing, ", ")
+    ),
     { "Overwrite", "Keep both", "Cancel" },
     function(choice)
       if choice == nil or choice == "Cancel" then
@@ -264,8 +272,10 @@ function M.move(destination)
         notify.info("Source and destination are the same")
         return
       end
-      if vim.fn.isdirectory(op.src) == 1 and vim.startswith(
-        path.slashify(op.dst) .. "/", path.slashify(op.src) .. "/") then
+      if
+        vim.fn.isdirectory(op.src) == 1
+        and vim.startswith(path.slashify(op.dst) .. "/", path.slashify(op.src) .. "/")
+      then
         notify.error("Cannot move a directory into itself: " .. path.relative(op.src))
         return
       end
@@ -292,8 +302,7 @@ function M.move(destination)
     return
   end
 
-  local what = #targets == 1 and path.basename(targets[1])
-    or string.format("%d items", #targets)
+  local what = #targets == 1 and path.basename(targets[1]) or string.format("%d items", #targets)
   kit.input({
     title = "Move " .. what .. " to: ",
     completion = "dir",
@@ -312,8 +321,12 @@ function M.setup(config, adapter)
 
   if _cfg.keymap then
     tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, function() M.move() end, {
-        buffer = buf, silent = true, desc = "Filetree: move node(s) to…",
+      map("n", _cfg.keymap, function()
+        M.move()
+      end, {
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: move node(s) to…",
       })
     end)
   end

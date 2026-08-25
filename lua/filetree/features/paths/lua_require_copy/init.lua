@@ -8,7 +8,7 @@ local M = {}
 ---@type FiletreeLuaRequireCopyConfig
 local _cfg = {
   enabled = false,
-  keymap  = "rq",
+  keymap = "rq",
 }
 ---@type FiletreeAdapter?
 local _adapter = nil
@@ -27,9 +27,7 @@ local function find_lua_root(path)
     -- Check if there is a 'lua' directory at this level
     local candidate = parent .. "/lua"
     local stat = vim.uv.fs_stat(candidate)
-    if stat and stat.type == "directory" then
-      return candidate
-    end
+    if stat and stat.type == "directory" then return candidate end
     cur = parent
   end
   -- Fallback: stdpath("config")/lua
@@ -40,11 +38,7 @@ end
 ---@param rel_path string
 ---@return string
 local function path_to_module(rel_path)
-  return rel_path
-    :gsub("\\", "/")
-    :gsub("%.lua$", "")
-    :gsub("/init$", "")
-    :gsub("/", ".")
+  return rel_path:gsub("\\", "/"):gsub("%.lua$", ""):gsub("/init$", ""):gsub("/", ".")
 end
 
 ---Recursively gather all .lua files under a directory.
@@ -63,7 +57,9 @@ local function gather_lua_files(dir, lua_root)
     local full = dir .. "/" .. entry
     if vim.fn.isdirectory(full) == 1 then
       local sub = gather_lua_files(full, lua_root)
-      for _, m in ipairs(sub) do modules[#modules + 1] = m end
+      for _, m in ipairs(sub) do
+        modules[#modules + 1] = m
+      end
     elseif entry:match("%.lua$") then
       local rel = full:gsub("\\", "/"):gsub("^" .. vim.pesc(root), "")
       modules[#modules + 1] = path_to_module(rel)
@@ -78,8 +74,13 @@ end
 local function write_to_clipboard(text, count)
   vim.fn.setreg("+", text)
   vim.fn.setreg('"', text)
-  notify.info(string.format("Copied %d require() string(s):\n%s", count,
-    count == 1 and text or text:sub(1, 200) .. (count > 1 and "\n..." or "")))
+  notify.info(
+    string.format(
+      "Copied %d require() string(s):\n%s",
+      count,
+      count == 1 and text or text:sub(1, 200) .. (count > 1 and "\n..." or "")
+    )
+  )
 end
 
 ---Copy current node as require() string(s) using the lua root.
@@ -164,13 +165,14 @@ end
 ---@param cfg FiletreeLuaRequireCopyConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = vim.tbl_deep_extend("force", _cfg, cfg or {})
+  _cfg = vim.tbl_deep_extend("force", _cfg, cfg or {})
   _adapter = adapter
 
   if _cfg.keymap then
     tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, function() M.copy_require() end,
-        { buffer = buf, desc = "filetree: copy as require()", silent = true })
+      map("n", _cfg.keymap, function()
+        M.copy_require()
+      end, { buffer = buf, desc = "filetree: copy as require()", silent = true })
     end)
   end
 end

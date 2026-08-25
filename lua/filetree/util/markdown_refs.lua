@@ -64,13 +64,22 @@ end
 function M.find_async(path, opts, callback)
   local ok_md, md = pcall(require, "markdown_nvim")
   if not ok_md or type(md.find_references_async) ~= "function" then
-    vim.schedule(function() callback({}) end)
+    vim.schedule(function()
+      callback({})
+    end)
     return
   end
-  local ok = pcall(md.find_references_async, path, { root = resolve_root(path, opts) }, function(refs)
-    callback(type(refs) == "table" and refs or {})
-  end)
-  if not ok then vim.schedule(function() callback({}) end) end
+  local ok = pcall(
+    md.find_references_async,
+    path,
+    { root = resolve_root(path, opts) },
+    function(refs)
+      callback(type(refs) == "table" and refs or {})
+    end
+  )
+  if not ok then vim.schedule(function()
+    callback({})
+  end) end
 end
 
 ---Start an async reference search NOW and return a handle whose `await(cb)`
@@ -92,12 +101,17 @@ function M.prefetch(path, opts)
     state.done = true
     local waiters = state.waiters
     state.waiters = {}
-    for _, w in ipairs(waiters) do w(refs) end
+    for _, w in ipairs(waiters) do
+      w(refs)
+    end
   end)
   return {
     await = function(cb)
-      if state.done then cb(state.refs or {})
-      else state.waiters[#state.waiters + 1] = cb end
+      if state.done then
+        cb(state.refs or {})
+      else
+        state.waiters[#state.waiters + 1] = cb
+      end
     end,
   }
 end
@@ -108,8 +122,13 @@ end
 ---@param cb fun(refs_by_path: table<string, table[]>)
 function M.await_all(handles, cb)
   local pending, results = 0, {}
-  for _ in pairs(handles) do pending = pending + 1 end
-  if pending == 0 then cb(results); return end
+  for _ in pairs(handles) do
+    pending = pending + 1
+  end
+  if pending == 0 then
+    cb(results)
+    return
+  end
   for path, handle in pairs(handles) do
     handle.await(function(refs)
       results[path] = refs
@@ -156,8 +175,8 @@ end
 ---@return boolean changed
 local function apply_ref(line, r)
   if not line or not r.new_target then return line, false end
-  local pattern    = "%]%(" .. vim.pesc(r.target) .. "%)"
-  local repl       = "](" .. r.new_target:gsub("%%", "%%%%") .. ")"
+  local pattern = "%]%(" .. vim.pesc(r.target) .. "%)"
+  local repl = "](" .. r.new_target:gsub("%%", "%%%%") .. ")"
   local new_line, n = line:gsub(pattern, repl)
   return new_line, n > 0
 end
@@ -242,14 +261,16 @@ function M.update(refs)
           end)
         end
       end
-
     else
       local ok, lines = pcall(vim.fn.readfile, file)
       if ok and lines then
         local changed = false
         for _, r in ipairs(file_refs) do
           local new_line, did = apply_ref(lines[r.line], r)
-          if did then lines[r.line] = new_line; changed = true end
+          if did then
+            lines[r.line] = new_line
+            changed = true
+          end
         end
         if changed then
           vim.fn.writefile(lines, file)

@@ -25,11 +25,7 @@ end
 ---@return integer?  bufnr
 local function find_netrw_buf()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_is_loaded(buf)
-      and vim.bo[buf].filetype == "netrw"
-    then
-      return buf
-    end
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].filetype == "netrw" then return buf end
   end
   return nil
 end
@@ -40,9 +36,7 @@ end
 ---@return integer?  winid
 local function buf_to_win(bufnr)
   for _, win in ipairs(vim.api.nvim_list_wins()) do
-    if vim.api.nvim_win_get_buf(win) == bufnr then
-      return win
-    end
+    if vim.api.nvim_win_get_buf(win) == bufnr then return win end
   end
   return nil
 end
@@ -59,7 +53,7 @@ local function parse_netrw_line(line)
   local name = line:match("^%s*(.-)%s*$")
   if not name or name == "" then return nil end
   -- Skip sort/filter header lines
-  if name:match("^\"") or name:match("^%-%-") then return nil end
+  if name:match('^"') or name:match("^%-%-") then return nil end
   return name
 end
 
@@ -107,8 +101,8 @@ function M.get_current_node()
   if not win then return nil end
 
   local line_nr = vim.api.nvim_win_get_cursor(win)[1]
-  local line    = vim.api.nvim_buf_get_lines(buf, line_nr - 1, line_nr, false)[1] or ""
-  local name    = parse_netrw_line(line)
+  local line = vim.api.nvim_buf_get_lines(buf, line_nr - 1, line_nr, false)[1] or ""
+  local name = parse_netrw_line(line)
   if not name then return nil end
 
   local root = M.get_root_path()
@@ -117,11 +111,11 @@ function M.get_current_node()
   local path = root .. "/" .. clean_name
 
   return {
-    id          = path,
-    name        = clean_name,
-    path        = path,
-    type        = is_dir and "directory" or "file",
-    depth       = 1,
+    id = path,
+    name = clean_name,
+    path = path,
+    type = is_dir and "directory" or "file",
+    depth = 1,
     line_number = line_nr,
     is_expanded = nil,
   }
@@ -133,9 +127,9 @@ function M.get_visible_nodes(filter)
   local buf = find_netrw_buf()
   if not buf then return {} end
 
-  local root    = M.get_root_path()
-  local lines   = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  local nodes   = {}
+  local root = M.get_root_path()
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local nodes = {}
   local line_nr = 0
 
   for _, line in ipairs(lines) do
@@ -143,21 +137,22 @@ function M.get_visible_nodes(filter)
     local name = parse_netrw_line(line)
     if name then
       local is_dir = name:sub(-1) == "/"
-      local clean  = is_dir and name:sub(1, -2) or name
-      local ntype  = is_dir and "directory" or "file"
+      local clean = is_dir and name:sub(1, -2) or name
+      local ntype = is_dir and "directory" or "file"
 
-      local include = filter == nil or filter == "all"
-        or (filter == "files"   and ntype == "file")
+      local include = filter == nil
+        or filter == "all"
+        or (filter == "files" and ntype == "file")
         or (filter == "folders" and ntype == "directory")
 
       if include then
         local path = root .. "/" .. clean
         nodes[#nodes + 1] = {
-          id          = path,
-          name        = clean,
-          path        = path,
-          type        = ntype,
-          depth       = 1,
+          id = path,
+          name = clean,
+          path = path,
+          type = ntype,
+          depth = 1,
           line_number = line_nr,
           is_expanded = nil,
         }
@@ -297,7 +292,7 @@ function M.highlight_node(path, hl_group)
   if not buf then return false end
   local ok, id = pcall(vim.api.nvim_buf_set_extmark, buf, ns(), line - 1, 0, {
     line_hl_group = hl_group,
-    priority      = 150,
+    priority = 150,
   })
   if ok then _hl_marks[path] = id end
   return ok

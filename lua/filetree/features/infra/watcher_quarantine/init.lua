@@ -12,7 +12,7 @@
 ---   M.is_active() → boolean
 ---   M.wrap(fn, duration_ms)        Execute fn inside an auto quarantine.
 
-local notify   = require("filetree.util.notify").create("[filetree.watcher_quarantine]")
+local notify = require("filetree.util.notify").create("[filetree.watcher_quarantine]")
 local platform = require("filetree.util.platform")
 local lib_debounce = require("lib.nvim.debounce")
 
@@ -20,10 +20,10 @@ local M = {}
 
 ---@type FiletreeWatcherQuarantineConfig
 local _cfg = {
-  enabled             = false,
-  duration_ms         = 500,
-  silent              = true,
-  patch_neotree_watch = true,   -- wrap neo-tree's fs_watch callbacks to swallow EPERM
+  enabled = false,
+  duration_ms = 500,
+  silent = true,
+  patch_neotree_watch = true, -- wrap neo-tree's fs_watch callbacks to swallow EPERM
 }
 
 ---@class QuarantineState
@@ -34,8 +34,8 @@ local _cfg = {
 
 ---@type QuarantineState
 local S = {
-  active          = false,
-  until_ms        = 0,
+  active = false,
+  until_ms = 0,
   suspended_paths = {},
   original_notify = nil,
 }
@@ -49,16 +49,16 @@ local _debounce = nil
 local _debounce_ms = nil
 
 local function cancel_timer()
-  if _debounce then
-    _debounce.cancel()
-  end
+  if _debounce then _debounce.cancel() end
 end
 
 ---@param ms integer
 local function ensure_debounce(ms)
   if not _debounce or _debounce_ms ~= ms then
     if _debounce then _debounce.cancel() end
-    _debounce = lib_debounce.new(function() M.exit() end, ms)
+    _debounce = lib_debounce.new(function()
+      M.exit()
+    end, ms)
     _debounce_ms = ms
   end
 end
@@ -71,13 +71,11 @@ local function restore_notify()
 end
 
 local function patch_notify()
-  if S.original_notify then return end  -- already patched
+  if S.original_notify then return end -- already patched
   S.original_notify = vim.notify
   vim.notify = function(msg, level, opts)
     -- Suppress EPERM noise from file watchers during quarantine
-    if S.active and type(msg) == "string" and msg:find("EPERM") then
-      return
-    end
+    if S.active and type(msg) == "string" and msg:find("EPERM") then return end
     S.original_notify(msg, level, opts)
   end
 end
@@ -98,9 +96,7 @@ local _neotree_patched = false
 ---@return boolean
 local function is_perm_error(s)
   if type(s) ~= "string" then return false end
-  return s:match("EPERM") ~= nil
-    or s:match("EACCES") ~= nil
-    or s:match("permission denied") ~= nil
+  return s:match("EPERM") ~= nil or s:match("EACCES") ~= nil or s:match("permission denied") ~= nil
 end
 
 ---Wrap a watcher callback so permission errors are suppressed.
@@ -134,16 +130,12 @@ function M.patch_neotree_watch()
   if type(original_watch_folder) ~= "function" then return false end
 
   fs_watch.watch_folder = function(path, callback)
-    if type(callback) == "function" then
-      callback = wrap_callback(callback)
-    end
+    if type(callback) == "function" then callback = wrap_callback(callback) end
     return original_watch_folder(path, callback)
   end
 
   _neotree_patched = true
-  if not _cfg.silent then
-    notify.debug("neo-tree fs_watch patched for EPERM suppression")
-  end
+  if not _cfg.silent then notify.debug("neo-tree fs_watch patched for EPERM suppression") end
   return true
 end
 
@@ -157,12 +149,14 @@ function M.enter(duration_ms, paths)
   if not _cfg.enabled then return end
 
   cancel_timer()
-  S.active    = true
-  S.until_ms  = (vim.uv or vim.loop).now() + (duration_ms or _cfg.duration_ms)
+  S.active = true
+  S.until_ms = (vim.uv or vim.loop).now() + (duration_ms or _cfg.duration_ms)
   S.suspended_paths = {}
 
   if paths then
-    for _, p in ipairs(paths) do S.suspended_paths[p] = true end
+    for _, p in ipairs(paths) do
+      S.suspended_paths[p] = true
+    end
   end
 
   patch_notify()
@@ -179,8 +173,8 @@ end
 ---End quarantine immediately.
 function M.exit()
   cancel_timer()
-  S.active    = false
-  S.until_ms  = 0
+  S.active = false
+  S.until_ms = 0
   S.suspended_paths = {}
   restore_notify()
 end
@@ -201,7 +195,7 @@ end
 ---@return boolean
 function M.is_path_quarantined(path)
   if not M.is_active() then return false end
-  if vim.tbl_isempty(S.suspended_paths) then return true end  -- global quarantine
+  if vim.tbl_isempty(S.suspended_paths) then return true end -- global quarantine
   return S.suspended_paths[path] == true
 end
 
@@ -214,9 +208,7 @@ function M.wrap(fn, duration_ms)
   local ok, result = pcall(fn)
   -- quarantine self-cancels via timer; we do not force-exit here
   -- so the watcher has time to settle after fn returns
-  if not ok then
-    notify.warn("wrapped fn errored: " .. tostring(result))
-  end
+  if not ok then notify.warn("wrapped fn errored: " .. tostring(result)) end
   return result
 end
 
@@ -231,16 +223,16 @@ function M.setup(config, adapter)
   -- Only useful on Windows / WSL where EPERM is common.
   local relevant = platform.is_windows() or platform.is_wsl()
   if not relevant then
-    if not _cfg.silent then
-      notify.info("watcher_quarantine: no-op on non-Windows platform")
-    end
+    if not _cfg.silent then notify.info("watcher_quarantine: no-op on non-Windows platform") end
     return
   end
 
   -- Neo-tree-specific: wrap fs_watch callbacks at the source. neo-tree loads
   -- fs_watch lazily, so defer until after startup and guard with pcall.
   if _cfg.patch_neotree_watch and adapter and adapter.name == "neotree" then
-    vim.defer_fn(function() pcall(M.patch_neotree_watch) end, 100)
+    vim.defer_fn(function()
+      pcall(M.patch_neotree_watch)
+    end, 100)
   end
 end
 

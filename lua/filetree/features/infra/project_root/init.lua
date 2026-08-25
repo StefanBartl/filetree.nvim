@@ -12,21 +12,30 @@ local M = {}
 
 ---@type FiletreeProjectRootConfig
 local _cfg = {
-  enabled  = false,
-  markers  = {
-    ".git", ".hg", ".svn",
-    "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+  enabled = false,
+  markers = {
+    ".git",
+    ".hg",
+    ".svn",
+    "package.json",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
     "Cargo.toml",
     "go.mod",
-    "pyproject.toml", "setup.py", "setup.cfg",
-    "Makefile", "CMakeLists.txt",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
+    "Makefile",
+    "CMakeLists.txt",
     "*.rockspec",
-    ".luarc.json", "selene.toml",
+    ".luarc.json",
+    "selene.toml",
     "mix.exs",
     "build.zig",
   },
   fallback = "parent",
-  cache    = true,
+  cache = true,
 }
 
 -- ── Cache ─────────────────────────────────────────────────────────────────────
@@ -58,15 +67,13 @@ end
 local function find_from(dir)
   if _cfg.cache ~= false then
     local cached = _cache[dir]
-    if cached ~= nil then
-      return cached or nil
-    end
+    if cached ~= nil then return cached or nil end
   end
 
   local visited = { dir }
   local current = dir
-  local prev    = nil
-  local found   = nil
+  local prev = nil
+  local found = nil
 
   while current ~= prev do
     for _, marker in ipairs(_cfg.markers) do
@@ -86,15 +93,13 @@ local function find_from(dir)
       end
     end
     if found then break end
-    prev    = current
+    prev = current
     current = vim.fn.fnamemodify(current, ":h")
     if current ~= prev then visited[#visited + 1] = current end
   end
 
   if _cfg.cache ~= false then
-    if vim.tbl_count(_cache) >= MAX_CACHE_ENTRIES then
-      _cache = {}
-    end
+    if vim.tbl_count(_cache) >= MAX_CACHE_ENTRIES then _cache = {} end
     for _, d in ipairs(visited) do
       _cache[d] = found or false
     end
@@ -109,16 +114,12 @@ end
 ---@param path string  Absolute file or directory path.
 ---@return string      Project root, or fallback (cwd/parent directory).
 function M.find(path)
-  local dir = vim.fn.isdirectory(path) == 1
-    and path
-    or vim.fn.fnamemodify(path, ":h")
+  local dir = vim.fn.isdirectory(path) == 1 and path or vim.fn.fnamemodify(path, ":h")
 
   local root = find_from(dir)
   if root then return root end
 
-  if _cfg.fallback == "cwd" then
-    return vim.fn.getcwd()
-  end
+  if _cfg.fallback == "cwd" then return vim.fn.getcwd() end
   return dir
 end
 

@@ -32,10 +32,18 @@ local function local_notifier(prefix)
     vim.notify(prefix .. " " .. msg, level)
   end
   return {
-    info  = function(msg) emit(vim.log.levels.INFO,  msg) end,
-    warn  = function(msg) emit(vim.log.levels.WARN,  msg) end,
-    error = function(msg) emit(vim.log.levels.ERROR, msg) end,
-    debug = function(msg) emit(vim.log.levels.DEBUG, msg) end,
+    info = function(msg)
+      emit(vim.log.levels.INFO, msg)
+    end,
+    warn = function(msg)
+      emit(vim.log.levels.WARN, msg)
+    end,
+    error = function(msg)
+      emit(vim.log.levels.ERROR, msg)
+    end,
+    debug = function(msg)
+      emit(vim.log.levels.DEBUG, msg)
+    end,
   }
 end
 
@@ -46,8 +54,8 @@ end
 ---@return FiletreeNotifier
 local function with_debug_gate(base)
   return {
-    info  = base.info,
-    warn  = base.warn,
+    info = base.info,
+    warn = base.warn,
     error = base.error,
     debug = function(msg)
       if _debug then base.info("[debug] " .. msg) end
@@ -62,9 +70,7 @@ function M.create(prefix)
   local ok, lib = pcall(require, "lib.nvim.notify")
   if ok and type(lib) == "table" and type(lib.create) == "function" then
     local n = lib.create(prefix)
-    if type(n) == "table" and type(n.info) == "function" then
-      return with_debug_gate(n)
-    end
+    if type(n) == "table" and type(n.info) == "function" then return with_debug_gate(n) end
   end
   return with_debug_gate(local_notifier(prefix))
 end

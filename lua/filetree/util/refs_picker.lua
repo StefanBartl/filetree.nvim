@@ -41,59 +41,68 @@ local M = {}
 local function via_telescope(refs, title, on_confirm, on_cancel)
   local ok = pcall(require, "telescope")
   if not ok then return false end
-  local pickers      = require("telescope.pickers")
-  local finders       = require("telescope.finders")
-  local conf          = require("telescope.config").values
-  local actions       = require("telescope.actions")
-  local action_state  = require("telescope.actions.state")
+  local pickers = require("telescope.pickers")
+  local finders = require("telescope.finders")
+  local conf = require("telescope.config").values
+  local actions = require("telescope.actions")
+  local action_state = require("telescope.actions.state")
 
-  pickers.new({}, {
-    prompt_title = title,
-    finder = finders.new_table({
-      results = refs,
-      entry_maker = function(r)
-        return {
-          value    = r,
-          display  = string.format("%s:%d  %s", path.relative(r.file, vim.fn.getcwd()), r.line, r.display),
-          ordinal  = r.file .. " " .. r.display,
-          filename = r.file,
-          lnum     = r.line,
-        }
-      end,
-    }),
-    sorter    = conf.generic_sorter({}),
-    previewer = conf.grep_previewer({}),
-    attach_mappings = function(prompt_bufnr, map)
-      local function confirm()
-        local picker = action_state.get_current_picker(prompt_bufnr)
-        local multi  = picker:get_multi_selection()
-        local chosen = {}
-        if #multi > 0 then
-          for _, e in ipairs(multi) do chosen[#chosen + 1] = e.value end
-        else
-          local cur = action_state.get_selected_entry()
-          if cur then chosen[1] = cur.value end
+  pickers
+    .new({}, {
+      prompt_title = title,
+      finder = finders.new_table({
+        results = refs,
+        entry_maker = function(r)
+          return {
+            value = r,
+            display = string.format(
+              "%s:%d  %s",
+              path.relative(r.file, vim.fn.getcwd()),
+              r.line,
+              r.display
+            ),
+            ordinal = r.file .. " " .. r.display,
+            filename = r.file,
+            lnum = r.line,
+          }
+        end,
+      }),
+      sorter = conf.generic_sorter({}),
+      previewer = conf.grep_previewer({}),
+      attach_mappings = function(prompt_bufnr, map)
+        local function confirm()
+          local picker = action_state.get_current_picker(prompt_bufnr)
+          local multi = picker:get_multi_selection()
+          local chosen = {}
+          if #multi > 0 then
+            for _, e in ipairs(multi) do
+              chosen[#chosen + 1] = e.value
+            end
+          else
+            local cur = action_state.get_selected_entry()
+            if cur then chosen[1] = cur.value end
+          end
+          actions.close(prompt_bufnr)
+          on_confirm(chosen)
         end
-        actions.close(prompt_bufnr)
-        on_confirm(chosen)
-      end
-      local function cancel()
-        actions.close(prompt_bufnr)
-        on_cancel()
-      end
-      actions.select_default:replace(confirm)
-      -- Dedicated picker-local keymaps for <Esc>/q, NOT actions.close:replace():
-      -- `close` is a shared action object other telescope machinery (including
-      -- our own `confirm` above) calls to actually close the window -- replacing
-      -- it globally would make every future call to actions.close() re-invoke
-      -- `cancel`, which itself calls actions.close(), i.e. infinite recursion
-      -- (and it would leak into every other telescope picker in the session).
-      map({ "i", "n" }, "<esc>", cancel)
-      map("n", "q", cancel)
-      map({ "i", "n" }, "<C-a>", actions.select_all)
-      return true
-    end,
-  }):find()
+        local function cancel()
+          actions.close(prompt_bufnr)
+          on_cancel()
+        end
+        actions.select_default:replace(confirm)
+        -- Dedicated picker-local keymaps for <Esc>/q, NOT actions.close:replace():
+        -- `close` is a shared action object other telescope machinery (including
+        -- our own `confirm` above) calls to actually close the window -- replacing
+        -- it globally would make every future call to actions.close() re-invoke
+        -- `cancel`, which itself calls actions.close(), i.e. infinite recursion
+        -- (and it would leak into every other telescope picker in the session).
+        map({ "i", "n" }, "<esc>", cancel)
+        map("n", "q", cancel)
+        map({ "i", "n" }, "<C-a>", actions.select_all)
+        return true
+      end,
+    })
+    :find()
   return true
 end
 
@@ -120,14 +129,16 @@ local function via_fzflua(refs, title, on_confirm, on_cancel)
   end
 
   fzf.fzf_exec(lines, {
-    prompt      = title .. "> ",
-    fzf_opts    = { ["--multi"] = true },
-    keymap      = { fzf = { ["ctrl-a"] = "select-all" } },
+    prompt = title .. "> ",
+    fzf_opts = { ["--multi"] = true },
+    keymap = { fzf = { ["ctrl-a"] = "select-all" } },
     actions = {
       -- A non-"default" action key makes fzf-lua add it to fzf's `--expect`
       -- list (see actions.lua's `M.expect`), so Esc is reported as a real
       -- keypress instead of silently exiting with no callback at all.
-      ["esc"] = function(_selected, _o) on_cancel() end,
+      ["esc"] = function(_selected, _o)
+        on_cancel()
+      end,
       ["default"] = function(selected)
         local chosen = {}
         for _, s in ipairs(selected or {}) do
@@ -213,7 +224,7 @@ end
 ---@param on_cancel fun()  Called when the user backs out without confirming.
 function M.pick(refs, opts, on_confirm, on_cancel)
   opts = opts or {}
-  local title  = opts.title or "References"
+  local title = opts.title or "References"
   local prefer = opts.prefer or "auto"
 
   if prefer == "telescope" then

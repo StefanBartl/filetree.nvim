@@ -6,11 +6,13 @@ on:
   pull_request:
 
 jobs:
-  # Gating: stylua + luacheck must pass. stylua is advisory (continue-on-error)
-  # until a one-time `stylua .` formatting pass lands across the codebase --
-  # the existing style predates this config and a blind repo-wide reformat is
-  # out of scope for a repo with no test coverage over every corner. luacheck
-  # is a real gate; it passes clean.
+  # Gating: stylua + luacheck must both pass, for real.
+  #
+  # stylua used to be advisory here, pending the one-time repo-wide `stylua .`
+  # pass the existing style predated. That pass has landed: 105 files
+  # reformatted, with the four headless suites reporting the same pass/fail
+  # counts before and after, so nothing behavioural moved with it. Keeping the
+  # step advisory now would only let the formatting drift straight back.
   lint:
     name: lint (stylua + luacheck)
     runs-on: ubuntu-latest
@@ -19,7 +21,6 @@ jobs:
 
       - name: stylua (check)
         uses: JohnnyMorganz/stylua-action@v4
-        continue-on-error: true
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: v2.5.2

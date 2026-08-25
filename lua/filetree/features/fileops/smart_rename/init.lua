@@ -30,12 +30,12 @@ local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local confirm_choice = require("filetree.util.confirm_choice")
-local path        = require("filetree.util.path")
-local buffer      = require("filetree.util.buffer")
+local path = require("filetree.util.path")
+local buffer = require("filetree.util.buffer")
 -- Cross-file references (markdown links, require()/import statements) are the
 -- reference engine's job, not this feature's: it owns the scan, the chooser
 -- and the undoable rewrite for every provider at once.
-local refs        = require("filetree.refs")
+local refs = require("filetree.refs")
 
 -- The one way this plugin moves a path: retries the transient Windows sharing
 -- errors (EPERM/EACCES/EBUSY) that a raw uv.fs_rename surfaces as a hard
@@ -47,10 +47,10 @@ local M = {}
 
 ---@type FiletreeSmartRenameConfig
 local _cfg = {
-  enabled    = false,
-  keymap     = "r",
+  enabled = false,
+  keymap = "r",
   use_safety = true,
-  dry_run    = false,
+  dry_run = false,
 }
 
 ---@type FiletreeAdapter?
@@ -74,24 +74,25 @@ end
 ---@param new_path string
 ---@param cb fun(workspace_edit: table?)
 local function lsp_will_rename(old_path, new_path, cb)
-  local params   = make_rename_files_params(uri(old_path), uri(new_path))
-  local clients  = {}
+  local params = make_rename_files_params(uri(old_path), uri(new_path))
+  local clients = {}
   for _, client in pairs(vim.lsp.get_clients()) do
-    local cap = vim.tbl_get(client, "server_capabilities", "workspace",
-                             "fileOperations", "willRename")
+    local cap =
+      vim.tbl_get(client, "server_capabilities", "workspace", "fileOperations", "willRename")
     if cap then clients[#clients + 1] = client end
   end
 
-  if #clients == 0 then cb(nil); return end
+  if #clients == 0 then
+    cb(nil)
+    return
+  end
 
   local pending = #clients
-  local merged  = {}
+  local merged = {}
   for _, client in ipairs(clients) do
     client:request("workspace/willRenameFiles", params, function(err, result)
       pending = pending - 1
-      if not err and result then
-        merged = vim.tbl_deep_extend("force", merged, result)
-      end
+      if not err and result then merged = vim.tbl_deep_extend("force", merged, result) end
       if pending == 0 then cb(#vim.tbl_keys(merged) > 0 and merged or nil) end
     end)
   end
@@ -101,11 +102,9 @@ end
 local function lsp_did_rename(old_path, new_path)
   local params = make_rename_files_params(uri(old_path), uri(new_path))
   for _, client in pairs(vim.lsp.get_clients()) do
-    local cap = vim.tbl_get(client, "server_capabilities", "workspace",
-                             "fileOperations", "didRename")
-    if cap then
-      client:notify("workspace/didRenameFiles", params)
-    end
+    local cap =
+      vim.tbl_get(client, "server_capabilities", "workspace", "fileOperations", "didRename")
+    if cap then client:notify("workspace/didRenameFiles", params) end
   end
 end
 
@@ -125,9 +124,13 @@ end
 ---  location.
 local function do_rename(old_path, new_path, scan_result)
   if _cfg.dry_run then
-    notify.info(string.format("[dry-run] %s → %s",
-      vim.fn.fnamemodify(old_path, ":t"),
-      vim.fn.fnamemodify(new_path, ":t")))
+    notify.info(
+      string.format(
+        "[dry-run] %s → %s",
+        vim.fn.fnamemodify(old_path, ":t"),
+        vim.fn.fnamemodify(new_path, ":t")
+      )
+    )
     return
   end
 
@@ -139,9 +142,7 @@ local function do_rename(old_path, new_path, scan_result)
 
   lsp_will_rename(old_path, new_path, function(workspace_edit)
     -- Apply workspace edit from LSP (reference updates) before the move
-    if workspace_edit then
-      pcall(vim.lsp.util.apply_workspace_edit, workspace_edit, "utf-8")
-    end
+    if workspace_edit then pcall(vim.lsp.util.apply_workspace_edit, workspace_edit, "utf-8") end
 
     -- Synchronous rather than an async uv.fs_rename callback: we are already on
     -- the main loop here (the un-scheduled apply_workspace_edit above depends
@@ -173,9 +174,13 @@ local function do_rename(old_path, new_path, scan_result)
     -- Refresh tree
     if _adapter and _adapter.refresh then _adapter.refresh() end
 
-    notify.info(string.format("%s → %s",
-      vim.fn.fnamemodify(old_path, ":t"),
-      vim.fn.fnamemodify(new_path, ":t")))
+    notify.info(
+      string.format(
+        "%s → %s",
+        vim.fn.fnamemodify(old_path, ":t"),
+        vim.fn.fnamemodify(new_path, ":t")
+      )
+    )
   end)
 end
 
@@ -184,11 +189,14 @@ end
 function M.rename_current()
   if not _adapter then return end
   local node = _adapter.get_current_node()
-  if not node or not node.path then notify.warn("No node under cursor"); return end
+  if not node or not node.path then
+    notify.warn("No node under cursor")
+    return
+  end
 
   local old_path = node.path
   local old_name = vim.fn.fnamemodify(old_path, ":t")
-  local dir      = path.parent(old_path)
+  local dir = path.parent(old_path)
 
   -- Start the reference scan NOW, while old_path still exists on disk, so it
   -- overlaps with the (potentially long) time the user spends typing a new
@@ -203,11 +211,13 @@ function M.rename_current()
     default = old_name,
     on_submit = function(new_name)
       if not new_name or new_name == "" or new_name == old_name then return end
-      new_name = path.slashify(new_name)  -- accept "/" or "\" if renaming into a subdir
+      new_name = path.slashify(new_name) -- accept "/" or "\" if renaming into a subdir
       local new_path = dir .. "/" .. new_name
 
       local function proceed()
-        refs_handle.await(function(result) do_rename(old_path, new_path, result) end)
+        refs_handle.await(function(result)
+          do_rename(old_path, new_path, result)
+        end)
       end
 
       if vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1 then
@@ -227,13 +237,15 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _cfg.keymap then
     tree_attach.on_attach(function(buf)
       map("n", _cfg.keymap, M.rename_current, {
-        buffer = buf, silent = true, desc = "Filetree: LSP-aware rename",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: LSP-aware rename",
       })
     end)
   end

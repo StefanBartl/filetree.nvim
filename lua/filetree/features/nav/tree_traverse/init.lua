@@ -82,16 +82,16 @@ end
 
 ---@type FiletreeTreeTraverseConfig
 local DEFAULTS = {
-  keymap_up   = "-",
+  keymap_up = "-",
   keymap_down = "+",
-  sync_cwd    = false,
+  sync_cwd = false,
 }
 
 ---@param cfg FiletreeTreeTraverseConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg     = vim.tbl_extend("force", DEFAULTS, cfg or {})
-  cfg      = _cfg
+  _cfg = vim.tbl_extend("force", DEFAULTS, cfg or {})
+  cfg = _cfg
   _adapter = adapter
 
   tree_attach.on_attach(function(buf)
@@ -99,12 +99,16 @@ function M.setup(cfg, adapter)
       map("n", cfg.keymap_up, function()
         -- M.up() has no count parameter of its own (each call climbs exactly
         -- one level via go_to()), so a count prefix loops it.
-        for _ = 1, vim.v.count1 do M.up() end
+        for _ = 1, vim.v.count1 do
+          M.up()
+        end
       end, { buffer = buf, desc = "filetree: traverse up (×count)", silent = true })
     end
     if cfg.keymap_down and cfg.keymap_down ~= "" then
       map("n", cfg.keymap_down, function()
-        for _ = 1, vim.v.count1 do M.down() end
+        for _ = 1, vim.v.count1 do
+          M.down()
+        end
       end, { buffer = buf, desc = "filetree: traverse down (×count)", silent = true })
     end
   end)

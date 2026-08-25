@@ -53,12 +53,11 @@ function M.setup(config, _adapter)
     map("n", keymap, do_reset, {
       buffer = buf,
       silent = true,
-      desc   = "Filetree: reset tree UI state (preview, filter, search)",
+      desc = "Filetree: reset tree UI state (preview, filter, search)",
     })
   end)
 end
 
-function M.teardown()
-end
+function M.teardown() end
 
 return M

@@ -20,16 +20,14 @@ return function(items, opts, on_choice)
   opts = opts or {}
   on_choice = on_choice or function() end
 
-  if not has_kit then
-    return vim.ui.select(items, opts, on_choice)
-  end
+  if not has_kit then return vim.ui.select(items, opts, on_choice) end
 
   -- kit.select sizes the float to its widest item by default, so the old
   -- `auto_width` workaround for hover_select's fixed min-width is no longer
   -- needed. format_item/index-remapping is kit.select's own job now too.
   kit.select({
-    items     = items,
-    title     = opts.prompt,
+    items = items,
+    title = opts.prompt,
     format_item = opts.format_item,
     on_select = on_choice,
     -- kit.select reports cancellation through on_cancel rather than by

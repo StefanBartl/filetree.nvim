@@ -20,21 +20,17 @@ local M = {}
 ---@return boolean ok true when the keymaps were attached
 function M.nice_quit(winid, opts)
   opts = opts or {}
-  if has_lib then
-    return lib.nice_quit(winid, opts)
-  end
+  if has_lib then return lib.nice_quit(winid, opts) end
 
   if not vim.api.nvim_win_is_valid(winid) then return false end
   local ok, bufnr = pcall(vim.api.nvim_win_get_buf, winid)
   if not ok then return false end
 
-  local keys  = opts.keys or { "q", "<Esc>" }
+  local keys = opts.keys or { "q", "<Esc>" }
   local force = opts.force == true
   for _, lhs in ipairs(keys) do
     vim.keymap.set("n", lhs, function()
-      if vim.api.nvim_win_is_valid(winid) then
-        pcall(vim.api.nvim_win_close, winid, force)
-      end
+      if vim.api.nvim_win_is_valid(winid) then pcall(vim.api.nvim_win_close, winid, force) end
     end, { buffer = bufnr, nowait = true, silent = true, desc = "filetree: close window" })
   end
   return true
@@ -61,7 +57,7 @@ function M.tree_side(adapter)
   if adapter and type(adapter.get_position) == "function" then
     local ok, pos = pcall(adapter.get_position)
     if ok then
-      if pos == "left"  then return "left"  end
+      if pos == "left" then return "left" end
       if pos == "right" then return "right" end
       if pos then return nil end -- "float" / "current": no side to stay clear of
     end
@@ -83,7 +79,7 @@ end
 ---@param side "left"|"right"|nil
 ---@return string modifier  "" when there is no side to avoid.
 function M.away_modifier(side)
-  if side == "left"  then return "botright" end
+  if side == "left" then return "botright" end
   if side == "right" then return "topleft" end
   return ""
 end
@@ -112,7 +108,7 @@ function M.open_editor_window(adapter, opts)
   end
 
   local tree_win = adapter and adapter.get_winid and adapter.get_winid()
-  local cur      = vim.api.nvim_get_current_win()
+  local cur = vim.api.nvim_get_current_win()
   local in_float = vim.api.nvim_win_get_config(cur).relative ~= ""
 
   local ok

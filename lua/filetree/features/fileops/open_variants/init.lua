@@ -18,20 +18,20 @@
 
 local notify = require("filetree.util.notify").create("[filetree.open_variants]")
 
-local map     = require("filetree.util.map")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local bufutil = require("filetree.util.buffer")
-local window  = require("filetree.util.window")
+local window = require("filetree.util.window")
 local M = {}
 
 ---@type FiletreeOpenVariantsConfig
 local _cfg = {
-  enabled          = false,
-  keymap_vsplit    = "sg",
-  keymap_split     = "sv",
-  keymap_tabnew    = "st",
-  keymap_badd      = "gb",
-  keymap_badd_alt  = "<S-CR>",
+  enabled = false,
+  keymap_vsplit = "sg",
+  keymap_split = "sv",
+  keymap_tabnew = "st",
+  keymap_badd = "gb",
+  keymap_badd_alt = "<S-CR>",
 }
 
 ---@type FiletreeAdapter?
@@ -68,8 +68,12 @@ local function open_in_editor(cmd)
   vim.cmd(cmd .. " " .. vim.fn.fnameescape(path))
 end
 
-function M.open_vsplit() open_in_editor("vsplit") end
-function M.open_split()  open_in_editor("split")  end
+function M.open_vsplit()
+  open_in_editor("vsplit")
+end
+function M.open_split()
+  open_in_editor("split")
+end
 
 function M.open_tabnew()
   local path = current_file_path()
@@ -95,7 +99,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   tree_attach.on_attach(function(buf)
@@ -104,11 +108,11 @@ function M.setup(config, adapter)
         map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
       end
     end
-    kmap(_cfg.keymap_vsplit,   M.open_vsplit, "open in vertical split")
-    kmap(_cfg.keymap_split,    M.open_split,  "open in horizontal split")
-    kmap(_cfg.keymap_tabnew,   M.open_tabnew, "open in new tab")
-    kmap(_cfg.keymap_badd,     M.open_badd,   "add to buffer list (no focus switch)")
-    kmap(_cfg.keymap_badd_alt, M.open_badd,   "add to buffer list (no focus switch)")
+    kmap(_cfg.keymap_vsplit, M.open_vsplit, "open in vertical split")
+    kmap(_cfg.keymap_split, M.open_split, "open in horizontal split")
+    kmap(_cfg.keymap_tabnew, M.open_tabnew, "open in new tab")
+    kmap(_cfg.keymap_badd, M.open_badd, "add to buffer list (no focus switch)")
+    kmap(_cfg.keymap_badd_alt, M.open_badd, "add to buffer list (no focus switch)")
   end)
 end
 

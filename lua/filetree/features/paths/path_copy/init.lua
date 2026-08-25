@@ -26,22 +26,22 @@
 
 local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 
-local map    = require("filetree.util.map")
+local map = require("filetree.util.map")
 local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
 local M = {}
 
 ---@type FiletreePathCopyConfig
 local _cfg = {
-  enabled             = false,
-  keymap_pick         = nil,
-  keymap_abs          = "[a",
-  keymap_dirname      = "]a",
-  keymap_name         = nil,
-  keymap_project_root = "[R",   -- copy absolute project root path
-  keymap_project_rel  = "]R",   -- copy node path relative to project root
-  root_markers        = { ".git" },
-  notify              = true,
+  enabled = false,
+  keymap_pick = nil,
+  keymap_abs = "[a",
+  keymap_dirname = "]a",
+  keymap_name = nil,
+  keymap_project_root = "[R", -- copy absolute project root path
+  keymap_project_rel = "]R", -- copy node path relative to project root
+  root_markers = { ".git" },
+  notify = true,
 }
 
 ---@type FiletreeAdapter?
@@ -85,16 +85,26 @@ end
 
 ---@type table<string, fun(path: string): string>
 local FORMATS = {
-  absolute = function(path) return path end,
-  relative = function(path) return vim.fn.fnamemodify(path, ":.") end,
-  name     = function(path) return vim.fn.fnamemodify(path, ":t") end,
-  dirname  = function(path) return vim.fn.fnamemodify(path, ":h") end,
-  stem     = function(path) return vim.fn.fnamemodify(path, ":t:r") end,
-  uri      = function(path)
+  absolute = function(path)
+    return path
+  end,
+  relative = function(path)
+    return vim.fn.fnamemodify(path, ":.")
+  end,
+  name = function(path)
+    return vim.fn.fnamemodify(path, ":t")
+  end,
+  dirname = function(path)
+    return vim.fn.fnamemodify(path, ":h")
+  end,
+  stem = function(path)
+    return vim.fn.fnamemodify(path, ":t:r")
+  end,
+  uri = function(path)
     local abs = vim.fn.fnamemodify(path, ":p"):gsub("\\", "/")
     return "file://" .. (abs:sub(1, 1) == "/" and abs or "/" .. abs)
   end,
-  line     = function(path)
+  line = function(path)
     local ln = cursor_line()
     local rel = vim.fn.fnamemodify(path, ":.")
     return ln and (rel .. ":" .. ln) or rel
@@ -107,51 +117,63 @@ local FORMATS = {
   project_relative = function(path)
     local root = resolve_root(path)
     local ok, relpath = pcall(require, "lib.nvim.fs.relpath")
-    if ok and type(relpath) == "function" then
-      return relpath(path, root)
-    end
+    if ok and type(relpath) == "function" then return relpath(path, root) end
     -- Fallback: strip the root prefix manually.
     local nroot = root:gsub("\\", "/"):gsub("/$", "")
     local npath = path:gsub("\\", "/")
-    if npath:sub(1, #nroot + 1) == nroot .. "/" then
-      return npath:sub(#nroot + 2)
-    end
+    if npath:sub(1, #nroot + 1) == nroot .. "/" then return npath:sub(#nroot + 2) end
     return npath
   end,
 }
 
 local FORMAT_ORDER = {
-  "absolute", "relative", "name", "dirname", "stem", "uri", "line",
-  "project_root", "project_relative",
+  "absolute",
+  "relative",
+  "name",
+  "dirname",
+  "stem",
+  "uri",
+  "line",
+  "project_root",
+  "project_relative",
 }
 
 -- ── Copy helper ───────────────────────────────────────────────────────────────
 
 local function do_copy(fmt)
   local path = current_node_path()
-  if not path then notify.warn("No node under cursor"); return end
+  if not path then
+    notify.warn("No node under cursor")
+    return
+  end
 
   local builder = FORMATS[fmt]
-  if not builder then notify.warn("Unknown format: " .. fmt); return end
+  if not builder then
+    notify.warn("Unknown format: " .. fmt)
+    return
+  end
 
   local text = builder(path)
   vim.fn.setreg("+", text)
   vim.fn.setreg('"', text)
 
-  if _cfg.notify then
-    notify.info(string.format("[%s] %s", fmt, text))
-  end
+  if _cfg.notify then notify.info(string.format("[%s] %s", fmt, text)) end
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
 for _, fmt in ipairs(FORMAT_ORDER) do
-  M["copy_" .. fmt] = function() do_copy(fmt) end
+  M["copy_" .. fmt] = function()
+    do_copy(fmt)
+  end
 end
 
 function M.pick()
   local path = current_node_path()
-  if not path then notify.warn("No node under cursor"); return end
+  if not path then
+    notify.warn("No node under cursor")
+    return
+  end
 
   local built = {}
   for _, fmt in ipairs(FORMAT_ORDER) do
@@ -160,14 +182,14 @@ function M.pick()
 
   ui_select(built, {
     prompt = "Copy path",
-    format_item = function(item) return string.format("%-10s %s", item.fmt, item.text) end,
+    format_item = function(item)
+      return string.format("%-10s %s", item.fmt, item.text)
+    end,
   }, function(item)
     if not item then return end
     vim.fn.setreg("+", item.text)
     vim.fn.setreg('"', item.text)
-    if _cfg.notify then
-      notify.info(string.format("[%s] %s", item.fmt, item.text))
-    end
+    if _cfg.notify then notify.info(string.format("[%s] %s", item.fmt, item.text)) end
   end)
 end
 
@@ -177,7 +199,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   -- Build the cached project-root finder unless disabled (root_markers = false).
@@ -186,28 +208,28 @@ function M.setup(config, adapter)
   if markers == nil then markers = { ".git" } end
   if markers ~= false then
     local ok, find_root = pcall(require, "lib.nvim.fs.find_root")
-    if ok and type(find_root) == "function" then
-      _root_finder = find_root({ markers = markers })
-    end
+    if ok and type(find_root) == "function" then _root_finder = find_root({ markers = markers }) end
   end
 
   tree_attach.on_attach(function(buf)
     local function kmap(key, fn, desc)
-      if key and key ~= "" then
-        map("n", key, fn, { buffer = buf, silent = true, desc = desc })
-      end
+      if key and key ~= "" then map("n", key, fn, { buffer = buf, silent = true, desc = desc }) end
     end
-    kmap(_cfg.keymap_pick,         M.pick,                  "Filetree: copy path (pick format)")
-    kmap(_cfg.keymap_abs,          M.copy_absolute,         "Filetree: copy absolute path")
-    kmap(_cfg.keymap_dirname,      M.copy_dirname,          "Filetree: copy absolute parent directory")
-    kmap(_cfg.keymap_name,         M.copy_name,             "Filetree: copy filename")
-    kmap(_cfg.keymap_project_root, M.copy_project_root,     "Filetree: copy absolute project root")
-    kmap(_cfg.keymap_project_rel,  M.copy_project_relative, "Filetree: copy path relative to project root")
+    kmap(_cfg.keymap_pick, M.pick, "Filetree: copy path (pick format)")
+    kmap(_cfg.keymap_abs, M.copy_absolute, "Filetree: copy absolute path")
+    kmap(_cfg.keymap_dirname, M.copy_dirname, "Filetree: copy absolute parent directory")
+    kmap(_cfg.keymap_name, M.copy_name, "Filetree: copy filename")
+    kmap(_cfg.keymap_project_root, M.copy_project_root, "Filetree: copy absolute project root")
+    kmap(
+      _cfg.keymap_project_rel,
+      M.copy_project_relative,
+      "Filetree: copy path relative to project root"
+    )
   end)
 end
 
 function M.teardown()
-  _adapter     = nil
+  _adapter = nil
   _root_finder = nil
 end
 

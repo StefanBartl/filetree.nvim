@@ -13,8 +13,8 @@ local M = {
   name = "nvimtree",
   filetypes = { "NvimTree" },
   hl_groups = {
-    NvimTreeNormal      = "Normal",
-    NvimTreeNormalNC    = "NormalNC",
+    NvimTreeNormal = "Normal",
+    NvimTreeNormalNC = "NormalNC",
     NvimTreeEndOfBuffer = "EndOfBuffer",
   },
 }
@@ -42,10 +42,10 @@ function M.is_open()
   local ok, view = pcall(require, "nvim-tree.view")
   if not ok or not view then return false, nil end
   if not view.is_visible() then return false, nil end
-  local ok2, bufnr = pcall(function() return view.get_bufnr() end)
-  if ok2 and bufnr and vim.api.nvim_buf_is_valid(bufnr) then
-    return true, bufnr
-  end
+  local ok2, bufnr = pcall(function()
+    return view.get_bufnr()
+  end)
+  if ok2 and bufnr and vim.api.nvim_buf_is_valid(bufnr) then return true, bufnr end
   return false, nil
 end
 
@@ -59,10 +59,10 @@ end
 function M.get_winid()
   local a = api()
   if not a then return nil end
-  local ok, winid = pcall(function() return a.tree.winid() end)
-  if ok and winid and vim.api.nvim_win_is_valid(winid) then
-    return winid
-  end
+  local ok, winid = pcall(function()
+    return a.tree.winid()
+  end)
+  if ok and winid and vim.api.nvim_win_is_valid(winid) then return winid end
   return nil
 end
 
@@ -109,15 +109,17 @@ end
 function M.get_current_node()
   local a = api()
   if not a then return nil end
-  local ok, node = pcall(function() return a.tree.get_node_under_cursor() end)
+  local ok, node = pcall(function()
+    return a.tree.get_node_under_cursor()
+  end)
   if not ok or not node then return nil end
   local ntype = node.type == "directory" and "directory" or "file"
   return {
-    id          = node.absolute_path or "",
-    name        = node.name or "",
-    path        = node.absolute_path or "",
-    type        = ntype,
-    depth       = node.level or 0,
+    id = node.absolute_path or "",
+    name = node.name or "",
+    path = node.absolute_path or "",
+    type = ntype,
+    depth = node.level or 0,
     line_number = vim.fn.line("."),
     is_expanded = ntype == "directory" and (node.open or false) or nil,
   }
@@ -134,16 +136,17 @@ function M.get_visible_nodes(filter)
     local function walk(node, depth)
       if not node then return end
       local ntype = node.type == "directory" and "directory" or "file"
-      local include = filter == nil or filter == "all"
-        or (filter == "files"   and ntype == "file")
+      local include = filter == nil
+        or filter == "all"
+        or (filter == "files" and ntype == "file")
         or (filter == "folders" and ntype == "directory")
       if include then
         nodes[#nodes + 1] = {
-          id          = node.absolute_path or "",
-          name        = node.name or "",
-          path        = node.absolute_path or "",
-          type        = ntype,
-          depth       = depth,
+          id = node.absolute_path or "",
+          name = node.name or "",
+          path = node.absolute_path or "",
+          type = ntype,
+          depth = depth,
           line_number = #nodes + 1,
           is_expanded = ntype == "directory" and (node.open or false) or nil,
         }
@@ -156,7 +159,9 @@ function M.get_visible_nodes(filter)
     end
     local tree = require("nvim-tree.core").get_explorer()
     if tree and tree.nodes then
-      for _, node in ipairs(tree.nodes) do walk(node, 1) end
+      for _, node in ipairs(tree.nodes) do
+        walk(node, 1)
+      end
     end
     return nodes
   end)
@@ -193,9 +198,7 @@ function M.expand_node(node)
   local ok = pcall(function()
     local lib = require("nvim-tree.lib")
     local nvim_node = lib.get_node_at_cursor()
-    if nvim_node and nvim_node.absolute_path == node.path then
-      lib.expand_or_collapse(nvim_node)
-    end
+    if nvim_node and nvim_node.absolute_path == node.path then lib.expand_or_collapse(nvim_node) end
   end)
   return ok
 end
@@ -212,10 +215,10 @@ end
 function M.open_file(path, mode)
   mode = mode or "edit"
   local cmd_map = {
-    edit   = "edit",
-    split  = "split",
+    edit = "edit",
+    split = "split",
     vsplit = "vsplit",
-    tab    = "tabnew",
+    tab = "tabnew",
   }
   local cmd = cmd_map[mode] or "edit"
   local ok = pcall(vim.cmd, cmd .. " " .. vim.fn.fnameescape(path))
@@ -229,10 +232,14 @@ function M.open_reveal(path, _parent_levels)
   local a = api()
   if not a then return false end
   if not M.is_open() then
-    local ok1 = pcall(function() a.tree.open() end)
+    local ok1 = pcall(function()
+      a.tree.open()
+    end)
     if not ok1 then return false end
   end
-  local ok2 = pcall(function() a.tree.find_file(path) end)
+  local ok2 = pcall(function()
+    a.tree.find_file(path)
+  end)
   return ok2
 end
 
@@ -240,7 +247,9 @@ end
 function M.open_cwd()
   local a = api()
   if not a then return false end
-  local ok = pcall(function() a.tree.open({ path = vim.fn.getcwd() }) end)
+  local ok = pcall(function()
+    a.tree.open({ path = vim.fn.getcwd() })
+  end)
   return ok
 end
 
@@ -248,7 +257,9 @@ end
 function M.close()
   local a = api()
   if not a then return false end
-  local ok = pcall(function() a.tree.close() end)
+  local ok = pcall(function()
+    a.tree.close()
+  end)
   return ok
 end
 
@@ -256,7 +267,9 @@ end
 function M.refresh()
   local a = api()
   if not a then return false end
-  local ok = pcall(function() a.tree.reload() end)
+  local ok = pcall(function()
+    a.tree.reload()
+  end)
   return ok
 end
 
@@ -290,7 +303,7 @@ function M.highlight_node(path, hl_group)
   if not bufnr then return false end
   local ok, id = pcall(vim.api.nvim_buf_set_extmark, bufnr, ns(), line - 1, 0, {
     line_hl_group = hl_group,
-    priority      = 150,
+    priority = 150,
   })
   if ok then _hl_marks[path] = id end
   return ok

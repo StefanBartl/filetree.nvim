@@ -18,8 +18,13 @@ vim.opt.rtp:prepend(root)
 
 local passed, failed = 0, 0
 local function check(name, ok, detail)
-  if ok then passed = passed + 1; print("  ok   " .. name)
-  else failed = failed + 1; print("  FAIL " .. name .. (detail and ("  — " .. detail) or "")) end
+  if ok then
+    passed = passed + 1
+    print("  ok   " .. name)
+  else
+    failed = failed + 1
+    print("  FAIL " .. name .. (detail and ("  — " .. detail) or ""))
+  end
 end
 local function eq(name, got, want)
   check(name, got == want, ("got %q want %q"):format(tostring(got), tostring(want)))
@@ -31,15 +36,21 @@ local function stub_action(name, fns)
   local calls = {}
   local t = {}
   for _, fn in ipairs(fns) do
-    t[fn] = function() calls[#calls + 1] = name .. "." .. fn end
+    t[fn] = function()
+      calls[#calls + 1] = name .. "." .. fn
+    end
   end
   return t, calls
 end
 
 local function install_stub(menu_cfg, present_features)
   package.loaded["filetree"] = {
-    feature = function(n) return present_features[n] end,
-    config = function() return { menu = menu_cfg } end,
+    feature = function(n)
+      return present_features[n]
+    end,
+    config = function()
+      return { menu = menu_cfg }
+    end,
   }
   package.loaded["filetree.integrations.menu"] = nil
   return require("filetree.integrations.menu")
@@ -47,11 +58,15 @@ end
 
 local function names(items)
   local out = {}
-  for _, it in ipairs(items) do out[#out + 1] = it.name end
+  for _, it in ipairs(items) do
+    out[#out + 1] = it.name
+  end
   return out
 end
 local function has(list, needle)
-  for _, x in ipairs(list) do if x == needle then return true end end
+  for _, x in ipairs(list) do
+    if x == needle then return true end
+  end
   return false
 end
 
@@ -65,7 +80,9 @@ do
   -- create_from_template intentionally omitted -> its entry must not appear.
   features.copy_move = (stub_action("copy_move", { "stage_copy", "stage_cut", "paste" }))
   features.trash = (stub_action("trash", { "delete_current" }))
-  features.open_variants = (stub_action("open_variants", { "open_vsplit", "open_split", "open_tabnew" }))
+  features.open_variants = (
+    stub_action("open_variants", { "open_vsplit", "open_split", "open_tabnew" })
+  )
   features.open_with = (stub_action("open_with", { "open_system" }))
   features.open_in_fm = (stub_action("open_in_fm", { "open" }))
   features.path_copy = (stub_action("path_copy", { "pick" }))
@@ -82,7 +99,10 @@ do
   check("menu: trash entry present", has(list, "  Trash"))
   check("menu: path_copy entry present", has(list, "  Copy path…"))
   check("menu: node_info entry present", has(list, "  Node info"))
-  check("menu: entry omitted when its feature is disabled/absent", not has(list, "New from template"))
+  check(
+    "menu: entry omitted when its feature is disabled/absent",
+    not has(list, "New from template")
+  )
 
   check("menu: does not start with a separator", items[1] and items[1].name ~= "separator")
   check("menu: does not end with a separator", items[#items] and items[#items].name ~= "separator")
@@ -105,7 +125,10 @@ do
   -- submenu() wraps the same entries as a single fly-out; nil when empty.
   local menu4 = install_stub({ enable = true }, features)
   local sub = menu4.submenu()
-  check("menu.submenu(): non-empty fly-out entry", sub ~= nil and sub.name ~= nil and #sub.items > 0)
+  check(
+    "menu.submenu(): non-empty fly-out entry",
+    sub ~= nil and sub.name ~= nil and #sub.items > 0
+  )
   local menu5 = install_stub({ enable = false }, features)
   eq("menu.submenu(): nil when there is nothing to show", menu5.submenu(), nil)
 
@@ -115,4 +138,8 @@ end
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim menu: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end

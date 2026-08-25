@@ -16,38 +16,38 @@
 ---   <Tab>  — toggle preview; image/PDF dispatch for those file types.
 ---   <CR>   — image/PDF dispatch only; other nodes pass through to adapter's <CR>.
 
-local notify     = require("filetree.util.notify").create("[filetree.preview]")
-local platform   = require("filetree.util.platform")
+local notify = require("filetree.util.notify").create("[filetree.preview]")
+local platform = require("filetree.util.platform")
 local line_count = require("filetree.util.line_count")
-local bufutil    = require("filetree.util.buffer")
+local bufutil = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
-local au  = require("filetree.util.autocmd")
+local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreePreviewConfig
 local _cfg = {
-  enabled              = false,
-  mode                 = "buffer",   -- "buffer" | "float"
-  highlight            = true,       -- syntax/treesitter highlighting in the preview
-  cursor_debounce_ms   = 80,         -- delay live-update while scrolling the tree
-  keymap               = "<Tab>",
-  keymap_open          = "<CR>",
-  max_lines            = 40,
-  max_width            = 80,
-  max_height           = 25,
-  wrap                 = false,
-  keymap_scroll_up     = "<C-b>",
-  keymap_scroll_down   = "<C-f>",
-  keymap_scroll_up10   = "<PageUp>",
+  enabled = false,
+  mode = "buffer", -- "buffer" | "float"
+  highlight = true, -- syntax/treesitter highlighting in the preview
+  cursor_debounce_ms = 80, -- delay live-update while scrolling the tree
+  keymap = "<Tab>",
+  keymap_open = "<CR>",
+  max_lines = 40,
+  max_width = 80,
+  max_height = 25,
+  wrap = false,
+  keymap_scroll_up = "<C-b>",
+  keymap_scroll_down = "<C-f>",
+  keymap_scroll_up10 = "<PageUp>",
   keymap_scroll_down10 = "<PageDown>",
   image = {
-    backend = "auto",   -- "auto" | "images.nvim" | "snacks" | "image.nvim" | "system" | false
+    backend = "auto", -- "auto" | "images.nvim" | "snacks" | "image.nvim" | "system" | false
   },
   pdf = {
-    backend = "pdfport",  -- "pdfport" | "system" | false
+    backend = "pdfport", -- "pdfport" | "system" | false
   },
 }
 
@@ -55,7 +55,7 @@ local _cfg = {
 local _adapter = nil
 
 ---@type integer?  current float preview window
-local _win  = nil
+local _win = nil
 ---@type integer?  current float preview buffer
 local _bufnr = nil
 
@@ -75,17 +75,29 @@ local _saved_buf = nil
 -- ── File-type detection ───────────────────────────────────────────────────────
 
 local _IMAGE_EXTS = {
-  png=1, jpg=1, jpeg=1, gif=1, bmp=1, svg=1, webp=1,
-  ico=1, tiff=1, tif=1, avif=1, heic=1,
+  png = 1,
+  jpg = 1,
+  jpeg = 1,
+  gif = 1,
+  bmp = 1,
+  svg = 1,
+  webp = 1,
+  ico = 1,
+  tiff = 1,
+  tif = 1,
+  avif = 1,
+  heic = 1,
 }
 
-local _PDF_EXTS = { pdf=1 }
+local _PDF_EXTS = { pdf = 1 }
 
 local function ext(path)
   return (path:match("%.([^.]+)$") or ""):lower()
 end
 
-local function is_image(path) return _IMAGE_EXTS[ext(path)] == 1 end
+local function is_image(path)
+  return _IMAGE_EXTS[ext(path)] == 1
+end
 
 ---Enable treesitter highlighting on a preview buffer, if configured and a
 ---parser is available. Explicit (rather than relying on the user's own
@@ -102,7 +114,9 @@ local function apply_highlight(bufnr, ft)
   lang = (ok_lang and lang) or ft
   pcall(vim.treesitter.start, bufnr, lang)
 end
-local function is_pdf(path)   return _PDF_EXTS[ext(path)]   == 1 end
+local function is_pdf(path)
+  return _PDF_EXTS[ext(path)] == 1
+end
 
 -- ── Cross-platform system-open ────────────────────────────────────────────────
 
@@ -122,16 +136,14 @@ local function system_open(path)
     args = { "xdg-open", path }
   end
   local ok = vim.fn.jobstart(args, { detach = true })
-  if not ok or ok <= 0 then
-    notify.warn("Could not open in system app: " .. path)
-  end
+  if not ok or ok <= 0 then notify.warn("Could not open in system app: " .. path) end
 end
 
 -- ── Image backend dispatch ────────────────────────────────────────────────────
 
 local function open_image(path)
   local backend = (_cfg.image or {}).backend or "auto"
-  if backend == false then return false end   -- caller falls through to text preview
+  if backend == false then return false end -- caller falls through to text preview
 
   -- images.nvim first in "auto": it is the only backend that works on native
   -- Windows Neovim. snacks.image and image.nvim both speak Kitty APC only, and
@@ -161,7 +173,7 @@ local function open_image(path)
     end
     if backend == "snacks" then
       notify.warn("snacks.image not available — install folke/snacks.nvim")
-      return true   -- don't fall through
+      return true -- don't fall through
     end
   end
 
@@ -221,7 +233,9 @@ local function hex_dump(path)
   local out = {}
   for i, l in ipairs(data) do
     local hex = {}
-    for j = 1, #l do hex[#hex + 1] = string.format("%02x", l:byte(j)) end
+    for j = 1, #l do
+      hex[#hex + 1] = string.format("%02x", l:byte(j))
+    end
     out[i] = table.concat(hex, " ")
   end
   out[#out + 1] = "(binary — first 16 lines as hex)"
@@ -240,7 +254,7 @@ local function list_dir(path)
   table.sort(entries)
   local out = { "Directory: " .. path, "" }
   for _, e in ipairs(entries) do
-    local full   = path .. "/" .. e
+    local full = path .. "/" .. e
     local prefix = vim.fn.isdirectory(full) == 1 and "  /" or "   "
     out[#out + 1] = prefix .. e
   end
@@ -250,76 +264,77 @@ end
 -- ── Preview window ────────────────────────────────────────────────────────────
 
 local function close_preview()
-  if _win and vim.api.nvim_win_is_valid(_win) then
-    pcall(vim.api.nvim_win_close, _win, true)
-  end
+  if _win and vim.api.nvim_win_is_valid(_win) then pcall(vim.api.nvim_win_close, _win, true) end
   if _bufnr and vim.api.nvim_buf_is_valid(_bufnr) then
     pcall(vim.api.nvim_buf_delete, _bufnr, { force = true })
   end
-  _win   = nil
+  _win = nil
   _bufnr = nil
 end
 
 local function open_preview(node)
   close_preview()
 
-  local path   = node.path
+  local path = node.path
   local is_dir = vim.fn.isdirectory(path) == 1
   local lines, ft
 
   if is_dir then
     lines = list_dir(path)
-    ft    = ""
+    ft = ""
   elseif is_binary(path) then
     lines = hex_dump(path)
-    ft    = ""
+    ft = ""
   else
     lines = read_text(path)
-    ft    = vim.filetype.match({ filename = path }) or ""
+    ft = vim.filetype.match({ filename = path }) or ""
   end
 
-  local max_w     = _cfg.max_width
+  local max_w = _cfg.max_width
   local content_w = 0
-  for _, l in ipairs(lines) do content_w = math.max(content_w, #l) end
-  local width  = math.max(math.min(content_w + 2, max_w), 20)
+  for _, l in ipairs(lines) do
+    content_w = math.max(content_w, #l)
+  end
+  local width = math.max(math.min(content_w + 2, max_w), 20)
   local height = math.min(#lines + 1, _cfg.max_height)
 
   local cur_win = vim.api.nvim_get_current_win()
   local win_pos = vim.api.nvim_win_get_position(cur_win)
-  local win_w   = vim.api.nvim_win_get_width(cur_win)
+  local win_w = vim.api.nvim_win_get_width(cur_win)
   local cur_row = vim.api.nvim_win_get_cursor(cur_win)[1] - 1
 
   local col = win_pos[2] + win_w + 1
-  if col + width > vim.o.columns then
-    col = math.max(0, win_pos[2] - width - 1)
-  end
+  if col + width > vim.o.columns then col = math.max(0, win_pos[2] - width - 1) end
   local row = math.max(0, win_pos[1] + cur_row - math.floor(height / 2))
   row = math.min(row, vim.o.lines - height - 3)
 
   _bufnr = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(_bufnr, 0, -1, false, lines)
   vim.api.nvim_set_option_value("modifiable", false, { buf = _bufnr })
-  vim.api.nvim_set_option_value("buftype",    "nofile", { buf = _bufnr })
+  vim.api.nvim_set_option_value("buftype", "nofile", { buf = _bufnr })
   if ft ~= "" then
     pcall(vim.api.nvim_set_option_value, "filetype", ft, { buf = _bufnr })
     apply_highlight(_bufnr, ft)
   end
 
   _win = vim.api.nvim_open_win(_bufnr, false, {
-    relative  = "editor",
-    row       = row,
-    col       = col,
-    width     = width,
-    height    = height,
-    style     = "minimal",
-    border    = "rounded",
-    title     = " " .. vim.fn.fnamemodify(path, ":t") .. " ",
+    relative = "editor",
+    row = row,
+    col = col,
+    width = width,
+    height = height,
+    style = "minimal",
+    border = "rounded",
+    title = " " .. vim.fn.fnamemodify(path, ":t") .. " ",
     title_pos = "center",
     focusable = false,
   })
 
-  vim.api.nvim_set_option_value("winhl",
-    "Normal:NormalFloat,FloatBorder:FloatBorder", { win = _win })
+  vim.api.nvim_set_option_value(
+    "winhl",
+    "Normal:NormalFloat,FloatBorder:FloatBorder",
+    { win = _win }
+  )
   vim.api.nvim_set_option_value("wrap", _cfg.wrap, { win = _win })
   pcall(vim.api.nvim_win_set_cursor, _win, { 1, 0 })
 end
@@ -329,10 +344,10 @@ end
 ---@param delta integer  positive = up (lower line numbers)
 local function scroll_preview(delta)
   if not (_win and vim.api.nvim_win_is_valid(_win)) then return end
-  local buf   = vim.api.nvim_win_get_buf(_win)
+  local buf = vim.api.nvim_win_get_buf(_win)
   local total = vim.api.nvim_buf_line_count(buf)
-  local cur   = vim.api.nvim_win_get_cursor(_win)[1]
-  local next  = math.max(1, math.min(total, cur - delta))
+  local cur = vim.api.nvim_win_get_cursor(_win)[1]
+  local next = math.max(1, math.min(total, cur - delta))
   pcall(vim.api.nvim_win_set_cursor, _win, { next, 0 })
 end
 
@@ -395,8 +410,8 @@ local function buf_show(path)
   if vim.fn.filereadable(path) ~= 1 then return end
   local b = vim.fn.bufadd(path)
   without_nav_events(function()
-    vim.fn.bufload(b)                            -- triggers filetype/syntax
-    pcall(vim.api.nvim_win_set_buf, win, b)      -- set buffer, focus stays in tree
+    vim.fn.bufload(b) -- triggers filetype/syntax
+    pcall(vim.api.nvim_win_set_buf, win, b) -- set buffer, focus stays in tree
   end)
   apply_highlight(b, vim.bo[b].filetype)
 end
@@ -404,8 +419,13 @@ end
 ---Stop buffer-mode preview. When `restore` is true, put the original buffer back.
 ---@param restore boolean
 local function buf_stop(restore)
-  if restore and _editor_win and vim.api.nvim_win_is_valid(_editor_win)
-     and _saved_buf and vim.api.nvim_buf_is_valid(_saved_buf) then
+  if
+    restore
+    and _editor_win
+    and vim.api.nvim_win_is_valid(_editor_win)
+    and _saved_buf
+    and vim.api.nvim_buf_is_valid(_saved_buf)
+  then
     -- Restoring the original buffer is just as much a non-navigation as showing
     -- the preview was, so suppress the same follow-the-file events (otherwise
     -- ending a preview would itself trigger a spurious cwd_sync chdir).
@@ -415,7 +435,7 @@ local function buf_stop(restore)
   end
   _buf_active = false
   _editor_win = nil
-  _saved_buf  = nil
+  _saved_buf = nil
 end
 
 ---Start buffer-mode preview for `node`, remembering the editor window's buffer.
@@ -427,7 +447,7 @@ local function buf_start(node)
     return
   end
   _editor_win = win
-  _saved_buf  = vim.api.nvim_win_get_buf(win)
+  _saved_buf = vim.api.nvim_win_get_buf(win)
   _buf_active = true
   if node and node.path and node.path ~= "" and vim.fn.isdirectory(node.path) ~= 1 then
     buf_show(node.path)
@@ -462,7 +482,10 @@ function M.toggle()
       return
     end
     local node = _adapter.get_current_node()
-    if not node then notify.warn("no node under cursor"); return end
+    if not node then
+      notify.warn("no node under cursor")
+      return
+    end
     open_preview(node)
     return
   end
@@ -473,7 +496,10 @@ function M.toggle()
     return
   end
   local node = _adapter.get_current_node()
-  if not node then notify.warn("no node under cursor"); return end
+  if not node then
+    notify.warn("no node under cursor")
+    return
+  end
   buf_start(node)
 end
 
@@ -487,10 +513,10 @@ function M.toggle_or_open()
   end
 
   local cfg_img = _cfg.image or {}
-  local cfg_pdf = _cfg.pdf   or {}
+  local cfg_pdf = _cfg.pdf or {}
 
   if cfg_img.backend ~= false and is_image(node.path) then
-    close_preview()   -- close any open text preview first
+    close_preview() -- close any open text preview first
     open_image(node.path)
     return
   end
@@ -516,7 +542,7 @@ function M.open_or_fallback(fallback)
   end
 
   local cfg_img = _cfg.image or {}
-  local cfg_pdf = _cfg.pdf   or {}
+  local cfg_pdf = _cfg.pdf or {}
 
   if cfg_img.backend ~= false and is_image(node.path) then
     open_image(node.path)
@@ -545,7 +571,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg     = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
   if _cm_debounce then _cm_debounce.cancel() end
@@ -558,7 +584,9 @@ function M.setup(config, adapter)
     -- <Tab>: toggle text preview, or dispatch image/PDF
     if _cfg.keymap then
       map("n", _cfg.keymap, M.toggle_or_open, {
-        buffer = buf, silent = true, desc = "Filetree: preview / open image or PDF",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: preview / open image or PDF",
       })
     end
 
@@ -575,8 +603,9 @@ function M.setup(config, adapter)
       map("n", _cfg.keymap_open, function()
         M.open_or_fallback(original_cr_cb)
       end, {
-        buffer = buf, silent = true,
-        desc   = "Filetree: open image/PDF, or adapter default",
+        buffer = buf,
+        silent = true,
+        desc = "Filetree: open image/PDF, or adapter default",
       })
     end
 
@@ -586,17 +615,20 @@ function M.setup(config, adapter)
       -- <PageUp>/<PageDown>) rather than looping scroll_preview, since its
       -- delta is plain cursor-line arithmetic.
       local scroll_keys = {
-        { _cfg.keymap_scroll_up,     1  },
-        { _cfg.keymap_scroll_down,   -1 },
-        { _cfg.keymap_scroll_up10,   10 },
+        { _cfg.keymap_scroll_up, 1 },
+        { _cfg.keymap_scroll_down, -1 },
+        { _cfg.keymap_scroll_up10, 10 },
         { _cfg.keymap_scroll_down10, -10 },
       }
       for _, pair in ipairs(scroll_keys) do
         local key, delta = pair[1], pair[2]
         if key then
-          map("n", key, function() scroll_preview(delta * vim.v.count1) end, {
-            buffer = buf, silent = true,
-            desc   = "Filetree: scroll preview " .. (delta > 0 and "up" or "down") .. " (×count)",
+          map("n", key, function()
+            scroll_preview(delta * vim.v.count1)
+          end, {
+            buffer = buf,
+            silent = true,
+            desc = "Filetree: scroll preview " .. (delta > 0 and "up" or "down") .. " (×count)",
           })
         end
       end
@@ -607,8 +639,8 @@ function M.setup(config, adapter)
       -- back with noremap so this mapping doesn't re-trigger) — the count is
       -- carried along in both cases.
       local page_keys = {
-        { _cfg.keymap_scroll_up10,   -1 },  -- <PageUp>  → page up
-        { _cfg.keymap_scroll_down10,  1 },  -- <PageDown> → page down
+        { _cfg.keymap_scroll_up10, -1 }, -- <PageUp>  → page up
+        { _cfg.keymap_scroll_down10, 1 }, -- <PageDown> → page down
       }
       for _, pair in ipairs(page_keys) do
         local key, dir = pair[1], pair[2]
@@ -620,8 +652,9 @@ function M.setup(config, adapter)
               vim.api.nvim_feedkeys(k, "n", false)
             end
           end, {
-            buffer = buf, silent = true,
-            desc   = "Filetree: page preview " .. (dir > 0 and "down" or "up") .. " (×count)",
+            buffer = buf,
+            silent = true,
+            desc = "Filetree: page preview " .. (dir > 0 and "down" or "up") .. " (×count)",
           })
         end
       end
@@ -632,7 +665,7 @@ function M.setup(config, adapter)
   -- keep the shown file (the user is moving into the editor to use it); toggling
   -- off from inside the tree is what restores the original buffer.
   au.acmd({ "BufLeave", "WinLeave" }, {
-    group   = _augroup,
+    group = _augroup,
     pattern = "*",
     callback = function(ev)
       local ft = vim.bo[ev.buf].filetype
@@ -651,7 +684,7 @@ function M.setup(config, adapter)
   -- full float rebuild) on every single line. The node is re-read when the timer
   -- fires, so the update always reflects the cursor's final resting line.
   au.acmd("CursorMoved", {
-    group   = _augroup,
+    group = _augroup,
     pattern = "*",
     callback = function()
       local ft = vim.bo.filetype

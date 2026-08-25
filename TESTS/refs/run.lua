@@ -33,26 +33,24 @@ vim.opt.rtp:prepend(root)
 -- managed copy (see lib.nvim/templates/resolve_lib_nvim.lua for the
 -- canonical copy of this function and the other caller patterns).
 local function add_lib_nvim()
-	local candidates = {}
-	if vim.env.LIB_NVIM_PATH then
-		candidates[#candidates + 1] = vim.env.LIB_NVIM_PATH
-	end
-	candidates[#candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
-	candidates[#candidates + 1] = vim.fn.stdpath("data") .. "/lazy/lib.nvim"
+  local candidates = {}
+  if vim.env.LIB_NVIM_PATH then candidates[#candidates + 1] = vim.env.LIB_NVIM_PATH end
+  candidates[#candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
+  candidates[#candidates + 1] = vim.fn.stdpath("data") .. "/lazy/lib.nvim"
 
-	for _, path in ipairs(candidates) do
-		local norm = vim.fs.normalize(path)
-		if vim.fn.isdirectory(norm .. "/lua/lib") == 1 then
-			vim.opt.rtp:prepend(norm)
-			package.path = table.concat({
-				norm .. "/lua/?.lua",
-				norm .. "/lua/?/init.lua",
-				package.path,
-			}, ";")
-			return norm
-		end
-	end
-	return nil
+  for _, path in ipairs(candidates) do
+    local norm = vim.fs.normalize(path)
+    if vim.fn.isdirectory(norm .. "/lua/lib") == 1 then
+      vim.opt.rtp:prepend(norm)
+      package.path = table.concat({
+        norm .. "/lua/?.lua",
+        norm .. "/lua/?/init.lua",
+        package.path,
+      }, ";")
+      return norm
+    end
+  end
+  return nil
 end
 
 add_lib_nvim()
@@ -112,9 +110,7 @@ end
 ---@param new string
 ---@return boolean
 local function old_fully_replaced(content, old, new)
-  if new:sub(1, #old) == old then
-    return count_sub(content, old) == count_sub(content, new)
-  end
+  if new:sub(1, #old) == old then return count_sub(content, old) == count_sub(content, new) end
   return content:find(old, 1, true) == nil
 end
 
@@ -156,53 +152,121 @@ refs.setup({
 ---@type LangSpec[]
 local LANGS = {
   {
-    name     = "lua",
-    hub      = "lua/proj/util/shared.lua",
+    name = "lua",
+    hub = "lua/proj/util/shared.lua",
     new_name = "shared_utils.lua",
     checks = {
-      { file = "lua/proj/a.lua",              old = 'require("proj.util.shared")', new = 'require("proj.util.shared_utils")' },
-      { file = "lua/proj/nested/b.lua",       old = 'require("proj.util.shared")', new = 'require("proj.util.shared_utils")' },
-      { file = "lua/proj/nested/deep/c.lua",  old = 'require "proj.util.shared"',  new = 'require "proj.util.shared_utils"' },
-      { file = "lua/proj/other/unrelated.lua",old = 'require("proj.util.shared_other")', new = 'require("proj.util.shared_other")' },
+      {
+        file = "lua/proj/a.lua",
+        old = 'require("proj.util.shared")',
+        new = 'require("proj.util.shared_utils")',
+      },
+      {
+        file = "lua/proj/nested/b.lua",
+        old = 'require("proj.util.shared")',
+        new = 'require("proj.util.shared_utils")',
+      },
+      {
+        file = "lua/proj/nested/deep/c.lua",
+        old = 'require "proj.util.shared"',
+        new = 'require "proj.util.shared_utils"',
+      },
+      {
+        file = "lua/proj/other/unrelated.lua",
+        old = 'require("proj.util.shared_other")',
+        new = 'require("proj.util.shared_other")',
+      },
     },
   },
   {
-    name     = "python",
-    hub      = "pkg/util/shared.py",
+    name = "python",
+    hub = "pkg/util/shared.py",
     new_name = "shared_utils.py",
     checks = {
-      { file = "pkg/a.py",               old = "from pkg.util.shared import greet", new = "from pkg.util.shared_utils import greet" },
-      { file = "pkg/nested/b.py",        old = "import pkg.util.shared",            new = "import pkg.util.shared_utils" },
-      { file = "pkg/other/unrelated.py", old = "from pkg.util.shared_other import greet", new = "from pkg.util.shared_other import greet" },
+      {
+        file = "pkg/a.py",
+        old = "from pkg.util.shared import greet",
+        new = "from pkg.util.shared_utils import greet",
+      },
+      {
+        file = "pkg/nested/b.py",
+        old = "import pkg.util.shared",
+        new = "import pkg.util.shared_utils",
+      },
+      {
+        file = "pkg/other/unrelated.py",
+        old = "from pkg.util.shared_other import greet",
+        new = "from pkg.util.shared_other import greet",
+      },
     },
   },
   {
-    name     = "ts",
-    hub      = "src/util/shared.ts",
+    name = "ts",
+    hub = "src/util/shared.ts",
     new_name = "shared_utils.ts",
     checks = {
-      { file = "src/a.ts",               old = 'from "./util/shared"',     new = 'from "./util/shared_utils"' },
-      { file = "src/nested/b.ts",        old = 'from "../util/shared"',    new = 'from "../util/shared_utils"' },
-      { file = "src/nested/deep/c.tsx",  old = 'from "../../util/shared"', new = 'from "../../util/shared_utils"' },
-      { file = "src/other/d.js",         old = 'import("../util/shared")', new = 'import("../util/shared_utils")' },
-      { file = "src/other/unrelated.ts", old = 'from "../util/shared_other"', new = 'from "../util/shared_other"' },
+      {
+        file = "src/a.ts",
+        old = 'from "./util/shared"',
+        new = 'from "./util/shared_utils"',
+      },
+      {
+        file = "src/nested/b.ts",
+        old = 'from "../util/shared"',
+        new = 'from "../util/shared_utils"',
+      },
+      {
+        file = "src/nested/deep/c.tsx",
+        old = 'from "../../util/shared"',
+        new = 'from "../../util/shared_utils"',
+      },
+      {
+        file = "src/other/d.js",
+        old = 'import("../util/shared")',
+        new = 'import("../util/shared_utils")',
+      },
+      {
+        file = "src/other/unrelated.ts",
+        old = 'from "../util/shared_other"',
+        new = 'from "../util/shared_other"',
+      },
     },
   },
   {
-    name     = "markdown",
-    hub      = "docs/guide.md",
+    name = "markdown",
+    hub = "docs/guide.md",
     new_name = "manual.md",
     checks = {
       -- every link form the provider claims to cover, all pointing at the
       -- same moved file from two different directories
-      { file = "README.md",     old = "[the guide](./docs/guide.md)", new = "[the guide](./docs/manual.md)" },
-      { file = "README.md",     old = '<a href="./docs/guide.md">',   new = '<a href="./docs/manual.md">' },
-      { file = "README.md",     old = "[guide-ref]: ./docs/guide.md", new = "[guide-ref]: ./docs/manual.md" },
-      { file = "docs/notes.md", old = "[guide](guide.md)",            new = "[guide](manual.md)" },
+      {
+        file = "README.md",
+        old = "[the guide](./docs/guide.md)",
+        new = "[the guide](./docs/manual.md)",
+      },
+      {
+        file = "README.md",
+        old = '<a href="./docs/guide.md">',
+        new = '<a href="./docs/manual.md">',
+      },
+      {
+        file = "README.md",
+        old = "[guide-ref]: ./docs/guide.md",
+        new = "[guide-ref]: ./docs/manual.md",
+      },
+      { file = "docs/notes.md", old = "[guide](guide.md)", new = "[guide](manual.md)" },
       -- negative controls: an external URL that merely contains the same
       -- path, and a same-named file in a different directory
-      { file = "README.md", old = "https://example.com/docs/guide.md", new = "https://example.com/docs/guide.md" },
-      { file = "README.md", old = "[other](./docs/guides/guide.md)",   new = "[other](./docs/guides/guide.md)" },
+      {
+        file = "README.md",
+        old = "https://example.com/docs/guide.md",
+        new = "https://example.com/docs/guide.md",
+      },
+      {
+        file = "README.md",
+        old = "[other](./docs/guides/guide.md)",
+        new = "[other](./docs/guides/guide.md)",
+      },
     },
   },
 }
@@ -225,14 +289,20 @@ local function run_lang(lang)
   -- "fully done" signal (filereadable(hub_new) flips earlier).
   local done = false
   local stub_adapter = {
-    get_current_node = function() return { path = hub_old, type = "file" } end,
-    refresh          = function() done = true end,
+    get_current_node = function()
+      return { path = hub_old, type = "file" }
+    end,
+    refresh = function()
+      done = true
+    end,
   }
   smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, stub_adapter)
 
   next_input = lang.new_name
   smart_rename.rename_current()
-  vim.wait(5000, function() return done end, 20)
+  vim.wait(5000, function()
+    return done
+  end, 20)
 
   check(lang.name .. ": hub file renamed on disk", vim.fn.filereadable(hub_new) == 1)
   check(lang.name .. ": old hub path gone", vim.fn.filereadable(hub_old) == 0)
@@ -240,15 +310,21 @@ local function run_lang(lang)
   for _, c in ipairs(lang.checks) do
     local content = read(work .. "/" .. c.file)
     if c.old == c.new then
-      check(("%s: %s keeps %s (negative control)"):format(lang.name, c.file, c.old),
-        content ~= nil and content:find(c.old, 1, true) ~= nil)
+      check(
+        ("%s: %s keeps %s (negative control)"):format(lang.name, c.file, c.old),
+        content ~= nil and content:find(c.old, 1, true) ~= nil
+      )
     else
-      check(("%s: %s updated"):format(lang.name, c.file),
+      check(
+        ("%s: %s updated"):format(lang.name, c.file),
         content ~= nil and content:find(c.new, 1, true) ~= nil,
-        "missing " .. c.new)
-      check(("%s: %s old reference gone"):format(lang.name, c.file),
+        "missing " .. c.new
+      )
+      check(
+        ("%s: %s old reference gone"):format(lang.name, c.file),
         content ~= nil and old_fully_replaced(content, c.old, c.new),
-        "still contains " .. c.old)
+        "still contains " .. c.old
+      )
     end
   end
 end
@@ -272,18 +348,26 @@ local function run_lua_buffer_check()
   local done = false
   local smart_rename = require("filetree.features.fileops.smart_rename")
   smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, {
-    get_current_node = function() return { path = hub_old, type = "file" } end,
-    refresh          = function() done = true end,
+    get_current_node = function()
+      return { path = hub_old, type = "file" }
+    end,
+    refresh = function()
+      done = true
+    end,
   })
 
   next_input = "shared_utils.lua"
   smart_rename.rename_current()
-  vim.wait(5000, function() return done end, 20)
+  vim.wait(5000, function()
+    return done
+  end, 20)
 
   local buf_content = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
-  check("lua buffer: open buffer patched in-memory",
+  check(
+    "lua buffer: open buffer patched in-memory",
     buf_content:find('require("proj.util.shared_utils")', 1, true) ~= nil,
-    "buffer content: " .. buf_content)
+    "buffer content: " .. buf_content
+  )
 
   vim.api.nvim_buf_delete(bufnr, { force = true })
 end
@@ -306,35 +390,61 @@ local function run_lua_directory_cascade_check()
   local done = false
   local smart_rename = require("filetree.features.fileops.smart_rename")
   smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, {
-    get_current_node = function() return { path = old_dir, type = "directory" } end,
-    refresh          = function() done = true end,
+    get_current_node = function()
+      return { path = old_dir, type = "directory" }
+    end,
+    refresh = function()
+      done = true
+    end,
   })
 
   next_input = "utilities"
   smart_rename.rename_current()
-  vim.wait(5000, function() return done end, 20)
+  vim.wait(5000, function()
+    return done
+  end, 20)
 
   check("lua dir cascade: directory renamed on disk", vim.fn.isdirectory(new_dir) == 1)
   check("lua dir cascade: old directory gone", vim.fn.isdirectory(old_dir) == 0)
 
   local cascade_checks = {
-    { file = "lua/proj/a.lua",             old = 'require("proj.util.shared")', new = 'require("proj.utilities.shared")' },
-    { file = "lua/proj/nested/b.lua",      old = 'require("proj.util.shared")', new = 'require("proj.utilities.shared")' },
-    { file = "lua/proj/nested/deep/c.lua", old = 'require "proj.util.shared"',  new = 'require "proj.utilities.shared"' },
+    {
+      file = "lua/proj/a.lua",
+      old = 'require("proj.util.shared")',
+      new = 'require("proj.utilities.shared")',
+    },
+    {
+      file = "lua/proj/nested/b.lua",
+      old = 'require("proj.util.shared")',
+      new = 'require("proj.utilities.shared")',
+    },
+    {
+      file = "lua/proj/nested/deep/c.lua",
+      old = 'require "proj.util.shared"',
+      new = 'require "proj.utilities.shared"',
+    },
     -- "proj.util.shared_other" is itself a submodule of "proj.util" (the
     -- directory being renamed) even though its basename looks like the
     -- file-rename negative control above — renaming the whole directory
     -- must cascade to it too, unlike renaming just shared.lua.
-    { file = "lua/proj/other/unrelated.lua", old = 'require("proj.util.shared_other")', new = 'require("proj.utilities.shared_other")' },
+    {
+      file = "lua/proj/other/unrelated.lua",
+      old = 'require("proj.util.shared_other")',
+      new = 'require("proj.utilities.shared_other")',
+    },
   }
   for _, c in ipairs(cascade_checks) do
     local content = read(work .. "/" .. c.file)
-    check(("lua dir cascade: %s updated"):format(c.file),
+    check(
+      ("lua dir cascade: %s updated"):format(c.file),
       content ~= nil and content:find(c.new, 1, true) ~= nil,
-      "missing " .. c.new)
-    check(("lua dir cascade: %s old reference gone"):format(c.file),
+      "missing " .. c.new
+    )
+    check(
+      ("lua dir cascade: %s old reference gone"):format(c.file),
       content ~= nil and old_fully_replaced(content, c.old, c.new),
-      "still contains " .. c.old)
+      "still contains " .. c.old
+    )
   end
 end
 
@@ -355,26 +465,38 @@ local function run_move_feature_check()
   local move = require("filetree.features.fileops.move")
   local done = false
   move.setup({ enabled = true, use_safety = false, dry_run = false }, {
-    get_current_node = function() return { path = src, type = "file" } end,
-    refresh          = function() done = true end,
+    get_current_node = function()
+      return { path = src, type = "file" }
+    end,
+    refresh = function()
+      done = true
+    end,
   })
 
   -- ":Filetree move <dest>" path — no prompt involved, so nothing to stub.
   move.move(work)
-  vim.wait(5000, function() return done end, 20)
+  vim.wait(5000, function()
+    return done
+  end, 20)
 
   check("move: file moved into the destination directory", vim.fn.filereadable(dst) == 1)
   check("move: source is gone", vim.fn.filereadable(src) == 0)
 
   local index = read(work .. "/index.md")
-  check("move: reference rewritten to the new location",
-    index ~= nil and index:find("[notes](./notes.md)", 1, true) ~= nil, index)
+  check(
+    "move: reference rewritten to the new location",
+    index ~= nil and index:find("[notes](./notes.md)", 1, true) ~= nil,
+    index
+  )
 
   -- …and the undo token puts the reference back, byte for byte.
   refs.undo()
   local reverted = read(work .. "/index.md")
-  check("move: refs undo restores the previous line",
-    reverted ~= nil and reverted:find("[notes](./docs/notes.md)", 1, true) ~= nil, reverted)
+  check(
+    "move: refs undo restores the previous line",
+    reverted ~= nil and reverted:find("[notes](./docs/notes.md)", 1, true) ~= nil,
+    reverted
+  )
 end
 
 -- ── Run ───────────────────────────────────────────────────────────────────────
@@ -387,4 +509,8 @@ run_move_feature_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then vim.cmd("cq") else vim.cmd("qa!") end
+if failed > 0 then
+  vim.cmd("cq")
+else
+  vim.cmd("qa!")
+end

@@ -18,90 +18,102 @@ local M = {}
 ---@type table<string, FiletreeFeatureInfo>
 M.FEATURES = {
   -- ── nav: navigation, reveal, window lifecycle ──────────────────────────────
-  tree_traverse     = { mod = "filetree.features.nav.tree_traverse",     category = "nav" },
-  reveal_alt        = { mod = "filetree.features.nav.reveal_alt",        category = "nav" },
-  auto_reveal       = { mod = "filetree.features.nav.auto_reveal",       category = "nav" },
-  auto_resize       = { mod = "filetree.features.nav.auto_resize",       category = "nav" },
-  cwd_sync          = { mod = "filetree.features.nav.cwd_sync",          category = "nav" },
-  cwd_mode          = { mod = "filetree.features.nav.cwd_mode",          category = "nav" },
-  layout_guard      = { mod = "filetree.features.nav.layout_guard",      category = "nav" },
-  no_name_guard     = { mod = "filetree.features.nav.no_name_guard",     category = "nav" },
-  buffer_cycle      = { mod = "filetree.features.nav.buffer_cycle",      category = "nav" },
+  tree_traverse = { mod = "filetree.features.nav.tree_traverse", category = "nav" },
+  reveal_alt = { mod = "filetree.features.nav.reveal_alt", category = "nav" },
+  auto_reveal = { mod = "filetree.features.nav.auto_reveal", category = "nav" },
+  auto_resize = { mod = "filetree.features.nav.auto_resize", category = "nav" },
+  cwd_sync = { mod = "filetree.features.nav.cwd_sync", category = "nav" },
+  cwd_mode = { mod = "filetree.features.nav.cwd_mode", category = "nav" },
+  layout_guard = { mod = "filetree.features.nav.layout_guard", category = "nav" },
+  no_name_guard = { mod = "filetree.features.nav.no_name_guard", category = "nav" },
+  buffer_cycle = { mod = "filetree.features.nav.buffer_cycle", category = "nav" },
 
   -- ── ui: cosmetic / display ─────────────────────────────────────────────────
-  window_style       = { mod = "filetree.features.ui.window_style",       category = "ui" },
+  window_style = { mod = "filetree.features.ui.window_style", category = "ui" },
   window_size_cycler = { mod = "filetree.features.ui.window_size_cycler", category = "ui" },
-  current_hl         = { mod = "filetree.features.ui.current_hl",         category = "ui" },
-  cursor_hide        = { mod = "filetree.features.ui.cursor_hide",        category = "ui" },
-  tree_reset         = { mod = "filetree.features.ui.tree_reset",         category = "ui" },
-  preview            = { mod = "filetree.features.ui.preview",            category = "ui" },
-  node_info          = { mod = "filetree.features.ui.node_info",          category = "ui" },
-  breadcrumbs        = { mod = "filetree.features.ui.breadcrumbs",        category = "ui" },
-  size_info          = { mod = "filetree.features.ui.size_info",          category = "ui" },
-  opened_sync        = { mod = "filetree.features.ui.opened_sync",        category = "ui" },
-  cheatsheet         = { mod = "filetree.features.ui.cheatsheet",         category = "ui" },
-  context_menu       = { mod = "filetree.features.ui.context_menu",       category = "ui" },
+  current_hl = { mod = "filetree.features.ui.current_hl", category = "ui" },
+  cursor_hide = { mod = "filetree.features.ui.cursor_hide", category = "ui" },
+  tree_reset = { mod = "filetree.features.ui.tree_reset", category = "ui" },
+  preview = { mod = "filetree.features.ui.preview", category = "ui" },
+  node_info = { mod = "filetree.features.ui.node_info", category = "ui" },
+  breadcrumbs = { mod = "filetree.features.ui.breadcrumbs", category = "ui" },
+  size_info = { mod = "filetree.features.ui.size_info", category = "ui" },
+  opened_sync = { mod = "filetree.features.ui.opened_sync", category = "ui" },
+  cheatsheet = { mod = "filetree.features.ui.cheatsheet", category = "ui" },
+  context_menu = { mod = "filetree.features.ui.context_menu", category = "ui" },
 
   -- ── fileops: create / edit / move ──────────────────────────────────────────
-  smart_create         = { mod = "filetree.features.fileops.smart_create",         category = "fileops" },
-  copy_move            = { mod = "filetree.features.fileops.copy_move",            category = "fileops" },
-  move                 = { mod = "filetree.features.fileops.move",                 category = "fileops" },
-  rename_batch         = { mod = "filetree.features.fileops.rename_batch",         category = "fileops" },
-  smart_rename         = { mod = "filetree.features.fileops.smart_rename",         category = "fileops" },
-  create_from_template = { mod = "filetree.features.fileops.create_from_template", category = "fileops" },
-  link_create          = { mod = "filetree.features.fileops.link_create",          category = "fileops" },
-  trash                = { mod = "filetree.features.fileops.trash",               category = "fileops" },
-  open_replace         = { mod = "filetree.features.fileops.open_replace",         category = "fileops" },
-  open_variants        = { mod = "filetree.features.fileops.open_variants",        category = "fileops" },
-  buffer_save          = { mod = "filetree.features.fileops.buffer_save",          category = "fileops" },
+  smart_create = { mod = "filetree.features.fileops.smart_create", category = "fileops" },
+  copy_move = { mod = "filetree.features.fileops.copy_move", category = "fileops" },
+  move = { mod = "filetree.features.fileops.move", category = "fileops" },
+  rename_batch = { mod = "filetree.features.fileops.rename_batch", category = "fileops" },
+  smart_rename = { mod = "filetree.features.fileops.smart_rename", category = "fileops" },
+  create_from_template = {
+    mod = "filetree.features.fileops.create_from_template",
+    category = "fileops",
+  },
+  link_create = { mod = "filetree.features.fileops.link_create", category = "fileops" },
+  trash = { mod = "filetree.features.fileops.trash", category = "fileops" },
+  open_replace = { mod = "filetree.features.fileops.open_replace", category = "fileops" },
+  open_variants = { mod = "filetree.features.fileops.open_variants", category = "fileops" },
+  buffer_save = { mod = "filetree.features.fileops.buffer_save", category = "fileops" },
 
   -- ── search: filter / find / grep ───────────────────────────────────────────
-  filter            = { mod = "filetree.features.search.filter",            category = "search" },
-  live_search       = { mod = "filetree.features.search.live_search",       category = "search" },
-  find_files        = { mod = "filetree.features.search.find_files",        category = "search" },
-  grep_in_dir       = { mod = "filetree.features.search.grep_in_dir",       category = "search" },
+  filter = { mod = "filetree.features.search.filter", category = "search" },
+  live_search = { mod = "filetree.features.search.live_search", category = "search" },
+  find_files = { mod = "filetree.features.search.find_files", category = "search" },
+  grep_in_dir = { mod = "filetree.features.search.grep_in_dir", category = "search" },
 
   -- ── paths: clipboard / path tools ──────────────────────────────────────────
-  path_copy        = { mod = "filetree.features.paths.path_copy",        category = "paths" },
+  path_copy = { mod = "filetree.features.paths.path_copy", category = "paths" },
   lua_require_copy = { mod = "filetree.features.paths.lua_require_copy", category = "paths" },
-  copy_file_list   = { mod = "filetree.features.paths.copy_file_list",   category = "paths" },
-  markdown_links   = { mod = "filetree.features.paths.markdown_links",   category = "paths" },
+  copy_file_list = { mod = "filetree.features.paths.copy_file_list", category = "paths" },
+  markdown_links = { mod = "filetree.features.paths.markdown_links", category = "paths" },
 
   -- ── git ────────────────────────────────────────────────────────────────────
   git_status = { mod = "filetree.features.git.git_status", category = "git" },
 
   -- ── org: marks / organization ──────────────────────────────────────────────
-  marks     = { mod = "filetree.features.org.marks",     category = "org" },
-  session   = { mod = "filetree.features.org.session",   category = "org" },
+  marks = { mod = "filetree.features.org.marks", category = "org" },
+  session = { mod = "filetree.features.org.session", category = "org" },
 
   -- ── system: external programs ──────────────────────────────────────────────
-  open_in_fm    = { mod = "filetree.features.system.open_in_fm",    category = "system" },
-  open_with     = { mod = "filetree.features.system.open_with",     category = "system" },
-  shell_run     = { mod = "filetree.features.system.shell_run",     category = "system" },
-  pdf_open      = { mod = "filetree.features.system.pdf_open",      category = "system" },
-  pdf_create    = { mod = "filetree.features.system.pdf_create",    category = "system" },
+  open_in_fm = { mod = "filetree.features.system.open_in_fm", category = "system" },
+  open_with = { mod = "filetree.features.system.open_with", category = "system" },
+  shell_run = { mod = "filetree.features.system.shell_run", category = "system" },
+  pdf_open = { mod = "filetree.features.system.pdf_open", category = "system" },
+  pdf_create = { mod = "filetree.features.system.pdf_create", category = "system" },
 
   -- ── lsp: diagnostics / symbols ─────────────────────────────────────────────
-  lsp_diagnostics    = { mod = "filetree.features.lsp.lsp_diagnostics",    category = "lsp" },
+  lsp_diagnostics = { mod = "filetree.features.lsp.lsp_diagnostics", category = "lsp" },
 
   -- ── compare: diff / directory comparison ───────────────────────────────────
-  diff         = { mod = "filetree.features.compare.diff",         category = "compare" },
+  diff = { mod = "filetree.features.compare.diff", category = "compare" },
 
   -- ── infra: plumbing shared by other features ───────────────────────────────
-  ignore_list        = { mod = "filetree.features.infra.ignore_list",        category = "infra" },
-  project_root       = { mod = "filetree.features.infra.project_root",       category = "infra" },
-  file_watcher       = { mod = "filetree.features.infra.file_watcher",       category = "infra" },
+  ignore_list = { mod = "filetree.features.infra.ignore_list", category = "infra" },
+  project_root = { mod = "filetree.features.infra.project_root", category = "infra" },
+  file_watcher = { mod = "filetree.features.infra.file_watcher", category = "infra" },
   watcher_quarantine = { mod = "filetree.features.infra.watcher_quarantine", category = "infra" },
-  handle_guard       = { mod = "filetree.features.infra.handle_guard",       category = "infra" },
-  hooks_api          = { mod = "filetree.features.infra.hooks_api",          category = "infra" },
-  safety             = { mod = "filetree.features.infra.safety",             category = "infra" },
+  handle_guard = { mod = "filetree.features.infra.handle_guard", category = "infra" },
+  hooks_api = { mod = "filetree.features.infra.hooks_api", category = "infra" },
+  safety = { mod = "filetree.features.infra.safety", category = "infra" },
 }
 
 ---Display order of categories (for docs / health grouping).
 ---@type string[]
 M.CATEGORY_ORDER = {
-  "nav", "ui", "fileops", "search", "paths",
-  "git", "org", "system", "lsp", "compare", "infra",
+  "nav",
+  "ui",
+  "fileops",
+  "search",
+  "paths",
+  "git",
+  "org",
+  "system",
+  "lsp",
+  "compare",
+  "infra",
 }
 
 ---Return the module path for a feature, or nil when the name is unknown.

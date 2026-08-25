@@ -15,7 +15,7 @@
 ---   keymap      string?   Key in tree buffer (default "O").
 ---   close_tree  boolean   Close the tree after opening (default true).
 
-local notify  = require("filetree.util.notify").create("[filetree.open_replace]")
+local notify = require("filetree.util.notify").create("[filetree.open_replace]")
 local bufutil = require("filetree.util.buffer")
 
 local map = require("filetree.util.map")
@@ -39,9 +39,7 @@ function M.open_replace()
   -- If no editor window is open yet, fall through and let the edit below
   -- create one.
   local ewin = bufutil.find_editor_win(vim.api.nvim_get_current_win())
-  if ewin then
-    vim.api.nvim_set_current_win(ewin)
-  end
+  if ewin then vim.api.nvim_set_current_win(ewin) end
 
   local ok = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(path))
   if not ok then
@@ -49,9 +47,7 @@ function M.open_replace()
     return
   end
 
-  if _close_tree and type(adapter.close) == "function" then
-    pcall(adapter.close)
-  end
+  if _close_tree and type(adapter.close) == "function" then pcall(adapter.close) end
 end
 
 ---@param config FiletreeOpenReplaceConfig
@@ -59,20 +55,19 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  local keymap    = config.keymap     or "O"
-  _adapter    = adapter
+  local keymap = config.keymap or "O"
+  _adapter = adapter
   _close_tree = config.close_tree ~= false
 
   tree_attach.on_attach(function(buf)
     map("n", keymap, M.open_replace, {
       buffer = buf,
       silent = true,
-      desc   = "Filetree: open file replacing current editor buffer",
+      desc = "Filetree: open file replacing current editor buffer",
     })
   end)
 end
 
-function M.teardown()
-end
+function M.teardown() end
 
 return M

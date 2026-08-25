@@ -45,16 +45,12 @@ local function apply_keymap_remap(cfg)
     if type(t) ~= "table" then return end
     for k, v in pairs(t) do
       if type(v) == "string" then
-        if type(k) == "string" and k:match("^keymap") and remap[v] ~= nil then
-          t[k] = remap[v]
-        end
+        if type(k) == "string" and k:match("^keymap") and remap[v] ~= nil then t[k] = remap[v] end
       elseif type(v) == "table" then
         if k == "keymaps" then
           -- patch all string values inside a keymaps sub-table
           for ik, iv in pairs(v) do
-            if type(iv) == "string" and remap[iv] ~= nil then
-              v[ik] = remap[iv]
-            end
+            if type(iv) == "string" and remap[iv] ~= nil then v[ik] = remap[iv] end
           end
         else
           patch(v)
@@ -80,9 +76,7 @@ local function apply_autocmd_overrides(cfg)
   if type(cfg.features) ~= "table" then return end
   for name, val in pairs(overrides) do
     local fcfg = cfg.features[name]
-    if type(fcfg) == "table" and val == false then
-      fcfg.autocmds_enabled = false
-    end
+    if type(fcfg) == "table" and val == false then fcfg.autocmds_enabled = false end
   end
 end
 
@@ -90,8 +84,8 @@ end
 ---to the feature + config field that action's prompt lives on.
 ---@type table<string, { feature: string, field: string }>
 local CONFIRMATION_ACTIONS = {
-  paste        = { feature = "copy_move",   field = "confirm" },
-  delete       = { feature = "trash",       field = "confirm" },
+  paste = { feature = "copy_move", field = "confirm" },
+  delete = { feature = "trash", field = "confirm" },
   rename_batch = { feature = "rename_batch", field = "confirm" },
 }
 
@@ -118,9 +112,7 @@ local function apply_confirmations(cfg)
       fcfg = {}
       cfg.features[spec.feature] = fcfg
     end
-    if fcfg[spec.field] == nil then
-      fcfg[spec.field] = value
-    end
+    if fcfg[spec.field] == nil then fcfg[spec.field] = value end
   end
 
   if type(val) == "table" then
@@ -148,11 +140,11 @@ local function apply_ignore_list(cfg)
     fi.enabled = false
   elseif type(val) == "table" then
     fi.enabled = true
-    fi.names   = val
+    fi.names = val
   else
     -- true or nil → default on, built-in names
     fi.enabled = true
-    fi.names   = fi.names  -- preserve user override if they set features.ignore_list.names directly
+    fi.names = fi.names -- preserve user override if they set features.ignore_list.names directly
   end
   cfg.features.ignore_list = fi
 end
@@ -165,8 +157,8 @@ end
 local LEGACY_REFS_FEATURES = {
   smart_rename = { op = "on_rename" },
   rename_batch = { op = "on_rename" },
-  copy_move    = { op = "on_move" },
-  trash        = { op = "on_delete" },
+  copy_move = { op = "on_move" },
+  trash = { op = "on_delete" },
 }
 
 ---Translate the deprecated per-feature reference options into `cfg.refs`.
@@ -212,7 +204,8 @@ local function apply_legacy_refs(cfg)
     require("filetree.util.notify").create("[filetree]").warn(
       "deprecated option(s) migrated to the central `refs` block: "
         .. table.concat(deprecated, ", ")
-        .. " — see docs/FEATURES/FILEOPS.md#references")
+        .. " — see docs/FEATURES/FILEOPS.md#references"
+    )
   end
 end
 
@@ -221,9 +214,7 @@ end
 function M.setup(user)
   -- Deep-copy defaults
   _active = vim.deepcopy(_defaults)
-  if user then
-    deep_merge(_active, user)
-  end
+  if user then deep_merge(_active, user) end
   apply_keymap_remap(_active)
   apply_autocmd_overrides(_active)
   apply_confirmations(_active)
@@ -242,12 +233,8 @@ end
 ---@return string? err
 function M.validate()
   local cfg = _active
-  if type(cfg.adapter) ~= "string" then
-    return false, "config.adapter must be a string"
-  end
-  if type(cfg.features) ~= "table" then
-    return false, "config.features must be a table"
-  end
+  if type(cfg.adapter) ~= "string" then return false, "config.adapter must be a string" end
+  if type(cfg.features) ~= "table" then return false, "config.features must be a table" end
   return true, nil
 end
 

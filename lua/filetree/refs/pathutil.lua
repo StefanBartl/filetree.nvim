@@ -43,7 +43,8 @@ function M.abs(p)
   if not p or p == "" then return "" end
   local unified = p:gsub("\\", "/")
   local is_absolute = unified:match("^%a:/") ~= nil
-    or unified:sub(1, 1) == "/" or unified:sub(1, 1) == "~"
+    or unified:sub(1, 1) == "/"
+    or unified:sub(1, 1) == "~"
   if not is_absolute then
     local uv = vim.uv or vim.loop
     local cwd = ((uv and uv.cwd and uv.cwd()) or vim.fn.getcwd()):gsub("\\", "/")
@@ -102,9 +103,7 @@ function M.resolve_candidates(target, from_file, root)
 
   if t:sub(1, 1) == "/" then
     out[#out + 1] = M.abs(t)
-    if root and root ~= "" then
-      out[#out + 1] = M.abs(root:gsub("/+$", "") .. t)
-    end
+    if root and root ~= "" then out[#out + 1] = M.abs(root:gsub("/+$", "") .. t) end
     return out
   end
 
@@ -158,17 +157,13 @@ function M.retarget(opts)
     return ftpath.to_unix(new_path)
   end
 
-  if style == "root" then
-    return "/" .. relpath(new_path, opts.root):gsub("\\", "/")
-  end
+  if style == "root" then return "/" .. relpath(new_path, opts.root):gsub("\\", "/") end
 
   local rel = relpath(new_path, ftpath.parent(opts.from_file)):gsub("\\", "/")
   -- Keep an explicit "./" only when the original had one; a bare "sub/x.md"
   -- stays bare, "./x.md" stays dotted, and anything climbing out with ".."
   -- never gets a "./" prefix.
-  if opts.target:sub(1, 2) == "./" and rel:sub(1, 1) ~= "." then
-    rel = "./" .. rel
-  end
+  if opts.target:sub(1, 2) == "./" and rel:sub(1, 1) ~= "." then rel = "./" .. rel end
   return rel
 end
 

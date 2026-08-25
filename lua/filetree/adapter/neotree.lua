@@ -16,8 +16,8 @@ local M = {
   -- UI capabilities consumed by adapter-agnostic features.
   filetypes = { "neo-tree" },
   hl_groups = {
-    NeoTreeNormal      = "Normal",
-    NeoTreeNormalNC    = "NormalNC",
+    NeoTreeNormal = "Normal",
+    NeoTreeNormalNC = "NormalNC",
     NeoTreeEndOfBuffer = "EndOfBuffer",
   },
 }
@@ -122,9 +122,7 @@ function M.is_open()
   if not state then return false, nil end
   if state.winid and vim.api.nvim_win_is_valid(state.winid) then
     local bufnr = vim.api.nvim_win_get_buf(state.winid)
-    if vim.api.nvim_buf_is_valid(bufnr) then
-      return true, bufnr
-    end
+    if vim.api.nvim_buf_is_valid(bufnr) then return true, bufnr end
   end
   return false, nil
 end
@@ -139,9 +137,7 @@ end
 function M.get_winid()
   local state = get_state()
   if not state then return nil end
-  if state.winid and vim.api.nvim_win_is_valid(state.winid) then
-    return state.winid
-  end
+  if state.winid and vim.api.nvim_win_is_valid(state.winid) then return state.winid end
   return nil
 end
 
@@ -161,16 +157,16 @@ function M.get_current_node()
   if not ok or not node then return nil end
 
   local path = node_path(node)
-  if not path then return nil end   -- skip message / virtual nodes without a path
+  if not path then return nil end -- skip message / virtual nodes without a path
 
   local is_dir = node_is_dir(node, path)
-  local ntype  = is_dir and "directory" or "file"
+  local ntype = is_dir and "directory" or "file"
   return {
-    id          = (node.get_id and node:get_id()) or node.id or path,
-    name        = node.name or vim.fn.fnamemodify(path, ":t"),
-    path        = path,
-    type        = ntype,
-    depth       = (node.get_depth and node:get_depth()) or 0,
+    id = (node.get_id and node:get_id()) or node.id or path,
+    name = node.name or vim.fn.fnamemodify(path, ":t"),
+    path = path,
+    type = ntype,
+    depth = (node.get_depth and node:get_depth()) or 0,
     line_number = vim.fn.line("."),
     is_expanded = is_dir and ((node.is_expanded and node:is_expanded()) or false) or nil,
   }
@@ -182,9 +178,7 @@ end
 ---@param nodes table[]
 ---@return string[] paths, string[] names
 function M.extract_paths(nodes)
-  if libnode then
-    return libnode.extract_paths(nodes)
-  end
+  if libnode then return libnode.extract_paths(nodes) end
   local paths, names = {}, {}
   for _, node in ipairs(nodes or {}) do
     local p = node_path(node)
@@ -221,20 +215,23 @@ function M.get_visible_nodes(filter)
     local depth = (node.get_depth and node:get_depth()) or 0
     if depth > 0 then
       local ntype = node.type == "directory" and "directory" or "file"
-      local include = filter == nil or filter == "all"
-        or (filter == "files"   and ntype == "file")
+      local include = filter == nil
+        or filter == "all"
+        or (filter == "files" and ntype == "file")
         or (filter == "folders" and ntype == "directory")
 
       if include then
         local id = (node.get_id and node:get_id()) or node.id or ""
         nodes[#nodes + 1] = {
-          id          = id,
-          name        = node.name or "",
-          path        = id,
-          type        = ntype,
-          depth       = depth,
+          id = id,
+          name = node.name or "",
+          path = id,
+          type = ntype,
+          depth = depth,
           line_number = line_nr,
-          is_expanded = ntype == "directory" and ((node.is_expanded and node:is_expanded()) or false) or nil,
+          is_expanded = ntype == "directory"
+              and ((node.is_expanded and node:is_expanded()) or false)
+            or nil,
         }
       end
       line_nr = line_nr + 1
@@ -253,11 +250,11 @@ function M.get_visible_nodes(filter)
 
   local roots = state.tree.get_nodes and state.tree:get_nodes()
   if roots then
-    for _, root in ipairs(roots) do collect(root) end
+    for _, root in ipairs(roots) do
+      collect(root)
+    end
   end
-  if capped then
-    notify.debug("get_visible_nodes: capped at " .. MAX_VISIBLE .. " nodes")
-  end
+  if capped then notify.debug("get_visible_nodes: capped at " .. MAX_VISIBLE .. " nodes") end
   return nodes
 end
 
@@ -297,18 +294,14 @@ local function line_map()
     return nil
   end
   local tick = vim.api.nvim_buf_get_changedtick(bufnr)
-  if _line_map and _line_map_buf == bufnr and _line_map_tick == tick then
-    return _line_map
-  end
+  if _line_map and _line_map_buf == bufnr and _line_map_tick == tick then return _line_map end
 
   local map = {}
   for _, node in ipairs(M.get_visible_nodes()) do
     -- First occurrence wins (a path is rendered once); keep the earliest line.
     if node.path then
       local key = key_of(node.path)
-      if map[key] == nil then
-        map[key] = node.line_number
-      end
+      if map[key] == nil then map[key] = node.line_number end
     end
   end
   _line_map, _line_map_buf, _line_map_tick = map, bufnr, tick
@@ -334,9 +327,7 @@ function M.expand_node(node)
   if tree_node.is_expanded and not tree_node:is_expanded() and tree_node.expand then
     tree_node:expand()
     local ok3, renderer = pcall(require, "neo-tree.ui.renderer")
-    if ok3 and renderer and renderer.redraw then
-      pcall(renderer.redraw, state)
-    end
+    if ok3 and renderer and renderer.redraw then pcall(renderer.redraw, state) end
   end
   return true
 end
@@ -353,9 +344,7 @@ function M.collapse_node(node)
   if tree_node.is_expanded and tree_node:is_expanded() and tree_node.collapse then
     tree_node:collapse()
     local ok3, renderer = pcall(require, "neo-tree.ui.renderer")
-    if ok3 and renderer and renderer.redraw then
-      pcall(renderer.redraw, state)
-    end
+    if ok3 and renderer and renderer.redraw then pcall(renderer.redraw, state) end
   end
   return true
 end
@@ -366,10 +355,10 @@ end
 function M.open_file(path, mode)
   mode = mode or "edit"
   local cmd_map = {
-    edit    = "edit",
-    split   = "split",
-    vsplit  = "vsplit",
-    tab     = "tabnew",
+    edit = "edit",
+    split = "split",
+    vsplit = "vsplit",
+    tab = "tabnew",
     preview = "split",
   }
   local cmd = cmd_map[mode]
@@ -384,10 +373,10 @@ function M.set_root(path)
   local commands = get_commands()
   if not commands then return false end
   local ok = pcall(commands.execute, {
-    action   = "show",
-    source   = "filesystem",
+    action = "show",
+    source = "filesystem",
     position = get_current_position(),
-    dir      = path,
+    dir = path,
   })
   return ok
 end
@@ -405,7 +394,7 @@ function M.open_reveal(path, parent_levels, root_dir)
   local target = root_dir
   if not target or target == "" then
     target = path
-    for _ = 1, (parent_levels or 0) do   -- fixed: was 0,n (ran n+1 times); now 1,n (runs n times)
+    for _ = 1, (parent_levels or 0) do -- fixed: was 0,n (ran n+1 times); now 1,n (runs n times)
       target = vim.fn.fnamemodify(target, ":h")
     end
   end
@@ -413,14 +402,12 @@ function M.open_reveal(path, parent_levels, root_dir)
   -- directory. With parent_levels = 0 (the default) and no root_dir, `target` is
   -- still the file itself — passing that made neo-tree run `tcd <file>` →
   -- E344/ENOTDIR. Ascend to the containing directory whenever target is not one.
-  if vim.fn.isdirectory(target) ~= 1 then
-    target = vim.fn.fnamemodify(target, ":h")
-  end
+  if vim.fn.isdirectory(target) ~= 1 then target = vim.fn.fnamemodify(target, ":h") end
   local ok = pcall(commands.execute, {
-    action      = "show",
-    source      = "filesystem",
-    position    = get_current_position(),
-    dir         = target,
+    action = "show",
+    source = "filesystem",
+    position = get_current_position(),
+    dir = target,
     reveal_file = path,
   })
   return ok
@@ -431,8 +418,8 @@ function M.open_cwd()
   local commands = get_commands()
   if not commands then return false end
   local ok = pcall(commands.execute, {
-    action   = "show",
-    source   = "filesystem",
+    action = "show",
+    source = "filesystem",
     position = get_current_position(),
   })
   return ok
@@ -446,15 +433,17 @@ function M.toggle_at(position, opts)
   opts = opts or {}
   local commands = get_commands()
   if not commands then return false end
-  return (pcall(commands.execute, {
-    action      = "focus",
-    source      = "filesystem",
-    position    = position,
-    toggle      = true,
-    reveal      = opts.reveal == true,
-    reveal_file = opts.reveal and opts.file or nil,
-    dir         = opts.dir,
-  }))
+  return (
+    pcall(commands.execute, {
+      action = "focus",
+      source = "filesystem",
+      position = position,
+      toggle = true,
+      reveal = opts.reveal == true,
+      reveal_file = opts.reveal and opts.file or nil,
+      dir = opts.dir,
+    })
+  )
 end
 
 ---@return boolean
@@ -517,7 +506,7 @@ function M.highlight_node(path, hl_group)
   if not bufnr then return false end
   local ok, id = pcall(vim.api.nvim_buf_set_extmark, bufnr, ns(), line - 1, 0, {
     line_hl_group = hl_group,
-    priority      = 150,
+    priority = 150,
   })
   if ok then _hl_marks[path] = id end
   return ok
@@ -558,9 +547,9 @@ function M.sign_node(path, text, hl_group)
   if not bufnr then return false end
   M.unsign_node(path)
   local ok, id = pcall(vim.api.nvim_buf_set_extmark, bufnr, sign_ns(), line - 1, 0, {
-    sign_text    = text,
+    sign_text = text,
     sign_hl_group = hl_group,
-    priority     = 160,
+    priority = 160,
   })
   if ok then _sign_marks[path] = id end
   return ok
@@ -615,10 +604,12 @@ function M.install_reveal_guard()
 
   local original_execute = commands.execute
   commands.execute = function(args, ...)
-    if type(args) == "table"
+    if
+      type(args) == "table"
       and args.dir == nil
       and args.reveal_force_cwd == nil
-      and args.reveal ~= false then
+      and args.reveal ~= false
+    then
       args.reveal_force_cwd = true
     end
     return original_execute(args, ...)
