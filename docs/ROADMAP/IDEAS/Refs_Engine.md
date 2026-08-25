@@ -20,7 +20,7 @@ Wichtig, weil das Konzept unten kein neues Subsystem baut, sondern das
 vorhandene generalisiert.
 
 **Markdown-Refs — Pipeline existiert komplett**, in
-[util/markdown_refs.lua](lua/filetree/util/markdown_refs.lua):
+[util/markdown_refs.lua](../../../lua/filetree/util/markdown_refs.lua):
 
 - `prefetch(path)` startet den Scan **bevor** mutiert wird (race-frei: die
   Mutation passiert erst im `await`-Callback, der Scan sieht die Datei also
@@ -31,17 +31,17 @@ vorhandene generalisiert.
   Zeile wird nur angefasst, wenn sie noch exakt das gescannte Target enthält),
   und patcht offene Buffer statt nur Disk.
 - UX: `confirm_choice` → *Update all / Inspect first / Leave as-is*, "Inspect"
-  öffnet [util/refs_picker.lua](lua/filetree/util/refs_picker.lua)
+  öffnet [util/refs_picker.lua](../../../lua/filetree/util/refs_picker.lua)
   (Telescope → fzf-lua → Quickfix-Fallback, Multi-Select via Tab/C-a).
 
-Angebunden ist das an: [smart_rename](lua/filetree/features/fileops/smart_rename/init.lua),
-[copy_move](lua/filetree/features/fileops/copy_move/init.lua) (nur `cut`, nicht `copy`),
-[rename_batch](lua/filetree/features/fileops/rename_batch/init.lua),
-[trash](lua/filetree/features/fileops/trash/init.lua) (dort: Refs als `REF!` markieren
+Angebunden ist das an: [smart_rename](../../../lua/filetree/features/fileops/smart_rename/init.lua),
+[copy_move](../../../lua/filetree/features/fileops/copy_move/init.lua) (nur `cut`, nicht `copy`),
+[rename_batch](../../../lua/filetree/features/fileops/rename_batch/init.lua),
+[trash](../../../lua/filetree/features/fileops/trash/init.lua) (dort: Refs als `REF!` markieren
 bzw. Delete abbrechen).
 
 **Code-Refs — existieren, aber nur halb**: `update_references_fallback()` in
-[smart_rename/init.lua:396](lua/filetree/features/fileops/smart_rename/init.lua:396)
+`lua/filetree/features/fileops/smart_rename/init.lua:396`
 macht nach dem Rename einen ripgrep-Scan + textuellen Rewrite für **lua**
 (`require`, inkl. Submodul-Kaskade bei Verzeichnis-Renames), **python**
 (`from x import`) und **ts/js** (`from "./x"`, `import("./x")`) — als Fallback,
@@ -136,7 +136,7 @@ Neu und wichtig, sobald mehr als Markdown angefasst wird: `refs.apply()` gibt ei
 Undo-Token zurück (betroffene Dateien + Original-Zeilen). `:Filetree refs undo`
 rollt den letzten Apply zurück. Bei offenen Buffern reicht deren natives Undo;
 für Disk-Dateien braucht es das Token. Vorbild:
-[trash/undo.lua](lua/filetree/features/fileops/trash/undo.lua).
+[trash/undo.lua](../../../lua/filetree/features/fileops/trash/undo.lua).
 
 ---
 
@@ -236,7 +236,7 @@ Fallback" in `smart_rename` schon richtig gebaut.
 ## 6. Config-Schema
 
 Ersetzt die heute pro Feature dreifach duplizierten `check_markdown_refs` /
-`refs_picker_prefer` (siehe [@types/config.lua:254](lua/filetree/@types/config.lua:254),
+`refs_picker_prefer` (siehe `lua/filetree/@types/config.lua:254`,
 `:401`, `:433`, `:569`) durch **einen** Block, den die Features referenzieren:
 
 ```lua
@@ -304,7 +304,7 @@ neuen Block gemappt.
 
 ## 9. Tests
 
-[TESTS/smart_rename_refs](TESTS/smart_rename_refs) existiert bereits mit Fixtures —
+[TESTS/refs](../../../TESTS/refs) existiert bereits mit Fixtures —
 das Muster ausbauen: pro Provider ein Fixture-Baum, Tabellen-Test
 `(altes Layout, Move, erwartetes Layout)`, plus Negativfälle (Ref in Kommentar,
 gleichnamiges Präfix `testfs.rem` vs. `testfs.rem_other`, Ref auf Symlink,

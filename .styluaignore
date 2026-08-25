@@ -4,5 +4,5 @@
 # .luacheckrc excludes the same directory, for the same reason.
 lua/filetree/assets/templates/
 
-# Sample projects for the smart_rename_refs harness, not part of the plugin.
-TESTS/smart_rename_refs/fixtures/
+# Sample projects for the reference-engine harness, not part of the plugin.
+TESTS/refs/fixtures/

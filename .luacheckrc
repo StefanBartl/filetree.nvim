@@ -11,10 +11,13 @@ ignore = {
   "122", -- setting a read-only field of a global (e.g. vim.*): common in Neovim
 }
 
--- Fixture files under TESTS/ are sample projects for the smart_rename_refs
--- test harness, not part of the plugin itself. Shipped file templates use
--- placeholder syntax (e.g. "$1", "$name") and are not valid standalone Lua.
+-- Fixture files under TESTS/ are sample projects for the reference-engine test
+-- harness, not part of the plugin itself. (The path used to say
+-- `TESTS/smart_rename_refs/` -- the suite moved to `TESTS/refs/` and the
+-- exclusion did not follow, so it excluded nothing at all.) Shipped file
+-- templates use placeholder syntax (e.g. "$1", "$name") and are not valid
+-- standalone Lua.
 exclude_files = {
-  "TESTS/smart_rename_refs/fixtures/**",
+  "TESTS/refs/fixtures/**",
   "lua/filetree/assets/templates/**",
 }

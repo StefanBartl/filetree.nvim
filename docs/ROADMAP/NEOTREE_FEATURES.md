@@ -119,7 +119,7 @@ source-model entries below are still open.
    Turns tree node(s) into Markdown links: single node, recursive, or all
    explicitly-marked nodes → clipboard.
    → Landed as `paths.markdown_links` (`ML` / `MR` / `MM`), not under
-   `integration.*`: it writes `[name](relative/path)` itself rather than calling
+   `integration.*`: it writes the `[name](relative/path)` lines itself rather than calling
    into markdown.nvim, so it has no dependency to guard and belongs with the
    other path-to-clipboard features.
 
