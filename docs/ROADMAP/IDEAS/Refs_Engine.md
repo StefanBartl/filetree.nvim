@@ -1,243 +1,250 @@
-# Referenz-Engine — Refs beim Move/Rename mitziehen
+# Reference engine — carrying refs along on move/rename
 
-Status: ✅ **umgesetzt.** Die Engine liegt in
-[lua/filetree/refs/](../../../lua/filetree/refs/), die Doku in
+Status: ✅ **built.** The engine lives in
+[lua/filetree/refs/](../../../lua/filetree/refs/), the documentation in
 [docs/FEATURES/FILEOPS.md#references](../../FEATURES/FILEOPS.md#references),
-die Tests in [TESTS/refs/](../../../TESTS/refs/). Dieses Dokument bleibt als
-Konzept-/Entscheidungsprotokoll stehen; was am Ende anders lief als geplant,
-steht unten unter „Abweichungen".
+the tests in [TESTS/refs/](../../../TESTS/refs/). This document stays as the
+concept and decision record; what ended up different from the plan is under
+"Deviations" at the bottom.
 
-Idee (Originalformulierung): In `./README.md` steht eine Referenz auf `/Test.md`.
-Ich verschiebe `Test.md` nach `/docs/Test.md` — filetree scannt das cwd nach
-Referenzen, listet sie auf und fragt, ob alle / nur ausgewählte / keine
-aktualisiert werden sollen. Erst Markdown, später Lua, später JS/TS.
+The idea, as originally put: `./README.md` holds a reference to `/Test.md`. I
+move `Test.md` to `/docs/Test.md` — filetree scans the cwd for references,
+lists them, and asks whether to update all of them, only some, or none.
+Markdown first, Lua later, JS/TS later still.
 
 ---
 
-## 1. Ist-Zustand (was schon im Repo steckt)
+## 1. Where things stood (what was already in the repo)
 
-Wichtig, weil das Konzept unten kein neues Subsystem baut, sondern das
-vorhandene generalisiert.
+Worth stating, because the concept below builds no new subsystem: it
+generalizes the existing one.
 
-**Markdown-Refs — Pipeline existiert komplett**, in
+**Markdown refs — the pipeline existed in full**, in
 [util/markdown_refs.lua](../../../lua/filetree/util/markdown_refs.lua):
 
-- `prefetch(path)` startet den Scan **bevor** mutiert wird (race-frei: die
-  Mutation passiert erst im `await`-Callback, der Scan sieht die Datei also
-  immer noch am alten Ort), `await_all()` für Batches.
-- `retarget(ref, new_path)` bewahrt den Link-Stil (`./x` bleibt `./x`,
-  absolut bleibt absolut), `relative_target()` als Fallback.
-- `update(refs)` schreibt `](old)` → `](new)`, **content-verifiziert** (eine
-  Zeile wird nur angefasst, wenn sie noch exakt das gescannte Target enthält),
-  und patcht offene Buffer statt nur Disk.
-- UX: `confirm_choice` → *Update all / Inspect first / Leave as-is*, "Inspect"
-  öffnet [util/refs_picker.lua](../../../lua/filetree/util/refs_picker.lua)
-  (Telescope → fzf-lua → Quickfix-Fallback, Multi-Select via Tab/C-a).
+- `prefetch(path)` starts the scan **before** anything is mutated (race-free:
+  the mutation happens in the `await` callback, so the scan still sees the file
+  at its old location), with `await_all()` for batches.
+- `retarget(ref, new_path)` preserves the link style (`./x` stays `./x`, an
+  absolute path stays absolute), with `relative_target()` as the fallback.
+- `update(refs)` rewrites `](old)` to `](new)`, **content-verified** — a line is
+  only touched if it still contains exactly the target that was scanned — and
+  patches open buffers rather than only disk.
+- UX: `confirm_choice` offering *Update all / Inspect first / Leave as-is*,
+  where "Inspect" opens
+  [util/refs_picker.lua](../../../lua/filetree/util/refs_picker.lua)
+  (Telescope → fzf-lua → quickfix fallback, multi-select via Tab/C-a).
 
-Angebunden ist das an: [smart_rename](../../../lua/filetree/features/fileops/smart_rename/init.lua),
-[copy_move](../../../lua/filetree/features/fileops/copy_move/init.lua) (nur `cut`, nicht `copy`),
+It was wired into: [smart_rename](../../../lua/filetree/features/fileops/smart_rename/init.lua),
+[copy_move](../../../lua/filetree/features/fileops/copy_move/init.lua) (`cut` only, not `copy`),
 [rename_batch](../../../lua/filetree/features/fileops/rename_batch/init.lua),
-[trash](../../../lua/filetree/features/fileops/trash/init.lua) (dort: Refs als `REF!` markieren
-bzw. Delete abbrechen).
+and [trash](../../../lua/filetree/features/fileops/trash/init.lua) (where refs are
+marked `REF!`, or the delete is aborted).
 
-**Code-Refs — existieren, aber nur halb**: `update_references_fallback()` in
-`lua/filetree/features/fileops/smart_rename/init.lua:396`
-macht nach dem Rename einen ripgrep-Scan + textuellen Rewrite für **lua**
-(`require`, inkl. Submodul-Kaskade bei Verzeichnis-Renames), **python**
-(`from x import`) und **ts/js** (`from "./x"`, `import("./x")`) — als Fallback,
-wenn kein LSP-Client `workspace/willRenameFiles` bedient hat (lua_ls tut das nie).
+**Code refs — present, but only half of it.**
+`update_references_fallback()` in
+`lua/filetree/features/fileops/smart_rename/init.lua:396` does a ripgrep scan
+plus a textual rewrite after the rename, for **Lua** (`require`, including the
+submodule cascade on directory renames), **Python** (`from x import`) and
+**TS/JS** (`from "./x"`, `import("./x")`) — as a fallback for when no LSP client
+served `workspace/willRenameFiles` (lua_ls never does).
 
-## 2. Die eigentlichen Lücken
+## 2. The actual gaps
 
-1. **Zwei getrennte Welten.** Markdown-Refs haben Prefetch, Auswahl-UX, Picker,
-   Buffer-Patching. Code-Refs haben nichts davon: sie laufen **still und
-   ungefragt** durch, ohne Vorschau, ohne Auswahl, ohne Undo. Die UX, die du
-   dir wünschst, existiert also — nur nicht für Code.
-2. **Nur beim Rename.** Der Code-Ref-Rewrite hängt ausschließlich in
-   `smart_rename`. Ein Move über `x`/`p` (copy_move) oder ein `rename_batch`
-   zieht `require`-Pfade **nicht** mit.
-3. **Markdown braucht eine Fremd-Plugin-Soft-Dep** (`markdown.nvim`,
-   `find_references`). Ohne sie: `{}`, das Feature ist stumm aus. Für ein
-   Kernfeature von filetree.nvim zu wenig.
-4. **Kein dedizierter Move.** Verschieben geht nur zweistufig (`x` … navigieren
-   … `p`). Ein `M` mit Ziel-Prompt fehlt.
-5. **Link-Formen unvollständig.** `apply_ref` kann nur `](target)`. Nicht
-   abgedeckt: Reference-Definitions (`[id]: pfad`), Wiki-Links, HTML
-   (`<img src=…>`), Frontmatter-Pfade; Anchors (`](x.md#abschnitt)`) klappen nur
-   zufällig, weil der Anchor Teil des Targets ist.
+1. **Two separate worlds.** Markdown refs have prefetch, a selection UX, a
+   picker, buffer patching. Code refs have none of it: they run **silently and
+   unasked**, with no preview, no selection, no undo. So the UX you want exists
+   already — just not for code.
+2. **Only on rename.** The code-ref rewrite hangs off `smart_rename` alone. A
+   move via `x`/`p` (copy_move), or a `rename_batch`, does **not** carry
+   `require` paths along.
+3. **Markdown needs a foreign plugin as a soft dependency** (`markdown.nvim`,
+   `find_references`). Without it: `{}`, and the feature is silently off. Too
+   little for a core feature of filetree.nvim.
+4. **No dedicated move.** Moving is only possible in two steps (`x`, navigate,
+   `p`). An `M` with a target prompt is missing.
+5. **Incomplete link forms.** `apply_ref` only handles `](target)`. Not covered:
+   reference definitions (`[id]: path`), wiki links, HTML (`<img src=…>`),
+   frontmatter paths; anchors (`](x.md#section)`) only work by accident,
+   because the anchor happens to be part of the target.
 
 ---
 
-## 3. Zielbild: eine Ref-Engine mit Provider-Registry
+## 3. The target picture: one ref engine with a provider registry
 
-Ein Modul `filetree.refs` als **einzige** Stelle, die weiß:
-"Datei X wandert nach Y — wer zeigt auf X, und wie muss der Verweis danach lauten?"
+A `filetree.refs` module as the **only** place that knows: "file X is moving to
+Y — who points at X, and what should the reference say afterwards?"
 
 ```
                       ┌──────────────────────────────┐
   smart_rename ──┐    │  filetree.refs               │
-  copy_move    ──┼──► │  scan → resolve → confirm →  │ ──► apply (Buffer/Disk)
+  copy_move    ──┼──► │  scan → resolve → confirm →  │ ──► apply (buffer/disk)
   rename_batch ──┤    │  apply                       │
   trash        ──┘    └──────────┬───────────────────┘
-                                 │ Provider-Registry
+                                 │ provider registry
              ┌───────────────────┼────────────────────┬─────────────┐
           markdown              lua               python         ts/js
 ```
 
-### Provider-Interface
+### The provider interface
 
 ```lua
 ---@class FiletreeRefProvider
 ---@field name string                          -- "markdown" | "lua" | ...
----@field handles fun(path: string): boolean   -- Ist diese Datei überhaupt referenzierbar?
----@field extensions string[]                  -- In welchen Dateien wird gesucht (rg -g)
----@field needles fun(old: string, root: string): string[]  -- Fixed-Strings für den rg-Vorfilter
+---@field handles fun(path: string): boolean   -- can this file be referenced at all?
+---@field extensions string[]                  -- which files are searched (rg -g)
+---@field needles fun(old: string, root: string): string[]  -- fixed strings for the rg prefilter
 ---@field extract fun(file: string, lines: string[], old: string, root: string): FiletreeRef[]
 ---@field retarget fun(ref: FiletreeRef, new: string): string
 ```
 
 ```lua
 ---@class FiletreeRef
----@field file string       -- Datei, die den Verweis enthält (absolut)
----@field line integer      -- 1-basiert
+---@field file string       -- the file holding the reference (absolute)
+---@field line integer      -- 1-based
 ---@field col? integer
----@field text string       -- Zeileninhalt zum Scan-Zeitpunkt (Content-Verify)
----@field target string     -- Verweis, wie er dasteht ("./Test.md", "foo.bar")
----@field new_target string -- von retarget() gesetzt
+---@field text string       -- the line as it was at scan time (content verify)
+---@field target string     -- the reference as written ("./Test.md", "foo.bar")
+---@field new_target string -- set by retarget()
 ---@field provider string
----@field display string    -- für den Picker
+---@field display string    -- for the picker
 ```
 
-Das Datenmodell ist bewusst **fast identisch** zu dem, was `markdown_refs`
-heute von markdown.nvim bekommt (`file/line/target/display`) — bestehende
-Aufrufer und der `refs_picker` funktionieren mit minimalem Umbau weiter.
+The data model is deliberately **almost identical** to what `markdown_refs`
+gets from markdown.nvim today (`file/line/target/display`) — existing callers
+and `refs_picker` keep working with minimal change.
 
-### Pipeline (für jede FS-Mutation gleich)
+### The pipeline (the same for every filesystem mutation)
 
-1. **Prefetch** beim Tastendruck — `refs.prefetch({paths}, opts)` → Handle.
-   Läuft, während der User tippt/navigiert. Mechanik aus
-   `markdown_refs.prefetch/await_all` 1:1 übernommen.
-2. **Scan** in zwei Stufen: `rg --files-with-matches --fixed-strings` mit den
-   Provider-`needles` als grober Vorfilter (schnell, ignoriert `.git`,
-   `node_modules`, respektiert `.gitignore`), danach `extract()` pro Kandidat
-   für die exakte Trefferliste mit Zeile/Spalte. Kein Vollscan des cwd.
-3. **Mutation** (rename/move) — im `await`-Callback, also garantiert nach dem Scan.
-4. **Resolve** — `retarget(ref, new_path)` pro Ref, stil-erhaltend.
-5. **Confirm** — ein Chooser über *alle* Provider zusammen:
-   `"7 Referenzen in 4 Dateien (5 markdown, 2 lua)"` →
-   **Alle aktualisieren / Auswählen / Diff ansehen / Nichts tun**.
-6. **Apply** — gruppiert pro Datei, content-verifiziert; offene Buffer werden
-   live gepatcht (Logik aus `markdown_refs.update()` hochziehen), unmodifizierte
-   Buffer `noautocmd` zurückgeschrieben, modifizierte bleiben modified.
+1. **Prefetch** on the keypress — `refs.prefetch({paths}, opts)` returns a
+   handle. It runs while the user is still typing or navigating. The mechanics
+   are taken from `markdown_refs.prefetch/await_all` unchanged.
+2. **Scan** in two stages: `rg --files-with-matches --fixed-strings` with the
+   provider's `needles` as a coarse prefilter (fast, ignores `.git` and
+   `node_modules`, respects `.gitignore`), then `extract()` per candidate for
+   the exact hit list with line and column. No full scan of the cwd.
+3. **Mutation** (rename/move) — inside the `await` callback, so guaranteed after
+   the scan.
+4. **Resolve** — `retarget(ref, new_path)` per ref, style-preserving.
+5. **Confirm** — one chooser across *all* providers together:
+   `"7 references in 4 files (5 markdown, 2 lua)"` →
+   **Update all / Select / Show diff / Leave as-is**.
+6. **Apply** — grouped per file, content-verified; open buffers are patched
+   live (the logic from `markdown_refs.update()` moved up), unmodified buffers
+   written back `noautocmd`, modified ones left modified.
 
 ### Undo
 
-Neu und wichtig, sobald mehr als Markdown angefasst wird: `refs.apply()` gibt ein
-Undo-Token zurück (betroffene Dateien + Original-Zeilen). `:Filetree refs undo`
-rollt den letzten Apply zurück. Bei offenen Buffern reicht deren natives Undo;
-für Disk-Dateien braucht es das Token. Vorbild:
-[trash/undo.lua](../../../lua/filetree/features/fileops/trash/undo.lua).
+New, and important the moment more than Markdown is touched: `refs.apply()`
+returns an undo token (the affected files plus their original lines).
+`:Filetree refs undo` rolls the last apply back. For open buffers their native
+undo suffices; for files on disk the token is what makes it possible. Modelled
+on [trash/undo.lua](../../../lua/filetree/features/fileops/trash/undo.lua).
 
 ---
 
-## 4. UX: der `M`-Move
+## 4. UX: the `M` move
 
-Neues Feature `fileops/move` — eigenes Modul statt Keymap in `copy_move`, weil
-der Ziel-Prompt nichts mit der Clipboard-Logik zu tun hat:
+A new `fileops/move` feature — its own module rather than a keymap inside
+`copy_move`, because the target prompt has nothing to do with the clipboard
+logic:
 
 ```
-M   → Prefetch startet sofort für Node (oder alle Marks)
-    → kit.input "Move to: " mit Completion auf Verzeichnisse (default: cwd-relativ)
-    → Konflikt-Check (Overwrite / Keep both / Cancel — Logik aus copy_move wiederverwenden)
-    → fsops.rename_file()   (zentraler Mutations-Chokepoint, Windows-Retry inklusive)
+M   → prefetch starts immediately for the node (or all marks)
+    → kit.input "Move to: " with directory completion (default: cwd-relative)
+    → conflict check (Overwrite / Keep both / Cancel — reusing copy_move's logic)
+    → fsops.rename_file()   (the central mutation chokepoint, Windows retry included)
     → buffer.relocate()
-    → refs-Pipeline Schritt 4–6
+    → refs pipeline, steps 4–6
 ```
 
-Der Chooser danach:
+The chooser afterwards:
 
 ```
   7 reference(s) to Test.md in 4 file(s)
     ▸ Update all
-    ▸ Select…            → refs_picker (Tab/C-a Multi-Select, Preview)
-    ▸ Show diff          → Scratch-Buffer, unified diff aller Änderungen
+    ▸ Select…            → refs_picker (Tab/C-a multi-select, preview)
+    ▸ Show diff          → a scratch buffer with a unified diff of every change
     ▸ Leave as-is
 ```
 
-"Select…" ist laut deiner Einschätzung der seltenste Fall — deshalb Option 2,
-nicht Option 1, und ohne eigenen Keymap-Shortcut.
+"Select…" is, by your own estimate, the rarest case — hence option 2 rather
+than option 1, and no keymap shortcut of its own.
 
 ---
 
-## 5. Provider-Ausbau in Phasen
+## 5. Growing the providers, in phases
 
 ### Phase 1 — Markdown, in-tree
 
-Eigener Scanner; `markdown.nvim` wird von der Voraussetzung zum Beschleuniger
-(wenn vorhanden, weiter dessen `find_references` benutzen — das Interface passt).
-Abzudecken:
+Its own scanner; `markdown.nvim` goes from being a prerequisite to being an
+accelerator (when present, keep using its `find_references` — the interface
+fits). To cover:
 
-| Form | Beispiel |
+| Form | Example |
 |---|---|
-| Inline-Link | `[text](./Test.md)` |
+| Inline link | `[text](./Test.md)` |
 | Image | `![alt](./img/x.png)` |
-| Anchor/Title | `[t](./Test.md#kapitel "Titel")` |
-| Reference-Def | `[id]: ./Test.md` |
-| Wiki-Link | `[[Test]]`, `[[Test|Alias]]` (opt-in, nicht Standard-Markdown) |
-| HTML im MD | `<img src="./img/x.png">`, `<a href="…">` |
+| Anchor/title | `[t](./Test.md#section "Title")` |
+| Reference definition | `[id]: ./Test.md` |
+| Wiki link | `[[Test]]`, `[[Test\|Alias]]` (opt-in; not standard Markdown) |
+| HTML inside Markdown | `<img src="./img/x.png">`, `<a href="…">` |
 
-Wichtig beim Matching: Target **relativ zur referenzierenden Datei** auflösen,
-dann auf absoluten Pfad normalisieren und mit `old_path` vergleichen — nicht
-textuell. Sonst matcht `../Test.md` aus `docs/` nicht, und `Test.md` matcht
-fälschlich in jedem Unterverzeichnis. Auf Windows: `path.slashify` +
-case-insensitiver Vergleich.
+The important part of the matching: resolve the target **relative to the
+referencing file**, normalize it to an absolute path, and compare *that* with
+`old_path` — not the text. Otherwise `../Test.md` from `docs/` does not match,
+and `Test.md` wrongly matches in every subdirectory. On Windows:
+`path.slashify` plus a case-insensitive comparison.
 
-Zusätzlich **Verzeichnis-Move**: jede Ref, deren aufgelöster Pfad unter dem
-alten Verzeichnis liegt, wird umgeschrieben (Präfix-Match auf Segmentgrenze).
+Also **directory moves**: every ref whose resolved path lies under the old
+directory is rewritten (a prefix match on a segment boundary).
 
 ### Phase 2 — Lua
 
-Der Rewrite existiert schon (`file_to_lua_module`, Submodul-Kaskade,
-`require "x"` und `require("x")`). Zu tun:
+The rewrite already exists (`file_to_lua_module`, the submodule cascade,
+`require "x"` and `require("x")`). What is left:
 
-- aus `smart_rename` in einen Provider herausziehen,
-- `extract()` ergänzen, damit Treffer *mit Zeilennummer* rauskommen (heute wird
-  blind gepatcht, deshalb gibt es keine Vorschau),
-- damit automatisch auch für Move/Batch verfügbar,
-- Kanten: `require` in Strings/Kommentaren, `pcall(require, "x")`,
-  `vim.pack`/`lazy`-Specs mit Modulnamen, `package.path`-Sonderfälle.
-  Der `lua/`-Root-Match ist bereits greedy auf das *letzte* `/lua/` — gut so.
+- pull it out of `smart_rename` into a provider,
+- extend `extract()` so hits come out *with line numbers* (today the patch is
+  applied blind, which is why there is no preview),
+- which then makes it available for move and batch automatically,
+- edges: `require` inside strings or comments, `pcall(require, "x")`,
+  `vim.pack`/`lazy` specs holding module names, `package.path` special cases.
+  The `lua/` root match is already greedy on the *last* `/lua/`, which is
+  right.
 
 ### Phase 3 — Python
 
-Ebenfalls vorhanden (`file_to_python_module`). Gleiche Behandlung wie Lua;
-zusätzlich relative Imports (`from .x import y`) — heute nicht abgedeckt.
+Also present (`file_to_python_module`). Same treatment as Lua, plus relative
+imports (`from .x import y`), which are not covered today.
 
 ### Phase 4 — JS/TS
 
-Bewusst zuletzt, weil hier die meiste Arbeit steckt:
+Deliberately last, because this is where most of the work sits:
 
-- extensionslose Specifier, `/index`-Collapse, `.js`-Endung in ESM-Imports auf
-  TS-Quellen, `.mjs`/`.cjs`,
-- `tsconfig.json` `paths`/`baseUrl`-Aliase (`@/components/x`) — ohne die ist der
-  Rewrite in modernen Projekten fast wertlos; also `tsconfig`/`jsconfig` parsen
-  (inkl. `extends`) und Alias-Targets mit auflösen,
-- `require()` (CJS), dynamisches `import()`, `export … from`,
-- `package.json` `exports`/`imports` (`#internal/x`), Monorepo-Workspaces.
+- extensionless specifiers, `/index` collapsing, the `.js` extension in ESM
+  imports pointing at TS sources, `.mjs`/`.cjs`,
+- `tsconfig.json` `paths`/`baseUrl` aliases (`@/components/x`) — without those
+  the rewrite is nearly worthless in modern projects, so `tsconfig`/`jsconfig`
+  has to be parsed (including `extends`) and alias targets resolved along with
+  it,
+- `require()` (CJS), dynamic `import()`, `export … from`,
+- `package.json` `exports`/`imports` (`#internal/x`), monorepo workspaces.
 
-Realistischer Schnitt: **4a** = relative Specifier + `/index` + Extensions
-(existiert im Kern schon), **4b** = tsconfig-Aliase. Alles darüber nur, wenn
-kein LSP da ist — `tsserver` beherrscht `willRenameFiles` und ist dann ohnehin
-die bessere Quelle. Genau dafür ist die Reihenfolge "LSP zuerst, textual als
-Fallback" in `smart_rename` schon richtig gebaut.
+A realistic cut: **4a** = relative specifiers plus `/index` plus extensions
+(already there in the core), **4b** = tsconfig aliases. Anything beyond that
+only when no LSP is present — `tsserver` handles `willRenameFiles` and is then
+the better source anyway. Which is exactly why "LSP first, textual as a
+fallback" is already the right order in `smart_rename`.
 
 ---
 
-## 6. Config-Schema
+## 6. Config schema
 
-Ersetzt die heute pro Feature dreifach duplizierten `check_markdown_refs` /
-`refs_picker_prefer` (siehe `lua/filetree/@types/config.lua:254`,
-`:401`, `:433`, `:569`) durch **einen** Block, den die Features referenzieren:
+Replaces the `check_markdown_refs` / `refs_picker_prefer` pair that is
+currently duplicated across three features (see
+`lua/filetree/@types/config.lua:254`, `:401`, `:433`, `:569`) with **one**
+block the features reference:
 
 ```lua
 refs = {
@@ -246,104 +253,105 @@ refs = {
     markdown = true,
     lua      = true,
     python   = true,
-    ts_js    = false,   -- opt-in, solange Phase 4b nicht steht
+    ts_js    = false,   -- opt-in while phase 4b is not in place
   },
   on_move   = "ask",    -- "ask" | "auto" | "off"
   on_rename = "ask",
-  on_delete = "ask",    -- trash: Refs als REF! markieren
-  copy      = false,    -- Kopien brechen nie eine Referenz
+  on_delete = "ask",    -- trash: mark refs as REF!
+  copy      = false,    -- a copy never breaks a reference
   picker    = "auto",   -- auto | telescope | fzf-lua | quickfix
-  prefer_lsp = true,    -- willRenameFiles gewinnt, textual nur als Fallback
+  prefer_lsp = true,    -- willRenameFiles wins; textual only as a fallback
   scan = {
     root              = "project",  -- "project" | "cwd"
     respect_gitignore = true,
-    max_files         = 5000,       -- darüber: warnen statt scannen
+    max_files         = 5000,       -- beyond that: warn rather than scan
     timeout_ms        = 3000,
   },
   undo = true,
 }
 ```
 
-Migration: alte Keys werden weiter gelesen und mit Deprecation-Notiz auf den
-neuen Block gemappt.
+Migration: the old keys keep being read and are mapped onto the new block with
+a deprecation notice.
 
 ---
 
-## 7. Risiken / Kanten
+## 7. Risks and edges
 
-- **Race "Datei weg vor Scan"** — gelöst durch Prefetch/`await`; muss bei jedem
-  neuen Aufrufer diszipliniert eingehalten werden.
-- **Stale Refs** bei offenen, ungespeicherten Buffern — gelöst durch
-  Content-Verify (`apply_ref` prüft die Zeile); für die Code-Provider ebenso zu
-  übernehmen.
-- **Performance** — rg-Vorfilter ist Pflicht; ohne `rg` degradiert das Feature
-  auf "still aus" (heutiges Verhalten) statt auf einen Lua-Vollscan.
-- **False Positives** in Code (Modulname in String/Kommentar). Genau deshalb ist
-  die Vorschau/Auswahl bei Code-Refs wertvoller als bei Markdown.
-- **Windows** — Separator und Case: `path.slashify` konsequent an allen
-  Vergleichsstellen, Vergleiche case-insensitiv.
-- **Symlinks** — seit `link_create` real möglich: Refs auf einen Symlink dürfen
-  nicht auf dessen Ziel umgeschrieben werden.
-- **Binär/große Dateien** — Extension-Whitelist des Providers schützt bereits.
+- **The "file gone before the scan" race** — solved by prefetch/`await`; it has
+  to be honoured by every new caller.
+- **Stale refs** in open, unsaved buffers — solved by the content verify
+  (`apply_ref` checks the line); to be carried over to the code providers.
+- **Performance** — the rg prefilter is mandatory; without `rg` the feature
+  degrades to "silently off" (today's behaviour) rather than to a full Lua
+  scan.
+- **False positives** in code (a module name inside a string or comment).
+  Which is exactly why preview and selection are worth more for code refs than
+  for Markdown ones.
+- **Windows** — separators and case: `path.slashify` consistently at every
+  comparison site, and case-insensitive comparisons.
+- **Symlinks** — genuinely possible since `link_create`: a ref to a symlink
+  must not be rewritten to point at its target.
+- **Binary and large files** — the provider's extension whitelist already
+  covers this.
 
 ---
 
-## 8. Umsetzungsreihenfolge
+## 8. Implementation order
 
-| # | Schritt | Aufwand |
+| # | Step | Effort |
 |---|---|---|
-| 1 | `filetree.refs` + Provider-Registry + Ref-Datenmodell; `markdown_refs` als erster Provider dahinter (Verhalten unverändert) | M |
-| 2 | Gemeinsame Confirm/Picker/Apply-Schicht + Undo-Token | M |
-| 3 | Markdown-Provider in-tree (alle Link-Formen, Pfad-Auflösung statt Textvergleich) | M–L |
-| 4 | Lua-Provider aus `smart_rename` herausgelöst, mit Zeilentreffern | S–M |
-| 5 | `M`-Move-Feature (Ziel-Prompt, Konflikt-Reuse, Marks-Support) | S |
-| 6 | Refs-Pipeline an `copy_move` (cut) und `rename_batch` für **alle** Provider | S |
-| 7 | Config-Block `refs` + Migration alter Keys + Doku | S |
-| 8 | Python-Provider (inkl. relativer Imports) | S |
-| 9 | TS/JS Phase 4a, danach 4b (tsconfig-Aliase) | L |
+| 1 | `filetree.refs` plus the provider registry and the ref data model; `markdown_refs` as the first provider behind it (behaviour unchanged) | M |
+| 2 | The shared confirm/picker/apply layer plus the undo token | M |
+| 3 | The Markdown provider in-tree (every link form, path resolution instead of text comparison) | M–L |
+| 4 | The Lua provider extracted from `smart_rename`, with line-level hits | S–M |
+| 5 | The `M` move feature (target prompt, conflict reuse, marks support) | S |
+| 6 | The refs pipeline on `copy_move` (cut) and `rename_batch`, for **all** providers | S |
+| 7 | The `refs` config block plus migration of the old keys, plus documentation | S |
+| 8 | The Python provider (including relative imports) | S |
+| 9 | TS/JS phase 4a, then 4b (tsconfig aliases) | L |
 
 ## 9. Tests
 
-[TESTS/refs](../../../TESTS/refs) existiert bereits mit Fixtures —
-das Muster ausbauen: pro Provider ein Fixture-Baum, Tabellen-Test
-`(altes Layout, Move, erwartetes Layout)`, plus Negativfälle (Ref in Kommentar,
-gleichnamiges Präfix `testfs.rem` vs. `testfs.rem_other`, Ref auf Symlink,
-ungespeicherter Buffer mit verschobenen Zeilen).
+[TESTS/refs](../../../TESTS/refs) already exists with fixtures — extend the
+pattern: one fixture tree per provider, a table test of
+`(old layout, move, expected layout)`, plus the negative cases (a ref inside a
+comment, a same-named prefix `testfs.rem` vs `testfs.rem_other`, a ref to a
+symlink, an unsaved buffer with shifted lines).
 
 ---
 
-## 10. Abweichungen von der Planung
+## 10. Deviations from the plan
 
-Was bei der Umsetzung anders entschieden wurde als oben skizziert:
+What was decided differently during implementation than sketched above:
 
-- **Markdown ohne markdown.nvim, sofort.** Schritt 3 (eigener Scanner) wurde
-  nicht nachgelagert, sondern direkt gebaut — die Soft-Dep hätte sonst weiter
-  bestimmt, ob ein Kernfeature überhaupt läuft. `markdown.nvim` wird nicht mehr
-  benutzt; `util/markdown_refs.lua` ist entfallen.
-- **Pfad-Keys sind rein lexikalisch.** `fnamemodify(":p")` expandiert auf
-  Windows stillschweigend einen 8.3-Kurznamen, sobald es den Pfad ohnehin
-  umschreiben muss (`C:/Users/STEFAN~1/…` → `C:/Users/StefanBartl/…`), einen
-  bereits sauberen Pfad aber nicht. Dadurch hatte dieselbe Datei zwei
-  verschiedene Keys, je nachdem ob die Referenz `./Test.md` oder `Test.md`
-  geschrieben war — und **jede** gepunktete Referenz wurde übersehen. Deshalb
-  macht `refs/pathutil.lua` das Auflösen ausschließlich über `vim.fs.normalize`
-  und fasst das Dateisystem nicht an.
-- **Content-Verify über Byte-Range statt Pattern.** Jede Ref trägt `col` +
-  `#target`; ersetzt wird genau dieser Ausschnitt. Das war nicht geplant, macht
-  aber mehrere Links pro Zeile korrekt (rechts nach links angewendet) und
-  erspart das Escaping von Lua-Patterns komplett.
-- **ts_js: Phase 4a und 4b zusammen.** Die tsconfig-`paths`-Auflösung ist mit
-  drin (inkl. `extends`-Kette und JSONC-Vorreinigung), weil relative Specifier
-  allein in aliaslastigen Projekten fast nichts treffen. Der Provider ist
-  trotzdem **default aus** — mit laufendem `tsserver` ist `willRenameFiles` die
-  bessere Quelle.
-- **Python-Relativimporte nur dann, wenn sie ausdrückbar bleiben.** Verlässt
-  eine Datei ihr Package, wäre die Umschreibung ein Semantikwechsel; solche
-  Refs werden gezählt und gemeldet („N Referenzen nicht automatisch
-  umschreibbar"), nicht geraten.
-- **Zwei Utils extra**, die im Konzept nicht standen, aber durch die Umstellung
-  sichtbar wurden: `util/mutate.lua` (Windows-Retry + EXDEV-Fallback, vorher
-  dreimal kopiert) und `util/conflict.lua` (exists / remove_existing /
-  unique_name, geteilt von Paste und Move).
-- **Kein rg → kein Totalausfall.** Statt „still aus" (Konzept) gibt es einen
-  gedeckelten libuv-Walk als Fallback.
+- **Markdown without markdown.nvim, immediately.** Step 3 (an own scanner) was
+  not deferred but built straight away — otherwise the soft dependency would
+  have kept deciding whether a core feature runs at all. `markdown.nvim` is no
+  longer used; `util/markdown_refs.lua` is gone.
+- **Path keys are purely lexical.** `fnamemodify(":p")` silently expands an 8.3
+  short name on Windows whenever it has to rewrite the path anyway
+  (`C:/Users/STEFAN~1/…` → `C:/Users/StefanBartl/…`), but not when the path is
+  already clean. So the same file ended up with two different keys depending on
+  whether the reference was written `./Test.md` or `Test.md` — and **every**
+  dotted reference was missed. `refs/pathutil.lua` therefore resolves purely
+  through `vim.fs.normalize` and does not touch the filesystem at all.
+- **Content verification by byte range rather than by pattern.** Every ref
+  carries `col` plus `#target`, and exactly that span is replaced. That was not
+  planned, but it makes several links on one line correct (applied right to
+  left) and removes the need to escape Lua patterns entirely.
+- **ts_js: phases 4a and 4b together.** The tsconfig `paths` resolution is in
+  (including the `extends` chain and JSONC pre-cleaning), because relative
+  specifiers alone hit almost nothing in alias-heavy projects. The provider is
+  **off by default** regardless — with `tsserver` running, `willRenameFiles` is
+  the better source.
+- **Python relative imports only where they stay expressible.** If a file
+  leaves its package, rewriting the import would be a change of semantics; such
+  refs are counted and reported ("N references not automatically rewritable")
+  rather than guessed at.
+- **Two extra utilities** that were not in the concept but became visible
+  during the change: `util/mutate.lua` (the Windows retry plus the EXDEV
+  fallback, previously copied three times) and `util/conflict.lua` (exists /
+  remove_existing / unique_name, shared by paste and move).
+- **No rg does not mean total failure.** Instead of "silently off" (as the
+  concept had it), there is a capped libuv walk as a fallback.
