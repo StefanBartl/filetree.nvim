@@ -13,7 +13,7 @@
 --- signature so call sites never change.
 
 local ok, libmap = pcall(require, "lib.nvim.bindings.keymap")
-if ok and type(libmap) == "function" then return libmap end
+if ok and vim.is_callable(libmap) then return libmap end
 
 ---@param modes string|string[]
 ---@param lhs string
