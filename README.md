@@ -31,7 +31,7 @@ Beyond navigation (cwd modes, auto-reveal, tree traversal) and tree UI (preview,
 ## Requirements
 
 - Neovim >= 0.8
-- [lib.nvim](https://github.com/StefanBartl/lib.nvim) — shared helper library. **Required** for the `:Filetree`/`:Ft` command layer (`lib.nvim.usercmd.composer`); most other integrations (notify, `find_root`, ...) still degrade gracefully with local fallbacks if it's missing, but the commands themselves won't register without it.
+- [lib.nvim](https://github.com/StefanBartl/lib.nvim) — shared helper library. **Required** for the `:Filetree`/`:Ft` command layer (`lib.nvim.bindings.usercmd.composer`); most other integrations (notify, `find_root`, ...) still degrade gracefully with local fallbacks if it's missing, but the commands themselves won't register without it.
 - **One** of [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) or [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua)
 - Optional CLI tools (`trash-put`/`gio` for the trash feature, `rg` for
   grep-in-dir and the reference scan) — declared in

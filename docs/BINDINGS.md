@@ -53,7 +53,7 @@ keymap setup.
 ### User commands
 
 **Commands are global.** There is exactly one: `:Filetree`, built with
-`lib.nvim.usercmd.composer`, with sub-command dispatch and tab completion at
+`lib.nvim.bindings.usercmd.composer`, with sub-command dispatch and tab completion at
 every level. `:Ft` is registered as an alias out of the box — `:Ft marks show`
 is `:Filetree marks show`. Both the name and the aliases are configurable via
 `setup({ command = … })`.

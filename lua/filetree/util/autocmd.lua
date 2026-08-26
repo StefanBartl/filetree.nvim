@@ -1,5 +1,5 @@
 ---@module 'filetree.util.autocmd'
----@brief Autocmd/augroup helpers — delegate to lib.nvim.autocmd, with fallbacks.
+---@brief Autocmd/augroup helpers — delegate to lib.nvim.bindings.autocmd, with fallbacks.
 ---@description
 --- Thin wrappers so filetree shares lib.nvim's autocmd conventions when present,
 --- and still runs standalone otherwise. Signatures:
@@ -8,14 +8,14 @@
 ---   local grp = au.group("filetree_marks", true)          -- clear = true
 ---   au.create(event, callback, { group = grp, pattern = … })
 
-local _ok, lib = pcall(require, "lib.nvim.autocmd")
+local _ok, lib = pcall(require, "lib.nvim.bindings.autocmd")
 local has_lib = _ok and type(lib) == "table"
 
 local M = {}
 
 ---Create (or clear) a named augroup and return its id.
 ---
----Deliberately NOT delegated to lib.nvim.autocmd.group(): that function caches
+---Deliberately NOT delegated to lib.nvim.bindings.autocmd.group(): that function caches
 ---the returned id per name forever and never re-validates it, so once a
 ---feature's own re-setup cycle deletes its previous augroup by id (the pattern
 ---used throughout filetree — del_group(_augroup) then group(name, true) again),

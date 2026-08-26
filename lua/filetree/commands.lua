@@ -1,7 +1,7 @@
 ---@module 'filetree.commands'
 --- Central :Filetree command dispatcher with tab-completion.
 ---
---- Registers a single :Filetree command (built via lib.nvim.usercmd.composer)
+--- Registers a single :Filetree command (built via lib.nvim.bindings.usercmd.composer)
 --- that dispatches to all feature modules. TREE is the single source of
 --- truth for dispatch, <Tab> completion, and M.command_paths(); composer
 --- routes are derived from it, not duplicated.
@@ -16,7 +16,7 @@
 ---   :Filetree reveal pause 2000
 
 local usercmd = require("filetree.util.usercmd")
-local composer = require("lib.nvim.usercmd.composer")
+local composer = require("lib.nvim.bindings.usercmd.composer")
 local notify = require("filetree.util.notify").create("[filetree]")
 
 local M = {}

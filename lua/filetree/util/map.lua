@@ -1,7 +1,7 @@
 ---@module 'filetree.util.map'
----@brief Keymap helper — delegates to lib.nvim.map, falls back to vim.keymap.set.
+---@brief Keymap helper — delegates to lib.nvim.bindings.keymap, falls back to vim.keymap.set.
 ---@description
---- `lib.nvim.map` is a drop-in superset of `vim.keymap.set` (same first four
+--- `lib.nvim.bindings.keymap` is a drop-in superset of `vim.keymap.set` (same first four
 --- args, plus an optional `desc` as the 5th and sensible noremap/silent
 --- defaults). Requiring this module returns a callable with that signature:
 ---
@@ -12,7 +12,7 @@
 --- shares the user's map conventions); otherwise a local fallback keeps the same
 --- signature so call sites never change.
 
-local ok, libmap = pcall(require, "lib.nvim.map")
+local ok, libmap = pcall(require, "lib.nvim.bindings.keymap")
 if ok and type(libmap) == "function" then return libmap end
 
 ---@param modes string|string[]
