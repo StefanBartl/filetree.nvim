@@ -14,6 +14,19 @@ bindings, [`docs/BINDINGS/`](BINDINGS/).
 | [`ROADMAP/NEOTREE_FEATURES.md`](ROADMAP/NEOTREE_FEATURES.md) | Audit of the Neo-tree setup in the personal nvim config, mapped feature by feature onto filetree.nvim's registry — the port map. | Two of the four gaps it found. Both are about Neo-tree's *source* model (a buffers source, a dormant neotest source), which filetree.nvim has no concept for; both are deliberately parked, not forgotten. |
 | [`ROADMAP/IDEAS/Neotree_Sources.md`](ROADMAP/IDEAS/Neotree_Sources.md) | Whether to rebuild Neo-tree's `sources/` registry. | Yes — Phase 4, low priority. Current thinking: a small recipe collection covers the actual pain ("setup was a pain") more cheaply than a template engine. |
 
+## Open work not tied to a document
+
+- **Optimize `cwd_mode`'s badge.** `component()` returns the badge as plain
+  text for whatever draws the statusline — native `%{v:lua…}`, heirline, or
+  lualine, all three documented, none of them a dependency. It is the piece
+  that gets touched if the personal config ever swaps its statusline
+  framework, so it is worth being cheap and correct before that: the redraw
+  path recomputes on every call, and `refresh()` asks the host to redraw
+  rather than the other way round.
+
+  Context for *why* this came up lives in the config, not here:
+  `nvim/docs/ROADMAP/IDEAS/nvim.nvim.md`, the UI-plugin section.
+
 ## Reference — decided or shipped
 
 | Document | What it is | Status |
