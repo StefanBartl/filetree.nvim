@@ -190,3 +190,64 @@ filetree.nvim, and **notes** on applicability.
 github_stats.nvim's domain-specific modules (date-range presets, period diff/
 comparison, CSV/Markdown export of traffic metrics, the GitHub REST API
 client) don't map to anything a filetree plugin needs and aren't listed above.
+
+---
+
+## Pass 3: nvim-tree and netrw — the two sources the audit had not read
+
+**Purpose.** The task this file answers names three sources: Neo-tree,
+NvimTree and Netrw. Passes 1 and 2 covered the Neo-tree config and
+github_stats.nvim; NvimTree and Netrw appeared only as *adapter targets*, never
+as feature sources. This pass reads them as sources.
+
+**Method.** Not from memory — against nvim-tree's actual action surface
+(`lua/nvim-tree/actions/*/`, which is exactly the set of things it can be asked
+to do) and Netrw's documented command set, each mapped onto
+`lua/filetree/features/*/`.
+
+### Already covered
+
+Most of nvim-tree's surface maps onto something filetree.nvim already has:
+
+| nvim-tree action | filetree.nvim |
+|---|---|
+| `finders/find-file`, `finders/search-node` | `search/find_files`, `search/live_search`, `search/filter` |
+| `fs/clipboard` | `fileops/copy_move`, `paths/path_copy` |
+| `fs/create-file` | `fileops/create`, `smart_create`, `create_from_template` |
+| `fs/rename-file` | `fileops/rename_batch`, `smart_rename` |
+| `fs/remove-file`, `fs/trash` | `fileops/trash` (with undo) |
+| `node/open-file` | `fileops/open_variants`, `open_replace` |
+| `node/system-open`, `node/run-command` | `system/open_in_fm`, `open_with`, `shell_run` |
+| `node/file-popup` | `ui/node_info`, `ui/size_info` |
+| `node/buffer` | `nav/buffer_cycle`, `fileops/buffer_save` |
+| `tree/change-dir`, `tree/change-root` | `nav/cwd_mode`, `cwd_sync`, `tree_traverse` |
+| `tree/find-file` | `nav/auto_reveal`, `reveal_alt` |
+| `tree/resize` | `nav/auto_resize`, `ui/window_size_cycler` |
+| `moves/item`, `moves/parent` | `nav/tree_traverse` (`up()`/`down()`) |
+
+Netrw's marked-file workflow (`mf`/`mt`/`mc`/`mm`/`mx`) maps onto
+`org/marks` + `fileops/copy_move` + `system/shell_run`, and its bookmarks
+(`mb`/`gb`) onto `org/marks`.
+
+### Gaps found
+
+Three, each checked against the source tree rather than assumed:
+
+| Gap | Source | Notes |
+|---|---|---|
+| **Sibling navigation** — jump to the next/previous entry at the *same* depth, without descending | nvim-tree `actions/moves/sibling` | `nav/tree_traverse` has `up()`/`down()`, which change the *root*. There is no same-level move; `grep -ri sibling lua/filetree/features/` is empty. Cheap and genuinely useful in a wide directory. |
+| **Collapse all** — fold every open directory back to the root | nvim-tree `actions/tree/collapse` | The `collapse` hits in the tree are incidental (`auto_reveal`, `cwd_sync`, `marks`), none of them a user-facing action. Every adapter has this natively, so this is likely a thin adapter method rather than a feature of its own. |
+| **Sort cycling** — name / size / mtime, and reverse | netrw `s` and `r` | No user-facing sort control at all; the `sort` hits are internal (`create_from_template`, `trash/undo`, `hooks_api`). Worth checking per adapter first: Neo-tree has `sort_function`, nvim-tree has `sort.sorter`, and if all of them can be driven, this is again an adapter method rather than an implementation. |
+
+### Checked and deliberately *not* a gap
+
+- **Toggle hidden/dot-files** (netrw `gh`, nvim-tree `H`). `infra/ignore_list`
+  documents this as delegated to the adapter's own mechanism on purpose
+  (`init.lua:17-19` names `H` for both Neo-tree and nvim-tree). Reimplementing
+  it would mean two switches for one behaviour.
+- **Remote editing over scp/ftp** (netrw). Out of scope: netrw is a file
+  *browser plus transport*, filetree.nvim is a manager over local trees.
+- **Listing styles** (netrw `i`: thin/long/wide/tree). `ui/window_style` and
+  `ui/breadcrumbs` cover the display axis filetree.nvim actually owns; the rest
+  is the adapter's rendering, not this plugin's.
+
