@@ -75,6 +75,79 @@ moment quietly relocates the pin, not just the tree view. `:Filetree cwd
 status` is the fast way to confirm the pin actually landed where you meant
 after a `+` under lock, before relying on it for the rest of a session.
 
+## Every path mutation goes through the reference engine — plan for the chooser
+
+Smart rename, batch rename, `M` (move), cut+paste and trash all hand their
+scan/ask/rewrite work to `filetree.refs`. In daily use that changes two things
+about how a rename feels.
+
+**The scan starts on the keypress, not on the confirmation** — while the file
+is still at its old path, so it overlaps with you typing the new name and
+cannot miss a reference because the file moved out from under it. The rename
+runs strictly after the scan finishes. That is why a rename in a large tree
+sometimes pauses briefly *after* you hit enter: the work already happened, and
+you are waiting on the tail of it.
+
+**You get one chooser per operation, across every language** — not one per
+file and not one per provider. *Update all* / *Select…* / *Show diff* /
+*Leave as-is*. Reach for *Show diff* the first few times in a new project;
+after that *Update all* is the honest default, because every rewrite is
+content-verified at the byte range the scan recorded and a line that changed
+in the meantime is skipped rather than corrupted. `:Filetree refs undo`
+reverts the last batch.
+
+**`ts_js` is off by default and that is not an oversight.** `tsserver`
+implements `willRenameFiles` and does the job better while it is running; the
+textual provider exists for projects without it. Turn it on when you are
+working in a TS tree with no language server attached — not as a general
+"more coverage is better" setting.
+
+**Deleting is the mirror image, and deliberately asymmetric.** Trash offers to
+blank now-dangling markdown links to `REF!` so the break is visible; code
+references are left alone, because a `require("REF!")` is worse than an
+obviously stale one.
+
+The markdown provider runs for *every* move regardless of the moved file's
+type — a markdown file can link to anything — so renaming `foo.lua` fixes the
+docs that point at it, not only the modules that require it.
+
+## `M` instead of cut, navigate, paste
+
+Moving used to be three steps in two places. `M` is one prompt: move into a
+directory, or move-and-rename in a single step for a single node. Cut+paste
+still exists and is still right when the target is somewhere you want to
+*navigate* to and look at first — but for a target you can name, the prompt is
+the shorter path, and it starts its reference scan while you type.
+
+Paste prompts to resolve a name conflict rather than silently overwriting or
+silently skipping, and batch trash/paste show a progress indicator, so a large
+operation is distinguishable from a hung one.
+
+## Marks are a set — treat them like one
+
+`m` in Visual mode marks every node in the selection and `[m` unmarks; those
+are the only Visual-mode keymaps filetree binds, and they exist because a line
+range over a rendered tree is exactly a set of nodes. Marking a run of twelve
+files is a `V` motion, not twelve keypresses.
+
+Navigation over marks follows the tree **as rendered**, not the alphabetical
+order `get_marked()` returns: `]M`/`[M` cycle with wrap, `Ngm` goes to the Nth
+mark, and an out-of-range count clamps to the last one the way `G` does. A
+mark inside a collapsed directory has no line to jump to at all — if `]M`
+seems to skip one, expand first rather than assuming the mark was lost.
+
+## Dry-run the two bulk operations before letting them run
+
+`:Filetree copymove dry-run` and `:Filetree renamebatch dry-run` toggle
+`dry_run` at runtime and log the plan instead of executing it. These are the
+destructive *bulk* operations, so this is the one worth using habitually on an
+unfamiliar tree — trash and safety already had a runtime toggle; these two used
+to be a config key, which meant previewing required editing the config and
+reloading.
+
+The command is `renamebatch`, not `rename`: `rename` is already the leaf
+command that opens the batch-rename buffer.
+
 ## `gp` is shared between `cwd_mode` and the PDF bridge — know which one is live
 
 `cwd_mode.lock_here` and `pdf_open.open_default` both default to the same
@@ -87,6 +160,12 @@ mapping silently — no error, no warning, just one of the two features
 losing its key. If you're enabling `pdf_open`, remap one of the two
 explicitly (`keymap_lock_here` on `cwd_mode`, or `keymap_open` on
 `pdf_open`) rather than relying on load order to sort it out for you.
+
+`pdf_open.default_mode = "picker"` is worth knowing before you decide which of
+the two to keep: it asks which backend to open with instead of committing to
+one, the same way gopath.nvim's and markdown.nvim's pdfport integrations
+already do. The prompt always includes "system application", so it works
+without pdfport.nvim installed rather than showing an empty list.
 
 ## Reading Complexity → Hierarchy is a general habit; here it's Analysis panels → Backends table
 

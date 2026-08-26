@@ -22,6 +22,9 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `[m` | marks | `keymap_unmark_all` | Unmark all nodes in current directory |
 | `<C-m>` | marks | `keymap_clear` | Clear all marks |
 | `<leader>ms` | marks | `keymap_show` | Show floating list of marked nodes |
+| `gm` | marks | `keymap_goto` | Go to the Nth marked node in render order (`Ngm`; a too-large count clamps to the last) |
+| `]M` | marks | `keymap_next` | Next marked node, wrapping |
+| `[M` | marks | `keymap_prev` | Previous marked node, wrapping |
 | `-` | tree_traverse | `keymap_up` | Navigate to parent directory |
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
 | `L` | cwd_mode | `keymap_cycle` | Cycle the cwd policy (follow → project → lock) |
@@ -74,6 +77,17 @@ A `?` suffix means the field is optional; omit or set to `false` to disable.
 | `<leader>fm` | open_in_fm | `keymap` | Open node directory in system file manager |
 | `i` | shell_run | `keymap` | Prompt for a shell command, run in node directory |
 | `gP` | pdf_create | `keymap` | Create PDF(s) from the current node/marked nodes/folder via pdfport.nvim (confirms first) |
+
+### Visual-mode keymaps
+
+The only two this plugin binds in Visual mode. A line range over a rendered
+tree is exactly a set of nodes, so marking a run of files is a motion rather
+than one keypress per line.
+
+| Key | Feature | Config field | Action |
+|-----|---------|-------------|--------|
+| `m` | marks | `keymap` | Mark every node in the selection |
+| `[m` | marks | `keymap_unmark_all` | Unmark every node in the selection |
 
 ---
 
