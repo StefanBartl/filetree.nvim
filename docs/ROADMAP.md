@@ -23,8 +23,32 @@ bindings, [`docs/BINDINGS/`](BINDINGS/).
 
 ## Known issues not tracked in any of the above
 
-- **The suites fail on Windows.** `TESTS/units.lua` (4) and `TESTS/cwd_mode.lua`
-  (41) compare temp-directory paths and hit 8.3 short paths against long paths
-  (`C:/Users/STEFAN~1/…` vs `C:/Users/StefanBartl/…`). Linux CI is green, so
-  this is an expectation problem in the tests, not a defect in the plugin — but
-  it makes the suites unusable as a local gate on Windows.
+- **`TESTS/refs/` is 52 of 54.** Two cases fail, both the same shape: a rename
+  updates `lua/proj/nested/b.lua` but not `lua/proj/nested/deep/c.lua`, one
+  level further down, even though both files hold the byte-identical
+  `require("proj.util.shared")`. The plain rename and the directory-cascade
+  case each fail on that one file.
+
+  What it is *not*, so the next reader does not re-check: not a regression
+  (identical before and after the 2026-08-25 cross-platform round), not the
+  scan backend (identical with ripgrep and with the libuv fallback — and rg
+  itself lists `nested/deep/c.lua` when run by hand with the same arguments),
+  and not the candidate set. The candidates arrive; the rewrite skips that one
+  file. So the defect sits in the apply layer, downstream of `refs/scan.lua`.
+
+  One lead worth starting from: for a ripgrep-relative hit,
+  `filetree.util.path.to_absolute` returns
+  `C:\repos\…\.\lua\proj\nested\deep\c.lua`
+  — backslashes kept and a literal `\.\` segment left in the middle. If
+  anything downstream dedups or matches on that string, an unnormalized
+  path is the first place to look.
+
+- ~~**The suites fail on Windows.**~~ Fixed 2026-08-25. The 45 failures
+  (`units.lua` 4, `cwd_mode.lua` 41) were *not* an expectation problem as
+  recorded here: `lib.nvim`'s `normkey` returned a different key for the same
+  path before and after `mkdir`, because `fs_realpath` fails on a path that
+  does not exist yet and the fallback kept the 8.3 spelling. Fixed at the root
+  in lib.nvim; 41 of the 45 went away without a test being touched. Of the
+  rest, two were a real defect here — `find_files`' builtin backend globbed a
+  tilde path and got an empty list — and two were genuine expectations. All
+  four suites are green on Windows now.
