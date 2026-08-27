@@ -26,6 +26,11 @@ return {
   -- lib.nvim.progress installed.
   progress_style = "auto",
 
+  -- Cap on how many nodes one walk of the rendered tree collects. Only a
+  -- guard against a single directory expanded with tens of thousands of
+  -- entries; the walk is already bounded by what is expanded.
+  max_visible_nodes = 5000,
+
   -- Reference engine: keeps markdown links and require()/import statements
   -- pointing at the right file after a rename/move/delete. One block for every
   -- fileops feature; see lua/filetree/refs/DEFAULTS.lua for the annotated

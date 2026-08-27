@@ -194,7 +194,13 @@ end
 -- bounded by the rendered line count, not the filesystem), but a single directory
 -- expanded with tens of thousands of entries could still be pathological. Stop
 -- collecting past this many nodes — far more than any picker/marks use needs.
-local MAX_VISIBLE = 5000
+---@return integer
+local function max_visible()
+  local ok, ft = pcall(require, "filetree.config")
+  if not ok or not ft.get then return 5000 end
+  local n = ft.get().max_visible_nodes
+  return (type(n) == "number" and n > 0) and n or 5000
+end
 
 ---@param filter? FiletreeFilterMode
 ---@return FiletreeNode[]
@@ -205,11 +211,12 @@ function M.get_visible_nodes(filter)
   local nodes = {}
   local line_nr = 1
   local capped = false
+  local cap = max_visible()
 
   ---@internal
   local function collect(node)
-    if not node or #nodes >= MAX_VISIBLE then
-      capped = capped or #nodes >= MAX_VISIBLE
+    if not node or #nodes >= cap then
+      capped = capped or #nodes >= cap
       return
     end
     local depth = (node.get_depth and node:get_depth()) or 0
@@ -254,7 +261,7 @@ function M.get_visible_nodes(filter)
       collect(root)
     end
   end
-  if capped then notify.debug("get_visible_nodes: capped at " .. MAX_VISIBLE .. " nodes") end
+  if capped then notify.debug("get_visible_nodes: capped at " .. cap .. " nodes") end
   return nodes
 end
 

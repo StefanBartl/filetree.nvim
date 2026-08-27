@@ -30,8 +30,17 @@ local M = {}
 ---@type FiletreeRefsUndoToken[]
 local _undo_stack = {}
 
----@type integer
-local UNDO_DEPTH = 10
+---How many reference rewrites stay undoable via `:Filetree refs undo`.
+---
+---Same class of preference as trash's history: the stack holds the previous
+---content of rewritten lines, which is small. `refs.undo_depth`.
+---@return integer
+local function undo_depth()
+  local ok, refs = pcall(require, "filetree.refs")
+  if not ok or type(refs.config) ~= "function" then return 10 end
+  local n = (refs.config() or {}).undo_depth
+  return (type(n) == "number" and n > 0) and n or 10
+end
 
 -- ── Line rewriting ────────────────────────────────────────────────────────────
 
@@ -173,7 +182,7 @@ function M.run(refs, opts)
       files = files_changed,
       label = opts.label or "reference update",
     }
-    while #_undo_stack > UNDO_DEPTH do
+    while #_undo_stack > undo_depth() do
       table.remove(_undo_stack, 1)
     end
   end

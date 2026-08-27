@@ -38,6 +38,7 @@
 ---@field deps_popup       boolean?                         Show the lib.nvim.deps "declared tools" popup once, ever, on first setup() after install (default true; needs lib.nvim.deps — a no-op without it).
 ---@field refs             FiletreeRefsConfig?              Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style   Lib.Progress.Style?              Style for batch-operation progress indicators (trash, paste, …): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress — a no-op without it.
+---@field max_visible_nodes integer?                        Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
 
 ---@class FiletreeConfirmationsConfig
 ---@field paste        boolean?  copy_move's paste-staged-nodes prompt (default false).
@@ -253,6 +254,7 @@
 ---@field confirm             boolean  Ask before trashing (default true, unlike paste/rename_batch; see top-level `confirmations`).
 ---@field use_safety          boolean  Create a backup before trashing (default false).
 ---@field dry_run             boolean  Log without actually trashing (default false).
+---@field max_history         integer? How many trash operations stay undoable (default 50; 0 = unlimited).
 ---@field check_markdown_refs boolean  **Deprecated** — migrated to `refs.on_delete` (`false` → `"off"`). See @types/refs.lua.
 ---@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
 ---@field keymap              string?  Trash current node / all marked (default "d").
@@ -313,6 +315,7 @@
 ---@field markers   string[]          Files/dirs that signal a project root.
 ---@field fallback  "cwd"|"parent"    What to use when no root is found (default "parent").
 ---@field cache     boolean           Cache resolved roots per directory for the session (default true).
+---@field max_cache_entries integer?  How many directories the root cache holds before it is cleared in one shot (default 1000).
 
 -- ── create_from_template ──────────────────────────────────────────────────────
 

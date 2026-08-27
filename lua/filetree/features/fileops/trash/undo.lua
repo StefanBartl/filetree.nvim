@@ -7,7 +7,20 @@ local platform = require("filetree.util.platform")
 local kit = require("lib.nvim.ui.kit")
 local M = {}
 
-local MAX_HISTORY = 50
+---How many trash operations stay undoable.
+---
+---A preference, not a safety limit: the history is a small JSON file, and
+---"how far back do I want to reach" is the user's call. `features.trash.
+---max_history`; 0 keeps everything.
+---@return integer
+local function max_history()
+  local ok, ft = pcall(require, "filetree.config")
+  if not ok or not ft.get then return 50 end
+  local cfg = (ft.get().features or {}).trash or {}
+  local n = cfg.max_history
+  if type(n) ~= "number" or n < 0 then return 50 end
+  return n
+end
 
 ---@class TrashEntry
 ---@field original_path string   Where the file/dir was before trashing.
@@ -28,7 +41,8 @@ function M.record(original_path)
     platform = platform.current(),
   }
   table.insert(_history, 1, entry)
-  if #_history > MAX_HISTORY then table.remove(_history, MAX_HISTORY + 1) end
+  local cap = max_history()
+  if cap > 0 and #_history > cap then table.remove(_history, cap + 1) end
 end
 
 ---Return the full trash history (newest first).

@@ -36,6 +36,8 @@ local _cfg = {
   },
   fallback = "parent",
   cache = true,
+  -- How many directories the cache holds before it is cleared in one shot.
+  max_cache_entries = 1000,
 }
 
 -- ── Cache ─────────────────────────────────────────────────────────────────────
@@ -48,11 +50,19 @@ local _cfg = {
 -- hash map (O(1) lookup by path), not a ring buffer: a ring buffer bounds an
 -- ordered *history*, but what's needed here is key-based lookup, which a
 -- table already gives for free. Capped and cleared in one shot (not a real
--- LRU) once it grows past MAX_CACHE_ENTRIES, so a very long session visiting
+-- LRU) once it grows past `features.project_root.max_cache_entries`, so a
+-- very long session visiting
 -- many one-off directories can't grow this unboundedly.
 ---@type table<string, string|false>  dir -> root, or false for "no root found"
 local _cache = {}
-local MAX_CACHE_ENTRIES = 1000
+---@return integer
+local function max_cache_entries()
+  local ok, ft = pcall(require, "filetree.config")
+  if not ok or not ft.get then return 1000 end
+  local cfg = (ft.get().features or {}).project_root or {}
+  local n = cfg.max_cache_entries
+  return (type(n) == "number" and n > 0) and n or 1000
+end
 
 ---Clear the project-root cache. Call this if a `.git` (or other marker) gets
 ---added/removed under a directory already visited this session.
@@ -99,7 +109,7 @@ local function find_from(dir)
   end
 
   if _cfg.cache ~= false then
-    if vim.tbl_count(_cache) >= MAX_CACHE_ENTRIES then _cache = {} end
+    if vim.tbl_count(_cache) >= max_cache_entries() then _cache = {} end
     for _, d in ipairs(visited) do
       _cache[d] = found or false
     end

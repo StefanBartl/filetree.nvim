@@ -73,6 +73,7 @@
 ---@field wiki_links  boolean   Also rewrite `[[wiki]]`-style markdown links (default false).
 ---@field scan        FiletreeRefsScanConfig
 ---@field undo        boolean   Keep an undo token per apply (default true).
+---@field undo_depth  integer?  How many applies stay undoable (default 10). The stack holds only the replaced line content, so raising this is cheap.
 
 ---One entry of the undo stack: the lines an apply replaced, per file.
 ---@class FiletreeRefsUndoEntry
