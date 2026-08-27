@@ -14,6 +14,7 @@
 ---   - :FiletreeSizeRefresh
 
 local au = require("filetree.util.autocmd")
+local bufutil = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeSizeInfoConfig
@@ -174,8 +175,7 @@ function M.setup(config, adapter)
     group = _augroup,
     pattern = "*",
     callback = function(ev)
-      local ft = vim.bo[ev.buf].filetype
-      if ft == "neo-tree" or ft == "NvimTree" then M._render() end
+      if bufutil.is_tree_buffer(ev.buf) then M._render() end
     end,
   })
 
@@ -183,8 +183,7 @@ function M.setup(config, adapter)
     group = _augroup,
     pattern = "*",
     callback = function()
-      local ft = vim.bo.filetype
-      if ft == "neo-tree" or ft == "NvimTree" then M._render() end
+      if bufutil.is_tree_buffer() then M._render() end
     end,
   })
 

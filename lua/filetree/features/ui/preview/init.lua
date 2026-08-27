@@ -682,8 +682,7 @@ function M.setup(config, adapter)
     group = _augroup,
     pattern = "*",
     callback = function(ev)
-      local ft = vim.bo[ev.buf].filetype
-      if ft == "neo-tree" or ft == "NvimTree" then
+      if bufutil.is_tree_buffer(ev.buf) then
         if _cfg.mode == "float" then
           close_preview()
         elseif _buf_active then

@@ -152,8 +152,11 @@ function M.setup(user_config)
   vim.schedule(function()
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
       if vim.api.nvim_buf_is_loaded(buf) then
-        local ft = vim.api.nvim_get_option_value("filetype", { buf = buf })
-        if ft == "neo-tree" or ft == "NvimTree" then
+        if require("filetree.util.buffer").is_tree_buffer(buf) then
+          -- The filetype is still needed as the pattern, so it is read here
+          -- rather than being the guard: which filetypes count as "a tree"
+          -- is the adapter's answer, not this loop's.
+          local ft = vim.api.nvim_get_option_value("filetype", { buf = buf })
           -- Fire FileType with the tree buffer current so the feature autocmd
           -- callbacks see the correct ev.buf.  (pattern and buf are mutually
           -- exclusive in nvim_exec_autocmds, hence nvim_buf_call.)

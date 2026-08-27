@@ -6,6 +6,36 @@ local au = require("filetree.util.autocmd")
 
 local M = {}
 
+---Is `bufnr` one of the tree plugin's own buffers?
+---
+---Asks the active adapter for its filetypes instead of testing against a
+---hardcoded pair. Eight features tested `ft == "neo-tree" or ft == "NvimTree"`
+---inline -- ten copies of the same line -- which meant every one of them
+---silently did nothing under netrw, oil or mini_files, all of which filetree
+---otherwise supports. The adapters have declared their own `filetypes` the
+---whole time.
+---
+---Falls back to the neo-tree/nvim-tree pair only when no adapter is resolved
+---yet, which is what `tree_attach` already does for its FileType pattern.
+---@param bufnr integer|nil  Defaults to the current buffer.
+---@return boolean
+function M.is_tree_buffer(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  if not vim.api.nvim_buf_is_valid(bufnr) then return false end
+  local ft = vim.bo[bufnr].filetype
+
+  local ok, ft_mod = pcall(require, "filetree")
+  local adapter = ok and type(ft_mod.adapter) == "function" and ft_mod.adapter() or nil
+  local types = (adapter and type(adapter.filetypes) == "table" and #adapter.filetypes > 0)
+      and adapter.filetypes
+    or { "neo-tree", "NvimTree" }
+
+  for _, t in ipairs(types) do
+    if ft == t then return true end
+  end
+  return false
+end
+
 ---Filetypes treated as tree/explorer windows — never valid editor targets.
 ---@type table<string, true>
 M.TREE_FT = {

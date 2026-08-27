@@ -44,6 +44,7 @@ local progress = require("filetree.util.progress")
 -- surface as a hard failure — see the handle_guard plan.
 local fsops = require("lib.nvim.cross.fs.mutate")
 local bind = require("filetree.util.bind")
+local bufutil = require("filetree.util.buffer")
 
 local M = {}
 
@@ -560,8 +561,7 @@ function M.setup(config, adapter)
     group = _augroup,
     pattern = "*",
     callback = function(ev)
-      local ft = vim.bo[ev.buf].filetype
-      if ft == "neo-tree" or ft == "NvimTree" then render_clipboard() end
+      if bufutil.is_tree_buffer(ev.buf) then render_clipboard() end
     end,
   })
 end

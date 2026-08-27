@@ -28,6 +28,7 @@
 
 local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
+local bufutil = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
@@ -225,8 +226,7 @@ function M.setup(config, adapter)
   au.acmd("WinEnter", {
     group = _augroup,
     callback = function()
-      local ft = vim.bo.filetype
-      if ft == "neo-tree" or ft == "NvimTree" then
+      if bufutil.is_tree_buffer() then
         -- Short pause so that the reveal triggered by WinEnter doesn't
         -- immediately jump again when the user leaves the tree
         M.pause(500)

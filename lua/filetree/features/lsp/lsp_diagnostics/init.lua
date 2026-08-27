@@ -12,6 +12,7 @@
 
 local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
+local bufutil = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeLspDiagnosticsConfig
@@ -205,8 +206,7 @@ function M.setup(config, adapter)
     group = _augroup,
     pattern = "*",
     callback = function(ev)
-      local ft = vim.bo[ev.buf].filetype
-      if ft == "neo-tree" or ft == "NvimTree" then
+      if bufutil.is_tree_buffer(ev.buf) then
         recompute()
         M._render()
       end
