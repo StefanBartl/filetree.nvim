@@ -47,6 +47,7 @@ function M.create(event, callback, opts)
   if has_lib and type(lib.create) == "function" then return lib.create(event, callback, opts) end
   local o = vim.tbl_extend("force", {}, opts)
   o.callback = callback
+  -- lib-docs: fallback
   return vim.api.nvim_create_autocmd(event, o)
 end
 
@@ -65,6 +66,7 @@ function M.acmd(event, opts)
     o.callback = nil
     return lib.create(event, cb, o)
   end
+  -- lib-docs: fallback -- also the `command = "…"` form, which lib cannot take.
   return vim.api.nvim_create_autocmd(event, opts)
 end
 
