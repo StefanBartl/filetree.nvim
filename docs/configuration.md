@@ -44,6 +44,11 @@ require("filetree").setup({
   -- "Progress indicators" below. Needs lib.nvim.progress; a no-op without it.
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
+  -- Cap on how many nodes one walk of the rendered tree collects. Only a
+  -- guard against a single directory expanded with tens of thousands of
+  -- entries; the walk is already bounded by what is expanded.
+  max_visible_nodes = 5000,
+
   -- Reference engine: what happens to markdown links and require()/import
   -- statements when a file is renamed, moved or deleted. One block for every
   -- fileops feature — see FEATURES/FILEOPS.md#references for the full story.
@@ -65,6 +70,8 @@ require("filetree").setup({
       timeout_ms        = 3000,
     },
     undo = true,          -- `:Filetree refs undo` reverts the last rewrite
+    undo_depth = 10,      -- how many rewrites stay undoable; the stack holds
+                          -- only the replaced line content, so raising is cheap
   },
 
   features = {
@@ -196,6 +203,7 @@ require("filetree").setup({
       markers  = { ".git", "package.json", "Cargo.toml", "go.mod", "*.rockspec", --[[ … ]] },
       fallback = "parent",  -- "parent" (the file's own dir) | "cwd", used when no marker is found
       cache    = true,      -- cache resolved roots per directory for the session (see below)
+      max_cache_entries = 1000,  -- directories held before the cache is cleared in one shot
     },
 
     current_hl = {

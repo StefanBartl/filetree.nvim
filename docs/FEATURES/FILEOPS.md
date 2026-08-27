@@ -148,7 +148,9 @@ tpl.move("go_test.go", -1)   -- same as pressing <M-k> on it
 ## Trash
 
 Cross-platform trash (not permanent delete) with undo — `d` to trash,
-`U` to undo, `<leader>th` for trash history. Marking multiple nodes and
+`U` to undo, `<leader>th` for trash history. How far back that reaches is
+`features.trash.max_history` (default 50, `0` = unlimited): a preference,
+not a limit protecting anything, since the history is a small JSON file. Marking multiple nodes and
 trashing them opens one batch confirmation instead of one prompt per
 file, and force-closes any open buffers backed by the deleted paths so
 they don't linger as edits-to-nowhere. Same optional progress indicator
