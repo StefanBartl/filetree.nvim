@@ -215,7 +215,11 @@ function M.setup(user_config)
     else
       au.create("VimEnter", function()
         vim.defer_fn(do_inject, 50)
-      end, { once = true })
+      end, {
+        group = "filetree_setup",
+        once = true,
+        desc = "[filetree] Inject the tree adapter's keymaps once Neovim has started",
+      })
     end
     -- Give `/` back its native search inside neo-tree's `?` help popup.
     require("filetree.attach").native_search_in_help()

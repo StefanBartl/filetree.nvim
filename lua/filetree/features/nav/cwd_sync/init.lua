@@ -344,6 +344,7 @@ function M.setup(config, adapter)
     au.acmd("VimEnter", {
       group = _augroup,
       once = true,
+      desc = "[filetree] Sync the working directory once, for a startup that beat setup()",
       callback = debounced_reveal,
     })
   end

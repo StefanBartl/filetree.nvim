@@ -109,9 +109,15 @@ end
 ---@param owner string
 ---@param keys string|string[]  # `"<event>:<scope>"`, scope `tree`/`editor`/`*`
 ---@param spec { load: fun(ctx: Lib.Autocmd.Dispatcher.Ctx), desc: string, priority?: integer, once?: boolean }
----@return nil
+---@return unknown  # the dispatcher handle, for chaining
 function M.register(owner, keys, spec)
-  handle().register(keys, {
+  -- A tail call, deliberately. lib records the `register()` call site so the
+  -- generated table can say which file a handler lives in, and it reads that
+  -- off the stack -- without the `return`, every handler would be attributed
+  -- to this line instead of to the feature that owns it. Lua guarantees proper
+  -- tail calls, so the frame is genuinely gone rather than optimized away on a
+  -- good day.
+  return handle().register(keys, {
     load = spec.load,
     desc = spec.desc,
     priority = spec.priority or M.PRIORITY.RENDER,

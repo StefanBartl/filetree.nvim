@@ -499,7 +499,11 @@ function M.native_search_in_help(keys)
         pcall(vim.keymap.del, "n", key, { buffer = buf })
       end
     end)
-  end, { group = _popup_augroup, pattern = "neo-tree-popup" })
+  end, {
+    group = _popup_augroup,
+    pattern = "neo-tree-popup",
+    desc = "[filetree] Give `/` back its native search inside neo-tree's help popup",
+  })
 end
 
 return M

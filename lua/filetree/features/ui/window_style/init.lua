@@ -128,6 +128,7 @@ function M.setup(config, adapter)
   if _cfg.highlights_isolate then
     au.acmd("ColorScheme", {
       group = _augroup,
+      desc = "[filetree] Re-isolate the tree window's highlights after a colorscheme change",
       callback = function()
         vim.schedule(isolate_highlights)
       end,

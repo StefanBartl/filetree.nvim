@@ -62,6 +62,7 @@ function M.setup(config, adapter)
   -- window (un)display of a buffer.
   au.acmd({ "BufAdd", "BufDelete", "BufWipeout", "BufWinEnter", "BufWinLeave" }, {
     group = _augroup,
+    desc = "[filetree] Re-draw the tree's open-file markers when the buffer list changes",
     callback = debounced_redraw,
   })
 end

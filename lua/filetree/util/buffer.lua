@@ -194,7 +194,11 @@ end
 au.create("BufDelete", function(args)
   M.invalidate(args.buf)
 end, {
-  group = au.group("FiletreeBufferCache", true),
+  -- Lowercase-prefixed like every other group here: `bindings.autocmds` picks
+  -- this plugin's records out by a `^filetree` match on the group name, and
+  -- `FiletreeBufferCache` fell straight through it.
+  group = au.group("filetree_buffer_cache", true),
+  desc = "[filetree] Drop a deleted buffer from the buffer cache",
 })
 
 ---Repoint every open buffer whose name is `old_path` (or nested under it, for
