@@ -63,7 +63,13 @@ local function query_dir_size(path, callback)
       ),
     }
   else
-    cmd = { "du", "-sb", path }
+    -- `-sk`, not `-sb`: `-b` is a GNU extension. On macOS and the BSDs `du`
+    -- rejects it, the process exits non-zero, and the size silently never
+    -- appears -- no error, just a column that stays empty forever. `-sk` is
+    -- POSIX and reports kibibytes, which after formatting is invisible: a
+    -- directory shown as "4.2 MB" does not change by being rounded to the
+    -- kibibyte.
+    cmd = { "du", "-sk", path }
   end
 
   vim.system(
@@ -77,7 +83,8 @@ local function query_dir_size(path, callback)
       if vim.fn.has("win32") == 1 then
         bytes = tonumber(vim.trim(out))
       else
-        bytes = tonumber(out:match("^(%d+)"))
+        local kib = tonumber(out:match("^(%d+)"))
+        bytes = kib and (kib * 1024) or nil
       end
       if bytes then
         _cache[path] = fmt_bytes(bytes)
