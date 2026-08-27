@@ -24,8 +24,6 @@ local trash_platform = require("filetree.features.fileops.trash.platform")
 local undo = require("filetree.features.fileops.trash.undo")
 local notify = require("filetree.util.notify").create("[filetree.trash]")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local buffer = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm = require("filetree.util.confirm")
@@ -41,6 +39,7 @@ local progress = require("filetree.util.progress")
 -- Release neo-tree's directory-watcher handle before the external trash command
 -- touches the path. No-op unless the handle_guard feature installed the registry.
 local watch = require("lib.nvim.neotree.watch")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -425,16 +424,16 @@ function M.setup(config, adapter)
     return
   end
 
-  tree_attach.on_attach(function(buf)
-    local function kmap(key, fn, desc)
-      if key and key ~= "" then
-        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-      end
-    end
-    kmap(_cfg.keymap, M.delete_current, "trash current node")
-    kmap(_cfg.keymap_undo, M.undo_last, "undo last trash")
-    kmap(_cfg.keymap_history, M.show_history, "show trash history")
-  end)
+  bind.bind("trash", _cfg, {
+    { name = "trash", field = "keymap", rhs = M.delete_current, desc = "trash current node" },
+    { name = "undo", field = "keymap_undo", rhs = M.undo_last, desc = "undo last trash" },
+    {
+      name = "history",
+      field = "keymap_history",
+      rhs = M.show_history,
+      desc = "show trash history",
+    },
+  })
 end
 
 function M.teardown()

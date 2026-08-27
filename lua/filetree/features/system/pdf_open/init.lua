@@ -22,8 +22,7 @@
 
 local pdf = require("filetree.util.pdf")
 local notify = require("filetree.util.notify").create("[filetree.pdf_open]")
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -105,18 +104,33 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  tree_attach.on_attach(function(buf)
-    local function kmap(key, fn, desc)
-      if key and key ~= "" then
-        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-      end
-    end
-    kmap(_cfg.keymap_open, M.open_default, "open PDF (pdfport)")
-    kmap(_cfg.keymap_text, M.open_text, "open PDF as text (pdfport)")
-    kmap(_cfg.keymap_system, M.open_system, "open PDF in system viewer")
-    kmap(_cfg.keymap_terminal, M.open_terminal, "open PDF in terminal (pdfport)")
-    kmap(_cfg.keymap_picker, M.open_picker, "open PDF — ask how (pdfport/system)")
-  end)
+  bind.bind("pdf_open", _cfg, {
+    { name = "open", field = "keymap_open", rhs = M.open_default, desc = "open PDF (pdfport)" },
+    {
+      name = "text",
+      field = "keymap_text",
+      rhs = M.open_text,
+      desc = "open PDF as text (pdfport)",
+    },
+    {
+      name = "system",
+      field = "keymap_system",
+      rhs = M.open_system,
+      desc = "open PDF in system viewer",
+    },
+    {
+      name = "terminal",
+      field = "keymap_terminal",
+      rhs = M.open_terminal,
+      desc = "open PDF in terminal (pdfport)",
+    },
+    {
+      name = "picker",
+      field = "keymap_picker",
+      rhs = M.open_picker,
+      desc = "open PDF — ask how (pdfport/system)",
+    },
+  })
 end
 
 function M.teardown()

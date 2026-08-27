@@ -1,8 +1,6 @@
 ---@module 'filetree.features.copy_file_list'
 ---@brief Copy recursive file/directory lists of the current node to clipboard.
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeCopyFileListConfig
@@ -13,6 +11,7 @@ local _adapter = nil
 local notify = require("filetree.util.notify").create("[filetree.copy_file_list]")
 local fs = require("filetree.util.fs")
 local ignore = require("filetree.util.ignore")
+local bind = require("filetree.util.bind")
 
 ---Recursively collect all file paths under a path. Skips `.git`,
 ---`node_modules`, etc. per the ignore_list feature (see filetree.util.ignore).
@@ -143,20 +142,32 @@ function M.setup(cfg, adapter)
   cfg = _cfg
   _adapter = adapter
 
-  local keymaps = {
-    { key = cfg.keymap_files_abs, fn = M.copy_files_abs, desc = "filetree: copy file list (abs)" },
-    { key = cfg.keymap_files_rel, fn = M.copy_files_rel, desc = "filetree: copy file list (rel)" },
-    { key = cfg.keymap_dirs_abs, fn = M.copy_dirs_abs, desc = "filetree: copy dir list (abs)" },
-    { key = cfg.keymap_dirs_rel, fn = M.copy_dirs_rel, desc = "filetree: copy dir list (rel)" },
-  }
-
-  local function set_keymaps(buf)
-    for _, km in ipairs(keymaps) do
-      if km.key then map("n", km.key, km.fn, { buffer = buf, desc = km.desc, silent = true }) end
-    end
-  end
-
-  tree_attach.on_attach(set_keymaps)
+  bind.bind("copy_file_list", cfg, {
+    {
+      name = "files_abs",
+      field = "keymap_files_abs",
+      rhs = M.copy_files_abs,
+      desc = "copy file list (abs)",
+    },
+    {
+      name = "files_rel",
+      field = "keymap_files_rel",
+      rhs = M.copy_files_rel,
+      desc = "copy file list (rel)",
+    },
+    {
+      name = "dirs_abs",
+      field = "keymap_dirs_abs",
+      rhs = M.copy_dirs_abs,
+      desc = "copy dir list (abs)",
+    },
+    {
+      name = "dirs_rel",
+      field = "keymap_dirs_rel",
+      rhs = M.copy_dirs_rel,
+      desc = "copy dir list (rel)",
+    },
+  })
 end
 
 function M.teardown()

@@ -19,14 +19,13 @@
 
 local notify = require("filetree.util.notify").create("[filetree.grep_in_dir]")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 -- Optional: shows a "searching…" indicator around the builtin backend's
 -- blocking rg/grep process, which can take a while under a large directory.
 -- No-op (returns nil) when lib.nvim isn't installed.
 local progress = require("filetree.util.progress")
+local bind = require("filetree.util.bind")
 ---@internal
 ---@return table?
 local function new_progress()
@@ -273,29 +272,21 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  tree_attach.on_attach(function(buf)
-    if _cfg.keymap then
-      map("n", _cfg.keymap, M.grep, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: grep in node directory",
-      })
-    end
-    if _cfg.keymap_cword then
-      map("n", _cfg.keymap_cword, M.grep_cword, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: grep cword in node directory",
-      })
-    end
-    if _cfg.keymap_telescope then
-      map("n", _cfg.keymap_telescope, M.grep_telescope, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: grep via telescope specifically",
-      })
-    end
-  end)
+  bind.bind("grep_in_dir", _cfg, {
+    { name = "grep", field = "keymap", rhs = M.grep, desc = "grep in node directory" },
+    {
+      name = "grep_cword",
+      field = "keymap_cword",
+      rhs = M.grep_cword,
+      desc = "grep cword in node directory",
+    },
+    {
+      name = "grep_telescope",
+      field = "keymap_telescope",
+      rhs = M.grep_telescope,
+      desc = "grep via telescope specifically",
+    },
+  })
 end
 
 function M.teardown()

@@ -3,6 +3,14 @@
 All keymaps are buffer-local (tree window) unless marked **global**.
 A `?` suffix means the field is optional; omit or set to `false` to disable.
 
+Every one of them is declared as a named action through
+[`lib.nvim.bindings.keymap`](https://github.com/StefanBartl/lib.nvim), which is
+what lets a config field also hold a **list** of keys
+(`keymap_abs = { "Y", "gy" }`) and what makes the `?` cheatsheet list the keys
+you actually have rather than the ones this plugin ships with. Read them back
+at runtime with `:lua vim.print(require("filetree.bindings").live())` —
+`require("filetree.bindings").keymaps` is the shipped defaults instead.
+
 > **neo-tree `?` cheatsheet:** filetree keymaps are shown there automatically
 > (filetree injects them into neo-tree's mapping registry on `setup()`).
 > For **nvim-tree** (`g?`) and other adapters the keymaps are set via the

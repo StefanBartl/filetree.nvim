@@ -18,10 +18,9 @@
 
 local notify = require("filetree.util.notify").create("[filetree.open_variants]")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local bufutil = require("filetree.util.buffer")
 local window = require("filetree.util.window")
+local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeOpenVariantsConfig
@@ -102,18 +101,33 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  tree_attach.on_attach(function(buf)
-    local function kmap(key, fn, desc)
-      if key and key ~= "" then
-        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-      end
-    end
-    kmap(_cfg.keymap_vsplit, M.open_vsplit, "open in vertical split")
-    kmap(_cfg.keymap_split, M.open_split, "open in horizontal split")
-    kmap(_cfg.keymap_tabnew, M.open_tabnew, "open in new tab")
-    kmap(_cfg.keymap_badd, M.open_badd, "add to buffer list (no focus switch)")
-    kmap(_cfg.keymap_badd_alt, M.open_badd, "add to buffer list (no focus switch)")
-  end)
+  bind.bind("open_variants", _cfg, {
+    {
+      name = "vsplit",
+      field = "keymap_vsplit",
+      rhs = M.open_vsplit,
+      desc = "open in vertical split",
+    },
+    {
+      name = "split",
+      field = "keymap_split",
+      rhs = M.open_split,
+      desc = "open in horizontal split",
+    },
+    { name = "tabnew", field = "keymap_tabnew", rhs = M.open_tabnew, desc = "open in new tab" },
+    {
+      name = "badd",
+      field = "keymap_badd",
+      rhs = M.open_badd,
+      desc = "add to buffer list (no focus switch)",
+    },
+    {
+      name = "badd_alt",
+      field = "keymap_badd_alt",
+      rhs = M.open_badd,
+      desc = "add to buffer list (no focus switch)",
+    },
+  })
 end
 
 function M.teardown()

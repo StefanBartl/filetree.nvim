@@ -65,7 +65,6 @@ local win_u = require("filetree.util.window")
 local json = require("lib.nvim.fs.json")
 
 local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
 local ui_confirm = require("filetree.util.confirm")
 
@@ -142,6 +141,7 @@ end
 -- reuse it rather than re-deriving the same "/lua/…/init.lua -> foo.bar"
 -- logic a third time.
 local get_lua_module_path = require("lib.nvim.lua_ls.get_module_path")
+local bind = require("filetree.util.bind")
 
 ---Dotted module/namespace path for `${module}`.
 ---
@@ -642,15 +642,9 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, M.open_current, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: create from template",
-      })
-    end)
-  end
+  bind.bind("create_from_template", _cfg, {
+    { name = "create", field = "keymap", rhs = M.open_current, desc = "create from template" },
+  })
 end
 
 function M.teardown()

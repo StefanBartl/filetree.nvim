@@ -13,9 +13,8 @@
 ---   keymap   string?   Key in tree buffer (default "B").
 
 local notify = require("filetree.util.notify").create("[filetree.reveal_alt]")
+local bind = require("filetree.util.bind")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@param config FiletreeRevealAltConfig
@@ -23,31 +22,31 @@ local M = {}
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  local keymap = config.keymap or "B"
-
-  tree_attach.on_attach(function(buf)
-    map("n", keymap, function()
-      local alt = vim.fn.expand("#:p")
-      if not alt or alt == "" then
-        notify.warn("No alternate buffer")
-        return
-      end
-      if vim.fn.filereadable(alt) ~= 1 then
-        notify.warn("Alternate buffer is not a readable file: " .. alt)
-        return
-      end
-      if type(adapter.open_reveal) == "function" then
-        local ok, err = pcall(adapter.open_reveal, alt, 0)
-        if not ok then notify.warn("Reveal failed: " .. tostring(err)) end
-      else
-        notify.warn("Adapter does not support open_reveal")
-      end
-    end, {
-      buffer = buf,
-      silent = true,
-      desc = "Filetree: reveal alternate buffer in tree",
-    })
-  end)
+  bind.bind("reveal_alt", config, {
+    {
+      name = "reveal",
+      field = "keymap",
+      default = "B",
+      desc = "reveal alternate buffer in tree",
+      rhs = function()
+        local alt = vim.fn.expand("#:p")
+        if not alt or alt == "" then
+          notify.warn("No alternate buffer")
+          return
+        end
+        if vim.fn.filereadable(alt) ~= 1 then
+          notify.warn("Alternate buffer is not a readable file: " .. alt)
+          return
+        end
+        if type(adapter.open_reveal) == "function" then
+          local ok, err = pcall(adapter.open_reveal, alt, 0)
+          if not ok then notify.warn("Reveal failed: " .. tostring(err)) end
+        else
+          notify.warn("Adapter does not support open_reveal")
+        end
+      end,
+    },
+  })
 end
 
 function M.teardown() end

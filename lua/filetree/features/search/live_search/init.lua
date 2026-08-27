@@ -24,9 +24,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.live_search]")
 
-local tree_attach = require("filetree.util.tree_attach")
-local map = require("filetree.util.map")
 local kit = require("lib.nvim.ui.kit")
+local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeLiveSearchConfig
@@ -167,15 +166,9 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, M.open, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: live search",
-      })
-    end)
-  end
+  bind.bind("live_search", _cfg, {
+    { name = "open", field = "keymap", rhs = M.open, desc = "live search" },
+  })
 end
 
 function M.teardown()

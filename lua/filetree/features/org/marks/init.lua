@@ -7,10 +7,9 @@
 
 local notify = require("filetree.util.notify").create("[filetree.marks]")
 
-local map = require("filetree.util.map")
 local au = require("filetree.util.autocmd")
-local tree_attach = require("filetree.util.tree_attach")
 local kit = require("lib.nvim.ui.kit")
+local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeMarksConfig
@@ -327,49 +326,99 @@ function M.setup(config, adapter)
   })
 
   -- Keymaps inside tree buffer
-  tree_attach.on_attach(function(buf)
-    local function km(key, fn, desc)
-      if key and key ~= "" then map("n", key, fn, { buffer = buf, silent = true, desc = desc }) end
-    end
-    km(_cfg.keymap, function()
-      M.toggle_current()
-    end, "Filetree: toggle mark")
-    km(_cfg.keymap_all, M.mark_all_visible, "Filetree: mark all visible")
-    km(_cfg.keymap_unmark_all, M.unmark_all_visible, "Filetree: unmark all visible")
-    km(_cfg.keymap_clear, function()
-      M.clear_all()
-    end, "Filetree: clear all marks")
-    km(_cfg.keymap_show, function()
-      M.show()
-    end, "Filetree: show marked nodes")
+  bind.bind("marks", _cfg, {
+    -- `keymap` is one action with two modes: on a line it toggles that node,
+    -- over a selection it marks every node the range spans. Same key, same
+    -- intent -- so one name, and one thing for a user to move.
+    {
+      name = "toggle",
+      field = "keymap",
+      desc = "toggle mark",
+      binds = {
+        {
+          mode = "n",
+          desc = "toggle mark",
+          rhs = function()
+            M.toggle_current()
+          end,
+        },
+        {
+          mode = "x",
+          desc = "mark selection",
+          rhs = function()
+            local n = M.mark_visual(false)
+            notify.info(("Marked %d node(s)"):format(n))
+          end,
+        },
+      },
+    },
+    {
+      name = "mark_all",
+      field = "keymap_all",
+      rhs = M.mark_all_visible,
+      desc = "mark all visible",
+    },
+    {
+      name = "unmark_all",
+      field = "keymap_unmark_all",
+      desc = "unmark all visible",
+      binds = {
+        { mode = "n", desc = "unmark all visible", rhs = M.unmark_all_visible },
+        {
+          mode = "x",
+          desc = "unmark selection",
+          rhs = function()
+            local n = M.mark_visual(true)
+            notify.info(("Unmarked %d node(s)"):format(n))
+          end,
+        },
+      },
+    },
+    {
+      name = "clear",
+      field = "keymap_clear",
+      desc = "clear all marks",
+      rhs = function()
+        M.clear_all()
+      end,
+    },
+    {
+      name = "show",
+      field = "keymap_show",
+      desc = "show marked nodes",
+      rhs = function()
+        M.show()
+      end,
+    },
 
     -- Navigation between marks. `Ngm` jumps to the Nth mark, matching how a
     -- count reads on `G`; `]M`/`[M` cycle, wrapping like every other
     -- next/prev pair in this plugin.
-    km(_cfg.keymap_goto, function()
-      M.goto_mark(vim.v.count ~= 0 and vim.v.count or 1)
-    end, "Filetree: jump to the Nth marked node")
-    km(_cfg.keymap_next, function()
-      M.goto_adjacent_mark(1)
-    end, "Filetree: next marked node")
-    km(_cfg.keymap_prev, function()
-      M.goto_adjacent_mark(-1)
-    end, "Filetree: previous marked node")
-
-    -- Visual-mode marking. The only keymaps this plugin binds in Visual mode:
-    -- a line range over a rendered tree is exactly a set of nodes.
-    local function xm(key, fn, desc)
-      if key and key ~= "" then map("x", key, fn, { buffer = buf, silent = true, desc = desc }) end
-    end
-    xm(_cfg.keymap, function()
-      local n = M.mark_visual(false)
-      notify.info(("Marked %d node(s)"):format(n))
-    end, "Filetree: mark selection")
-    xm(_cfg.keymap_unmark_all, function()
-      local n = M.mark_visual(true)
-      notify.info(("Unmarked %d node(s)"):format(n))
-    end, "Filetree: unmark selection")
-  end)
+    {
+      name = "goto",
+      field = "keymap_goto",
+      desc = "jump to the Nth marked node",
+      rhs = function()
+        M.goto_mark(vim.v.count ~= 0 and vim.v.count or 1)
+      end,
+    },
+    {
+      name = "next",
+      field = "keymap_next",
+      desc = "next marked node",
+      rhs = function()
+        M.goto_adjacent_mark(1)
+      end,
+    },
+    {
+      name = "prev",
+      field = "keymap_prev",
+      desc = "previous marked node",
+      rhs = function()
+        M.goto_adjacent_mark(-1)
+      end,
+    },
+  })
 end
 
 function M.teardown()

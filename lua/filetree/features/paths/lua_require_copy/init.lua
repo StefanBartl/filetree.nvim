@@ -1,8 +1,6 @@
 ---@module 'filetree.features.lua_require_copy'
 ---@brief Copy current node as require('module.path') string(s) to clipboard.
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 -- The canonical, already-implemented path -> Lua module resolver (same one
@@ -19,6 +17,7 @@ local _cfg = {
 local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.lua_require_copy]")
+local bind = require("filetree.util.bind")
 
 ---Convert a relative path (from a known root) to a module string. Only
 ---needed for copy_require_relative's cwd-relative root below — the
@@ -151,13 +150,16 @@ function M.setup(cfg, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, cfg or {})
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, function()
+  bind.bind("lua_require_copy", _cfg, {
+    {
+      name = "copy",
+      field = "keymap",
+      desc = "copy as require()",
+      rhs = function()
         M.copy_require()
-      end, { buffer = buf, desc = "filetree: copy as require()", silent = true })
-    end)
-  end
+      end,
+    },
+  })
 end
 
 function M.teardown()

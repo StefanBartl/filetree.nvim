@@ -20,8 +20,6 @@
 
 local notify = require("filetree.util.notify").create("[filetree.find_files]")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
 local globbable = require("lib.nvim.fs.globbable")
 local ignore = require("filetree.util.ignore")
@@ -32,6 +30,7 @@ local M = {}
 -- no other feedback otherwise. No-op (returns nil) when lib.nvim isn't
 -- installed — the scan still runs, just without the indicator.
 local progress = require("filetree.util.progress")
+local bind = require("filetree.util.bind")
 ---@internal
 ---@return table?
 local function new_progress()
@@ -277,30 +276,21 @@ function M.setup(config, adapter)
   _adapter = adapter
 
   -- Keymap inside tree
-  if _cfg.keymap_tree then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap_tree, M.find, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: find files from current node",
-      })
-      if _cfg.keymap_telescope then
-        map("n", _cfg.keymap_telescope, M.find_telescope, {
-          buffer = buf,
-          silent = true,
-          desc = "Filetree: find files via telescope specifically",
-        })
-      end
-    end)
-  end
+  bind.bind("find_files", _cfg, {
+    { name = "find", field = "keymap_tree", rhs = M.find, desc = "find files from current node" },
+    {
+      name = "find_telescope",
+      field = "keymap_telescope",
+      rhs = M.find_telescope,
+      desc = "find files via telescope specifically",
+    },
+  })
 
-  -- Optional global keymap
-  if _cfg.keymap_global then
-    map("n", _cfg.keymap_global, M.find, {
-      silent = true,
-      desc = "Filetree: find files",
-    })
-  end
+  -- Optional global keymap: this one is not tree-local, so it is its own
+  -- surface rather than a fourth entry above.
+  bind.bind("find_files/global", _cfg, {
+    { name = "find", field = "keymap_global", rhs = M.find, desc = "find files" },
+  }, "global")
 end
 
 function M.teardown()

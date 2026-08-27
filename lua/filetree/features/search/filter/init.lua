@@ -14,9 +14,8 @@
 ---   :FiletreeFilter [query]
 ---   :FiletreeFilterClear
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local kit = require("lib.nvim.ui.kit")
+local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeFilterConfig
@@ -195,24 +194,10 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_filter")
 
-  if _cfg.keymap or _cfg.keymap_clear then
-    tree_attach.on_attach(function(buf)
-      if _cfg.keymap then
-        map("n", _cfg.keymap, M.enter, {
-          buffer = buf,
-          silent = true,
-          desc = "Filetree: enter filter mode",
-        })
-      end
-      if _cfg.keymap_clear then
-        map("n", _cfg.keymap_clear, M.clear, {
-          buffer = buf,
-          silent = true,
-          desc = "Filetree: clear filter",
-        })
-      end
-    end)
-  end
+  bind.bind("filter", _cfg, {
+    { name = "enter", field = "keymap", rhs = M.enter, desc = "enter filter mode" },
+    { name = "clear", field = "keymap_clear", rhs = M.clear, desc = "clear filter" },
+  })
 end
 
 ---Clear the filter and close the floating input, if open.

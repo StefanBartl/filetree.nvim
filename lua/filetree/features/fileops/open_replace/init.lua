@@ -17,9 +17,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.open_replace]")
 local bufutil = require("filetree.util.buffer")
+local bind = require("filetree.util.bind")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeAdapter?
@@ -55,17 +54,18 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  local keymap = config.keymap or "O"
   _adapter = adapter
   _close_tree = config.close_tree ~= false
 
-  tree_attach.on_attach(function(buf)
-    map("n", keymap, M.open_replace, {
-      buffer = buf,
-      silent = true,
-      desc = "Filetree: open file replacing current editor buffer",
-    })
-  end)
+  bind.bind("open_replace", config, {
+    {
+      name = "open_replace",
+      field = "keymap",
+      default = "O",
+      rhs = M.open_replace,
+      desc = "open file replacing current editor buffer",
+    },
+  })
 end
 
 function M.teardown() end

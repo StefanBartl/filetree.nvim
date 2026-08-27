@@ -22,8 +22,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.shell_run]")
 local path = require("filetree.util.path")
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -94,7 +93,6 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  local keymap = config.keymap or "i"
   _adapter = adapter
   _opts = {
     close_on_ok = config.close_on_ok ~= false, -- default true
@@ -102,9 +100,15 @@ function M.setup(config, adapter)
     height = config.height or 12,
   }
 
-  tree_attach.on_attach(function(buf)
-    map("n", keymap, M.run, { buffer = buf }, "Filetree: run shell command in node directory")
-  end)
+  bind.bind("shell_run", config, {
+    {
+      name = "run",
+      field = "keymap",
+      default = "i",
+      rhs = M.run,
+      desc = "run shell command in node directory",
+    },
+  })
 end
 
 function M.teardown() end

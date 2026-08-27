@@ -310,7 +310,10 @@ end
 do
   local map = require("filetree.util.map")
   local au = require("filetree.util.autocmd")
-  check("util.map is callable", type(map) == "function")
+  -- `vim.is_callable`, not `type(...) == "function"`: lib.nvim's keymap
+  -- module is a callable table, and the stricter check reported the working
+  -- delegation as a failure.
+  check("util.map is callable", vim.is_callable(map))
   local g = au.group("filetree_units_test", true)
   check("au.group returns id", type(g) == "number")
   local fired = false

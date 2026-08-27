@@ -16,8 +16,7 @@
 --- turn off unless you specifically don't want the trigger bound.
 
 local notify = require("filetree.util.notify").create("[filetree.context_menu]")
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -79,13 +78,9 @@ function M.setup(config, adapter)
 
   if not _cfg.keymap then return end
 
-  tree_attach.on_attach(function(buf)
-    map("n", _cfg.keymap, open_menu, {
-      buffer = buf,
-      silent = true,
-      desc = "Filetree: right-click context menu",
-    })
-  end)
+  bind.bind("context_menu", _cfg, {
+    { name = "open", field = "keymap", rhs = open_menu, desc = "right-click context menu" },
+  })
 end
 
 function M.teardown()

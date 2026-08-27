@@ -13,16 +13,17 @@
 ---   - netrw's `?` is a static, hardcoded help page.
 ---   - oil/mini.files were not verified to be safely injectable either.
 --- Rather than reverse-engineer (and maintain) a bespoke integration per
---- adapter, this feature is filetree's own adapter-agnostic replacement:
---- built once from the same `bindings.keymaps()` catalog that already backs
---- `docs/BINDINGS.lua`, filtered to keys that are actually live right now
---- (tree-scoped + the owning feature currently enabled). Skips neo-tree,
---- whose native help is already complete.
+--- adapter, this feature is filetree's own adapter-agnostic replacement.
+---
+--- It reads what was **actually bound** out of lib.nvim's keymap registry,
+--- not the declared defaults: it used to build from the `bindings.keymaps`
+--- catalog, which lists the keys the plugin ships with, so a user who moved
+--- one had a cheatsheet that confidently named a key they no longer had.
+--- Skips neo-tree, whose native help is already complete.
 
-local bindings_mod = require("filetree.bindings")
 local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local kit = require("lib.nvim.ui.kit")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -39,43 +40,79 @@ local function close_win()
   if _surf then _surf:close() end
 end
 
----Build the display lines: one header per category, one row per active
----tree-scoped binding in it. Categories/bindings with nothing live are
----skipped entirely.
+---@internal
+---Which category a feature belongs to, from the feature registry.
+---@return table<string, string>
+local function category_of()
+  local ok, registry = pcall(require, "filetree.features")
+  local out = {}
+  if ok and type(registry.FEATURES) == "table" then
+    for name, entry in pairs(registry.FEATURES) do
+      out[name] = entry.category
+    end
+  end
+  return out
+end
+
+---Build the display lines: one header per category, one row per key that is
+---actually bound right now.
+---
+---Read back from the registry rather than from a catalog of defaults, so a
+---remapped or disabled key shows up as what it is.
 ---@return string[]
 local function build_lines()
-  local ok_ft, ft = pcall(require, "filetree")
-  local is_enabled = (ok_ft and type(ft.is_feature_enabled) == "function") and ft.is_feature_enabled
-    or function()
-      return true
-    end
-
   local ok_reg, registry = pcall(require, "filetree.features")
   local order = (ok_reg and registry.CATEGORY_ORDER) or {}
+  local cat_of = category_of()
 
-  local catalog = bindings_mod.keymaps
   local lines = { "" }
   local widest = 0
 
-  -- First pass: collect per-category rows and the widest lhs (for padding).
   ---@type table<string, { lhs: string, desc: string }[]>
   local rows_by_cat = {}
-  for _, cat in ipairs(order) do
-    local entries = catalog[cat]
-    if entries then
-      for _, b in ipairs(entries) do
-        if b.scope == "tree" and is_enabled(b.feature) then
+  ---@type table<string, boolean>
+  local seen = {}
+
+  local all = require("lib.nvim.bindings.keymap").registered()
+  for key, entries in pairs(all) do
+    -- "filetree/<feature>" and "filetree/<feature>/<sub>"; the global surface
+    -- is not tree-scoped and does not belong on a tree buffer's cheatsheet.
+    local feature = key:match("^filetree/([^/]+)$")
+    if feature then
+      for _, e in ipairs(entries) do
+        -- One row per key, not per registration: a buffer-local preset is
+        -- registered again for every tree buffer that attaches.
+        local id = tostring(e.mode) .. " " .. tostring(e.lhs)
+        if e.bound and e.lhs and not seen[id] then
+          seen[id] = true
+          local cat = cat_of[feature] or "other"
           rows_by_cat[cat] = rows_by_cat[cat] or {}
-          table.insert(rows_by_cat[cat], { lhs = b.lhs, desc = b.desc })
-          if #b.lhs > widest then widest = #b.lhs end
+          -- The registry's `desc` carries the plugin prefix, which every row
+          -- here would repeat. Capitalized because a cheatsheet row is a
+          -- sentence about the key, not a fragment of one.
+          local desc = (e.desc or e.name):gsub("^filetree: ", ""):gsub("^%l", string.upper)
+          table.insert(rows_by_cat[cat], { lhs = e.lhs, desc = desc })
+          if #e.lhs > widest then widest = #e.lhs end
         end
       end
     end
   end
 
+  ---@type string[]
+  local cats = {}
   for _, cat in ipairs(order) do
+    cats[#cats + 1] = cat
+  end
+  -- Anything whose feature the registry does not classify still gets shown,
+  -- after the known categories, rather than silently dropped.
+  if rows_by_cat.other then cats[#cats + 1] = "other" end
+
+  for _, cat in ipairs(cats) do
     local rows = rows_by_cat[cat]
     if rows and #rows > 0 then
+      table.sort(rows, function(a, b)
+        return a.lhs < b.lhs
+      end)
       lines[#lines + 1] = " " .. cat
       for _, r in ipairs(rows) do
         lines[#lines + 1] = string.format("  %-" .. widest .. "s  %s", r.lhs, r.desc)
@@ -139,14 +176,9 @@ function M.setup(config, adapter)
   if adapter.name == "neotree" then return end
   if not _cfg.keymap then return end
 
-  tree_attach.on_attach(function(buf)
-    map(
-      "n",
-      _cfg.keymap,
-      M.show,
-      { buffer = buf, desc = "filetree: keymap cheatsheet", silent = true }
-    )
-  end)
+  bind.bind("cheatsheet", _cfg, {
+    { name = "show", field = "keymap", rhs = M.show, desc = "keymap cheatsheet" },
+  })
 end
 
 function M.teardown()

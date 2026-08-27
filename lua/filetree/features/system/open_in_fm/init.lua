@@ -50,8 +50,7 @@
 local notify = require("filetree.util.notify").create("[filetree.open_in_fm]")
 local platform = require("filetree.util.platform")
 local path = require("filetree.util.path")
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -151,22 +150,21 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  local keymap = config.keymap or "<leader>fm"
   _adapter = adapter
   _cmd = config.command -- nil unless the user overrides the launcher
   _debug = config.debug == true
   _reuse_existing = config.reuse_existing == true
   _reveal = config.reveal ~= false
 
-  tree_attach.on_attach(function(buf)
-    map(
-      "n",
-      keymap,
-      M.open,
-      { buffer = buf },
-      "Filetree: open node directory in system file manager"
-    )
-  end)
+  bind.bind("open_in_fm", config, {
+    {
+      name = "open",
+      field = "keymap",
+      default = "<leader>fm",
+      rhs = M.open,
+      desc = "open node directory in system file manager",
+    },
+  })
 end
 
 function M.teardown() end

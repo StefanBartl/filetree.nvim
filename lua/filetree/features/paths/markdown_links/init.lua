@@ -12,10 +12,9 @@
 
 local notify = require("filetree.util.notify").create("[filetree.markdown_links]")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local fs = require("filetree.util.fs")
 local ignore = require("filetree.util.ignore")
+local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeMarkdownLinksConfig
@@ -108,16 +107,26 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  tree_attach.on_attach(function(buf)
-    local function kmap(key, fn, desc)
-      if key and key ~= "" then
-        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-      end
-    end
-    kmap(_cfg.keymap, M.link_current, "markdown link for current node")
-    kmap(_cfg.keymap_recursive, M.link_recursive, "markdown links recursively")
-    kmap(_cfg.keymap_from_marked, M.link_from_marked, "markdown links from marked nodes")
-  end)
+  bind.bind("markdown_links", _cfg, {
+    {
+      name = "link",
+      field = "keymap",
+      rhs = M.link_current,
+      desc = "markdown link for current node",
+    },
+    {
+      name = "link_recursive",
+      field = "keymap_recursive",
+      rhs = M.link_recursive,
+      desc = "markdown links recursively",
+    },
+    {
+      name = "link_from_marked",
+      field = "keymap_from_marked",
+      rhs = M.link_from_marked,
+      desc = "markdown links from marked nodes",
+    },
+  })
 end
 
 function M.teardown()

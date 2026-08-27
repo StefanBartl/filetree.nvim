@@ -3,10 +3,9 @@
 
 local line_count = require("filetree.util.line_count")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local notify = require("filetree.util.notify").create("[filetree]")
 local kit = require("lib.nvim.ui.kit")
+local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeNodeInfoConfig
@@ -211,13 +210,16 @@ function M.setup(cfg, adapter)
   cfg = _cfg
   _adapter = adapter
 
-  if cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", cfg.keymap, function()
+  bind.bind("node_info", cfg, {
+    {
+      name = "show",
+      field = "keymap",
+      desc = "node info",
+      rhs = function()
         M.show_current()
-      end, { buffer = buf, desc = "filetree: node info", silent = true })
-    end)
-  end
+      end,
+    },
+  })
 end
 
 function M.teardown()

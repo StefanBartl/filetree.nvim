@@ -1,8 +1,6 @@
 ---@module 'filetree.features.tree_traverse'
 ---@brief Navigate up/down the directory tree with optional CWD sync.
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeTreeTraverseConfig
@@ -11,6 +9,7 @@ local _cfg = {}
 local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.tree_traverse]")
+local bind = require("filetree.util.bind")
 
 ---Change the tree root and optionally sync cwd.
 ---@param path string   Absolute directory path to navigate to.
@@ -94,24 +93,30 @@ function M.setup(cfg, adapter)
   cfg = _cfg
   _adapter = adapter
 
-  tree_attach.on_attach(function(buf)
-    if cfg.keymap_up and cfg.keymap_up ~= "" then
-      map("n", cfg.keymap_up, function()
+  bind.bind("tree_traverse", cfg, {
+    {
+      name = "up",
+      field = "keymap_up",
+      desc = "traverse up (×count)",
+      rhs = function()
         -- M.up() has no count parameter of its own (each call climbs exactly
         -- one level via go_to()), so a count prefix loops it.
         for _ = 1, vim.v.count1 do
           M.up()
         end
-      end, { buffer = buf, desc = "filetree: traverse up (×count)", silent = true })
-    end
-    if cfg.keymap_down and cfg.keymap_down ~= "" then
-      map("n", cfg.keymap_down, function()
+      end,
+    },
+    {
+      name = "down",
+      field = "keymap_down",
+      desc = "traverse down (×count)",
+      rhs = function()
         for _ = 1, vim.v.count1 do
           M.down()
         end
-      end, { buffer = buf, desc = "filetree: traverse down (×count)", silent = true })
-    end
-  end)
+      end,
+    },
+  })
 end
 
 function M.teardown()

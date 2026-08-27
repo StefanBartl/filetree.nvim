@@ -15,9 +15,8 @@
 ---   sizes    integer[]   Width presets to cycle through (default { 30, 50, 15 }).
 
 local notify = require("filetree.util.notify").create("[filetree.window_size_cycler]")
+local bind = require("filetree.util.bind")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeWindowSizeCyclerConfig
@@ -100,15 +99,14 @@ function M.setup(config, adapter)
   -- Start at the preset closest to the current window width
   _idx = nearest_idx()
 
-  tree_attach.on_attach(function(buf)
-    if _cfg.keymap then
-      map("n", _cfg.keymap, M.cycle, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: cycle tree width (count N: jump to preset N)",
-      })
-    end
-  end)
+  bind.bind("window_size_cycler", _cfg, {
+    {
+      name = "cycle",
+      field = "keymap",
+      rhs = M.cycle,
+      desc = "cycle tree width (count N: jump to preset N)",
+    },
+  })
 end
 
 function M.teardown()

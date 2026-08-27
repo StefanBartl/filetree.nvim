@@ -27,8 +27,6 @@
 
 local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local confirm_choice = require("filetree.util.confirm_choice")
 local path = require("filetree.util.path")
 local buffer = require("filetree.util.buffer")
@@ -42,6 +40,7 @@ local refs = require("filetree.refs")
 -- failure, releasing neo-tree's watcher on the source between attempts, and
 -- falls back to a copy+delete across drive letters. See filetree.util.mutate.
 local mutate = require("filetree.util.mutate")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -240,15 +239,9 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, M.rename_current, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: LSP-aware rename",
-      })
-    end)
-  end
+  bind.bind("smart_rename", _cfg, {
+    { name = "rename", field = "keymap", rhs = M.rename_current, desc = "LSP-aware rename" },
+  })
 end
 
 function M.teardown()

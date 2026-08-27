@@ -31,9 +31,8 @@
 
 local pdf = require("filetree.util.pdf")
 local notify = require("filetree.util.notify").create("[filetree.pdf_create]")
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local ui_confirm = require("filetree.util.confirm")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -187,15 +186,9 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_extend("force", _cfg, config)
   _adapter = adapter
 
-  tree_attach.on_attach(function(buf)
-    if _cfg.keymap and _cfg.keymap ~= "" then
-      map("n", _cfg.keymap, M.create, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: create PDF (pdfport)",
-      })
-    end
-  end)
+  bind.bind("pdf_create", _cfg, {
+    { name = "create", field = "keymap", rhs = M.create, desc = "create PDF (pdfport)" },
+  })
 end
 
 function M.teardown()

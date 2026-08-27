@@ -26,9 +26,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
+local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreePathCopyConfig
@@ -211,21 +210,29 @@ function M.setup(config, adapter)
     if ok and type(find_root) == "function" then _root_finder = find_root({ markers = markers }) end
   end
 
-  tree_attach.on_attach(function(buf)
-    local function kmap(key, fn, desc)
-      if key and key ~= "" then map("n", key, fn, { buffer = buf, silent = true, desc = desc }) end
-    end
-    kmap(_cfg.keymap_pick, M.pick, "Filetree: copy path (pick format)")
-    kmap(_cfg.keymap_abs, M.copy_absolute, "Filetree: copy absolute path")
-    kmap(_cfg.keymap_dirname, M.copy_dirname, "Filetree: copy absolute parent directory")
-    kmap(_cfg.keymap_name, M.copy_name, "Filetree: copy filename")
-    kmap(_cfg.keymap_project_root, M.copy_project_root, "Filetree: copy absolute project root")
-    kmap(
-      _cfg.keymap_project_rel,
-      M.copy_project_relative,
-      "Filetree: copy path relative to project root"
-    )
-  end)
+  bind.bind("path_copy", _cfg, {
+    { name = "pick", field = "keymap_pick", rhs = M.pick, desc = "copy path (pick format)" },
+    { name = "absolute", field = "keymap_abs", rhs = M.copy_absolute, desc = "copy absolute path" },
+    {
+      name = "dirname",
+      field = "keymap_dirname",
+      rhs = M.copy_dirname,
+      desc = "copy absolute parent directory",
+    },
+    { name = "name", field = "keymap_name", rhs = M.copy_name, desc = "copy filename" },
+    {
+      name = "project_root",
+      field = "keymap_project_root",
+      rhs = M.copy_project_root,
+      desc = "copy absolute project root",
+    },
+    {
+      name = "project_relative",
+      field = "keymap_project_rel",
+      rhs = M.copy_project_relative,
+      desc = "copy path relative to project root",
+    },
+  })
 end
 
 function M.teardown()

@@ -21,9 +21,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.buffer_cycle]")
 local bufutil = require("filetree.util.buffer")
+local bind = require("filetree.util.bind")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@internal
@@ -56,26 +55,22 @@ end
 function M.setup(config, _adapter)
   if not config.enabled then return end
 
-  local keymap_next = config.keymap_next or "<C-n>"
-  local keymap_prev = config.keymap_prev or "<C-p>"
-
-  tree_attach.on_attach(function(buf)
-    if keymap_next then
-      map("n", keymap_next, M.next, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: next buffer in adjacent editor window",
-      })
-    end
-
-    if keymap_prev then
-      map("n", keymap_prev, M.prev, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: previous buffer in adjacent editor window",
-      })
-    end
-  end)
+  bind.bind("buffer_cycle", config, {
+    {
+      name = "next",
+      field = "keymap_next",
+      default = "<C-n>",
+      rhs = M.next,
+      desc = "next buffer in adjacent editor window",
+    },
+    {
+      name = "prev",
+      field = "keymap_prev",
+      default = "<C-p>",
+      rhs = M.prev,
+      desc = "previous buffer in adjacent editor window",
+    },
+  })
 end
 
 function M.teardown() end

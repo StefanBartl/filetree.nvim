@@ -10,11 +10,9 @@
 --- allows an unprivileged hard link to a directory); a file target is offered
 --- a Symlink/Hardlink choice via kit.confirm.
 
-local tree_attach = require("filetree.util.tree_attach")
 local confirm_choice = require("filetree.util.confirm_choice")
 local path = require("filetree.util.path")
 local platform = require("filetree.util.platform")
-local map = require("filetree.util.map")
 local mutate = require("lib.nvim.cross.fs.mutate")
 
 local M = {}
@@ -28,6 +26,7 @@ local _cfg = {
 local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.link_create]")
+local bind = require("filetree.util.bind")
 
 ---@internal
 ---Get the directory to create the link in (current node's dir or cwd) —
@@ -140,13 +139,16 @@ function M.setup(cfg, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, cfg or {})
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, function()
+  bind.bind("link_create", _cfg, {
+    {
+      name = "create",
+      field = "keymap",
+      rhs = function()
         M.create()
-      end, { buffer = buf, silent = true }, "filetree: create link")
-    end)
-  end
+      end,
+      desc = "create link",
+    },
+  })
 end
 
 function M.teardown()

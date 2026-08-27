@@ -2,7 +2,12 @@
 --- Aggregated binding catalog + optional which-key integration.
 ---
 --- One place to introspect everything filetree.nvim binds:
----   • keymaps    — default keymaps by category (bindings.keymaps)
+---   • keymaps    — the DEFAULT keymaps by category (bindings.keymaps); what
+---                  the plugin ships with, including features that are off by
+---                  default. Meaningful before `setup()` has run.
+---   • live       — what is bound RIGHT NOW, read back from lib.nvim's keymap
+---                  registry: the user's own keys, with the disabled ones
+---                  gone. Empty until `setup()` has run.
 ---   • usercommands — every `:Filetree …` sub-command, walked live from the
 ---                    dispatcher TREE so it never drifts (commands.command_paths)
 ---   • autocmds   — behavioural autocmds by event (bindings.autocmds)
@@ -23,8 +28,49 @@ function M.usercommands()
   return commands.command_paths()
 end
 
+---Every keymap actually bound, from lib.nvim's registry.
+---
+---The catalog beside it lists what the plugin *ships*; this lists what the
+---user *has*. Both are worth having and they are not the same question --
+---which is why the cheatsheet reads this one.
+---@return { feature: string, name: string, lhs: string, mode: string|string[], desc: string|nil }[]
+function M.live()
+  local ok, keymap = pcall(require, "lib.nvim.bindings.keymap")
+  if not ok then return {} end
+
+  ---@type table<string, boolean>
+  local seen = {}
+  local out = {}
+  for key, entries in pairs(keymap.registered()) do
+    local feature = key:match("^filetree/(.+)$")
+    if feature then
+      for _, e in ipairs(entries) do
+        -- A buffer-local preset is registered once per tree buffer; the answer
+        -- to "which keys do I have" is the same each time.
+        local id = feature .. " " .. tostring(e.mode) .. " " .. tostring(e.lhs)
+        if e.bound and e.lhs and not seen[id] then
+          seen[id] = true
+          out[#out + 1] = {
+            feature = feature,
+            name = e.name,
+            lhs = e.lhs,
+            mode = e.mode,
+            desc = e.desc,
+          }
+        end
+      end
+    end
+  end
+
+  table.sort(out, function(a, b)
+    if a.feature ~= b.feature then return a.feature < b.feature end
+    return a.lhs < b.lhs
+  end)
+  return out
+end
+
 ---Return the full binding catalog as plain data.
----@return { command: string, keymaps: table, usercommands: string[], autocmds: table }
+---@return { command: string, keymaps: table, live: table, usercommands: string[], autocmds: table }
 function M.catalog()
   local cfg_ok, config = pcall(require, "filetree.config")
   local cmd_name = "Filetree"
@@ -39,6 +85,7 @@ function M.catalog()
   return {
     command = cmd_name,
     keymaps = M.keymaps,
+    live = M.live(),
     usercommands = M.usercommands(),
     autocmds = M.autocmds,
   }
@@ -53,25 +100,13 @@ local WK_GROUPS = {
 }
 
 ---Register which-key group labels, if which-key is installed. Safe to call
----always; a no-op when which-key is absent. Supports the v3 (`add`) and v2
----(`register`) APIs.
+---always; a no-op when which-key is absent.
 function M.setup_which_key()
-  local ok, wk = pcall(require, "which-key")
-  if not ok then return end
-
-  if type(wk.add) == "function" then -- which-key v3
-    local spec = {}
-    for _, g in ipairs(WK_GROUPS) do
-      spec[#spec + 1] = { g[1], group = g[2] }
-    end
-    pcall(wk.add, spec)
-  elseif type(wk.register) == "function" then -- which-key v2
-    local spec = {}
-    for _, g in ipairs(WK_GROUPS) do
-      spec[g[1]] = { name = g[2] }
-    end
-    pcall(wk.register, spec)
+  local groups = {}
+  for _, g in ipairs(WK_GROUPS) do
+    groups[#groups + 1] = { prefix = g[1], group = g[2] }
   end
+  require("lib.nvim.bindings.keymap.which_key").add_group(groups)
 end
 
 return M

@@ -29,8 +29,6 @@
 
 local notify = require("filetree.util.notify").create("[filetree.move]")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local path = require("filetree.util.path")
 local buffer = require("filetree.util.buffer")
 local conflict = require("filetree.util.conflict")
@@ -40,6 +38,7 @@ local progress = require("filetree.util.progress")
 local refs = require("filetree.refs")
 
 local kit = require("lib.nvim.ui.kit")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -319,17 +318,16 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, function()
+  bind.bind("move", _cfg, {
+    {
+      name = "move",
+      field = "keymap",
+      rhs = function()
         M.move()
-      end, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: move node(s) to…",
-      })
-    end)
-  end
+      end,
+      desc = "move node(s) to…",
+    },
+  })
 end
 
 function M.teardown()

@@ -22,9 +22,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.rename_batch]")
 
-local map = require("filetree.util.map")
 local au = require("filetree.util.autocmd")
-local tree_attach = require("filetree.util.tree_attach")
 local buffer = require("filetree.util.buffer")
 local ui_confirm = require("filetree.util.confirm")
 -- Cross-file references (markdown links, require()/import statements) after
@@ -35,6 +33,7 @@ local refs = require("filetree.refs")
 -- rename touches many watched paths in a row, so it is a prime trigger) plus
 -- the cross-drive EXDEV fallback. See filetree.util.mutate.
 local mutate = require("filetree.util.mutate")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -337,15 +336,9 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, M.open, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: open batch rename buffer",
-      })
-    end)
-  end
+  bind.bind("rename_batch", _cfg, {
+    { name = "open", field = "keymap", rhs = M.open, desc = "open batch rename buffer" },
+  })
 end
 
 function M.teardown()

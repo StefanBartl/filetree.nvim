@@ -22,9 +22,8 @@
 
 local notify = require("filetree.util.notify").create("[filetree.open_with]")
 local platform = require("filetree.util.platform")
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local ui_select = require("filetree.util.select")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -166,20 +165,33 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  tree_attach.on_attach(function(buf)
-    if _cfg.keymap then
-      map("n", _cfg.keymap, M.open_system, { buffer = buf }, "Filetree: open with system default")
-    end
-    -- Register per-app keymaps
-    for _, app in ipairs(_cfg.apps) do
-      if app.keymap then
-        local app_copy = app
-        map("n", app.keymap, function()
-          M.open_app(app_copy.name)
-        end, { buffer = buf }, "Filetree: open with " .. app.name)
-      end
-    end
-  end)
+  ---@type FiletreeBindSpec[]
+  local specs = {
+    {
+      name = "open_system",
+      field = "keymap",
+      rhs = M.open_system,
+      desc = "open with system default",
+    },
+  }
+
+  -- One action per configured application, named after it. The keys live in
+  -- the app entries rather than in a `keymap_*` field, so each gets a
+  -- one-field view of its own app table to read its lhs out of.
+  for _, app in ipairs(_cfg.apps) do
+    local app_copy = app
+    specs[#specs + 1] = {
+      name = "open_" .. tostring(app.name):lower():gsub("[^%w]+", "_"),
+      field = "keymap",
+      cfg = app,
+      desc = "open with " .. app.name,
+      rhs = function()
+        M.open_app(app_copy.name)
+      end,
+    }
+  end
+
+  bind.bind("open_with", _cfg, specs)
 end
 
 function M.teardown()

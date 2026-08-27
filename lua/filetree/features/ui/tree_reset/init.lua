@@ -18,8 +18,7 @@
 ---   enabled  boolean
 ---   keymap   string?   Key in tree buffer (default "<Esc>").
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
+local bind = require("filetree.util.bind")
 local M = {}
 
 local function do_reset()
@@ -47,15 +46,15 @@ end
 function M.setup(config, _adapter)
   if not config.enabled then return end
 
-  local keymap = config.keymap or "<Esc>"
-
-  tree_attach.on_attach(function(buf)
-    map("n", keymap, do_reset, {
-      buffer = buf,
-      silent = true,
-      desc = "Filetree: reset tree UI state (preview, filter, search)",
-    })
-  end)
+  bind.bind("tree_reset", config, {
+    {
+      name = "reset",
+      field = "keymap",
+      default = "<Esc>",
+      rhs = do_reset,
+      desc = "reset tree UI state (preview, filter, search)",
+    },
+  })
 end
 
 function M.teardown() end

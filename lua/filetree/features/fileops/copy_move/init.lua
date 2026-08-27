@@ -23,7 +23,6 @@
 
 local notify = require("filetree.util.notify").create("[filetree.copy_move]")
 
-local map = require("filetree.util.map")
 local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local buffer = require("filetree.util.buffer")
@@ -44,6 +43,7 @@ local progress = require("filetree.util.progress")
 -- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_copyfile would
 -- surface as a hard failure — see the handle_guard plan.
 local fsops = require("lib.nvim.cross.fs.mutate")
+local bind = require("filetree.util.bind")
 
 local M = {}
 
@@ -505,42 +505,55 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_copy_move", true)
 
   local km = _cfg.keymaps or {}
-  tree_attach.on_attach(function(buf)
+
+  -- neo-tree's own native keymaps (y/x/p/...) are registered with a
+  -- global `nowait = true`, which makes Vim resolve the ambiguity
+  -- between a single-char native mapping and our own longer "yy"/"xx"
+  -- sequence immediately in the native mapping's favour -- the second
+  -- keypress never gets a chance to complete the double-tap. Re-binding
+  -- the bare prefix char to a plain <Nop> (no nowait) on this buffer
+  -- overrides neo-tree's mapping and restores Vim's normal
+  -- wait-for-more-input behaviour, making "yy"/"xx" reachable again.
+  --
+  -- Declared as actions of their own rather than bound behind the others'
+  -- backs: a key this plugin claims is a key a user may need to see, and
+  -- `unblock_copy = false` is the only way to get `y` back if they want it.
+  ---@param key string|nil
+  ---@return string|nil
+  local function prefix_of(key)
+    if type(key) == "string" and #key == 2 and key:sub(1, 1) == key:sub(2, 2) then
+      local prefix = key:sub(1, 1)
+      if prefix ~= km.paste and prefix ~= km.show then return prefix end
+    end
+    return nil
+  end
+
+  ---@type FiletreeBindSpec[]
+  local specs = {
+    { name = "copy", field = "copy", cfg = km, rhs = M.stage_copy, desc = "stage copy" },
+    { name = "cut", field = "cut", cfg = km, rhs = M.stage_cut, desc = "stage cut" },
+    { name = "paste", field = "paste", cfg = km, rhs = M.paste, desc = "paste clipboard" },
+    { name = "show", field = "show", cfg = km, rhs = M.show, desc = "show clipboard" },
+    { name = "clear", field = "clear", cfg = km, rhs = M.clear, desc = "clear clipboard" },
+  }
+
+  for _, which in ipairs({ { "copy", "stage copy" }, { "cut", "stage cut" } }) do
+    local prefix = prefix_of(km[which[1]])
+    if prefix then
+      specs[#specs + 1] = {
+        name = "unblock_" .. which[1],
+        field = "_prefix",
+        cfg = { _prefix = prefix },
+        rhs = "<Nop>",
+        desc = ("unblock %s (%s)"):format(which[2], km[which[1]]),
+      }
+    end
+  end
+
+  bind.bind("copy_move", _cfg, specs)
+
+  tree_attach.on_attach(function(_buf)
     render_clipboard()
-    local function bind(key, fn, desc)
-      if key then
-        map("n", key, fn, { buffer = buf, silent = true, desc = "Filetree: " .. desc })
-      end
-    end
-
-    -- neo-tree's own native keymaps (y/x/p/...) are registered with a
-    -- global `nowait = true`, which makes Vim resolve the ambiguity
-    -- between a single-char native mapping and our own longer "yy"/"xx"
-    -- sequence immediately in the native mapping's favour — the second
-    -- keypress never gets a chance to complete the double-tap. Re-binding
-    -- the bare prefix char to a plain <Nop> (no nowait) on this buffer
-    -- overrides neo-tree's mapping and restores Vim's normal
-    -- wait-for-more-input behaviour, making "yy"/"xx" reachable again.
-    local function unblock_prefix(key, desc)
-      if type(key) == "string" and #key == 2 and key:sub(1, 1) == key:sub(2, 2) then
-        local prefix = key:sub(1, 1)
-        if prefix ~= km.paste and prefix ~= km.show then
-          map("n", prefix, "<Nop>", {
-            buffer = buf,
-            silent = true,
-            desc = "Filetree: unblock " .. desc .. " (" .. key .. ")",
-          })
-        end
-      end
-    end
-    unblock_prefix(km.copy, "stage copy")
-    unblock_prefix(km.cut, "stage cut")
-
-    bind(km.copy, M.stage_copy, "stage copy")
-    bind(km.cut, M.stage_cut, "stage cut")
-    bind(km.paste, M.paste, "paste clipboard")
-    bind(km.show, M.show, "show clipboard")
-    bind(km.clear, M.clear, "clear clipboard")
   end)
 
   au.acmd("BufEnter", {

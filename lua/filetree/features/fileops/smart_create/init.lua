@@ -1,8 +1,6 @@
 ---@module 'filetree.features.fileops.smart_create'
 --- Enhanced file/directory creation with clipboard paste and LuaLS templates.
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local confirm_choice = require("filetree.util.confirm_choice")
 local path = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
@@ -24,6 +22,7 @@ local _cfg = {
 local _adapter = nil
 
 local notify = require("filetree.util.notify").create("[filetree.smart_create]")
+local bind = require("filetree.util.bind")
 
 ---@internal
 ---Find the lua/ root above a path.
@@ -240,13 +239,16 @@ function M.setup(cfg, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, cfg or {})
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, function()
+  bind.bind("smart_create", _cfg, {
+    {
+      name = "create",
+      field = "keymap",
+      rhs = function()
         M.create()
-      end, { buffer = buf, desc = "filetree: smart create", silent = true })
-    end)
-  end
+      end,
+      desc = "smart create",
+    },
+  })
 end
 
 function M.teardown()

@@ -21,10 +21,10 @@ local platform = require("filetree.util.platform")
 local line_count = require("filetree.util.line_count")
 local bufutil = require("filetree.util.buffer")
 
-local map = require("filetree.util.map")
 local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
+local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreePreviewConfig
@@ -581,56 +581,66 @@ function M.setup(config, adapter)
   _augroup = au.group("filetree_preview", true)
 
   tree_attach.on_attach(function(buf)
-    -- <Tab>: toggle text preview, or dispatch image/PDF
-    if _cfg.keymap then
-      map("n", _cfg.keymap, M.toggle_or_open, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: preview / open image or PDF",
-      })
-    end
-
-    -- <CR>: image/PDF dispatch; save and call neotree's original <CR> for other nodes
+    -- Per buffer, not once: `<CR>` wraps whatever the adapter had mapped
+    -- there, which can only be read off the buffer it is being bound in.
+    local original_cr_cb = nil
     if _cfg.keymap_open then
-      local original_cr_cb = nil
       for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
         if m.lhs == _cfg.keymap_open then
           original_cr_cb = m.callback
           break
         end
       end
-
-      map("n", _cfg.keymap_open, function()
-        M.open_or_fallback(original_cr_cb)
-      end, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: open image/PDF, or adapter default",
-      })
     end
+
+    -- The lhs each scroll key ended up on, filled in once the registry has
+    -- resolved the overrides. The page keys feed their own key back to the
+    -- tree when no preview is active, and that has to be the key the user
+    -- actually pressed, not the default it was declared with.
+    ---@type table<string, string|nil>
+    local lhs_of_action = {}
+
+    ---@type FiletreeBindSpec[]
+    local specs = {
+      -- <Tab>: toggle text preview, or dispatch image/PDF
+      {
+        name = "toggle",
+        field = "keymap",
+        rhs = M.toggle_or_open,
+        desc = "preview / open image or PDF",
+      },
+      -- <CR>: image/PDF dispatch; save and call the adapter's original <CR>
+      -- for other nodes
+      {
+        name = "open",
+        field = "keymap_open",
+        desc = "open image/PDF, or adapter default",
+        rhs = function()
+          M.open_or_fallback(original_cr_cb)
+        end,
+      },
+    }
 
     if _cfg.mode == "float" then
       -- Float mode: the scroll keys move the float's cursor. A count prefix
       -- multiplies the fixed step (1 line for <C-b>/<C-f>, 10 for
       -- <PageUp>/<PageDown>) rather than looping scroll_preview, since its
       -- delta is plain cursor-line arithmetic.
-      local scroll_keys = {
-        { _cfg.keymap_scroll_up, 1 },
-        { _cfg.keymap_scroll_down, -1 },
-        { _cfg.keymap_scroll_up10, 10 },
-        { _cfg.keymap_scroll_down10, -10 },
-      }
-      for _, pair in ipairs(scroll_keys) do
-        local key, delta = pair[1], pair[2]
-        if key then
-          map("n", key, function()
+      for _, entry in ipairs({
+        { "scroll_up", "keymap_scroll_up", 1 },
+        { "scroll_down", "keymap_scroll_down", -1 },
+        { "scroll_up10", "keymap_scroll_up10", 10 },
+        { "scroll_down10", "keymap_scroll_down10", -10 },
+      }) do
+        local delta = entry[3]
+        specs[#specs + 1] = {
+          name = entry[1],
+          field = entry[2],
+          desc = "scroll preview " .. (delta > 0 and "up" or "down") .. " (×count)",
+          rhs = function()
             scroll_preview(delta * vim.v.count1)
-          end, {
-            buffer = buf,
-            silent = true,
-            desc = "Filetree: scroll preview " .. (delta > 0 and "up" or "down") .. " (×count)",
-          })
-        end
+          end,
+        }
       end
     else
       -- Buffer mode: <PageUp>/<PageDown> page the previewed file in the
@@ -638,26 +648,30 @@ function M.setup(config, adapter)
       -- active the key falls through to the tree's own native scroll (fed
       -- back with noremap so this mapping doesn't re-trigger) — the count is
       -- carried along in both cases.
-      local page_keys = {
-        { _cfg.keymap_scroll_up10, -1 }, -- <PageUp>  → page up
-        { _cfg.keymap_scroll_down10, 1 }, -- <PageDown> → page down
-      }
-      for _, pair in ipairs(page_keys) do
-        local key, dir = pair[1], pair[2]
-        if key then
-          map("n", key, function()
+      for _, entry in ipairs({
+        { "page_up", "keymap_scroll_up10", -1 },
+        { "page_down", "keymap_scroll_down10", 1 },
+      }) do
+        local name, dir = entry[1], entry[3]
+        specs[#specs + 1] = {
+          name = name,
+          field = entry[2],
+          desc = "page preview " .. (dir > 0 and "down" or "up") .. " (×count)",
+          rhs = function()
             local count = vim.v.count1
             if not scroll_buf_preview(dir, count) then
-              local k = vim.api.nvim_replace_termcodes(tostring(count) .. key, true, false, true)
+              local lhs = lhs_of_action[name]
+              if not lhs then return end
+              local k = vim.api.nvim_replace_termcodes(tostring(count) .. lhs, true, false, true)
               vim.api.nvim_feedkeys(k, "n", false)
             end
-          end, {
-            buffer = buf,
-            silent = true,
-            desc = "Filetree: page preview " .. (dir > 0 and "down" or "up") .. " (×count)",
-          })
-        end
+          end,
+        }
       end
+    end
+
+    for _, e in ipairs(bind.bind_buffer("preview", _cfg, specs, buf)) do
+      if e.bound and e.lhs then lhs_of_action[e.name] = e.lhs end
     end
   end)
 

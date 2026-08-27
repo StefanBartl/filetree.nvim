@@ -35,8 +35,6 @@
 local notify = require("filetree.util.notify").create("[filetree.cwd_mode]")
 local path_util = require("filetree.util.path")
 local au = require("filetree.util.autocmd")
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 
 local chdir = require("lib.nvim.fs.chdir")
 local dir_guard = require("lib.nvim.fs.dir_guard")
@@ -64,6 +62,7 @@ local MODES = {
 -- user-facing config -- see that module for why it is not inlined here.
 ---@type FiletreeCwdModeConfig
 local DEFAULTS = require("filetree.features.nav.cwd_mode.DEFAULTS")
+local bind = require("filetree.util.bind")
 
 ---@type FiletreeCwdModeConfig
 local _cfg = vim.deepcopy(DEFAULTS)
@@ -817,18 +816,24 @@ function M.setup(config, adapter)
     end,
   })
 
-  tree_attach.on_attach(function(buf)
-    if _cfg.keymap_cycle and _cfg.keymap_cycle ~= "" then
-      map("n", _cfg.keymap_cycle, function()
+  bind.bind("cwd_mode", _cfg, {
+    {
+      name = "cycle",
+      field = "keymap_cycle",
+      desc = "cycle cwd mode",
+      rhs = function()
         M.cycle()
-      end, { buffer = buf, desc = "filetree: cycle cwd mode", silent = true })
-    end
-    if _cfg.keymap_lock_here and _cfg.keymap_lock_here ~= "" then
-      map("n", _cfg.keymap_lock_here, function()
+      end,
+    },
+    {
+      name = "lock_here",
+      field = "keymap_lock_here",
+      desc = "lock cwd here",
+      rhs = function()
         M.lock_here()
-      end, { buffer = buf, desc = "filetree: lock cwd here", silent = true })
-    end
-  end)
+      end,
+    },
+  })
 
   -- Deferred: the adapter's window (and the startup buffer) may not exist yet,
   -- and both matter for seeding a project pin and for drawing the badge.

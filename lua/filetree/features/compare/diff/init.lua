@@ -8,9 +8,8 @@
 --- Uses Neovim's built-in :diffthis. Files open in vertical splits by default.
 
 local notify = require("filetree.util.notify").create("[filetree.diff]")
+local bind = require("filetree.util.bind")
 
-local map = require("filetree.util.map")
-local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeDiffConfig
@@ -144,15 +143,14 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _cfg.keymap then
-    tree_attach.on_attach(function(buf)
-      map("n", _cfg.keymap, M.stage_or_diff_current, {
-        buffer = buf,
-        silent = true,
-        desc = "Filetree: stage/diff current file",
-      })
-    end)
-  end
+  bind.bind("diff", _cfg, {
+    {
+      name = "stage_or_diff",
+      field = "keymap",
+      rhs = M.stage_or_diff_current,
+      desc = "stage/diff current file",
+    },
+  })
 end
 
 function M.teardown()
