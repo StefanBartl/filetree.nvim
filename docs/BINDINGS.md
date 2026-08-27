@@ -64,6 +64,18 @@ is `:Filetree marks show`. Both the name and the aliases are configurable via
 refresh, diagnostics, breadcrumbs and so on. Each belongs to a feature and each
 can be switched off individually through the top-level `autocmds` table.
 
+To see what is actually registered — with the file and line it came from —
+ask the plugin instead of a document:
+
+```lua
+vim.print(require("filetree.bindings.autocmds").lines())     -- one line each
+vim.print(require("filetree.bindings.autocmds").by_event())  -- grouped by event
+```
+
+That is read back from `lib.nvim.bindings.autocmd`'s record of what it
+created, not maintained by hand. The hand-written version of this list used
+to claim fourteen entries against forty-six real ones.
+
 ## Keymap prefixes at a glance
 
 Enough to predict where a key lives without opening the full table:

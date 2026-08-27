@@ -1,86 +1,78 @@
 ---@module 'filetree.bindings.autocmds'
---- Catalog of the autocmds filetree.nvim registers, by event.
+--- What filetree.nvim actually registers, by event — read back, not listed.
 ---
---- Behavioural autocmds only (feature keymaps are also bound via a FileType
---- autocmd but are cataloged in bindings.keymaps). All groups are named
---- `filetree_<feature>` and are cleared on re-setup. Per-feature autocmds can be
---- disabled via the top-level `autocmds = { <feature> = false }` config.
+--- This file used to hold a hand-written table of fourteen entries. The real
+--- number is forty-six, spread over twenty-three feature modules, so the list
+--- was wrong about two thirds of what fires and nothing anywhere said so. A
+--- mirror of the code is only as good as the last time somebody remembered to
+--- update it, and for "which autocmds does this plugin have" that is exactly
+--- the question you cannot afford a stale answer to.
+---
+--- So it is derived now. Every autocmd goes through `filetree.util.autocmd`,
+--- which delegates to `lib.nvim.bindings.autocmd`, which records what it
+--- created — event, group, pattern, desc, and the `file:line` it was created
+--- from. Clearing a group drops its records with it, so a re-`setup()` does
+--- not inflate the list.
+---
+--- Behavioural autocmds only, as before: the FileType autocmd that binds each
+--- feature's tree-buffer keymaps is catalogued in `bindings.keymaps`.
 
----@class FiletreeAutocmdEntry
----@field event   string|string[]
----@field feature string
----@field desc    string
+local M = {}
 
----@type FiletreeAutocmdEntry[]
-return {
-  {
-    event = "FileType",
-    feature = "*",
-    desc = "Bind each enabled feature's tree-buffer keymaps",
-  },
-  {
-    event = "CursorMoved",
-    feature = "preview",
-    desc = "Live-update the preview as the cursor moves",
-  },
-  {
-    event = "CursorMoved",
-    feature = "current_hl",
-    desc = "Re-highlight the current node line",
-  },
-  {
-    event = { "BufEnter", "WinEnter" },
-    feature = "cwd_sync",
-    desc = "Reveal the current buffer's file in the tree",
-  },
-  {
-    event = { "BufEnter", "WinEnter" },
-    feature = "auto_reveal",
-    desc = "Scroll/highlight the current file (no cwd change)",
-  },
-  {
-    event = { "BufLeave", "WinLeave" },
-    feature = "preview",
-    desc = "End/close the preview when leaving the tree",
-  },
-  {
-    event = "BufWritePost",
-    feature = "marks",
-    desc = "Redraw mark indicators after writes",
-  },
-  {
-    event = "ColorScheme",
-    feature = "current_hl",
-    desc = "Re-apply highlight groups after colorscheme change",
-  },
-  {
-    event = "ColorScheme",
-    feature = "window_style",
-    desc = "Re-isolate tree highlight groups",
-  },
-  {
-    event = "VimResized",
-    feature = "auto_resize",
-    desc = "Adjust tree width to the new column count",
-  },
-  {
-    event = { "BufDelete", "BufWipeout", "WinClosed" },
-    feature = "layout_guard",
-    desc = "Open an editor window if the tree is left alone",
-  },
-  {
-    event = "BufWinEnter",
-    feature = "no_name_guard",
-    desc = "Redirect a stray [No Name] editor window to a real buffer, then wipe it",
-  },
-  {
-    event = { "BufAdd", "BufDelete", "BufWipeout", "BufWinEnter", "BufWinLeave" },
-    feature = "opened_sync",
-    desc = "Redraw the tree so opened-file highlights stay in sync",
-  },
-  {
-    event = "BufDelete",
-    feature = "*",
-    desc = "Invalidate the buffer-validation cache (util.buffer)",
-  },
-}
+---@internal
+--- filetree's own records: everything whose group is named `filetree*`, plus
+--- the tree-attach dispatcher.
+---@return Lib.Autocmd.Record[]
+local function own_records()
+  local ok, au = pcall(require, "lib.nvim.bindings.autocmd")
+  if not ok or type(au.registered) ~= "function" then return {} end
+  local out = {}
+  for _, r in ipairs(au.registered()) do
+    if type(r.group) == "string" and r.group:match("^filetree") then out[#out + 1] = r end
+  end
+  return out
+end
+
+--- Every autocmd filetree currently has registered, in creation order.
+---@return Lib.Autocmd.Record[]
+function M.list()
+  return own_records()
+end
+
+--- The same, grouped by event — how the question is usually asked: "what
+--- happens on BufWritePost?"
+---@return table<string, Lib.Autocmd.Record[]>
+function M.by_event()
+  local out = {}
+  for _, r in ipairs(own_records()) do
+    for _, e in ipairs(r.events) do
+      out[e] = out[e] or {}
+      out[e][#out[e] + 1] = r
+    end
+  end
+  return out
+end
+
+--- One line per autocmd, sorted by event then group. For `:checkhealth` and
+--- for a human asking what this plugin does to their editor.
+---@return string[]
+function M.lines()
+  local records = own_records()
+  table.sort(records, function(a, b)
+    local ae, be = a.events[1] or "", b.events[1] or ""
+    if ae ~= be then return ae < be end
+    return (a.group or "") < (b.group or "")
+  end)
+
+  local out = {}
+  for _, r in ipairs(records) do
+    out[#out + 1] = ("%-16s %-28s %s"):format(
+      table.concat(r.events, ","),
+      r.group or "-",
+      r.desc or r.src
+    )
+  end
+  return out
+end
+
+return M

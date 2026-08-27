@@ -10,7 +10,8 @@
 ---                  gone. Empty until `setup()` has run.
 ---   • usercommands — every `:Filetree …` sub-command, walked live from the
 ---                    dispatcher TREE so it never drifts (commands.command_paths)
----   • autocmds   — behavioural autocmds by event (bindings.autocmds)
+---   • autocmds   — what is actually registered, read back from lib.nvim
+---                  (bindings.autocmds); no longer a hand-written list
 ---
 --- `catalog()` returns the whole thing (also re-exported by docs/BINDINGS.lua).
 --- `setup_which_key()` registers leader-group labels when which-key is installed.
@@ -87,7 +88,7 @@ function M.catalog()
     keymaps = M.keymaps,
     live = M.live(),
     usercommands = M.usercommands(),
-    autocmds = M.autocmds,
+    autocmds = M.autocmds.list(),
   }
 end
 
