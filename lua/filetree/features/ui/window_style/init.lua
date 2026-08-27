@@ -118,6 +118,7 @@ function M.setup(config, adapter)
     -- a given buffer, which would otherwise win the last-write race.
     au.acmd({ "BufWinEnter", "WinEnter" }, {
       group = _augroup,
+      desc = "[filetree] Re-assert the tree's statusline after another plugin overwrote it",
       callback = function()
         vim.schedule(apply_statusline)
       end,

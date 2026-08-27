@@ -26,9 +26,8 @@
 ---   :FiletreeAutoRevealResume       Resume immediately.
 ---   :FiletreeRevealCurrent          Force reveal now.
 
-local au = require("filetree.util.autocmd")
+local bufevents = require("filetree.util.bufevents")
 local lib_debounce = require("lib.nvim.debounce")
-local bufutil = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
@@ -197,9 +196,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeAutoRevealConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -210,41 +206,35 @@ function M.setup(config, adapter)
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(do_reveal, _cfg.debounce_ms)
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_auto_reveal", true)
-
-  au.acmd("BufEnter", {
-    group = _augroup,
-    callback = function(ev)
-      if should_ignore(ev.buf) then return end
-      local path = vim.api.nvim_buf_get_name(ev.buf)
+  bufevents.register("auto_reveal", "BufEnter:editor", {
+    desc = "[filetree] Reveal the entered file in the tree",
+    priority = bufevents.PRIORITY.REVEAL,
+    load = function(ctx)
+      if should_ignore(ctx.buf) then return end
+      local path = vim.api.nvim_buf_get_name(ctx.buf)
       if path and path ~= "" and vim.fn.filereadable(path) == 1 then schedule_reveal(path) end
     end,
   })
 
   -- Auto-pause when user enters the tree window
-  au.acmd("WinEnter", {
-    group = _augroup,
-    callback = function()
-      if bufutil.is_tree_buffer() then
-        -- Short pause so that the reveal triggered by WinEnter doesn't
-        -- immediately jump again when the user leaves the tree
-        M.pause(500)
-      end
+  bufevents.register("auto_reveal", "WinEnter:tree", {
+    desc = "[filetree] Pause auto-reveal while the cursor is in the tree",
+    priority = bufevents.PRIORITY.REVEAL,
+    load = function()
+      -- Short pause so that the reveal triggered by WinEnter doesn't
+      -- immediately jump again when the user leaves the tree
+      M.pause(500)
     end,
   })
 end
 
 function M.teardown()
+  bufevents.unregister("auto_reveal")
   _adapter = nil
   _paused_until = 0
   if _debounce then
     _debounce.cancel()
     _debounce = nil
-  end
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
   end
 end
 

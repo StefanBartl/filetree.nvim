@@ -164,6 +164,7 @@ function M.setup(config, adapter)
 
   au.acmd("DirChanged", {
     group = _augroup,
+    desc = "[filetree] Re-point the filesystem watcher at the new working directory",
     callback = function()
       watch(vim.fn.getcwd())
     end,

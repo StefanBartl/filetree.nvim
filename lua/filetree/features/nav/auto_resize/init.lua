@@ -115,6 +115,7 @@ function M.setup(config, adapter)
 
   au.acmd("VimResized", {
     group = _augroup,
+    desc = "[filetree] Re-apply the tree width breakpoint after a terminal resize",
     callback = function()
       M.apply()
     end,

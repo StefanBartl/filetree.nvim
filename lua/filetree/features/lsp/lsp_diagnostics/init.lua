@@ -10,9 +10,9 @@
 ---
 --- Updates on DiagnosticChanged and when the tree buffer is entered.
 
+local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
-local bufutil = require("filetree.util.buffer")
 local M = {}
 
 ---@type FiletreeLspDiagnosticsConfig
@@ -199,17 +199,15 @@ function M.setup(config, adapter)
 
   au.acmd("DiagnosticChanged", {
     group = _augroup,
+    desc = "[filetree] Re-draw the tree's diagnostic badges when diagnostics change",
     callback = schedule_update,
   })
 
-  au.acmd({ "BufEnter", "BufWritePost" }, {
-    group = _augroup,
-    pattern = "*",
-    callback = function(ev)
-      if bufutil.is_tree_buffer(ev.buf) then
-        recompute()
-        M._render()
-      end
+  bufevents.register("lsp_diagnostics", { "BufEnter:tree", "BufWritePost:tree" }, {
+    desc = "[filetree] Recount LSP diagnostics and re-draw the tree's badges",
+    load = function()
+      recompute()
+      M._render()
     end,
   })
 
@@ -221,6 +219,7 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
+  bufevents.unregister("lsp_diagnostics")
   if not _adapter then return end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
   if bufnr >= 0 and vim.api.nvim_buf_is_valid(bufnr) then

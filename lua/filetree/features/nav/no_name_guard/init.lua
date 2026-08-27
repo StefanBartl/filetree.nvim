@@ -106,6 +106,7 @@ function M.setup(config, adapter)
 
   au.acmd("BufWinEnter", {
     group = _augroup,
+    desc = "[filetree] Replace a stray [No Name] buffer shown next to the tree",
     callback = function(event)
       if not buffer.is_stray_no_name(event.buf) then return end
       handle(event.buf, vim.api.nvim_get_current_win(), adapter.get_winid())
@@ -114,6 +115,7 @@ function M.setup(config, adapter)
 
   au.acmd({ "BufAdd", "BufDelete", "BufWipeout" }, {
     group = _augroup,
+    desc = "[filetree] Sweep leftover [No Name] buffers after the buffer list changes",
     callback = function()
       sweep(adapter.get_winid())
     end,

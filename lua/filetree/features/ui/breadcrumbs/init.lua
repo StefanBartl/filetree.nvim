@@ -15,6 +15,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.breadcrumbs]")
 
+local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local ui_statusline = require("lib.nvim.ui.statusline")
 local M = {}
@@ -204,6 +205,7 @@ function M.setup(config, adapter)
   au.acmd("CursorMoved", {
     group = _augroup,
     pattern = "*",
+    desc = "[filetree] Follow the tree node under the cursor with the breadcrumb",
     callback = function()
       local ft = vim.bo.filetype
       if ft ~= "neo-tree" and ft ~= "NvimTree" then return end
@@ -214,11 +216,11 @@ function M.setup(config, adapter)
   })
 
   -- Update when editor buffer changes
-  au.acmd("BufEnter", {
-    group = _augroup,
-    callback = function(ev)
-      if vim.bo[ev.buf].buftype ~= "" then return end
-      local path = vim.api.nvim_buf_get_name(ev.buf)
+  bufevents.register("breadcrumbs", "BufEnter:editor", {
+    desc = "[filetree] Sync the breadcrumb to the entered file",
+    load = function(ctx)
+      if vim.bo[ctx.buf].buftype ~= "" then return end
+      local path = vim.api.nvim_buf_get_name(ctx.buf)
       if path and path ~= "" then M.update(path) end
     end,
   })
@@ -237,6 +239,7 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
+  bufevents.unregister("breadcrumbs")
   close_float()
   _current = ""
   _adapter = nil

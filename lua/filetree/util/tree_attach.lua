@@ -49,6 +49,7 @@ function M.install(adapter)
   au.acmd("FileType", {
     group = _augroup,
     pattern = pattern,
+    desc = "[filetree] Run every feature's tree-buffer setup when a tree buffer attaches",
     callback = function(ev)
       local buf = ev.buf
       -- Defer past the adapter's own buffer-local keymap setup, then run every

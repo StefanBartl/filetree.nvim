@@ -16,6 +16,13 @@
 ---
 --- Behavioural autocmds only, as before: the FileType autocmd that binds each
 --- feature's tree-buffer keymaps is catalogued in `bindings.keymaps`.
+---
+--- One wrinkle since the buffer-lifecycle events moved to a dispatcher
+--- (`filetree.util.bufevents`): ten features now share ONE autocmd, so the
+--- record list has one row where ten things listen. Reading that as "filetree
+--- does one thing on BufEnter" would be the same stale-mirror problem in a new
+--- shape, so `dispatchers()` reads the handler list back too and `lines()`
+--- prints it underneath its autocmd.
 
 local M = {}
 
@@ -53,8 +60,22 @@ function M.by_event()
   return out
 end
 
---- One line per autocmd, sorted by event then group. For `:checkhealth` and
---- for a human asking what this plugin does to their editor.
+--- Every dispatcher filetree owns, with its handler list — read back from
+--- `lib.nvim.bindings.autocmd.dispatcher`, same as the records above.
+---@return Lib.Autocmd.Dispatcher.Entry[]
+function M.dispatchers()
+  local ok, dispatcher = pcall(require, "lib.nvim.bindings.autocmd.dispatcher")
+  if not ok or type(dispatcher.registry) ~= "function" then return {} end
+  local out = {}
+  for _, entry in ipairs(dispatcher.registry()) do
+    if entry.name:match("^filetree") then out[#out + 1] = entry end
+  end
+  return out
+end
+
+--- One line per autocmd, sorted by event then group, with a dispatcher's
+--- handlers indented underneath it. For `:checkhealth` and for a human asking
+--- what this plugin does to their editor.
 ---@return string[]
 function M.lines()
   local records = own_records()
@@ -64,6 +85,19 @@ function M.lines()
     return (a.group or "") < (b.group or "")
   end)
 
+  -- Which record IS the dispatch autocmd, keyed by "group|event,event".
+  --
+  -- Group alone is not enough: a dispatcher also creates a BufWipeout autocmd
+  -- in the same group to clean up its per-buffer `once` bookkeeping, and
+  -- hanging the handler list off that one too would claim ten features listen
+  -- on BufWipeout. The event list tells them apart.
+  local handlers_by_key = {}
+  for _, entry in ipairs(M.dispatchers()) do
+    if entry.group then
+      handlers_by_key[entry.group .. "|" .. table.concat(entry.events, ",")] = entry.handlers
+    end
+  end
+
   local out = {}
   for _, r in ipairs(records) do
     out[#out + 1] = ("%-16s %-28s %s"):format(
@@ -71,6 +105,14 @@ function M.lines()
       r.group or "-",
       r.desc or r.src
     )
+    local dispatched = handlers_by_key[(r.group or "") .. "|" .. table.concat(r.events, ",")]
+    for _, h in ipairs(dispatched or {}) do
+      out[#out + 1] = ("%-16s %-28s %s"):format(
+        "",
+        "  -> " .. table.concat(h.keys, ","),
+        h.desc or h.src
+      )
+    end
   end
   return out
 end

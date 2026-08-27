@@ -218,6 +218,57 @@ do
   )
 end
 
+-- 9) the shared buffer-lifecycle dispatcher
+--
+-- Ten features used to own a BufEnter autocmd each; they now register with
+-- `filetree.util.bufevents`. Two things have to hold, and neither is obvious
+-- from reading one feature: a re-setup must not double them (a plain autocmd
+-- got that for free from `augroup(clear = true)` — here it depends on every
+-- teardown() calling unregister), and every handler needs a `desc`, because
+-- there is now only one autocmd and the desc is all the generated bindings
+-- table has left to print per handler.
+do
+  local bufevents = require("filetree.util.bufevents")
+  local opts = {
+    adapter = "stub",
+    -- cwd_sync and current_hl are opt-in; enable them so all ten features
+    -- are represented.
+    features = { cwd_sync = { enabled = true }, current_hl = { enabled = true } },
+  }
+
+  ft.setup(opts)
+  local first = bufevents.handlers()
+  check("every feature registered a buffer-lifecycle handler", #first >= 10, "n=" .. #first)
+
+  local no_desc = {}
+  for _, h in ipairs(first) do
+    if not h.desc or h.desc == "" then no_desc[#no_desc + 1] = table.concat(h.keys, ",") end
+  end
+  check("every handler has a desc", #no_desc == 0, table.concat(no_desc, "; "))
+
+  local sorted = true
+  for i = 2, #first do
+    if first[i].priority < first[i - 1].priority then sorted = false end
+  end
+  check("handlers come back in priority order", sorted)
+
+  ft.setup(opts)
+  ft.setup(opts)
+  local after = bufevents.handlers()
+  check(
+    "re-setup does not accumulate handlers",
+    #after == #first,
+    ("%d -> %d"):format(#first, #after)
+  )
+
+  -- One autocmd for all of them, plus the dispatcher's own BufWipeout cleanup.
+  local au = require("lib.nvim.bindings.autocmd")
+  local recs = au.registered({ group = "filetree_bufevents" })
+  check("the ten handlers share two autocmds", #recs == 2, "n=" .. #recs)
+
+  ft.setup({ adapter = "stub" })
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim smoke: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then

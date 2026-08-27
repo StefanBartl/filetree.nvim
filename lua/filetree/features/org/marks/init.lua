@@ -7,7 +7,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.marks]")
 
-local au = require("filetree.util.autocmd")
+local bufevents = require("filetree.util.bufevents")
 local kit = require("lib.nvim.ui.kit")
 local bind = require("filetree.util.bind")
 local M = {}
@@ -303,9 +303,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---@param config FiletreeMarksConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
@@ -313,14 +310,10 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
 
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_marks", true)
-
   -- Redraw marks whenever the tree buffer is entered/refreshed
-  au.acmd({ "BufEnter", "BufWritePost" }, {
-    group = _augroup,
-    pattern = "*",
-    callback = function()
+  bufevents.register("marks", { "BufEnter:*", "BufWritePost:*" }, {
+    desc = "[filetree] Re-draw node marks in the tree",
+    load = function()
       vim.defer_fn(redraw, 50)
     end,
   })
@@ -422,14 +415,11 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
+  bufevents.unregister("marks")
   _marks = {}
   if _adapter then
     local _, bufnr = _adapter.is_open()
     if bufnr then pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns(), 0, -1) end
-  end
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
   end
   _adapter = nil
 end

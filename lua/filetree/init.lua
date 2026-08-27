@@ -138,6 +138,12 @@ function M.setup(user_config)
   -- on_attach callback registered above.
   tree_attach.install(adapter)
 
+  -- Same shape for the buffer-lifecycle events: one autocmd set fanning out
+  -- to every handler the features registered above, in `PRIORITY` order.
+  -- Each feature's teardown() un-registers its own, so the loop above has
+  -- already emptied the registry of the previous cycle.
+  require("filetree.util.bufevents").install()
+
   commands.setup(cfg.command)
 
   -- Register which-key group labels (no-op when which-key is absent).

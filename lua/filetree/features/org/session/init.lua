@@ -192,12 +192,14 @@ function M.setup(config, adapter)
   if _cfg.auto_save then
     au.acmd("VimLeavePre", {
       group = _augroup,
+      desc = "[filetree] Save the tree session before leaving Neovim",
       callback = M.save,
     })
     -- Also save when the tree buffer is hidden
     au.acmd("BufHidden", {
       group = _augroup,
       pattern = "*",
+      desc = "[filetree] Save the tree session when the tree buffer is hidden",
       callback = function(ev)
         if bufutil.is_tree_buffer(ev.buf) then M.save() end
       end,

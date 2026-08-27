@@ -218,6 +218,7 @@ function M.setup(config, adapter)
   -- Re-query on file save or focus return
   au.acmd({ "BufWritePost", "FocusGained" }, {
     group = _augroup,
+    desc = "[filetree] Re-query git status after a write or on regaining focus",
     callback = function()
       debounce_refresh()
     end,

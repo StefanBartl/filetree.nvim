@@ -52,6 +52,7 @@ function M.setup(config, adapter)
 
   au.acmd({ "BufDelete", "BufWipeout", "WinClosed" }, {
     group = _augroup,
+    desc = "[filetree] Keep an editor window alive next to the tree",
     callback = function()
       vim.defer_fn(function()
         if not adapter.is_open() then return end

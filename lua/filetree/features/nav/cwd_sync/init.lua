@@ -30,6 +30,7 @@ local path = require("filetree.util.path")
 local lib_debounce = require("lib.nvim.debounce")
 local chdir = require("lib.nvim.fs.chdir")
 
+local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local M = {}
 
@@ -298,9 +299,13 @@ function M.setup(config, adapter)
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_cwd_sync", true)
 
-  au.acmd({ "BufEnter", "WinEnter" }, {
-    group = _augroup,
-    callback = function()
+  -- Registered for both scopes: the check below is about the tree WINDOW,
+  -- which is not the same question as "is the current buffer a tree buffer"
+  -- -- the tree window can briefly show something else.
+  bufevents.register("cwd_sync", { "BufEnter:*", "WinEnter:*" }, {
+    desc = "[filetree] Sync the working directory to the entered file",
+    priority = bufevents.PRIORITY.CWD,
+    load = function()
       -- Skip if cursor is inside the tree window
       local tree_winid = adapter.get_winid()
       if tree_winid and vim.api.nvim_get_current_win() == tree_winid then
@@ -345,6 +350,7 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
+  bufevents.unregister("cwd_sync")
   if _debounce then _debounce.cancel() end
   _root_finder = nil
   if _augroup then

@@ -681,6 +681,7 @@ function M.setup(config, adapter)
   au.acmd({ "BufLeave", "WinLeave" }, {
     group = _augroup,
     pattern = "*",
+    desc = "[filetree] End the preview when the cursor leaves the tree",
     callback = function(ev)
       if bufutil.is_tree_buffer(ev.buf) then
         if _cfg.mode == "float" then
@@ -699,6 +700,7 @@ function M.setup(config, adapter)
   au.acmd("CursorMoved", {
     group = _augroup,
     pattern = "*",
+    desc = "[filetree] Follow the tree node under the cursor with the preview (debounced)",
     callback = function()
       local ft = vim.bo.filetype
       if ft ~= "neo-tree" and ft ~= "NvimTree" then return end

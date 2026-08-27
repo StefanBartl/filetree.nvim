@@ -19,6 +19,7 @@
 ---   nvimtree → `H` (toggle_dotfiles) shows/hides dot-files.
 ---   Others   → filetree falls back to extmark-dim (same as ignore_patterns).
 
+local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local M = {}
 
@@ -210,12 +211,14 @@ local function apply_dim(names)
     end
   end
 
-  local aug = au.group("filetree_ignore_list_dim", true)
-  au.acmd({ "BufEnter", "TextChanged" }, {
-    group = aug,
-    pattern = { "neo-tree://*", "NvimTree_*" },
-    callback = function(ev)
-      render(ev.buf)
+  -- Was pattern-filtered to `neo-tree://*`/`NvimTree_*`, i.e. filtered in C.
+  -- The `:tree` scope is the same question asked from Lua, and the ~30 us it
+  -- costs on a TextChanged that is not in the tree is not a number anyone
+  -- perceives -- see `filetree.util.bufevents`.
+  bufevents.register("ignore_list", { "BufEnter:tree", "TextChanged:tree" }, {
+    desc = "[filetree] Dim ignored entries in the tree",
+    load = function(ctx)
+      render(ctx.buf)
     end,
   })
 end
@@ -266,7 +269,7 @@ function M.predicate()
 end
 
 function M.teardown()
-  pcall(vim.api.nvim_del_augroup_by_name, "filetree_ignore_list_dim")
+  bufevents.unregister("ignore_list")
   _names_set = nil
   _patterns = {}
 end

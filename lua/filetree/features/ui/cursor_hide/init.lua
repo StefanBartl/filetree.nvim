@@ -23,6 +23,7 @@
 --- without a real UI attached makes VeryLazy fire unpredictably relative to
 --- a scripted test). Confirmed working in real interactive use.
 
+local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local M = {}
 
@@ -84,18 +85,19 @@ function M.setup(config, adapter)
   -- immediately loses the race. Deferring to the next tick - after that
   -- setup has fully settled - is what made window_style's equivalent
   -- fallback reliable; same fix here.
-  au.acmd({ "BufEnter", "WinEnter" }, {
-    group = _augroup,
-    callback = function(ev)
+  bufevents.register("cursor_hide", { "BufEnter:*", "WinEnter:*" }, {
+    desc = "[filetree] Hide the cursor in the tree window",
+    load = function(ctx)
       local win = vim.api.nvim_get_current_win()
       vim.schedule(function()
-        apply_hide(win, ev.buf)
+        apply_hide(win, ctx.buf)
       end)
     end,
   })
 
   au.acmd({ "BufLeave", "WinLeave" }, {
     group = _augroup,
+    desc = "[filetree] Restore the cursor when leaving the tree window",
     callback = function(ev)
       local win = vim.api.nvim_get_current_win()
       vim.schedule(function()
@@ -106,6 +108,7 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
+  bufevents.unregister("cursor_hide")
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil

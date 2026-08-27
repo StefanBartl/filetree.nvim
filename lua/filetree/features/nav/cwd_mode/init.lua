@@ -811,6 +811,7 @@ function M.setup(config, adapter)
   -- after which a different window (or none) may be the tree.
   au.acmd({ "WinEnter", "BufWinEnter", "WinClosed", "TabEnter" }, {
     group = _augroup,
+    desc = "[filetree] Move the cwd-mode badge to wherever the tree window now is",
     callback = function()
       vim.schedule(M.refresh_indicator)
     end,

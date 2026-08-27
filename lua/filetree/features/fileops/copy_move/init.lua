@@ -23,7 +23,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.copy_move]")
 
-local au = require("filetree.util.autocmd")
+local bufevents = require("filetree.util.bufevents")
 local tree_attach = require("filetree.util.tree_attach")
 local buffer = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
@@ -44,7 +44,6 @@ local progress = require("filetree.util.progress")
 -- surface as a hard failure — see the handle_guard plan.
 local fsops = require("lib.nvim.cross.fs.mutate")
 local bind = require("filetree.util.bind")
-local bufutil = require("filetree.util.buffer")
 
 local M = {}
 
@@ -478,9 +477,6 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@type integer?
-local _augroup = nil
-
 ---Toggle dry-run for copy/move.
 ---
 --- `dry_run` was config-only here, while `trash` and `safety` both had a
@@ -501,9 +497,6 @@ function M.setup(config, adapter)
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_copy_move")
-
-  if _augroup then au.del_group(_augroup) end
-  _augroup = au.group("filetree_copy_move", true)
 
   local km = _cfg.keymaps or {}
 
@@ -557,22 +550,18 @@ function M.setup(config, adapter)
     render_clipboard()
   end)
 
-  au.acmd("BufEnter", {
-    group = _augroup,
-    pattern = "*",
-    callback = function(ev)
-      if bufutil.is_tree_buffer(ev.buf) then render_clipboard() end
+  bufevents.register("copy_move", "BufEnter:tree", {
+    desc = "[filetree] Re-draw the copy/move clipboard marks in the tree",
+    load = function()
+      render_clipboard()
     end,
   })
 end
 
 function M.teardown()
+  bufevents.unregister("copy_move")
   _clipboard = {}
   _adapter = nil
-  if _augroup then
-    au.del_group(_augroup)
-    _augroup = nil
-  end
 end
 
 return M

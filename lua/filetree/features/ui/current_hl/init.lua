@@ -6,6 +6,7 @@
 --- Highlight groups are resolved from the config spec which accepts hex colors,
 --- linked groups ("link:GroupName"), or named colors ("red", "darkred", etc.).
 
+local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
@@ -122,14 +123,15 @@ function M.setup(config, adapter)
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_current_hl", true)
 
-  au.acmd({ "BufEnter", "WinEnter", "BufWritePost" }, {
-    group = _augroup,
-    callback = debounced_apply,
+  bufevents.register("current_hl", { "BufEnter:*", "WinEnter:*", "BufWritePost:*" }, {
+    desc = "[filetree] Highlight the current file's line in the tree",
+    load = debounced_apply,
   })
 
   -- Re-apply after colorscheme changes
   au.acmd("ColorScheme", {
     group = _augroup,
+    desc = "[filetree] Rebuild the current-file highlight groups after a colorscheme change",
     callback = function()
       setup_hl_groups()
       apply()
@@ -138,6 +140,7 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
+  bufevents.unregister("current_hl")
   clear_old()
   if _debounce then
     _debounce.cancel()

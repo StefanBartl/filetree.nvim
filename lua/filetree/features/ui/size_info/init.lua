@@ -13,6 +13,7 @@
 ---   - CursorHold inside tree buffer (re-renders cached values)
 ---   - :FiletreeSizeRefresh
 
+local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local bufutil = require("filetree.util.buffer")
 local M = {}
@@ -171,17 +172,17 @@ function M.setup(config, adapter)
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_size_info", true)
 
-  au.acmd({ "BufEnter" }, {
-    group = _augroup,
-    pattern = "*",
-    callback = function(ev)
-      if bufutil.is_tree_buffer(ev.buf) then M._render() end
+  bufevents.register("size_info", "BufEnter:tree", {
+    desc = "[filetree] Re-draw the tree's size column",
+    load = function()
+      M._render()
     end,
   })
 
   au.acmd("CursorHold", {
     group = _augroup,
     pattern = "*",
+    desc = "[filetree] Refresh the tree's size column while the cursor rests",
     callback = function()
       if bufutil.is_tree_buffer() then M._render() end
     end,
@@ -191,6 +192,7 @@ function M.setup(config, adapter)
 end
 
 function M.teardown()
+  bufevents.unregister("size_info")
   if _adapter then
     local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
     if bufnr >= 0 and vim.api.nvim_buf_is_valid(bufnr) then
