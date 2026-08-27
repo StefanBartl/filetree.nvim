@@ -32,6 +32,10 @@ local notify = require("filetree.util.notify").create("[filetree.move]")
 local path = require("filetree.util.path")
 local buffer = require("filetree.util.buffer")
 local conflict = require("filetree.util.conflict")
+-- Case-insensitive-FS guard: a single-target move whose destination differs
+-- from the source only by case is a rename, not a collision — and "Overwrite"
+-- on such a "collision" would delete the source. See filetree.util.case_clash.
+local case_clash = require("filetree.util.case_clash")
 local mutate = require("filetree.util.mutate")
 local confirm_choice = require("filetree.util.confirm_choice")
 local progress = require("filetree.util.progress")
@@ -88,12 +92,20 @@ local function build_plan(input, targets)
   dest = dest:gsub("/+$", "")
   if dest == "" then return nil, "empty destination" end
 
-  local into_dir = #targets > 1
-    or vim.fn.isdirectory(dest) == 1
-    -- A trailing slash is the user saying "this is a directory" even when it
-    -- does not exist yet, so honour it instead of treating the last segment as
-    -- the item's new name.
-    or input:match("[/\\]%s*$") ~= nil
+  -- A single target whose destination is just its own name re-cased is a
+  -- rename: `isdirectory(dest)` would otherwise be true (the OS folds the
+  -- casing) and wrongly route it "into" the directory it already is.
+  local single_case_rename = #targets == 1 and case_clash.is_alias(targets[1], dest)
+
+  local into_dir = not single_case_rename
+    and (
+      #targets > 1
+      or vim.fn.isdirectory(dest) == 1
+      -- A trailing slash is the user saying "this is a directory" even when it
+      -- does not exist yet, so honour it instead of treating the last segment
+      -- as the item's new name.
+      or input:match("[/\\]%s*$") ~= nil
+    )
 
   local ops = {}
   if into_dir then
@@ -133,7 +145,9 @@ local function run(plan, resolution, scan_result)
     end
 
     local dst = op.dst
-    if conflict.exists(dst) then
+    -- A case-only rename resolves to the source itself: not a real collision,
+    -- and clearing it (the "Overwrite" path) would delete the source.
+    if conflict.exists(dst) and not case_clash.is_alias(op.src, dst) then
       if resolution == "Overwrite" then
         if not conflict.remove_existing(dst) then
           notify.error("Could not clear existing target: " .. path.relative(dst))
@@ -190,7 +204,9 @@ end
 local function resolve_conflicts_and_run(plan, scan_result)
   local clashing = {}
   for _, op in ipairs(plan.ops) do
-    if conflict.exists(op.dst) then clashing[#clashing + 1] = path.basename(op.dst) end
+    if conflict.exists(op.dst) and not case_clash.is_alias(op.src, op.dst) then
+      clashing[#clashing + 1] = path.basename(op.dst)
+    end
   end
 
   if #clashing == 0 then

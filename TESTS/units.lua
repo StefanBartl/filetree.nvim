@@ -1876,6 +1876,195 @@ do
   package.loaded["filetree.features.fileops.smart_rename"] = nil
 end
 
+-- ── case_clash: alias detection on a case-insensitive filesystem ────────────
+do
+  local cc = require("filetree.util.case_clash")
+  local tmp = (TMP_ROOT .. "/units-caseclash"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/Telemetry", "p")
+  vim.fn.mkdir(tmp .. "/Other", "p")
+  vim.fn.writefile({ "x" }, tmp .. "/Telemetry/a.txt")
+
+  check("case_clash: a path aliases itself", cc.same_file(tmp .. "/Telemetry", tmp .. "/Telemetry"))
+  check(
+    "case_clash: two distinct directories are not aliases",
+    not cc.is_alias(tmp .. "/Telemetry", tmp .. "/Other")
+  )
+  check(
+    "case_clash: a not-yet-existing distinct name is not an alias",
+    not cc.is_alias(tmp .. "/Telemetry", tmp .. "/TELEMTRY")
+  )
+  if cc.case_insensitive_fs() then
+    check(
+      "case_clash: case-only variant IS an alias (case-insensitive fs)",
+      cc.is_alias(tmp .. "/Telemetry", tmp .. "/TELEMETRY")
+    )
+  else
+    check(
+      "case_clash: case-only variant is NOT an alias (case-sensitive fs)",
+      not cc.is_alias(tmp .. "/Telemetry", tmp .. "/TELEMETRY")
+    )
+  end
+end
+
+-- ── smart_rename: a case-only rename is not a collision ─────────────────────
+-- Regression: on Windows/macOS `isdirectory("docs/TELEMETRY")` is truthy while
+-- `docs/Telemetry` exists (the OS folds the casing), so smart_rename used to
+-- pop a bogus "'TELEMETRY' exists." prompt. It must rename in place instead.
+if require("filetree.util.case_clash").case_insensitive_fs() then
+  local tmp = (TMP_ROOT .. "/units-smartrename-caseonly"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/Telemetry", "p")
+  vim.fn.writefile({ "payload" }, tmp .. "/Telemetry/a.txt")
+
+  package.loaded["lib.nvim.ui.kit"] = {
+    input = function(opts)
+      opts.on_submit("TELEMETRY")
+    end,
+  }
+  local asked = false
+  package.loaded["filetree.util.confirm_choice"] = function(_q, _choices, on_choice)
+    asked = true
+    on_choice("Cancel")
+  end
+  package.loaded["filetree.features.fileops.smart_rename"] = nil
+
+  local cur_node = { path = tmp .. "/Telemetry", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-smartrename-caseonly",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-smartrename-caseonly",
+    features = { smart_rename = { enabled = true, use_safety = false } },
+  })
+
+  ft.feature("smart_rename").rename_current()
+  vim.wait(300, function()
+    return false
+  end)
+
+  check("smart_rename case-only: no bogus 'exists' prompt", not asked)
+  check(
+    "smart_rename case-only: directory re-cased on disk",
+    vim.fn.isdirectory(tmp .. "/TELEMETRY") == 1
+  )
+  check(
+    "smart_rename case-only: content preserved through the rename",
+    vim.fn.readfile(tmp .. "/TELEMETRY/a.txt")[1] == "payload"
+  )
+  check("smart_rename case-only: exactly one entry — not a copy", #vim.fn.readdir(tmp) == 1)
+
+  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.features.fileops.smart_rename"] = nil
+end
+
+-- ── copy_move: a copy that collides only by case with its own source ────────
+-- The OS can't hold both spellings, and the old "Overwrite" path would
+-- delete(dst,"rf") — i.e. wipe the source. It must ask via case_clash and,
+-- on "Append a number", produce a numbered copy while leaving the source be.
+if require("filetree.util.case_clash").case_insensitive_fs() then
+  local tmp = (TMP_ROOT .. "/units-cm-caseclash"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/Telemetry", "p")
+  vim.fn.writefile({ "hi" }, tmp .. "/Telemetry/a.txt")
+  -- Same directory, different casing — the paste target's node path.
+  local recased = tmp:gsub("units%-cm%-caseclash", "UNITS-CM-CASECLASH")
+
+  local saw_choices
+  package.loaded["filetree.util.confirm_choice"] = function(_q, choices, on_choice)
+    saw_choices = choices
+    on_choice("Append a number")
+  end
+  package.loaded["filetree.features.fileops.copy_move"] = nil
+
+  local cur_node = { path = tmp .. "/Telemetry", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-cm-caseclash",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    get_bufnr = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-cm-caseclash",
+    features = {
+      copy_move = { enabled = true, confirm = false, use_safety = false },
+      no_name_guard = { enabled = false },
+    },
+  })
+
+  local cm = ft.feature("copy_move")
+  cm.stage_copy()
+  cur_node = { path = recased, type = "directory" }
+  local orig_notify = vim.notify
+  vim.notify = function() end
+  cm.paste()
+  vim.wait(400, function()
+    return false
+  end)
+  vim.notify = orig_notify
+
+  check(
+    "copy_move caseclash: prompt offered the case-limitation choices",
+    saw_choices ~= nil and saw_choices[1] == "Append a number",
+    vim.inspect(saw_choices)
+  )
+  check(
+    "copy_move caseclash: source directory left intact",
+    vim.fn.readfile(tmp .. "/Telemetry/a.txt")[1] == "hi"
+  )
+  check(
+    "copy_move caseclash: numbered copy written with content",
+    vim.fn.filereadable(tmp .. "/Telemetry (2)/a.txt") == 1
+  )
+  check("copy_move caseclash: no third entry, no merge/overwrite", #vim.fn.readdir(tmp) == 2)
+
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.features.fileops.copy_move"] = nil
+end
+
 -- ── smart_create: non-empty clipboard asks confirm_choice (Empty/Paste) ─────
 -- Regression for the kit.confirm migration (used to be a vim.ui.select list).
 -- Skipped without a working clipboard provider (see HAS_CLIPBOARD above): the

@@ -33,6 +33,9 @@ local refs = require("filetree.refs")
 -- rename touches many watched paths in a row, so it is a prime trigger) plus
 -- the cross-drive EXDEV fallback. See filetree.util.mutate.
 local mutate = require("filetree.util.mutate")
+-- Case-insensitive-FS guard: a case-only rename must not be blocked by the
+-- "target already exists" check (see filetree.util.case_clash).
+local case_clash = require("filetree.util.case_clash")
 local bind = require("filetree.util.bind")
 
 local M = {}
@@ -174,7 +177,10 @@ local function execute_renames(entries, new_names, on_done)
   -- Conflict check
   local blocked = false
   for _, op in ipairs(plan) do
-    if vim.fn.filereadable(op.dst) == 1 or vim.fn.isdirectory(op.dst) == 1 then
+    local exists = vim.fn.filereadable(op.dst) == 1 or vim.fn.isdirectory(op.dst) == 1
+    -- A case-only rename (`Foo` → `FOO`) looks like a collision on a
+    -- case-insensitive filesystem but is just an in-place re-casing.
+    if exists and not case_clash.is_alias(op.src, op.dst) then
       notify.error("Target already exists: " .. op.dst)
       blocked = true
     end

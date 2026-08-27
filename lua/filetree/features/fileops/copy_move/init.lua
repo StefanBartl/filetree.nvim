@@ -31,6 +31,10 @@ local ui_confirm = require("filetree.util.confirm")
 -- Destination-collision helpers (exists / remove_existing / unique_name) and
 -- the shared move-with-retry, both also used by the `move` feature.
 local conflict = require("filetree.util.conflict")
+-- Case-insensitive-FS guard. On Windows/macOS a copy into a name that differs
+-- from the source only by case can't produce a second entry, and the shared
+-- "Overwrite" path would delete the source. See filetree.util.case_clash.
+local case_clash = require("filetree.util.case_clash")
 local mutate = require("filetree.util.mutate")
 -- Cross-file references after a cut+paste (= move). Copies never break one,
 -- so only cuts are ever scanned — see filetree.refs.
@@ -76,6 +80,10 @@ local _ns = -1
 
 ---@type ClipboardEntry[]
 local _clipboard = {}
+
+-- Sentinel: an entry the user chose to skip while resolving a case-only
+-- collision in the pre-paste prompt (see `resolve_case_clashes`).
+local SKIP = {}
 
 ---Reference scan for the staged cut items, started at stage time so it
 ---overlaps with the user navigating to the paste target.
@@ -263,7 +271,12 @@ end
 ---  user picked a resolution for the batch; nil means none were found (in
 ---  which case a target that turns out to exist anyway at execution time —
 ---  a race since the scan — is treated as an error, not a silent guess).
-local function do_paste_impl(dst_dir, conflict_mode)
+---@param overrides? table<string, string|table>  Per-source-path destination
+---  override chosen up-front while resolving a case-only collision: a string
+---  path to use instead of `dst_dir/<name>`, or the `SKIP` sentinel to drop
+---  the item.
+local function do_paste_impl(dst_dir, conflict_mode, overrides)
+  overrides = overrides or {}
   if _cfg.use_safety then
     local ok_s, safety = require("filetree.features").load("safety")
     if ok_s and safety then
@@ -304,9 +317,23 @@ local function do_paste_impl(dst_dir, conflict_mode)
         })
       end
       local name = vim.fn.fnamemodify(e.path, ":t")
-      local dst = dst_dir .. "/" .. name
+      local override = overrides[e.path]
+      local dst
+      if override == SKIP then
+        skipped = skipped + 1
+        dst = nil
+      elseif type(override) == "string" then
+        dst = override
+      else
+        dst = dst_dir .. "/" .. name
+      end
 
-      if conflict.exists(dst) then
+      -- `is_alias`: `dst` resolves to the item's own source (case-only match on
+      -- a case-insensitive FS). Never route that through the conflict handling
+      -- — "Overwrite" would `delete(dst, "rf")` the source. A cut lands as a
+      -- plain re-casing rename via do_move(); a copy can't happen and was
+      -- already turned into an override above.
+      if dst and conflict.exists(dst) and not case_clash.is_alias(e.path, dst) then
         if conflict_mode == "Overwrite" then
           if _cfg.use_safety then
             local ok_s, safety = require("filetree.features").load("safety")
@@ -395,39 +422,93 @@ local function do_paste_impl(dst_dir, conflict_mode)
 end
 
 ---@internal
+---A copy entry whose destination would be just its own source re-cased: the
+---filesystem can't hold both, so it needs the case_clash prompt rather than
+---the normal Overwrite/Keep both flow. (A cut in the same situation is a
+---legitimate re-casing rename and needs no prompt.)
+---@param dst_dir string
+---@param e ClipboardEntry
+---@return boolean
+local function is_impossible_copy(dst_dir, e)
+  if e.op ~= "copy" then return false end
+  local dst = dst_dir .. "/" .. vim.fn.fnamemodify(e.path, ":t")
+  return case_clash.is_alias(e.path, dst)
+end
+
+---@internal
+---Resolve every case-only copy collision (one prompt each), accumulating a
+---per-source override map, then continue to `next(overrides)`.
+---@param dst_dir string
+---@param next fun(overrides: table<string, string|table>)
+local function resolve_case_clashes(dst_dir, next)
+  local overrides = {}
+  local pending = {}
+  for _, e in ipairs(_clipboard) do
+    if is_impossible_copy(dst_dir, e) then pending[#pending + 1] = e end
+  end
+
+  local i = 0
+  local function step()
+    i = i + 1
+    local e = pending[i]
+    if not e then
+      next(overrides)
+      return
+    end
+    local dst = dst_dir .. "/" .. vim.fn.fnamemodify(e.path, ":t")
+    case_clash.resolve(e.path, dst, function(final_dst)
+      overrides[e.path] = final_dst or SKIP
+      step()
+    end)
+  end
+  step()
+end
+
+---@internal
 ---Preflight-check `dst_dir` for name collisions; if any exist, ask the user
 ---once how to resolve the whole batch (Overwrite / Keep both / Skip /
 ---Cancel) before touching the filesystem. No conflicts -> straight to paste,
 ---same as before this feature existed.
 ---@param dst_dir string
 local function paste_resolving_conflicts(dst_dir)
-  local conflicts = find_conflicts(dst_dir)
-  if #conflicts == 0 then
-    do_paste_impl(dst_dir)
-    return
-  end
-
-  local names = {}
-  for _, e in ipairs(conflicts) do
-    names[#names + 1] = vim.fn.fnamemodify(e.path, ":t")
-  end
-
-  confirm_choice(
-    string.format(
-      "%d item(s) already exist in %s:\n  %s",
-      #conflicts,
-      vim.fn.fnamemodify(dst_dir, ":t"),
-      table.concat(names, ", ")
-    ),
-    { "Overwrite", "Keep both", "Skip", "Cancel" },
-    function(choice)
-      if choice == nil or choice == "Cancel" then
-        notify.info("Paste cancelled")
-        return
+  resolve_case_clashes(dst_dir, function(overrides)
+    -- Genuine collisions still needing the batch resolution — excluding the
+    -- case-only ones just handled and the case-only cut renames (harmless).
+    local conflicts = {}
+    for _, e in ipairs(find_conflicts(dst_dir)) do
+      local dst = dst_dir .. "/" .. vim.fn.fnamemodify(e.path, ":t")
+      if overrides[e.path] == nil and not case_clash.is_alias(e.path, dst) then
+        conflicts[#conflicts + 1] = e
       end
-      do_paste_impl(dst_dir, choice)
     end
-  )
+
+    if #conflicts == 0 then
+      do_paste_impl(dst_dir, nil, overrides)
+      return
+    end
+
+    local names = {}
+    for _, e in ipairs(conflicts) do
+      names[#names + 1] = vim.fn.fnamemodify(e.path, ":t")
+    end
+
+    confirm_choice(
+      string.format(
+        "%d item(s) already exist in %s:\n  %s",
+        #conflicts,
+        vim.fn.fnamemodify(dst_dir, ":t"),
+        table.concat(names, ", ")
+      ),
+      { "Overwrite", "Keep both", "Skip", "Cancel" },
+      function(choice)
+        if choice == nil or choice == "Cancel" then
+          notify.info("Paste cancelled")
+          return
+        end
+        do_paste_impl(dst_dir, choice, overrides)
+      end
+    )
+  end)
 end
 
 function M.paste()

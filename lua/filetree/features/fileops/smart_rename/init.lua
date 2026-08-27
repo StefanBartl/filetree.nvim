@@ -28,6 +28,10 @@
 local notify = require("filetree.util.notify").create("[filetree.smart_rename]")
 
 local confirm_choice = require("filetree.util.confirm_choice")
+-- Case-insensitive-FS guard: on Windows/macOS a case-only rename
+-- (`Telemetry` → `TELEMETRY`) makes `isdirectory(new_path)` report a bogus
+-- collision, because the OS folds the new spelling onto the existing entry.
+local case_clash = require("filetree.util.case_clash")
 local path = require("filetree.util.path")
 local buffer = require("filetree.util.buffer")
 -- Cross-file references (markdown links, require()/import statements) are the
@@ -219,7 +223,13 @@ function M.rename_current()
         end)
       end
 
-      if vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1 then
+      local exists = vim.fn.filereadable(new_path) == 1 or vim.fn.isdirectory(new_path) == 1
+      if exists and case_clash.is_alias(old_path, new_path) then
+        -- Only the case changed: `new_path` and `old_path` are the same entry
+        -- on this filesystem. Not a real collision — mutate.move() (uv.fs_rename)
+        -- re-cases it in place.
+        proceed()
+      elseif exists then
         confirm_choice("'" .. new_name .. "' exists.", { "Overwrite", "Cancel" }, function(choice)
           if choice == "Overwrite" then proceed() end
         end)
