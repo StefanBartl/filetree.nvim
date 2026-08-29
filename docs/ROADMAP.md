@@ -11,7 +11,6 @@ bindings, [`docs/BINDINGS/`](BINDINGS/).
 
 | Document | What it is | Still open |
 | --- | --- | --- |
-| [`ROADMAP/NEOTREE_FEATURES.md`](ROADMAP/NEOTREE_FEATURES.md) | Audit of the Neo-tree setup in the personal nvim config, mapped feature by feature onto filetree.nvim's registry — the port map. | Two of the four gaps it found. Both are about Neo-tree's *source* model (a buffers source, a dormant neotest source), which filetree.nvim has no concept for; both are deliberately parked, not forgotten. |
 | [`ROADMAP/CWD_MODES.md`](ROADMAP/CWD_MODES.md) | Implementation status for the cwd/root policy stack — what shipped, in which commit, and what is still open. Moved here from `docs/FEATURES/` on 2026-08-26: it is a status note, not a catalogue theme, and the features parser was reading its `Done`/`Open` headings as features. The feature itself is catalogued in [`FEATURES/CORE.md`](FEATURES/CORE.md#cwd-mode). | Its `Open` section. |
 | [`ROADMAP/IDEAS/Neotree_Sources.md`](ROADMAP/IDEAS/Neotree_Sources.md) | Whether to rebuild Neo-tree's `sources/` registry. | Yes — Phase 4, low priority. Current thinking: a small recipe collection covers the actual pain ("setup was a pain") more cheaply than a template engine. |
 
