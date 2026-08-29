@@ -12,7 +12,6 @@ bindings, [`docs/BINDINGS/`](BINDINGS/).
 | Document | What it is | Still open |
 | --- | --- | --- |
 | [`ROADMAP/CWD_MODES.md`](ROADMAP/CWD_MODES.md) | Implementation status for the cwd/root policy stack — what shipped, in which commit, and what is still open. Moved here from `docs/FEATURES/` on 2026-08-26: it is a status note, not a catalogue theme, and the features parser was reading its `Done`/`Open` headings as features. The feature itself is catalogued in [`FEATURES/CORE.md`](FEATURES/CORE.md#cwd-mode). | Its `Open` section. |
-| [`ROADMAP/IDEAS/Neotree_Sources.md`](ROADMAP/IDEAS/Neotree_Sources.md) | Whether to rebuild Neo-tree's `sources/` registry. | Yes — Phase 4, low priority. Current thinking: a small recipe collection covers the actual pain ("setup was a pain") more cheaply than a template engine. |
 
 ## Open work not tied to a document
 
