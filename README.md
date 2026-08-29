@@ -87,4 +87,3 @@ For packer.nvim, vim-plug, and mini.deps, see [Installation](docs/installation.m
 - [Menu integration](docs/menu.md) — using filetree.nvim's actions with nvzone/menu.
 - [Troubleshooting](docs/troubleshooting.md) — health check, debug mode, and known adapter caveats.
 
-**Roadmap:** see [`docs/ROADMAP.md`](docs/ROADMAP.md) — it indexes the design notes and audits under `docs/ROADMAP/` and says which of them are still open.
