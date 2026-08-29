@@ -57,9 +57,9 @@
 
 ---@class FiletreeRefsProvidersConfig
 ---@field markdown? boolean
----@field lua?     boolean
----@field python?  boolean
----@field ts_js?   boolean
+---@field lua?      boolean
+---@field python?   boolean
+---@field ts_js?    boolean
 
 ---@class FiletreeRefsConfig
 ---@field enabled?    boolean
