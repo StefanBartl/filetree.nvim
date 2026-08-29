@@ -1,3 +1,6 @@
+---@diagnostic disable: missing-fields
+-- Test doubles here implement only what the unit under test calls -- a full
+-- FiletreeAdapter or FiletreeRef would be noise, not coverage.
 -- run.lua — regression test for the reference engine (lua/filetree/refs) and
 -- the features that drive it.
 --

@@ -290,13 +290,14 @@ local function open_preview(node)
     ft = vim.filetype.match({ filename = path }) or ""
   end
 
-  local max_w = _cfg.max_width
+  -- `or <default>` mirrors the defaults above; see watcher_quarantine.
+  local max_w = _cfg.max_width or 80
   local content_w = 0
   for _, l in ipairs(lines) do
     content_w = math.max(content_w, #l)
   end
   local width = math.max(math.min(content_w + 2, max_w), 20)
-  local height = math.min(#lines + 1, _cfg.max_height)
+  local height = math.min(#lines + 1, _cfg.max_height or 25)
 
   local cur_win = vim.api.nvim_get_current_win()
   local win_pos = vim.api.nvim_win_get_position(cur_win)

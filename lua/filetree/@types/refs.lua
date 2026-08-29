@@ -56,23 +56,23 @@
 ---@field timeout_ms        integer          Per-scan timeout (default 3000).
 
 ---@class FiletreeRefsProvidersConfig
----@field markdown boolean
----@field lua      boolean
----@field python   boolean
----@field ts_js    boolean
+---@field markdown? boolean
+---@field lua?     boolean
+---@field python?  boolean
+---@field ts_js?   boolean
 
 ---@class FiletreeRefsConfig
----@field enabled     boolean
----@field providers   FiletreeRefsProvidersConfig
----@field on_rename   "ask"|"auto"|"off"
----@field on_move     "ask"|"auto"|"off"
----@field on_delete   "ask"|"auto"|"off"
----@field copy        boolean   Scan for refs on a *copy* too (default false: a copy breaks nothing).
----@field picker      "auto"|"telescope"|"fzf-lua"|"quickfix"
----@field prefer_lsp  boolean   Skip textual code providers when an LSP client applied a workspace edit.
----@field wiki_links  boolean   Also rewrite `[[wiki]]`-style markdown links (default false).
----@field scan        FiletreeRefsScanConfig
----@field undo        boolean   Keep an undo token per apply (default true).
+---@field enabled?    boolean
+---@field providers?  FiletreeRefsProvidersConfig
+---@field on_rename?  "ask"|"auto"|"off"
+---@field on_move?    "ask"|"auto"|"off"
+---@field on_delete?  "ask"|"auto"|"off"
+---@field copy?       boolean   Scan for refs on a *copy* too (default false: a copy breaks nothing).
+---@field picker?     "auto"|"telescope"|"fzf-lua"|"quickfix"
+---@field prefer_lsp? boolean   Skip textual code providers when an LSP client applied a workspace edit.
+---@field wiki_links? boolean   Also rewrite `[[wiki]]`-style markdown links (default false).
+---@field scan?       FiletreeRefsScanConfig
+---@field undo?       boolean   Keep an undo token per apply (default true).
 ---@field undo_depth  integer?  How many applies stay undoable (default 10). The stack holds only the replaced line content, so raising this is cheap.
 
 ---One entry of the undo stack: the lines an apply replaced, per file.

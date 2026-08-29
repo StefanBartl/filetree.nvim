@@ -35,9 +35,9 @@ local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@class FiletreeWindowStyleConfig
----@field enabled            boolean
----@field statusline         boolean
----@field highlights_isolate boolean
+---@field enabled?           boolean
+---@field statusline?        boolean
+---@field highlights_isolate? boolean
 
 ---@type FiletreeWindowStyleConfig
 local _cfg = {

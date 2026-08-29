@@ -28,7 +28,7 @@ local keymap = require("lib.nvim.bindings.keymap")
 ---@field name string          # Action name, e.g. "copy_absolute".
 ---@field field string         # Config field holding the lhs, e.g. "keymap_abs".
 ---@field default? string      # Plugin default lhs, when the config may not carry one.
----@field rhs string|function
+---@field rhs? string|function # Omitted when `binds` carries the per-mode variants instead.
 ---@field desc string          # Without a prefix; the registry adds "filetree: ".
 ---@field mode? string|string[] # Default "n".
 ---@field opts? table          # Extra keymap options (expr, nowait, ...).

@@ -1,3 +1,6 @@
+---@diagnostic disable: missing-fields
+-- Test doubles here implement only what the unit under test calls -- a full
+-- FiletreeAdapter or FiletreeRef would be noise, not coverage.
 -- units.lua — headless unit tests for filetree.nvim's util layer + adapter helpers.
 --
 -- Complements test/smoke.lua (which is an integration test over the registry and

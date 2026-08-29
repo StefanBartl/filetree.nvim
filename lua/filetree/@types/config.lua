@@ -25,9 +25,9 @@
 ---@field info      boolean?  node info (default true).
 
 ---@class FiletreeConfig
----@field adapter          FiletreeAdapterName|"auto"       Which adapter to use. "auto" picks the first available one.
+---@field adapter?         FiletreeAdapterName|"auto"       Which adapter to use. "auto" picks the first available one.
 ---@field debug            boolean?                         true → show notifier.debug(...) messages for troubleshooting (default false).
----@field features         FiletreeFeaturesConfig
+---@field features?        FiletreeFeaturesConfig
 ---@field keymaps          table<string,string|false>?      Global keymap remap: { ["<old>"] = "<new>" } or { ["<key>"] = false } to disable.
 ---@field adapter_keymaps  table<string,string|false>?      Override the adapter's own native keymaps: false → <Nop>, string → remap target. Applied after the adapter sets its keymaps. Example: { ["i"] = false } noops neotree's built-in `i` (toggle-info).
 ---@field command          FiletreeCommandConfig|string|nil User command name (string) or config table. Default: "Filetree" + "Ft" alias.
@@ -123,19 +123,19 @@
 -- ── cwd_sync ──────────────────────────────────────────────────────────────────
 
 ---@class FiletreeCwdSyncConfig
----@field enabled          boolean
----@field debounce_ms      integer   Debounce delay for buffer-change events (default 150).
----@field parent_levels    integer   How many parent dirs to ascend when revealing (default 0).
----@field keep_focus       boolean   Keep focus in the editor window after reveal (default true).
----@field change_dir       boolean   Actually change Neovim's cwd (default true). Never prompts —
+---@field enabled?         boolean
+---@field debounce_ms?     integer   Debounce delay for buffer-change events (default 150).
+---@field parent_levels?   integer   How many parent dirs to ascend when revealing (default 0).
+---@field keep_focus?      boolean   Keep focus in the editor window after reveal (default true).
+---@field change_dir?      boolean   Actually change Neovim's cwd (default true). Never prompts —
 ---                                  always applies silently.
----@field reveal           boolean   Also reveal/root the tree from cwd_sync (default true). Set
+---@field reveal?          boolean   Also reveal/root the tree from cwd_sync (default true). Set
 ---                                  false when the tree plugin already follows the cwd (e.g.
 ---                                  neo-tree bind_to_cwd + follow_current_file) so the two
 ---                                  reveals don't fight and land on the file's parent.
----@field use_project_root boolean   Target the detected project root instead of the file's
+---@field use_project_root? boolean   Target the detected project root instead of the file's
 ---                                  immediate parent directory (default true; see project_root).
----@field root_markers     string[]|false  Marker names to anchor the cwd to the nearest ancestor
+---@field root_markers?    string[]|false  Marker names to anchor the cwd to the nearest ancestor
 ---                                  containing one (default { ".git" }), via a cached lib.nvim
 ---                                  finder. FALLBACK ONLY: when the cwd_mode feature is enabled
 ---                                  (the default) its marker walk decides, so that the cwd and
@@ -208,7 +208,7 @@
 ---@field hl             table<FiletreeCwdModeName, string>?  Highlight group per mode (shared across styles).
 
 ---@class FiletreeCwdModeConfig
----@field enabled        boolean
+---@field enabled?       boolean
 ---@field mode           FiletreeCwdModeName? Mode to start in (default "follow" — inert).
 ---@field scope          Lib.Fs.Chdir.Scope?  Directory scope: "global" (default), "tab" or "win".
 ---@field project        FiletreeCwdModeProjectConfig?
@@ -227,36 +227,36 @@
 -- ── current_hl ────────────────────────────────────────────────────────────────
 
 ---@class FiletreeCurrentHlConfig
----@field enabled     boolean
----@field file_hl     string|table  Highlight spec for the current file node.
----@field parent_hl   string|table  Highlight spec for the parent directory node.
----@field debounce_ms integer
+---@field enabled?    boolean
+---@field file_hl?    string|table  Highlight spec for the current file node.
+---@field parent_hl?  string|table  Highlight spec for the parent directory node.
+---@field debounce_ms? integer
 ---@field icon        string?  Sign-column marker placed on the current file's line (nil = off). e.g. "▸".
 ---@field icon_hl     string?  Highlight group for the icon (default: the file_hl group).
 
 --- ── opened_sync ───────────────────────────────────────────────────────────────
 ---@class FiletreeOpenedSyncConfig
----@field enabled     boolean
----@field debounce_ms integer  Delay (ms) before re-rendering after a buffer open/close (default 60).
+---@field enabled?    boolean
+---@field debounce_ms? integer  Delay (ms) before re-rendering after a buffer open/close (default 60).
 
 -- ── safety ────────────────────────────────────────────────────────────────────
 
 ---@class FiletreeSafetyConfig
----@field enabled        boolean
+---@field enabled?       boolean
 ---@field backup_dir     string?  Absolute path for backups. Defaults to stdpath("data")/filetree/backups.
----@field max_backups    integer  Maximum number of backup copies kept per file (default 5).
----@field dry_run        boolean  Log operations without executing them (default false).
+---@field max_backups?   integer  Maximum number of backup copies kept per file (default 5).
+---@field dry_run?       boolean  Log operations without executing them (default false).
 
 -- ── trash ─────────────────────────────────────────────────────────────────────
 
 ---@class FiletreeTrashConfig
----@field enabled             boolean
----@field confirm             boolean  Ask before trashing (default true, unlike paste/rename_batch; see top-level `confirmations`).
----@field use_safety          boolean  Create a backup before trashing (default false).
----@field dry_run             boolean  Log without actually trashing (default false).
+---@field enabled?            boolean
+---@field confirm?            boolean  Ask before trashing (default true, unlike paste/rename_batch; see top-level `confirmations`).
+---@field use_safety?         boolean  Create a backup before trashing (default false).
+---@field dry_run?            boolean  Log without actually trashing (default false).
 ---@field max_history         integer? How many trash operations stay undoable (default 50; 0 = unlimited).
----@field check_markdown_refs boolean  **Deprecated** — migrated to `refs.on_delete` (`false` → `"off"`). See @types/refs.lua.
----@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
+---@field check_markdown_refs? boolean  **Deprecated** — migrated to `refs.on_delete` (`false` → `"off"`). See @types/refs.lua.
+---@field refs_picker_prefer? "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
 ---@field keymap              string?  Trash current node / all marked (default "d").
 ---@field keymap_undo         string?  Undo last trash operation (default "U").
 ---@field keymap_history      string?  Show trash history (default "<leader>th").
@@ -264,9 +264,9 @@
 -- ── watcher_quarantine ────────────────────────────────────────────────────────
 
 ---@class FiletreeWatcherQuarantineConfig
----@field enabled     boolean
----@field duration_ms integer  Default quarantine duration in ms (default 500).
----@field silent      boolean  Suppress quarantine notifications (default true).
+---@field enabled?    boolean
+---@field duration_ms? integer  Default quarantine duration in ms (default 500).
+---@field silent?     boolean  Suppress quarantine notifications (default true).
 
 -- ── handle_guard ──────────────────────────────────────────────────────────────
 
@@ -281,9 +281,9 @@
 -- ── marks ─────────────────────────────────────────────────────────────────────
 
 ---@class FiletreeMarksConfig
----@field enabled          boolean
----@field indicator        string   Character shown before marked nodes (default "✓").
----@field hl_group         string   Highlight group for the indicator (default "DiagnosticOk").
+---@field enabled?         boolean
+---@field indicator?       string   Character shown before marked nodes (default "✓").
+---@field hl_group?        string   Highlight group for the indicator (default "DiagnosticOk").
 ---@field keymap           string?  Toggle mark on current node (default "m").
 ---@field keymap_all       string?  Mark all files in current directory (default "]m").
 ---@field keymap_unmark_all string? Unmark all files in current directory (default "[m").
@@ -300,7 +300,7 @@
 -- ── context_menu ─────────────────────────────────────────────────────────────
 
 ---@class FiletreeContextMenuConfig
----@field enabled boolean          Bind the mouse trigger (default true — opt-out).
+---@field enabled? boolean          Bind the mouse trigger (default true — opt-out).
 ---@field keymap  string|false?    Mouse trigger inside the tree buffer (default "<RightMouse>").
 ---                                 false disables the binding without disabling the feature outright.
 ---                                 Opens nvzone/menu (soft dependency — a single notify, not an
@@ -311,10 +311,10 @@
 -- ── project_root ──────────────────────────────────────────────────────────────
 
 ---@class FiletreeProjectRootConfig
----@field enabled   boolean
----@field markers   string[]          Files/dirs that signal a project root.
----@field fallback  "cwd"|"parent"    What to use when no root is found (default "parent").
----@field cache     boolean           Cache resolved roots per directory for the session (default true).
+---@field enabled?  boolean
+---@field markers?  string[]          Files/dirs that signal a project root.
+---@field fallback? "cwd"|"parent"    What to use when no root is found (default "parent").
+---@field cache?    boolean           Cache resolved roots per directory for the session (default true).
 ---@field max_cache_entries integer?  How many directories the root cache holds before it is cleared in one shot (default 1000).
 
 -- ── create_from_template ──────────────────────────────────────────────────────
@@ -329,21 +329,21 @@
 ---                 no preview) — the only option that supports the <M-j>/<M-k> reorder keymaps.
 
 ---@class FiletreeCreateFromTemplateConfig
----@field enabled       boolean
+---@field enabled?      boolean
 ---@field keymap        string?   Key inside tree (default "A" — the smart_create "a" counterpart, template-driven).
 ---@field template_dir  string?   Custom template directory. Defaults to stdpath("data")/filetree/templates/.
 ---@field author        string?   Author name for ${author} substitution.
----@field open_after    boolean   Open created file in editor (default true).
+---@field open_after?   boolean   Open created file in editor (default true).
 ---@field prefer        FiletreeCreateFromTemplatePrefer?  Which picker renders template selection (default "auto").
 ---                                pickers.nvim is a soft dependency — absent, and this always behaves like "builtin".
 
 -- ── auto_reveal ───────────────────────────────────────────────────────────────
 
 ---@class FiletreeAutoRevealConfig
----@field enabled      boolean
----@field debounce_ms  integer   Delay after BufEnter (default 150ms).
----@field ignore_ft    string[]  Filetypes that never trigger reveal.
----@field only_if_open boolean   Only reveal when tree window is visible (default true).
+---@field enabled?     boolean
+---@field debounce_ms? integer   Delay after BufEnter (default 150ms).
+---@field ignore_ft?   string[]  Filetypes that never trigger reveal.
+---@field only_if_open? boolean   Only reveal when tree window is visible (default true).
 
 -- ── lsp_diagnostics ──────────────────────────────────────────────────────────
 
@@ -379,14 +379,14 @@
 -- ── breadcrumbs ───────────────────────────────────────────────────────────────
 
 ---@class FiletreeBreadcrumbsConfig
----@field enabled    boolean
----@field mode       "winbar"|"float"|"statusline"  Display mode (default "winbar").
----@field separator  string   Part separator (default "  ").
----@field max_depth  integer  Max number of path segments (default 5).
----@field hl_dir     string   Highlight group for directory parts (default "Comment").
----@field hl_file    string   Highlight group for the file/leaf part (default "Normal").
----@field hl_sep     string   Highlight group for separators (default "NonText").
----@field winbar_hl  string   Background group for the whole winbar (default "WinBar").
+---@field enabled?   boolean
+---@field mode?      "winbar"|"float"|"statusline"  Display mode (default "winbar").
+---@field separator? string   Part separator (default "  ").
+---@field max_depth? integer  Max number of path segments (default 5).
+---@field hl_dir?    string   Highlight group for directory parts (default "Comment").
+---@field hl_file?   string   Highlight group for the file/leaf part (default "Normal").
+---@field hl_sep?    string   Highlight group for separators (default "NonText").
+---@field winbar_hl? string   Background group for the whole winbar (default "WinBar").
 
 -- ── copy_move ─────────────────────────────────────────────────────────────────
 
@@ -398,13 +398,13 @@
 ---@field clear  string?  Clear clipboard (default "<C-c>")
 
 ---@class FiletreeCopyMoveConfig
----@field enabled             boolean
+---@field enabled?            boolean
 ---@field keymaps             FiletreeCopyMoveKeymaps?
----@field confirm             boolean  Ask before paste (default false; see top-level `confirmations`).
----@field use_safety          boolean  Create backup before move (default true).
----@field dry_run             boolean  Log without executing (default false).
----@field check_markdown_refs boolean  **Deprecated** — migrated to `refs.on_move` (`false` → `"off"`). See @types/refs.lua.
----@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
+---@field confirm?            boolean  Ask before paste (default false; see top-level `confirmations`).
+---@field use_safety?         boolean  Create backup before move (default true).
+---@field dry_run?            boolean  Log without executing (default false).
+---@field check_markdown_refs? boolean  **Deprecated** — migrated to `refs.on_move` (`false` → `"off"`). See @types/refs.lua.
+---@field refs_picker_prefer? "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
 
 -- ── move ──────────────────────────────────────────────────────────────────────
 
@@ -428,23 +428,23 @@
 -- ── filter ────────────────────────────────────────────────────────────────────
 
 ---@class FiletreeFilterConfig
----@field enabled          boolean
+---@field enabled?         boolean
 ---@field keymap           string?  Key inside tree to enter filter mode (default "/").
 ---@field keymap_clear     string?  Key inside tree to clear an applied filter directly (default "<C-c>").
----@field case_sensitive   boolean  Case-sensitive matching (default false).
----@field dim_hl_group     string   Highlight group for non-matching lines (default "Comment").
----@field debounce_ms      integer  Input debounce delay (default 80ms).
+---@field case_sensitive?  boolean  Case-sensitive matching (default false).
+---@field dim_hl_group?    string   Highlight group for non-matching lines (default "Comment").
+---@field debounce_ms?     integer  Input debounce delay (default 80ms).
 
 -- ── rename_batch ──────────────────────────────────────────────────────────────
 
 ---@class FiletreeRenameBatchConfig
----@field enabled             boolean
+---@field enabled?            boolean
 ---@field keymap              string?  Normal-mode key inside tree (default "<leader>rb").
----@field confirm             boolean  Ask for confirmation before renaming (default false; see top-level `confirmations`).
----@field use_safety          boolean  Create safety backup before renaming (default true).
----@field dry_run             boolean  Log plan without executing (default false).
----@field check_markdown_refs boolean  **Deprecated** — migrated to `refs.on_rename` (`false` → `"off"`). See @types/refs.lua.
----@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
+---@field confirm?            boolean  Ask for confirmation before renaming (default false; see top-level `confirmations`).
+---@field use_safety?         boolean  Create safety backup before renaming (default true).
+---@field dry_run?            boolean  Log plan without executing (default false).
+---@field check_markdown_refs? boolean  **Deprecated** — migrated to `refs.on_rename` (`false` → `"off"`). See @types/refs.lua.
+---@field refs_picker_prefer? "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
 
 -- ── session ───────────────────────────────────────────────────────────────────
 
@@ -461,10 +461,10 @@
 ---@field hl   string
 
 ---@class FiletreeGitStatusConfig
----@field enabled      boolean
----@field debounce_ms  integer              Delay between write and re-query (default 300ms).
----@field show_ignored boolean              Also show ignored files (default false).
----@field signs        table<string, FiletreeGitStatusSign>?
+---@field enabled?     boolean
+---@field debounce_ms? integer              Delay between write and re-query (default 300ms).
+---@field show_ignored? boolean              Also show ignored files (default false).
+---@field signs?       table<string, FiletreeGitStatusSign>?
 
 -- ── preview ───────────────────────────────────────────────────────────────────
 
@@ -478,16 +478,16 @@
 ---@field backend FiletreePdfBackend  "pdfport" tries pdfport.nvim, falls back to system (default "pdfport").
 
 ---@class FiletreePreviewConfig
----@field enabled              boolean
----@field mode                 "buffer"|"float"         Preview target: "buffer" shows the file in the editor window (default); "float" uses a floating window.
----@field highlight            boolean                  Syntax/treesitter highlighting in the preview (default true).
+---@field enabled?             boolean
+---@field mode?                "buffer"|"float"         Preview target: "buffer" shows the file in the editor window (default); "float" uses a floating window.
+---@field highlight?           boolean                  Syntax/treesitter highlighting in the preview (default true).
 ---@field cursor_debounce_ms   integer?                 Debounce (ms) for the live-update while scrolling the tree (default 80).
 ---@field keymap               string?                  Normal-mode key: toggle text preview; dispatch image/PDF (default "<Tab>").
 ---@field keymap_open          string?                  Normal-mode key: dispatch image/PDF; adapter default for other nodes (default "<CR>").
----@field max_lines            integer                  Max lines to read for text preview (default 40).
----@field max_width            integer                  Max floating window width in columns (default 80).
----@field max_height           integer                  Max floating window height in lines (default 25).
----@field wrap                 boolean                  Enable line wrapping in the preview window (default false).
+---@field max_lines?           integer                  Max lines to read for text preview (default 40).
+---@field max_width?           integer                  Max floating window width in columns (default 80).
+---@field max_height?          integer                  Max floating window height in lines (default 25).
+---@field wrap?                boolean                  Enable line wrapping in the preview window (default false).
 ---@field keymap_scroll_up     string?                  Scroll preview up 1 line (default "<C-b>").
 ---@field keymap_scroll_down   string?                  Scroll preview down 1 line (default "<C-f>").
 ---@field keymap_scroll_up10   string?                  Scroll preview up 10 lines (default "<PageUp>").
@@ -521,10 +521,10 @@
 ---@field width integer  Tree window width to use.
 
 ---@class FiletreeAutoResizeConfig
----@field enabled      boolean
----@field breakpoints  FiletreeAutoResizeBreakpoint[]
----@field min_width    integer  Absolute minimum (default 20).
----@field max_width    integer  Absolute maximum (default 60).
+---@field enabled?     boolean
+---@field breakpoints? FiletreeAutoResizeBreakpoint[]
+---@field min_width?   integer  Absolute minimum (default 20).
+---@field max_width?   integer  Absolute maximum (default 60).
 
 -- ── open_with ─────────────────────────────────────────────────────────────────
 
@@ -577,45 +577,45 @@
 -- ── smart_rename ─────────────────────────────────────────────────────────────
 
 ---@class FiletreeSmartRenameConfig
----@field enabled             boolean
+---@field enabled?            boolean
 ---@field keymap              string?   Key inside tree (default "r").
----@field use_safety          boolean   Create safety backup before rename (default true).
----@field dry_run             boolean   Log without executing (default false).
----@field update_references   boolean   **Deprecated** — migrated to `refs.providers` (`false` turns the lua/python/ts_js providers off).
----@field check_markdown_refs boolean   **Deprecated** — migrated to `refs.on_rename` (`false` → `"off"`). See @types/refs.lua.
----@field refs_picker_prefer  "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
+---@field use_safety?         boolean   Create safety backup before rename (default true).
+---@field dry_run?            boolean   Log without executing (default false).
+---@field update_references?  boolean   **Deprecated** — migrated to `refs.providers` (`false` turns the lua/python/ts_js providers off).
+---@field check_markdown_refs? boolean   **Deprecated** — migrated to `refs.on_rename` (`false` → `"off"`). See @types/refs.lua.
+---@field refs_picker_prefer? "auto"|"telescope"|"fzf-lua"|"quickfix"  **Deprecated** — migrated to `refs.picker`.
 
 -- ── path_copy ────────────────────────────────────────────────────────────────
 
 ---@class FiletreePathCopyConfig
----@field enabled             boolean
+---@field enabled?            boolean
 ---@field keymap_pick         string?  Opens format picker (default nil, off).
 ---@field keymap_abs          string?  Copy absolute path (default "[a").
 ---@field keymap_dirname      string?  Copy absolute parent directory (default "]a").
 ---@field keymap_name         string?  Copy filename only (default nil, off).
 ---@field keymap_project_root string?  Copy absolute project root path (default "[R").
 ---@field keymap_project_rel  string?  Copy path relative to project root (default "]R").
----@field root_markers        string[]|false  Markers for project-root detection (default { ".git" }); false → use cwd.
----@field notify              boolean  Show notification after copy (default true).
+---@field root_markers?       string[]|false  Markers for project-root detection (default { ".git" }); false → use cwd.
+---@field notify?             boolean  Show notification after copy (default true).
 
 -- ── live_search ──────────────────────────────────────────────────────────────
 
 ---@class FiletreeLiveSearchConfig
----@field enabled           boolean
+---@field enabled?          boolean
 ---@field keymap            string?  Key to open live search (default "gs").
----@field match             "name"|"path"  Match against filename or full path (default "name").
----@field hl_match          string   Highlight for matched nodes (default "Search").
----@field hl_dim            string   Highlight for non-matched nodes (default "Comment").
----@field commit_to_filter  boolean  Enter pushes query to filter feature (default true).
----@field debounce_ms       integer  TextChanged debounce (default 80ms).
+---@field match?            "name"|"path"  Match against filename or full path (default "name").
+---@field hl_match?         string   Highlight for matched nodes (default "Search").
+---@field hl_dim?           string   Highlight for non-matched nodes (default "Comment").
+---@field commit_to_filter? boolean  Enter pushes query to filter feature (default true).
+---@field debounce_ms?      integer  TextChanged debounce (default 80ms).
 
 -- ── node_info ────────────────────────────────────────────────────────────────
 
 ---@class FiletreeNodeInfoConfig
----@field enabled          boolean
+---@field enabled?         boolean
 ---@field keymap           string?   Key inside tree (default "I").
----@field show_lines       boolean   Show line count for files (default true).
----@field max_lines_size   integer   Skip line count for files larger than this in bytes (default 5MB).
+---@field show_lines?      boolean   Show line count for files (default true).
+---@field max_lines_size?  integer   Skip line count for files larger than this in bytes (default 5MB).
 ---@field max_entries      integer?  Cap for the recursive directory scan behind Items/Size (default 100000).
 
 -- ── cheatsheet ────────────────────────────────────────────────────────────────
@@ -627,10 +627,10 @@
 -- ── tree_traverse ─────────────────────────────────────────────────────────────
 
 ---@class FiletreeTreeTraverseConfig
----@field enabled       boolean
+---@field enabled?      boolean
 ---@field keymap_up     string?   Navigate to parent directory (default "-").
 ---@field keymap_down   string?   Set current dir as root (default "+").
----@field sync_cwd      boolean   Also change Vim's cwd (default true).
+---@field sync_cwd?     boolean   Also change Vim's cwd (default true).
 
 -- ── lua_require_copy ─────────────────────────────────────────────────────────
 
@@ -641,13 +641,13 @@
 -- ── copy_file_list ────────────────────────────────────────────────────────────
 
 ---@class FiletreeCopyFileListConfig
----@field enabled          boolean
+---@field enabled?         boolean
 ---@field keymap_files_abs string?   Copy absolute file paths (default "[f").
 ---@field keymap_files_rel string?   Copy relative file paths (default "]f").
 ---@field keymap_dirs_abs  string?   Copy absolute dir paths  (default "[F").
 ---@field keymap_dirs_rel  string?   Copy relative dir paths  (default "]F").
----@field preview_limit    integer   Max lines shown in notification (default 5).
----@field separator        string    Separator between paths (default "\\n").
+---@field preview_limit?   integer   Max lines shown in notification (default 5).
+---@field separator?       string    Separator between paths (default "\\n").
 
 -- ── markdown_links ────────────────────────────────────────────────────────────
 
@@ -660,13 +660,13 @@
 -- ── smart_create ──────────────────────────────────────────────────────────────
 
 ---@class FiletreeSmartCreateConfig
----@field enabled              boolean
+---@field enabled?             boolean
 ---@field keymap               string?   Key inside tree (default "a").
----@field auto_init_lua        boolean   Dirs → create init.lua (default true).
----@field auto_types_template  boolean   @types dirs → ---@meta template (default true).
----@field auto_module_annot    boolean   .lua files → ---@module annotation (default true).
----@field ask_clipboard        boolean   Ask whether to paste clipboard content (default true).
----@field notify_level         "verbose"|"short"|"off"  Success-message verbosity (default "verbose").
+---@field auto_init_lua?       boolean   Dirs → create init.lua (default true).
+---@field auto_types_template? boolean   @types dirs → ---@meta template (default true).
+---@field auto_module_annot?   boolean   .lua files → ---@module annotation (default true).
+---@field ask_clipboard?       boolean   Ask whether to paste clipboard content (default true).
+---@field notify_level?        "verbose"|"short"|"off"  Success-message verbosity (default "verbose").
 ---                                     "verbose": "Created file/directory: <path>". "short": just
 ---                                     "Path: <path>". "off": no notification at all.
 
@@ -692,9 +692,9 @@
 -- ── open_replace ──────────────────────────────────────────────────────────────
 
 ---@class FiletreeOpenReplaceConfig
----@field enabled     boolean
+---@field enabled?    boolean
 ---@field keymap      string?   Key in tree buffer (default "O").
----@field close_tree  boolean   Close the tree after opening the file (default true).
+---@field close_tree? boolean   Close the tree after opening the file (default true).
 
 -- ── open_variants ─────────────────────────────────────────────────────────────
 

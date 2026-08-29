@@ -165,7 +165,9 @@ function M.enter(duration_ms, paths)
     notify.debug("quarantine entered (" .. (duration_ms or _cfg.duration_ms) .. "ms)")
   end
 
-  local ms = duration_ms or _cfg.duration_ms
+  -- `or 500` mirrors the default above: the merge always fills the field,
+  -- but the type no longer promises it now that partial config is legal.
+  local ms = duration_ms or _cfg.duration_ms or 500
   ensure_debounce(ms)
   _debounce.call()
 end
