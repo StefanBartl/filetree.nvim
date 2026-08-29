@@ -18,6 +18,7 @@
 ---   :FiletreeGrepInDir [pattern]
 
 local notify = require("filetree.util.notify").create("[filetree.grep_in_dir]")
+local list = require("lib.nvim.ui.list")
 
 local M = {}
 
@@ -145,9 +146,7 @@ local function builtin_search_done(dir, pattern, output, exit_code, prog)
     return
   end
 
-  vim.fn.setqflist(qf_items, "r")
-  vim.fn.setqflist({}, "a", { title = "grep: " .. pattern .. " [" .. dir .. "]" })
-  vim.cmd("copen")
+  list.qf(qf_items, "grep: " .. pattern .. " [" .. dir .. "]", { action = "r" })
   notify.info(string.format("Found %d match(es) in %s", #qf_items, vim.fn.fnamemodify(dir, ":t")))
   return
 end

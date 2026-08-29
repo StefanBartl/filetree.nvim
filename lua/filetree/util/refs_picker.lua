@@ -26,6 +26,7 @@
 
 local path = require("filetree.util.path")
 local notify = require("filetree.util.notify").create("[filetree]")
+local list = require("lib.nvim.ui.list")
 
 local M = {}
 
@@ -167,9 +168,7 @@ local function via_quickfix(refs, title, on_confirm)
   for _, r in ipairs(refs) do
     items[#items + 1] = { filename = r.file, lnum = r.line, text = r.display }
   end
-  vim.fn.setqflist(items, "r")
-  vim.fn.setqflist({}, "a", { title = title })
-  vim.cmd("copen")
+  list.qf(items, title, { action = "r" })
   _qf_pending = { refs = refs, on_confirm = on_confirm }
   notify.info(
     "References in the quickfix list. Delete lines (e.g. `dd`) for "
