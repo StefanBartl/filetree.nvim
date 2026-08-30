@@ -12,9 +12,10 @@
                               .nvim
 ```
 
-![Neovim](https://img.shields.io/badge/Neovim-0.8%2B-brightgreen?logo=neovim&logoColor=white)
-![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-blue?logo=lua)
-![Status](https://img.shields.io/badge/status-alpha-orange)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Neovim](https://img.shields.io/badge/Neovim-0.8%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io)
+[![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
+![Status](https://img.shields.io/badge/status-alpha-red)
 
 > **Pairs well with [fileops.nvim](https://github.com/StefanBartl/fileops.nvim)** — filetree.nvim gives you the in-tree actions, fileops.nvim handles the heavier file operations. Use them together for a complete file-management workflow.
 
