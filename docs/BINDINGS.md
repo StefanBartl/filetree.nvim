@@ -113,7 +113,7 @@ require("filetree").setup({
   -- 1. globally, by key: rename or drop any key across all features
   keymaps = {
     ["gs"]    = "<leader>gs",  -- live_search: gs → <leader>gs
-    ["<C-m>"] = false,         -- marks.keymap_clear: gone
+    ["<leader>mc"] = false,    -- marks.keymap_clear: gone
   },
 
   -- 2. per feature: set the field directly

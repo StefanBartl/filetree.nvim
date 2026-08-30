@@ -28,7 +28,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `m` | marks | `keymap` | Toggle mark on current node |
 | `]m` | marks | `keymap_all` | Mark all nodes in current directory |
 | `[m` | marks | `keymap_unmark_all` | Unmark all nodes in current directory |
-| `<C-m>` | marks | `keymap_clear` | Clear all marks |
+| `<leader>mc` | marks | `keymap_clear` | Clear all marks |
 | `<leader>ms` | marks | `keymap_show` | Show floating list of marked nodes |
 | `gm` | marks | `keymap_goto` | Go to the Nth marked node in render order (`Ngm`; a too-large count clamps to the last) |
 | `]M` | marks | `keymap_next` | Next marked node, wrapping |
@@ -108,6 +108,21 @@ than one keypress per line.
 | `<C-c>` | `filter.keymap_clear` + `copy_move.keymaps.clear` | Both default to `<C-c>`. Last one registered wins; remap one if you need both reachable at once. |
 | `m` | `marks` + neotree built-in `m` (move) | filetree binds `m` to marking, shadowing neo-tree's own move. filetree's `M` does the same job and updates references while it's at it. |
 
+### Keys deliberately not used
+
+`<C-m>`, `<C-i>` and `<C-[>` are the same bytes as `<CR>`, `<Tab>` and `<Esc>`
+(0x0D, 0x09, 0x1B). Neovim keeps both spellings as separate mappings, but a
+terminal only sends the *distinct* sequence for the Ctrl form when an extended
+encoding is active ("CSI u"/modifyOtherKeys, or the Windows console) — without
+one, the byte always resolves to `<CR>`/`<Tab>`/`<Esc>`, and it does so even
+when nothing maps those at all. A mapping on the Ctrl spelling is therefore
+not "shadowed", it is simply dead for most users.
+
+`marks.keymap_clear` sat on `<C-m>` until 2026-08-30 for exactly that reason;
+it defaults to `<leader>mc` now. `TESTS/smoke.lua` check 6 folds the three
+pairs together and fails the build if two default-on tree keymaps land on one
+physical key, so this cannot come back unnoticed.
+
 ---
 
 ## Overriding adapter (neotree) native keymaps
@@ -143,7 +158,7 @@ require("filetree").setup({
     -- rename
     ["gs"]   = "<leader>gs",   -- live_search: gs → <leader>gs
     -- disable
-    ["<C-m>"] = false,          -- marks.keymap_clear: disabled
+    ["<leader>mc"] = false,     -- marks.keymap_clear: disabled
   },
   features = { ... },
 })

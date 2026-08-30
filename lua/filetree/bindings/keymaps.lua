@@ -191,7 +191,7 @@ return {
     { lhs = "m", desc = "Toggle mark", feature = "marks", scope = "tree" },
     { lhs = "]m", desc = "Mark all visible", feature = "marks", scope = "tree" },
     { lhs = "[m", desc = "Unmark all visible", feature = "marks", scope = "tree" },
-    { lhs = "<C-m>", desc = "Clear all marks", feature = "marks", scope = "tree" },
+    { lhs = "<leader>mc", desc = "Clear all marks", feature = "marks", scope = "tree" },
     { lhs = "<leader>ms", desc = "Show marked nodes", feature = "marks", scope = "tree" },
   },
   system = {

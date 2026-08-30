@@ -82,7 +82,9 @@ local SPEC = {
       field = "keymap_clear",
       method = "clear_all",
       desc = "filetree: clear all marks",
-      default = "<C-m>",
+      -- Not "<C-m>" -- same byte as <CR>, which always wins. See the note on
+      -- `keymap_clear` in features/org/marks/init.lua.
+      default = "<leader>mc",
     },
     {
       field = "keymap_show",

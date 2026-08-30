@@ -20,7 +20,12 @@ local _cfg = {
   keymap = "m",
   keymap_all = "]m",
   keymap_unmark_all = "[m",
-  keymap_clear = "<C-m>",
+  -- Deliberately NOT "<C-m>": outside an extended encoding ("CSI u" /
+  -- modifyOtherKeys) Ctrl+M and Enter are the same byte, 0x0D, and Neovim
+  -- always resolves that byte to <CR> -- even when nothing maps <CR> at all.
+  -- So a "<C-m>" mapping is not "last registration wins" shadowing, it simply
+  -- never fires on such a terminal. See TESTS/smoke.lua check 6.
+  keymap_clear = "<leader>mc",
   keymap_show = "<leader>ms",
   -- Navigation between marks. `Ngm` jumps to the Nth marked node.
   keymap_goto = "gm",

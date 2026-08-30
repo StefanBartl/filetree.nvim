@@ -287,7 +287,7 @@
 ---@field keymap            string?  Toggle mark on current node (default "m").
 ---@field keymap_all        string?  Mark all files in current directory (default "]m").
 ---@field keymap_unmark_all string? Unmark all files in current directory (default "[m").
----@field keymap_clear      string?  Clear all marks (default "<C-m>").
+---@field keymap_clear      string?  Clear all marks (default "<leader>mc"; not "<C-m>", which is <CR>'s byte).
 ---@field keymap_show       string?  Show floating list of marked nodes (default "<leader>ms").
 
 -- ── diff ──────────────────────────────────────────────────────────────────────

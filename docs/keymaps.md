@@ -30,7 +30,7 @@ individual tree keys carry a `desc` so which-key shows them out of the box.
 require("filetree").setup({
   keymaps = {
     ["gs"]    = "<leader>gs",   -- rename live_search key
-    ["<C-m>"] = false,          -- disable marks clear
+    ["<leader>mc"] = false,     -- disable marks clear
     ["<Tab>"] = "<leader>pv",   -- move preview to <leader>pv
   },
 })

@@ -15,7 +15,8 @@ mechanism rather than filetree.nvim reimplementing git status parsing.
 ## Marks
 
 Toggle a mark on the node under the cursor (`m`), batch mark/unmark
-(`]m`/`[m`), and list every current mark (`<C-m>`) — the selection
+(`]m`/`[m`), clear every mark (`<leader>mc`) and list them
+(`<leader>ms`) — the selection
 mechanism several fileops features (trash, copy/move, copy_file_list)
 build on for "act on more than one node at once".
 
@@ -45,7 +46,7 @@ to add.
 
 - **Module:** `lua/filetree/features/org/marks/` (`goto_mark`,
   `goto_adjacent_mark`, `mark_visual`)
-- **Keymaps:** `m`, `]m`, `[m`, `<C-m>`, `<leader>ms`, `gm`, `]M`, `[M`,
+- **Keymaps:** `m`, `]m`, `[m`, `<leader>mc`, `<leader>ms`, `gm`, `]M`, `[M`,
   plus `m`/`[m` in Visual mode
 - **Config:** `marks.keymap_goto` (default `gm`), `marks.keymap_next`
   (`]M`), `marks.keymap_prev` (`[M`)
