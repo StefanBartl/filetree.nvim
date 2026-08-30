@@ -176,6 +176,30 @@ function M.check()
     end
   end
 
+  -- tree_integrity: whether the nui set_nodes guard is actually in place, and
+  -- whether it has had to repair anything (a non-zero count means this session
+  -- did hit the upstream corruption — and survived it).
+  if is_enabled("tree_integrity") then
+    local ok_ti, ti = registry.load("tree_integrity")
+    if ok_ti and ti then
+      local healed = ti.healed()
+      if ti.installed() then
+        if healed > 0 then
+          vim.health.ok(
+            ("tree_integrity installed (%d stale child id(s) healed this session)"):format(healed)
+          )
+        else
+          vim.health.ok("tree_integrity installed")
+        end
+      else
+        vim.health.info(
+          "tree_integrity enabled but not installed "
+            .. "(needs the neo-tree adapter; patched on the first tree buffer)"
+        )
+      end
+    end
+  end
+
   -- Human-readable category headings + feature names.
   local CATEGORY_LABELS = {
     nav = "navigation & reveal",

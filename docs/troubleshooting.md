@@ -48,6 +48,35 @@ The usual causes, in the order worth checking:
 If the wrong thing was rewritten, `:Filetree refs undo` puts the last batch
 back, line for line.
 
+## Neo-tree repeats "Error setting nodes" and dumps the whole tree
+
+```
+[Neo-tree ERROR] Error setting nodes:  .../nui/tree/init.lua:494:
+attempt to index local 'node' (a nil value)
+```
+
+An upstream inconsistency between neo-tree and nui.nvim, not a filetree
+setting: once neo-tree's node index has lost a subtree it still lists, every
+render throws again, so the messages come in series with a full `vim.inspect`
+of the tree behind each one. Closing and re-opening neo-tree is the manual way
+out.
+
+The `tree_integrity` feature prevents it, and repairs a tree that is already in
+that state on the next render. It is **on by default** — if you see this error,
+check that it is actually running:
+
+```lua
+:lua print(require("filetree.features.infra.tree_integrity").installed())
+```
+
+`false` means either the feature is disabled in your config, or the adapter in
+use is not neo-tree (no other adapter uses nui), or no tree buffer has been
+opened yet — the patch installs on the first one. `:Filetree health` reports
+the same thing, plus how many stale ids it has had to drop.
+
+See [BACKENDS.md → Tree Integrity](FEATURES/BACKENDS.md#tree-integrity) for the
+mechanism.
+
 ## Known adapter caveats
 
 nvim-tree's `update_focused_file.update_root.enable` is not a drop-in

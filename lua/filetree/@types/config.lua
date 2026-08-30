@@ -66,6 +66,7 @@
 ---@field trash               FiletreeTrashConfig?
 ---@field watcher_quarantine  FiletreeWatcherQuarantineConfig?
 ---@field handle_guard        FiletreeHandleGuardConfig?
+---@field tree_integrity      FiletreeTreeIntegrityConfig?
 ---@field marks               FiletreeMarksConfig?
 ---@field diff                FiletreeDiffConfig?
 ---@field context_menu        FiletreeContextMenuConfig?
@@ -277,6 +278,17 @@
 ---                        source, unlike watcher_quarantine which only hides the
 ---                        error). neo-tree adapter + Windows/WSL only; a no-op
 ---                        elsewhere. Opt-in (default off).
+
+-- ── tree_integrity ────────────────────────────────────────────────────────────
+
+---@class FiletreeTreeIntegrityConfig
+---@field enabled? boolean  Wrap nui.nvim's `Tree:set_nodes` so re-setting a
+---                         subtree with live nodes cannot corrupt neo-tree's
+---                         node index ("Error setting nodes: attempt to index
+---                         local 'node' (a nil value)", repeating until the tree
+---                         is re-opened). neo-tree adapter only; default **on**.
+---@field silent?  boolean  Suppress the debug note emitted when a corrupt
+---                         subtree is healed (default true).
 
 -- ── marks ─────────────────────────────────────────────────────────────────────
 

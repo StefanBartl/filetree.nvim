@@ -107,3 +107,46 @@ everywhere else, so the fileops' hook can always be passed unconditionally.
 - **Module:** [`features/infra/handle_guard/init.lua`](../../lua/filetree/features/infra/handle_guard/init.lua) (`M.release`)
 - **Config:** `opts.features.handle_guard.enabled` (default **false**, opt-in — patches a neo-tree internal and closes libuv handles it owns)
 - **Usercmds:** `:Filetree handles` — lists tracked handles, flags any pointing at a path that no longer exists (the leak signature)
+
+## Tree Integrity
+
+Fixes an upstream crash that otherwise breaks a neo-tree session until it is
+closed and re-opened:
+
+```
+[Neo-tree ERROR] Error setting nodes:  .../nui/tree/init.lua:494:
+attempt to index local 'node' (a nil value)
+```
+
+— followed by a dump of the entire tree, on every render from then on.
+
+nui's node initialization is not idempotent: it *consumes* a node's
+`__children`, keeping only their ids in `_child_ids`. `Tree:set_nodes()` first
+deletes the parent's whole subtree from its `by_id` index and then re-initializes
+whatever it was handed, so handing it *live* nodes re-registers those nodes but
+not their children — `by_id` loses them while `_child_ids` still lists them. The
+next `set_nodes()` over that subtree indexes a nil node and throws, and because
+it throws before `_child_ids` is reset, the inconsistency is permanent.
+
+neo-tree reaches that call from one place: the `group_empty_dirs` branch for a
+lazily loaded single sub-folder (`ui/renderer.lua`, with the default
+`scan_mode = "shallow"`), which re-exports a whole level with
+`state.tree:get_nodes(parentId)` and passes those live nodes straight back.
+Expanding a directory next to a one-child chain is enough.
+
+This feature wraps `NuiTree.set_nodes` with a pre-pass that (a) hands every live
+node its children back as `__children`, so the re-initialization rebuilds the
+subtree instead of orphaning it — nothing is lost and expanded directories stay
+expanded — and (b) drops ids already missing from `by_id`, so an
+*already*-corrupted tree repairs itself on the next render rather than throwing.
+Fresh nodes (the normal `create_nodes()` path) are not touched at all, so nui
+behaves exactly as before wherever it was already correct.
+
+Left on by default, unlike the two features above: it changes nothing on a
+healthy tree, costs one pass over the subtree being replaced, and the crash it
+prevents is not recoverable without re-opening the tree. Disabling it is a
+one-liner if a future nui release fixes this upstream.
+
+- **Module:** [`features/infra/tree_integrity/init.lua`](../../lua/filetree/features/infra/tree_integrity/init.lua) (`M.sanitize`, `M.install`, `M.healed`)
+- **Config:** `opts.features.tree_integrity` — `enabled` (default **true**), `silent` (true — set false to get a debug note whenever a corrupt subtree is healed)
+- **Scope:** neo-tree adapter only (no other adapter uses nui); patched on the first tree buffer, so a session that never opens a tree never loads nui for it

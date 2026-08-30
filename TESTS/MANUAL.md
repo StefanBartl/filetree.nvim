@@ -392,6 +392,42 @@ To enable these, uncomment the corresponding blocks in `minimal_neotree.lua`.
 
 ---
 
+### O. tree_integrity — the nui `set_nodes` guard
+
+Needs a real nui.nvim, so it cannot live in the headless suites (which run with
+no tree plugin at all); `TESTS/units.lua` covers the pre-pass logic against a
+hand-built stand-in for nui's node store.
+
+Paste this into a scratch buffer of a session that has neo-tree loaded, then
+`:setf lua` and `:source`. It builds a throwaway nui tree, hands the same live
+nodes back to `set_nodes` — what neo-tree's `group_empty_dirs` branch does for a
+lazily loaded single sub-folder — and prints what the node index looks like
+afterwards:
+
+```lua
+local NuiTree = require("nui.tree")
+local function mk(id, kids) return NuiTree.Node({ id = id, text = id }, kids) end
+local tree = NuiTree({
+  bufnr = vim.api.nvim_create_buf(false, true),
+  nodes = { mk("root", { mk("docs", { mk("a", { mk("a1") }), mk("b") }) }) },
+  get_node_id = function(n) return n.id end,
+})
+tree:set_nodes({ tree:get_node("root") })          -- the same live node, twice
+local ids = vim.tbl_keys(tree.nodes.by_id); table.sort(ids)
+print("by_id: " .. table.concat(ids, ","))
+print("second set_nodes: " .. tostring((pcall(tree.set_nodes, tree, { tree:get_node("root") }))))
+```
+
+| # | Test | Expected |
+|---|------|----------|
+| O.1 | Run the snippet with `tree_integrity` enabled (the default) | `by_id: a,a1,b,docs,root` and `second set_nodes: true` |
+| O.2 | `:lua print(require("filetree.features.infra.tree_integrity").installed())` after a tree buffer has been opened | `true` |
+| O.3 | Re-run the snippet after `require("filetree").setup({ features = { tree_integrity = { enabled = false } } })` | `by_id: root` and `second set_nodes: false` — the upstream bug, unguarded |
+| O.4 | With the guard back on: expand a directory that sits next to a grouped one-child chain (`a/b/c` shown as one line), repeatedly | No `[Neo-tree ERROR] Error setting nodes` in `:messages`, and the grouped chain still renders as one line |
+| O.5 | `:checkhealth filetree` | `tree_integrity installed`, plus a healed count if this session hit the corruption |
+
+---
+
 ## Known limits of this test environment
 
 - **No git blame**: needs `git log`, and only works inside a real git repository

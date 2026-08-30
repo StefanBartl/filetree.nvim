@@ -96,6 +96,7 @@ M.FEATURES = {
   file_watcher = { mod = "filetree.features.infra.file_watcher", category = "infra" },
   watcher_quarantine = { mod = "filetree.features.infra.watcher_quarantine", category = "infra" },
   handle_guard = { mod = "filetree.features.infra.handle_guard", category = "infra" },
+  tree_integrity = { mod = "filetree.features.infra.tree_integrity", category = "infra" },
   hooks_api = { mod = "filetree.features.infra.hooks_api", category = "infra" },
   safety = { mod = "filetree.features.infra.safety", category = "infra" },
 }

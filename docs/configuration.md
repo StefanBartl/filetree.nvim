@@ -228,6 +228,16 @@ require("filetree").setup({
                          -- elsewhere. No keymaps — inspect with `:Filetree handles`.
     },
 
+    tree_integrity = {
+      enabled = true,   -- default: on — wraps nui's Tree:set_nodes so neo-tree's
+                        -- node index cannot be corrupted by a subtree being
+                        -- re-set with live nodes ("Error setting nodes: attempt
+                        -- to index local 'node' (a nil value)", repeating on
+                        -- every render until the tree is re-opened). No-op on a
+                        -- healthy tree; neo-tree adapter only.
+      silent  = true,   -- false → debug note whenever a corrupt subtree is healed
+    },
+
     -- auto_resize is also off by default — see "Default-disabled features".
   },
 

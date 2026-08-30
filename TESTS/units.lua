@@ -3577,6 +3577,82 @@ do
   vim.o.splitright = saved_splitright
 end
 
+-- ── tree_integrity: the nui "Error setting nodes" guard ─────────────────────
+--
+-- nui consumes a node's `__children` on first init and only keeps `_child_ids`,
+-- so handing live nodes back to `set_nodes` re-registers the nodes but not their
+-- children: `by_id` loses them while `_child_ids` still lists them, and the next
+-- `set_nodes` over that subtree indexes nil and throws — permanently, because it
+-- throws before `_child_ids` is reset. Asserted here against a hand-built stand-in
+-- for nui's node store, so the suite needs no nui.nvim; the end-to-end run against
+-- the real nui (including the unpatched crash) is in TESTS/MANUAL.md.
+do
+  local ti = require("filetree.features.infra.tree_integrity")
+
+  ---Build the shape nui keeps internally: root → docs → (a → a1, b).
+  local function fake_tree()
+    local by_id = {}
+    local tree = { nodes = { by_id = by_id, root_ids = { "root" } } }
+    local function node(id, child_ids)
+      by_id[id] = { _id = id, _initialized = true, _tree = tree, _child_ids = child_ids }
+    end
+    node("root", { "docs" })
+    node("docs", { "a", "b" })
+    node("a", { "a1" })
+    node("a1", nil)
+    node("b", nil)
+    return tree
+  end
+
+  do -- live nodes get their children handed back, so nothing is orphaned
+    local tree = fake_tree()
+    local by_id = tree.nodes.by_id
+    local dropped = ti.sanitize(tree, { by_id["a"], by_id["b"] }, "docs")
+    eq("tree_integrity: healthy tree drops nothing", dropped, 0)
+    check("tree_integrity: children handed back as __children", by_id["a"].__children ~= nil)
+    eq("tree_integrity: exactly the live child", by_id["a"].__children[1], by_id["a1"])
+    -- empty table, not nil: has_children() must report false (so remove_node does
+    -- not detach them again) while initialize_nodes appends into it
+    check("tree_integrity: _child_ids emptied, not removed", #by_id["a"]._child_ids == 0)
+    check("tree_integrity: childless node untouched", by_id["b"].__children == nil)
+  end
+
+  do -- the crash itself: ids left over from an earlier corruption are dropped
+    local tree = fake_tree()
+    local by_id = tree.nodes.by_id
+    by_id["a1"] = nil -- what an unpatched set_nodes leaves behind
+    table.insert(by_id["docs"]._child_ids, "ghost")
+    local dropped = ti.sanitize(tree, {}, "docs")
+    eq("tree_integrity: both stale ids dropped", dropped, 2)
+    eq("tree_integrity: parent list compacted", table.concat(by_id["docs"]._child_ids, ","), "a,b")
+    eq("tree_integrity: nested stale id dropped too", #by_id["a"]._child_ids, 0)
+  end
+
+  do -- fresh nodes (the normal create_nodes path) must not be touched at all
+    local tree = fake_tree()
+    local fresh = { __children = { { _id = "n1" } }, _child_ids = { "stale" } }
+    ti.sanitize(tree, { fresh }, "docs")
+    eq("tree_integrity: fresh node keeps __children", #fresh.__children, 1)
+    eq("tree_integrity: fresh node keeps _child_ids", fresh._child_ids[1], "stale")
+  end
+
+  do -- the whole-tree branch (set_nodes without a parent_id)
+    local tree = fake_tree()
+    local by_id = tree.nodes.by_id
+    ti.sanitize(tree, { by_id["root"] }, nil)
+    eq("tree_integrity: root branch rehydrates the top", by_id["root"].__children[1], by_id["docs"])
+    eq("tree_integrity: root branch recurses", by_id["a"].__children[1], by_id["a1"])
+  end
+
+  do -- a corrupt tree can hold a cycle; neither walk may loop forever
+    local tree = fake_tree()
+    local by_id = tree.nodes.by_id
+    by_id["a"]._child_ids = { "docs" }
+    local ok = pcall(ti.sanitize, tree, { by_id["docs"] }, "root")
+    check("tree_integrity: cycle does not hang or throw", ok)
+  end
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 -- ── trash: AppleScript quoting ────────────────────────
 --
