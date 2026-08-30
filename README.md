@@ -91,3 +91,6 @@ For packer.nvim, vim-plug, and mini.deps, see [Installation](docs/installation.m
 - [Menu integration](docs/menu.md) — using filetree.nvim's actions with nvzone/menu.
 - [Troubleshooting](docs/troubleshooting.md) — health check, debug mode, and known adapter caveats.
 
+## License
+
+MIT — see [LICENSE](LICENSE).
