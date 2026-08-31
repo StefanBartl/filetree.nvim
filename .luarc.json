@@ -9,6 +9,8 @@
   "diagnostics.unusedLocalExclude": ["_*"],
   "workspace.checkThirdParty": false,
   "workspace.ignoreDir": [
+    ".claude",
+    "**/.claude",
     ".git",
     "doc",
     "docs",
