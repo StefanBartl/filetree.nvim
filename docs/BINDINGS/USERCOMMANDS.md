@@ -133,6 +133,12 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 |---------|--------|
 | `:Filetree rename` | Open batch rename buffer |
 | `:Filetree smartrename` | Rename with LSP reference update |
+| `:Filetree renamebatch dry-run` | Toggle dry-run for the batch rename at runtime (it was config-only before). Named `renamebatch`, not `rename`: `rename` is already a leaf command above, and a table under the same key would be silently overwritten by it |
+
+### Dry-run toggles for the bulk operations
+| Command | Action |
+|---------|--------|
+| `:Filetree copymove dry-run` | Toggle dry-run for copy/move at runtime — `trash` and `safety` always had one, these two destructive bulk operations were config-only |
 
 ### Move
 | Command | Action |
