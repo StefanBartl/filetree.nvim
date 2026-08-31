@@ -1,3 +1,7 @@
+-- Test code: when something here comes back nil -- a `pcall(require, ...)`,
+-- a fixture read, a uv handle -- this file must crash and name it. The nil
+-- guards LuaLS asks for below would hide the very failure it exists to report.
+---@diagnostic disable: need-check-nil
 -- cwd_mode.lua — headless tests for the cwd/root policy feature.
 --
 -- Covers the decision logic every mode produces for cwd_sync, the lock's
