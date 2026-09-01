@@ -79,6 +79,9 @@ local DEFAULT_OFF = {
 do
   local warnings = 0
   local orig = vim.notify
+  -- A test double over typed `vim.*` surface: replacing the field is the
+  -- point of the case, not a second definition of it.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.notify = function(m, l, o)
     if type(m) == "string" and m:find("filetree") and (l or 0) >= vim.log.levels.WARN then
       warnings = warnings + 1

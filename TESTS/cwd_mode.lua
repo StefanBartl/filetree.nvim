@@ -646,6 +646,9 @@ do
   -- rather than trying to reach the module-local notifier instance.
   local captured = {}
   local orig_vim_notify = vim.notify
+  -- A test double over typed `vim.*` surface: replacing the field is the
+  -- point of the case, not a second definition of it.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.notify = function(msg, level, opts)
     captured[#captured + 1] = msg
     return orig_vim_notify(msg, level, opts)

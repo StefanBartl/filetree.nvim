@@ -845,6 +845,9 @@ do
   cur_node = { path = tmp .. "/dst", type = "directory" }
   local captured
   local orig_notify = vim.notify
+  -- A test double over typed `vim.*` surface: replacing the field is the
+  -- point of the case, not a second definition of it.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.notify = function(m)
     captured = m
   end
@@ -1193,6 +1196,9 @@ do
   -- keeping the last one.
   local messages = {}
   local orig_notify = vim.notify
+  -- A test double over typed `vim.*` surface: replacing the field is the
+  -- point of the case, not a second definition of it.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.notify = function(m)
     messages[#messages + 1] = m
   end
@@ -2068,6 +2074,9 @@ if require("filetree.util.case_clash").case_insensitive_fs() then
   cm.stage_copy()
   cur_node = { path = recased, type = "directory" }
   local orig_notify = vim.notify
+  -- A test double over typed `vim.*` surface: replacing the field is the
+  -- point of the case, not a second definition of it.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.notify = function() end
   cm.paste()
   vim.wait(400, function()

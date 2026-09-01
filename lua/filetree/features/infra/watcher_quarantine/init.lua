@@ -73,6 +73,10 @@ end
 local function patch_notify()
   if S.original_notify then return end -- already patched
   S.original_notify = vim.notify
+  -- Replacing `vim.notify` is what this module is: the original is kept above
+  -- and restored in `unpatch_notify`, and the wrapper only drops the EPERM
+  -- lines the watchers produce while a quarantine window is open.
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.notify = function(msg, level, opts)
     -- Suppress EPERM noise from file watchers during quarantine
     if S.active and type(msg) == "string" and msg:find("EPERM") then return end
