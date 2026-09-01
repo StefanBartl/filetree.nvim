@@ -463,12 +463,22 @@ function M.close()
   return ok
 end
 
+---Re-scan the filesystem and re-render the tree — the same thing neo-tree's own
+---`R` mapping does.
+---
+---Deliberately routed through `sources.manager.refresh` rather than
+---`neo-tree.command.execute`: `execute` only ever understands the "show",
+---"focus" and "close" actions, so an `action = "refresh"` fell straight through
+---`do_show_or_focus` without matching either branch and did nothing at all —
+---while still reporting success, since nothing threw. A newly created directory
+---then only appeared when some *unrelated* event happened to re-navigate the
+---tree (opening a file right after a create, follow_current_file firing, ...),
+---which is why a manual `R` was needed roughly half the time.
 ---@return boolean
 function M.refresh()
-  local commands = get_commands()
-  if not commands then return false end
-  local ok = pcall(commands.execute, { action = "refresh", source = "filesystem" })
-  return ok
+  local manager = get_manager()
+  if not manager or type(manager.refresh) ~= "function" then return false end
+  return (pcall(manager.refresh, "filesystem"))
 end
 
 ---Re-render the CURRENT tree from its existing state, without rescanning the
