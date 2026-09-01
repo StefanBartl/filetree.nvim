@@ -19,6 +19,14 @@
 -- correct even if a test later changes Neovim's cwd (":h:h" alone would give a
 -- path relative to invocation-time cwd, e.g. "." when run as `-l test/units.lua`,
 -- which breaks require() after any vim.fn.chdir()).
+-- `---@diagnostic disable-next-line: duplicate-set-field` appears throughout
+-- this file. Every one of them sits on a test double: a stdlib function, a
+-- `package.loaded` entry or a platform probe is replaced for the length of one
+-- case and put back right after it. Replacing a field LuaLS already knows is
+-- exactly what the rule is for, and exactly what a double has to do -- so the
+-- suppression is per line rather than per file, and each one marks a swap that
+-- is undone a few lines further down.
+
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h")
 vim.opt.rtp:prepend(root)
@@ -411,6 +419,7 @@ do
 
   local ui_input_called = false
   local orig_input = vim.ui.input
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.ui.input = function(...)
     ui_input_called = true
     return orig_input(...)
@@ -1030,6 +1039,7 @@ do
   vim.fn.writefile({ "# Copy" }, copy_src)
   vim.fn.writefile({ "Refs: [cut](cut.md) and [copy](copy.md)." }, linker)
 
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[1]) -- "Update all"
   end
@@ -1289,6 +1299,7 @@ do
     end,
   }
   -- Auto-drive the batch chooser: always pick option 1 ("Delete all at once").
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[1])
   end
@@ -1488,6 +1499,7 @@ do
   }
   -- Auto-drive the chooser: always pick option 1 ("Delete + remove refs").
   local select_prompt = nil
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
     select_prompt = question
     on_choice(choices[1])
@@ -1581,6 +1593,7 @@ do
     end,
   }
   -- Auto-drive the chooser: always pick option 2 ("Inspect first").
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[2])
   end
@@ -1671,6 +1684,7 @@ do
       opts.on_submit("renamed.md")
     end,
   }
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[1]) -- "Update all refs"
   end
@@ -1741,6 +1755,7 @@ do
   vim.fn.writefile({ "# B" }, b_old)
   vim.fn.writefile({ "See [a](a.md) and [b](b.md) here." }, linker)
 
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
     on_choice(choices[1]) -- "Update all refs"
   end
@@ -1822,6 +1837,7 @@ do
   }
 
   local captured_question, captured_choices
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
     captured_question, captured_choices = question, choices
     on_choice("Cancel")
@@ -2170,6 +2186,7 @@ do
     end,
   }
   local captured_question, captured_choices
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
     captured_question, captured_choices = question, choices
     on_choice("Hardlink")
@@ -2249,6 +2266,7 @@ do
     end,
   }
   local confirm_choice_called = false
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm_choice"] = function(_, _, on_choice)
     confirm_choice_called = true
     on_choice("Symlink")
@@ -2315,6 +2333,7 @@ do
   vim.fn.writefile({ "a" }, a_old)
 
   local captured_question
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm"] = function(opts)
     captured_question = opts.question
     opts.on_choice(true) -- confirm the rename
@@ -2380,6 +2399,7 @@ do
   vim.fn.writefile({ "hi" }, tmp .. "/file1.txt")
 
   local captured_question
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm"] = function(opts)
     captured_question = opts.question
     opts.on_choice(false) -- Cancel
@@ -2462,6 +2482,7 @@ do
   }
 
   local captured_question
+  ---@diagnostic disable-next-line: duplicate-set-field
   package.loaded["filetree.util.confirm"] = function(opts)
     captured_question = opts.question
     opts.on_choice(false) -- Cancel: do not overwrite
@@ -2674,6 +2695,7 @@ do
   }
 
   local orig_is_windows = platform.is_windows
+  ---@diagnostic disable-next-line: duplicate-set-field
   platform.is_windows = function()
     return true
   end
@@ -2681,6 +2703,7 @@ do
   -- Stub the shared dispatcher: its own platform behavior is lib.nvim's to
   -- test, and stubbing keeps these checks host-independent.
   local orig_reveal_mod = package.loaded["lib.nvim.cross.reveal_in_fm"]
+  ---@type { target: string, opts: table }|nil
   local captured
   package.loaded["lib.nvim.cross.reveal_in_fm"] = function(target, opts)
     captured = { target = target, opts = opts or {} }
@@ -2696,6 +2719,7 @@ do
   open_in_fm.setup({ enabled = true }, stub_adapter)
   captured = nil
   open_in_fm.open()
+  assert(captured, "the reveal dispatcher was not called")
   check("open_in_fm: directory node is handed over as-is", captured.target == tmp_dir)
   check("open_in_fm: reveal defaults to true", captured.opts.reveal == true)
   check("open_in_fm: no command override by default", captured.opts.command == nil)
@@ -2705,6 +2729,7 @@ do
   open_in_fm.setup({ enabled = true }, stub_adapter)
   captured = nil
   open_in_fm.open()
+  assert(captured, "the reveal dispatcher was not called")
   check(
     "open_in_fm: file node keeps the FILE path (so it can be selected)",
     captured.target == tmp_file
@@ -2714,6 +2739,7 @@ do
   open_in_fm.setup({ enabled = true, reveal = false, command = "thunar" }, stub_adapter)
   captured = nil
   open_in_fm.open()
+  assert(captured, "the reveal dispatcher was not called")
   check("open_in_fm: reveal=false is forwarded", captured.opts.reveal == false)
   check("open_in_fm: command override is forwarded", captured.opts.command == "thunar")
 
@@ -2724,6 +2750,7 @@ do
   open_in_fm.setup({ enabled = true }, stub_adapter)
   captured = nil
   open_in_fm.open()
+  assert(captured, "the reveal dispatcher was not called")
   check("open_in_fm: nonexistent node falls back to a directory", captured.target ~= node_path)
 
   -- reuse_existing is no longer decided here: it is forwarded as an option, so
@@ -2736,6 +2763,7 @@ do
   open_in_fm.setup({ enabled = true, reuse_existing = true }, stub_adapter)
   captured = nil
   open_in_fm.open()
+  assert(captured, "the reveal dispatcher was not called")
   check("open_in_fm: reuse_existing=true is forwarded as reuse", captured.opts.reuse == true)
   check(
     "open_in_fm: reuse_existing=true still reaches the shared dispatcher",
@@ -2746,6 +2774,7 @@ do
   open_in_fm.setup({ enabled = true }, stub_adapter)
   captured = nil
   open_in_fm.open()
+  assert(captured, "the reveal dispatcher was not called")
   check("open_in_fm: reuse defaults to false", captured.opts.reuse == false)
 
   -- A launcher override names the program, so there is no Explorer window to
@@ -2754,9 +2783,11 @@ do
   open_in_fm.setup({ enabled = true, reuse_existing = true, command = "thunar" }, stub_adapter)
   captured = nil
   open_in_fm.open()
+  assert(captured, "the reveal dispatcher was not called")
   check("open_in_fm: a command override suppresses reuse", captured.opts.reuse == false)
 
   -- Reuse is Explorer-specific COM automation; off-Windows it must not be sent.
+  ---@diagnostic disable-next-line: duplicate-set-field
   platform.is_windows = function()
     return false
   end
@@ -2764,6 +2795,7 @@ do
   open_in_fm.setup({ enabled = true, reuse_existing = true }, stub_adapter)
   captured = nil
   open_in_fm.open()
+  assert(captured, "the reveal dispatcher was not called")
   check("open_in_fm: reuse is not forwarded off Windows", captured.opts.reuse == false)
 
   platform.is_windows = orig_is_windows
@@ -3055,6 +3087,7 @@ do
   -- popup (util.confirm float) rather than the native vim.fn.confirm prompt.
   local confirm_called = false
   local orig_confirm = vim.fn.confirm
+  ---@diagnostic disable-next-line: duplicate-set-field
   vim.fn.confirm = function(...)
     confirm_called = true
     return 1
@@ -3116,6 +3149,7 @@ do
   local captured_cmd
 
   local function with_exit_code(code, fn)
+    ---@diagnostic disable-next-line: duplicate-set-field
     run_argv.run_blocking = function(cmd)
       captured_cmd = cmd[#cmd] -- the PowerShell script is the last argv element
       if code == 0 then return true, nil end

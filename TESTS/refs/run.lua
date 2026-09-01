@@ -28,6 +28,14 @@
 -- engine has no provider for yet needs one first (lua/filetree/refs/providers).
 
 -- ── Locate the repo root relative to this file, put it on rtp ────────────────
+-- `---@diagnostic disable-next-line: duplicate-set-field` appears throughout
+-- this file. Every one of them sits on a test double: a stdlib function, a
+-- `package.loaded` entry or a platform probe is replaced for the length of one
+-- case and put back right after it. Replacing a field LuaLS already knows is
+-- exactly what the rule is for, and exactly what a double has to do -- so the
+-- suppression is per line rather than per file, and each one marks a swap that
+-- is undone a few lines further down.
+
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h:h")
 vim.opt.rtp:prepend(root)
@@ -122,10 +130,12 @@ end
 -- cannot drive; kit.confirm likewise. Both are replaced by scripted answers.
 local kit = require("lib.nvim.ui.kit")
 local next_input, next_choice = nil, nil
+---@diagnostic disable-next-line: duplicate-set-field
 kit.input = function(opts)
   if next_input ~= nil and opts.on_submit then opts.on_submit(next_input) end
   return nil
 end
+---@diagnostic disable-next-line: duplicate-set-field
 kit.confirm = function(opts)
   if opts.on_answer then opts.on_answer(next_choice) end
   return nil

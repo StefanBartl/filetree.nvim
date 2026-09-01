@@ -165,6 +165,9 @@ function M.sanitize(tree, nodes, parent_id)
 
   -- 1. Heal the ids nui is about to walk through `remove_node()`. On a healthy
   --    tree this finds nothing, at the cost of one pass over the doomed subtree.
+  -- `store` is nui's own node table; `root_ids` is its internal index and
+  -- carries no annotation upstream.
+  ---@type integer[]|nil
   local doomed = store.root_ids
   if parent_id ~= nil then
     local parent = by_id[parent_id]

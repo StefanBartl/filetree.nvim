@@ -110,7 +110,9 @@ function M.save()
   local expanded = {}
   if _adapter.get_expanded_paths then expanded = _adapter.get_expanded_paths() or {} end
 
-  local root = _adapter.get_root and _adapter.get_root() or nil
+  -- `get_root_path`, not `get_root`: no adapter has ever had the shorter
+  -- name, so this recorded `root = nil` for every session it saved.
+  local root = _adapter.get_root_path and _adapter.get_root_path() or nil
 
   local key = project_key()
   _sessions[key] = {

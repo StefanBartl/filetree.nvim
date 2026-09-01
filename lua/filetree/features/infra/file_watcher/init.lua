@@ -37,7 +37,8 @@ local _cfg = {
 local _adapter = nil
 
 local _handle = nil -- uv fs_event handle
-local _debounce = nil -- lib.nvim.debounce handle, built in M.setup()
+---@type Lib.Debounce.Handle|nil # built in M.setup()
+local _debounce = nil
 local _watched = nil -- current watched path
 
 -- ── uv helpers ────────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ local function do_refresh()
 end
 
 local function trigger_refresh()
+  if not _debounce then return end
   _debounce.call()
 end
 

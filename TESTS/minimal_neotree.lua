@@ -10,6 +10,14 @@
 
 -- ── Temp data dir ─────────────────────────────────────────────────────────────
 
+-- `---@diagnostic disable-next-line: duplicate-set-field` appears throughout
+-- this file. Every one of them sits on a test double: a stdlib function, a
+-- `package.loaded` entry or a platform probe is replaced for the length of one
+-- case and put back right after it. Replacing a field LuaLS already knows is
+-- exactly what the rule is for, and exactly what a double has to do -- so the
+-- suppression is per line rather than per file, and each one marks a swap that
+-- is undone a few lines further down.
+
 local tmp = (vim.fn.has("win32") == 1 and vim.env.TEMP or "/tmp") .. "/filetree-test"
 vim.fn.mkdir(tmp, "p")
 
@@ -21,6 +29,7 @@ vim.env.XDG_RUNTIME_DIR = tmp .. "/run"
 
 -- Override stdpath so lazy and filetree store state in our temp dir
 local std = vim.fn.stdpath
+---@diagnostic disable-next-line: duplicate-set-field
 vim.fn.stdpath = function(what)
   local map = {
     data = tmp .. "/data/nvim",
