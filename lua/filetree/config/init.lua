@@ -9,8 +9,12 @@ local M = {}
 ---@type FiletreeConfig
 local _defaults = require("filetree.config.DEFAULTS")
 
+--- Starts at the defaults rather than an empty table: `get()` is called from
+--- feature modules that can run before `setup()` (a test, a lazy-loaded
+--- command), and every one of them reads `cfg.features.<name>` as if the
+--- plugin's own defaults were in place. `setup()` replaces this wholesale.
 ---@type FiletreeConfig
-local _active = {}
+local _active = vim.deepcopy(_defaults)
 
 ---Deep-merge src into dst (modifies dst in place).
 ---@internal
@@ -210,7 +214,7 @@ local function apply_legacy_refs(cfg)
 end
 
 ---Apply user config on top of defaults.
----@param user FiletreeConfig?
+---@param user FiletreeOpts?
 function M.setup(user)
   -- Deep-copy defaults
   _active = vim.deepcopy(_defaults)

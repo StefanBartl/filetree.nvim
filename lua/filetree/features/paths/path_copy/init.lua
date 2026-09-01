@@ -46,13 +46,11 @@ local _cfg = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
----Cached marker-based root finder from lib.nvim.fs.find_root.
----@class FiletreeRootFinder
----@field find  fun(path: string): string?
----@field clear fun()
-
----nil when disabled via root_markers=false, or lib.nvim is unavailable
----@type FiletreeRootFinder?
+---Cached marker-based root finder. The shape was hand-copied here as
+---`FiletreeRootFinder` before lib.nvim shipped `Lib.Fs.FindRoot` for it; the
+---copy is what made every assignment from `find_root()` a type mismatch.
+---nil when disabled via root_markers=false, or lib.nvim is unavailable.
+---@type Lib.Fs.FindRoot?
 local _root_finder = nil
 
 ---Resolve the project root for `path` (falls back to cwd when unresolved).

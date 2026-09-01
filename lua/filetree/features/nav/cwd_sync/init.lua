@@ -59,13 +59,11 @@ local _cfg = {}
 ---@type FiletreeAdapter?
 local _adapter = nil
 
----Cached marker-based root finder from lib.nvim.fs.find_root.
----@class FiletreeRootFinder
----@field find  fun(path: string): string?
----@field clear fun()
-
----nil when disabled via root_markers=false, or lib.nvim is unavailable
----@type FiletreeRootFinder?
+---Cached marker-based root finder. The shape was hand-copied here as
+---`FiletreeRootFinder` before lib.nvim shipped `Lib.Fs.FindRoot` for it; the
+---copy is what made every assignment from `find_root()` a type mismatch.
+---nil when disabled via root_markers=false, or lib.nvim is unavailable.
+---@type Lib.Fs.FindRoot?
 local _root_finder = nil
 
 ---@internal
@@ -273,7 +271,7 @@ end
 local function debounced_reveal()
   local file = vim.fn.expand("%:p")
   if file == "" or vim.fn.filereadable(file) == 0 then return end
-  _debounce.call(file)
+  if _debounce then _debounce.call(file) end
 end
 
 ---@param config FiletreeCwdSyncConfig

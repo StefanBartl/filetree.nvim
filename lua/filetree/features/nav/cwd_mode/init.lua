@@ -692,7 +692,9 @@ local _last_hl = nil
 local function announce_change()
   pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "FiletreeCwdModeChanged" })
   vim.schedule(function()
-    pcall(vim.cmd, "redrawstatus")
+    pcall(function()
+      vim.cmd("redrawstatus")
+    end)
   end)
 end
 
@@ -734,6 +736,9 @@ function M.refresh_indicator()
     _badge_win = win
   end
 
+  -- Same reasoning as breadcrumbs' float: a matched window does not by itself
+  -- mean a segment was attached.
+  if not _badge then return end
   if text == "" then
     _badge.clear()
   else
@@ -769,7 +774,7 @@ end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
----@param config FiletreeCwdModeConfig
+---@param config FiletreeCwdModeOpts
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end

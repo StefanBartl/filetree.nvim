@@ -160,7 +160,7 @@ local function module_path(abs_path)
 
   local ok_pr, pr = require("filetree.features").load("project_root")
   local root
-  if ok_pr and type(pr.find) == "function" then root = pr.find(abs_path) end
+  if ok_pr and pr and type(pr.find) == "function" then root = pr.find(abs_path) end
   root = root or vim.fn.getcwd() -- project_root.find() may return nil (no marker found)
   local rel = path_u.relative(abs_path, root)
   rel = rel:gsub("%.[^./\\]+$", "") -- strip whatever extension is actually there
@@ -490,7 +490,13 @@ end
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 ---@return boolean ok  false when no engine could be loaded — caller should fall back
 local function pick_template_via_pickers(templates, on_select)
-  local engine_mod = pickers_engines.load(_cfg.prefer)
+  -- "builtin" means "do not go through pickers.nvim at all", and
+  -- `engines.load` has no engine by that name. The caller checks it too; this
+  -- is the check that holds when the function is called from anywhere else.
+  local prefer = _cfg.prefer
+  if prefer == "builtin" then return false end
+  ---@cast prefer "auto"|"fzf"|"snacks"|"telescope"|nil
+  local engine_mod = pickers_engines.load(prefer)
   if not engine_mod then return false end
 
   local items = {}

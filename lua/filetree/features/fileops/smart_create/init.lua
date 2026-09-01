@@ -50,7 +50,7 @@ local function path_to_module(filepath)
   if not lua_root then return filepath end
   local root_norm = path.slashify(lua_root):gsub("/?$", "/")
   local rel = path.slashify(filepath):gsub("^" .. vim.pesc(root_norm), "")
-  return rel:gsub("%.lua$", ""):gsub("/init$", ""):gsub("/", ".")
+  return (rel:gsub("%.lua$", ""):gsub("/init$", ""):gsub("/", ".")) -- parens: gsub returns (str, count)
 end
 
 ---Show a success notification for a created file/directory, at the

@@ -199,7 +199,9 @@ function M.open_file(path, mode)
   mode = mode or "edit"
   local cmd_map = { edit = "edit", split = "split", vsplit = "vsplit", tab = "tabnew" }
   local cmd = cmd_map[mode] or "edit"
-  local ok = pcall(vim.cmd, cmd .. " " .. vim.fn.fnameescape(path))
+  local ok = pcall(function()
+    vim.cmd(cmd .. " " .. vim.fn.fnameescape(path))
+  end)
   return ok
 end
 
@@ -219,7 +221,9 @@ local function explore_in_tree_win(dir)
   if tree_win and tree_win ~= cur_win and vim.api.nvim_win_is_valid(tree_win) then
     vim.api.nvim_set_current_win(tree_win)
   end
-  local ok = pcall(vim.cmd, "Explore " .. vim.fn.fnameescape(dir))
+  local ok = pcall(function()
+    vim.cmd("Explore " .. vim.fn.fnameescape(dir))
+  end)
   if tree_win and tree_win ~= cur_win and vim.api.nvim_win_is_valid(cur_win) then
     vim.api.nvim_set_current_win(cur_win)
   end
@@ -249,7 +253,9 @@ end
 function M.close()
   local buf = find_netrw_buf()
   if not buf then return false end
-  local ok = pcall(vim.cmd, "bdelete " .. buf)
+  local ok = pcall(function()
+    vim.cmd("bdelete " .. buf)
+  end)
   return ok
 end
 

@@ -175,7 +175,7 @@ end
 
 ---@internal
 local function schedule_update()
-  _debounce.call()
+  if _debounce then _debounce.call() end
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ function M.teardown()
   _counts = {}
   _adapter = nil
   if _debounce then
-    _debounce.cancel()
+    if _debounce then _debounce.cancel() end
     _debounce = nil
   end
   if _augroup then

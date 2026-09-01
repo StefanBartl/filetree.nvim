@@ -271,6 +271,9 @@ do
   vim.cmd("cd " .. vim.fn.fnameescape(base .. "/proj_b"))
   eq("the re-anchored guard still enforces", global_cwd(), base .. "/proj_a")
 
+  -- Deliberately invalid: rejecting a scope outside the alias is what is
+  -- under test, so the type is wrong on purpose.
+  ---@diagnostic disable-next-line: param-type-mismatch
   check("an unknown scope is rejected", cwd_mode.set_scope("nope") == false)
   eq("a rejected scope changes nothing", cwd_mode.scope(), "global")
 

@@ -66,20 +66,20 @@ local function apply_overlay(tree_bufnr, query)
   local pat = query:lower()
 
   for _, node in ipairs(nodes) do
-    if not node.path or not node.line then goto continue end
+    if not node.path or not node.line_number then goto continue end
     local subject = _cfg.match == "path" and node.path:lower()
       or vim.fn.fnamemodify(node.path, ":t"):lower()
 
     local matched = subject:find(pat, 1, true)
     if matched then
       -- Highlight match
-      pcall(vim.api.nvim_buf_set_extmark, tree_bufnr, _ns, node.line - 1, 0, {
+      pcall(vim.api.nvim_buf_set_extmark, tree_bufnr, _ns, node.line_number - 1, 0, {
         line_hl_group = _cfg.hl_match,
         priority = 200,
       })
     else
       -- Dim non-match
-      pcall(vim.api.nvim_buf_set_extmark, tree_bufnr, _ns, node.line - 1, 0, {
+      pcall(vim.api.nvim_buf_set_extmark, tree_bufnr, _ns, node.line_number - 1, 0, {
         line_hl_group = _cfg.hl_dim,
         priority = 200,
       })

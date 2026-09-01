@@ -69,7 +69,7 @@ end
 
 local function trigger_refresh()
   if not _debounce then return end
-  _debounce.call()
+  if _debounce then _debounce.call() end
 end
 
 -- ── Watch ─────────────────────────────────────────────────────────────────────

@@ -82,9 +82,12 @@ local function on_select(path)
     return
   end
   vim.cmd("edit " .. vim.fn.fnameescape(path))
-  if _cfg.reveal_on_open and _adapter and _adapter.reveal then
+  -- `reveal` is not an adapter member and never was -- the guard was always
+  -- false, so `reveal_on_open` (on by default) revealed nothing. The capability
+  -- is called `open_reveal`, and every backend in this repo implements it.
+  if _cfg.reveal_on_open and _adapter and type(_adapter.open_reveal) == "function" then
     vim.defer_fn(function()
-      pcall(_adapter.reveal, path)
+      pcall(_adapter.open_reveal, path, 0)
     end, 50)
   end
 end

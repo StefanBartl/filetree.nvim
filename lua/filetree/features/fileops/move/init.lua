@@ -145,6 +145,10 @@ local function run(plan, resolution, scan_result)
     end
 
     local dst = op.dst
+    -- Set below when a collision cannot be resolved; the operation is then
+    -- counted as an error and skipped. A flag rather than `dst = nil`, so the
+    -- collision handling below still works on a plain string.
+    local skip = false
     -- A case-only rename resolves to the source itself: not a real collision,
     -- and clearing it (the "Overwrite" path) would delete the source.
     if conflict.exists(dst) and not case_clash.is_alias(op.src, dst) then
@@ -152,7 +156,7 @@ local function run(plan, resolution, scan_result)
         if not conflict.remove_existing(dst) then
           notify.error("Could not clear existing target: " .. path.relative(dst))
           errors = errors + 1
-          dst = nil
+          skip = true
         end
       elseif resolution == "Keep both" then
         local dir = path.parent(dst)
@@ -162,11 +166,11 @@ local function run(plan, resolution, scan_result)
       else
         notify.error("Target exists, skipping: " .. path.relative(dst))
         errors = errors + 1
-        dst = nil
+        skip = true
       end
     end
 
-    if dst then
+    if not skip then
       local ok, err = mutate.move(op.src, dst)
       if not ok then
         notify.error(

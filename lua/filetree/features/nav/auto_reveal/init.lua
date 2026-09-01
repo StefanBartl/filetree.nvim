@@ -165,7 +165,7 @@ end
 ---@internal
 ---@param path string
 local function schedule_reveal(path)
-  _debounce.call(path)
+  if _debounce then _debounce.call(path) end
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -233,7 +233,7 @@ function M.teardown()
   _adapter = nil
   _paused_until = 0
   if _debounce then
-    _debounce.cancel()
+    if _debounce then _debounce.cancel() end
     _debounce = nil
   end
 end

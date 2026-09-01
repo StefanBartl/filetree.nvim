@@ -42,6 +42,12 @@
 ---@class FiletreeRefProvider
 ---@field name string
 ---@field plan fun(old_path: string, ctx: FiletreeRefCtx): FiletreeRefPlan|nil
+---@field lsp_exempt? boolean  This provider's language never gets a `willRenameFiles`
+---                            rewrite from a server, so `refs.prefer_lsp` must not skip
+---                            it. Set by the markdown and lua providers.
+---@field delete_target? string  What a reference to a *deleted* file is rewritten to, so
+---                              the dangling link stays visible. Only providers that
+---                              declare one take part in `refs.for_delete`.
 
 ---Result of a scan: the refs themselves plus the plans that produced them
 ---(kept so the resolve step can call the right `retarget`).

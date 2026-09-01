@@ -40,7 +40,9 @@ function M.open_replace()
   local ewin = bufutil.find_editor_win(vim.api.nvim_get_current_win())
   if ewin then vim.api.nvim_set_current_win(ewin) end
 
-  local ok = pcall(vim.cmd, "edit " .. vim.fn.fnameescape(path))
+  local ok = pcall(function()
+    vim.cmd("edit " .. vim.fn.fnameescape(path))
+  end)
   if not ok then
     notify.warn("Could not open: " .. path)
     return

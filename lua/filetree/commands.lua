@@ -684,7 +684,7 @@ end
 ---@type string[]
 local _registered_commands = {}
 
----@param cfg FiletreeCommandConfig?
+---@param cfg FiletreeCommandConfig|string|nil  A name, a config table, or nothing.
 function M.setup(cfg)
   -- Re-setup is idempotent: composer's usercmd.create overwrites an existing
   -- command of the same name safely, but cfg can change the NAME between

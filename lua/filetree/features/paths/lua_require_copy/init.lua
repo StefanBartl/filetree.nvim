@@ -25,7 +25,7 @@ local bind = require("filetree.util.bind")
 ---@param rel_path string
 ---@return string
 local function path_to_module(rel_path)
-  return rel_path:gsub("\\", "/"):gsub("%.lua$", ""):gsub("/init$", ""):gsub("/", ".")
+  return (rel_path:gsub("\\", "/"):gsub("%.lua$", ""):gsub("/init$", ""):gsub("/", ".")) -- parens: gsub returns (str, count)
 end
 
 ---Recursively gather all .lua files under a directory as module strings.

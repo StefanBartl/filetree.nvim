@@ -150,6 +150,13 @@ local function rehydrate(by_id, node, seen)
   node._child_ids = {}
 end
 
+--- nui's own node store, as far as this feature reads it: nui ships no
+--- annotations, so the two internal indices walked below are named here rather
+--- than read off a bare `table`.
+---@class FiletreeNuiNodeStore
+---@field by_id    table<string, any>  node id -> node.
+---@field root_ids integer[]|nil       ids of the top-level nodes.
+
 ---Make `tree` safe for the `set_nodes(nodes, parent_id)` that is about to run.
 ---Public because it *is* the feature — the wrapper around it is a two-line
 ---delegate — and because it is the part worth testing (and worth calling by
@@ -159,15 +166,15 @@ end
 ---@param parent_id string?  Parent whose children are being replaced.
 ---@return integer dropped   Stale child ids removed (0 on a healthy tree).
 function M.sanitize(tree, nodes, parent_id)
-  local store = type(tree) == "table" and tree.nodes or nil
-  local by_id = type(store) == "table" and store.by_id or nil
+  local raw_store = type(tree) == "table" and tree.nodes or nil
+  if type(raw_store) ~= "table" then return 0 end
+  ---@type FiletreeNuiNodeStore
+  local store = raw_store
+  local by_id = store.by_id
   if type(by_id) ~= "table" then return 0 end
 
   -- 1. Heal the ids nui is about to walk through `remove_node()`. On a healthy
   --    tree this finds nothing, at the cost of one pass over the doomed subtree.
-  -- `store` is nui's own node table; `root_ids` is its internal index and
-  -- carries no annotation upstream.
-  ---@type integer[]|nil
   local doomed = store.root_ids
   if parent_id ~= nil then
     local parent = by_id[parent_id]

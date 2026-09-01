@@ -211,7 +211,9 @@ function M.open_file(path, mode)
   mode = mode or "edit"
   local cmd_map = { edit = "edit", split = "split", vsplit = "vsplit", tab = "tabnew" }
   local cmd = cmd_map[mode] or "edit"
-  local ok = pcall(vim.cmd, cmd .. " " .. vim.fn.fnameescape(path))
+  local ok = pcall(function()
+    vim.cmd(cmd .. " " .. vim.fn.fnameescape(path))
+  end)
   return ok
 end
 

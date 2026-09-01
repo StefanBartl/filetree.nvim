@@ -199,7 +199,9 @@ function M.qf_confirm()
     end
   end
 
-  pcall(vim.cmd, "cclose")
+  pcall(function()
+    vim.cmd("cclose")
+  end)
   pending.on_confirm(kept)
 end
 
@@ -207,7 +209,9 @@ end
 function M.qf_cancel()
   if not _qf_pending then return end
   _qf_pending = nil
-  pcall(vim.cmd, "cclose")
+  pcall(function()
+    vim.cmd("cclose")
+  end)
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────

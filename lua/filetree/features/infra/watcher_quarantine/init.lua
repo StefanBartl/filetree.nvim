@@ -169,7 +169,7 @@ function M.enter(duration_ms, paths)
   -- but the type no longer promises it now that partial config is legal.
   local ms = duration_ms or _cfg.duration_ms or 500
   ensure_debounce(ms)
-  _debounce.call()
+  if _debounce then _debounce.call() end
 end
 
 ---End quarantine immediately.

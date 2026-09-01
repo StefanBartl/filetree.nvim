@@ -307,6 +307,7 @@ local function run_lang(lang)
     end,
     refresh = function()
       done = true
+      return true
     end,
   }
   smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, stub_adapter)
@@ -366,6 +367,7 @@ local function run_lua_buffer_check()
     end,
     refresh = function()
       done = true
+      return true
     end,
   })
 
@@ -408,6 +410,7 @@ local function run_lua_directory_cascade_check()
     end,
     refresh = function()
       done = true
+      return true
     end,
   })
 
@@ -483,6 +486,7 @@ local function run_move_feature_check()
     end,
     refresh = function()
       done = true
+      return true
     end,
   })
 

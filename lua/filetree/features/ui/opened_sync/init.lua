@@ -38,7 +38,7 @@ local function redraw_now()
 end
 
 local function debounced_redraw()
-  _debounce.call()
+  if _debounce then _debounce.call() end
 end
 
 ---@param config FiletreeOpenedSyncConfig
@@ -69,7 +69,7 @@ end
 
 function M.teardown()
   if _debounce then
-    _debounce.cancel()
+    if _debounce then _debounce.cancel() end
     _debounce = nil
   end
   _adapter = nil

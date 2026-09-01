@@ -84,7 +84,7 @@ end
 
 local function project_key()
   local ok_pr, pr = require("filetree.features").load("project_root")
-  if ok_pr and type(pr.find) == "function" then
+  if ok_pr and pr and type(pr.find) == "function" then
     local buf = vim.api.nvim_get_current_buf()
     local name = vim.api.nvim_buf_get_name(buf)
     return pr.find(name ~= "" and name or vim.fn.getcwd())

@@ -48,21 +48,33 @@ local function run_in_terminal(dir, cmd, close_on_ok, split, height)
   -- `cd … && …` — that was shell-specific (`&&` breaks on older PowerShell);
   -- termopen's `cwd` is shell-agnostic (cmd, PowerShell, bash, zsh, …).
   local open_cmd = split == "vsplit" and "vsplit | enew" or (height .. "split | enew")
-  local ok, err = pcall(vim.cmd, open_cmd)
+  local ok, err = pcall(function()
+    vim.cmd(open_cmd)
+  end)
   if not ok then
     notify.warn("Could not open terminal split: " .. tostring(err))
     return
   end
 
   local term_buf = vim.api.nvim_get_current_buf()
-  local job = vim.fn.termopen(cmd, {
+  local job_opts = {
     cwd = dir,
     on_exit = function(_, code)
       if close_on_ok and code == 0 then
         pcall(vim.api.nvim_buf_delete, term_buf, { force = true })
       end
     end,
-  })
+  }
+  -- `termopen()` is deprecated since 0.11, where jobstart's `term = true` does
+  -- the same thing. The README still promises 0.8, so the old call stays for
+  -- anything older -- suppressed there because the deprecation is the point.
+  local job
+  if vim.fn.has("nvim-0.11") == 1 then
+    job = vim.fn.jobstart(cmd, vim.tbl_extend("force", job_opts, { term = true }))
+  else
+    ---@diagnostic disable-next-line: deprecated
+    job = vim.fn.termopen(cmd, job_opts)
+  end
   if not job or job <= 0 then notify.warn("Could not run command: " .. cmd) end
 end
 

@@ -24,7 +24,33 @@
 ---@field search    boolean?  find files / grep in dir (default true).
 ---@field info      boolean?  node info (default true).
 
+--- The **resolved** configuration, as `config.get()` returns it and as every
+--- consumer downstream of `setup()` receives it: `config.DEFAULTS`, then the
+--- user's table, deep-merged and normalized. The nine fields DEFAULTS carries
+--- are therefore always present -- which this class now says, instead of
+--- marking every field optional and leaving each reader to re-check what
+--- `setup()` already guaranteed. The five that DEFAULTS does not carry stay
+--- optional, because nothing fills them in.
+---
+--- `FiletreeOpts` below is the partial shape a caller hands to `setup()`.
 ---@class FiletreeConfig
+---@field adapter           FiletreeAdapterName|"auto"       Which adapter to use. "auto" picks the first available one.
+---@field debug             boolean                          true -> show notifier.debug(...) messages for troubleshooting (default false).
+---@field features          FiletreeFeaturesConfig
+---@field keymaps           table<string,string|false>?      Global keymap remap: { ["<old>"] = "<new>" } or { ["<key>"] = false } to disable.
+---@field adapter_keymaps   table<string,string|false>?      Override the adapter's own native keymaps: false -> <Nop>, string -> remap target. Applied after the adapter sets its keymaps. Example: { ["i"] = false } noops neotree's built-in `i` (toggle-info).
+---@field command           FiletreeCommandConfig|string|nil User command name (string) or config table. Default: "Filetree" + "Ft" alias.
+---@field autocmds          table<string,false>?             Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
+---@field ignore_list       boolean|string[]                 true (default) = hide common dirs (.git, node_modules...); false = show all; string[] = custom list.
+---@field menu              FiletreeMenuConfig               nvzone/menu integration entries (group-level opt-out; entries provided by filetree.integrations.menu).
+---@field confirmations     boolean|FiletreeConfirmationsConfig|nil  Confirmable actions: paste/rename_batch default to *no* prompt, delete defaults to *prompt*. true/false applies to all three at once; a table applies per action, e.g. { delete = false } to opt out of just the delete prompt. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
+---@field deps_popup        boolean                          Show the lib.nvim.deps "declared tools" popup once, ever, on first setup() after install (default true; needs lib.nvim.deps -- a no-op without it).
+---@field refs              FiletreeRefsConfig               Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
+---@field progress_style    Lib.Progress.Style               Style for batch-operation progress indicators (trash, paste, ...): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress -- a no-op without it.
+---@field max_visible_nodes integer                          Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
+
+--- What `require("filetree").setup({})` accepts: any subset of the above.
+---@class FiletreeOpts
 ---@field adapter?          FiletreeAdapterName|"auto"       Which adapter to use. "auto" picks the first available one.
 ---@field debug             boolean?                         true → show notifier.debug(...) messages for troubleshooting (default false).
 ---@field features?         FiletreeFeaturesConfig
@@ -60,7 +86,7 @@
 ---@field no_name_guard       FiletreeNoNameGuardConfig?
 ---@field buffer_cycle        FiletreeBufferCycleConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
----@field cwd_mode            FiletreeCwdModeConfig?
+---@field cwd_mode            FiletreeCwdModeOpts?
 ---@field current_hl          FiletreeCurrentHlConfig?
 ---@field safety              FiletreeSafetyConfig?
 ---@field trash               FiletreeTrashConfig?
@@ -208,7 +234,34 @@
 ---@field icons          table<FiletreeCwdModeName, string>?  Badge text per mode for style="icon".
 ---@field hl             table<FiletreeCwdModeName, string>?  Highlight group per mode (shared across styles).
 
----@class FiletreeCwdModeConfig
+--- The **resolved** cwd_mode config, as the feature holds it after
+--- `setup()`: `cwd_mode.DEFAULTS` deep-extended with whatever the user
+--- passed. DEFAULTS carries every field below, so every field is present --
+--- which is why the sub-tables are not optional here. Marking them optional
+--- was what made `indicator` read as maybe-nil at five call sites inside
+--- `badge_text()`, each of which then had to re-check a value `setup()`
+--- had already guaranteed.
+---
+--- `FiletreeCwdModeOpts` below is the partial shape a caller passes in.
+---@class FiletreeCwdModeConfig : FiletreeCwdModeOpts
+---@field enabled          boolean
+---@field mode             FiletreeCwdModeName Mode to start in (default "follow" — inert).
+---@field scope            Lib.Fs.Chdir.Scope  Directory scope: "global" (default), "tab" or "win".
+---@field project          FiletreeCwdModeProjectConfig
+---@field nearest          FiletreeCwdModeNearestConfig
+---@field lock             FiletreeCwdModeLockConfig
+---@field reveal_outside   "skip"|"reveal"  What to do when the focused file is outside the held
+---                                         root: leave the tree alone (default) or reveal anyway.
+---@field persist          boolean  Remember mode, scope and a lock's pin per project
+---                                 (lib.nvim.store.project), keyed by the directory
+---                                 Neovim was started in. Default false.
+---@field indicator        FiletreeCwdModeIndicatorConfig
+---@field cycle            FiletreeCwdModeName[]  Order used by `:Filetree cwd toggle`.
+---@field keymap_cycle     string  Tree-buffer key that cycles modes (default "L"; "" disables).
+---@field keymap_lock_here string  Tree-buffer key that locks onto the node under the cursor (default "gp").
+
+--- What `setup({ features = { cwd_mode = ... } })` accepts: any subset.
+---@class FiletreeCwdModeOpts
 ---@field enabled?         boolean
 ---@field mode             FiletreeCwdModeName? Mode to start in (default "follow" — inert).
 ---@field scope            Lib.Fs.Chdir.Scope?  Directory scope: "global" (default), "tab" or "win".
@@ -566,11 +619,11 @@
 ---@class FiletreePdfOpenConfig
 ---@field enabled         boolean
 ---@field default_mode    FiletreePdfOpenMode?  Mode for `keymap_open` (default "buffer"; falls back to system viewer when pdfport.nvim is absent).
----@field keymap_open     string?  Open the PDF under the cursor with `default_mode` (default "gp").
----@field keymap_text     string?  Force text extraction into a buffer (default nil, off).
----@field keymap_system   string?  Force the OS default viewer (default nil, off).
----@field keymap_terminal string?  Force pdfport's terminal mode (default nil, off).
----@field keymap_picker   string?  Ask how to open it — `default_mode = "picker"` (default nil, off).
+---@field keymap_open     string|false?  Open the PDF under the cursor with `default_mode` (default "gp").
+---@field keymap_text     string|false?  Force text extraction into a buffer (default false, off).
+---@field keymap_system   string|false?  Force the OS default viewer (default false, off).
+---@field keymap_terminal string|false?  Force pdfport's terminal mode (default false, off).
+---@field keymap_picker   string|false?  Ask how to open it — `default_mode = "picker"` (default false, off).
 
 -- ── pdf_create ────────────────────────────────────────────────────────────────
 

@@ -175,6 +175,7 @@ end
 ---@internal
 ---@param line integer  1-based
 local function goto_line(line)
+  if not _adapter then return end
   local is_open, bufnr = _adapter.is_open()
   if not is_open or not bufnr then return end
   for _, win in ipairs(vim.api.nvim_list_wins()) do
@@ -207,6 +208,7 @@ end
 ---@param dir integer  1 forward, -1 backward
 ---@return boolean moved
 function M.goto_adjacent_mark(dir)
+  if not _adapter then return false end
   local marks = visible_marks()
   if #marks == 0 then
     notify.info("No marked nodes visible")

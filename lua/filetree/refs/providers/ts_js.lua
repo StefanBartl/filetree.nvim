@@ -218,7 +218,7 @@ local function each_specifier(text, fn)
     local init = 1
     while true do
       local s, e = text:find(lead, init)
-      if not s then break end
+      if not s or not e then break end
       local quote = text:sub(e, e)
       local close = text:find(quote, e + 1, true)
       if close then

@@ -103,7 +103,7 @@ local function apply()
 end
 
 local function debounced_apply()
-  _debounce.call()
+  if _debounce then _debounce.call() end
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ function M.teardown()
   bufevents.unregister("current_hl")
   clear_old()
   if _debounce then
-    _debounce.cancel()
+    if _debounce then _debounce.cancel() end
     _debounce = nil
   end
   if _augroup then

@@ -107,7 +107,7 @@ local function do_trash(path, cb)
   -- Optional pre-trash backup via safety feature
   if _cfg.use_safety then
     local ok_sf, safety = require("filetree.features").load("safety")
-    if ok_sf then pcall(safety.before_delete, path) end
+    if ok_sf and safety then pcall(safety.before_delete, path) end
   end
 
   local function spawn()

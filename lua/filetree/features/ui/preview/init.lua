@@ -167,9 +167,20 @@ local function open_image(path)
 
   if backend == "snacks" or backend == "auto" then
     local ok, snacks = pcall(require, "snacks")
-    if ok and snacks.image then
-      local call_ok, opened = pcall(snacks.image.open, path)
-      if call_ok and opened then return true end
+    -- snacks.image has no `open()` and never had one, so this branch always
+    -- threw inside the pcall and fell through. It renders an image buffer when
+    -- one is displayed; `supports()` is its public "can I draw this file", and
+    -- opening the file is what puts it in charge of the drawing.
+    if
+      ok
+      and snacks.image
+      and type(snacks.image.supports) == "function"
+      and snacks.image.supports(path)
+    then
+      local call_ok = pcall(function()
+        vim.cmd("edit " .. vim.fn.fnameescape(path))
+      end)
+      if call_ok then return true end
     end
     if backend == "snacks" then
       notify.warn("snacks.image not available — install folke/snacks.nvim")
@@ -713,7 +724,7 @@ function M.setup(config, adapter)
         return
       end
 
-      _cm_debounce.call()
+      if _cm_debounce then _cm_debounce.call() end
     end,
   })
 end
@@ -722,7 +733,7 @@ function M.teardown()
   close_preview()
   buf_stop(true)
   if _cm_debounce then
-    _cm_debounce.cancel()
+    if _cm_debounce then _cm_debounce.cancel() end
     _cm_debounce = nil
   end
   _adapter = nil

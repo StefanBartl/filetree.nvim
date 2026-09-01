@@ -417,7 +417,7 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
     _cut_prefetch = nil
 
     render_clipboard()
-    if _adapter.refresh then pcall(_adapter.refresh) end
+    if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
   end)
 end
 

@@ -61,7 +61,7 @@ local _adapter_keymaps_augroup = nil
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---Initialize filetree.nvim.
----@param user_config FiletreeConfig?
+---@param user_config FiletreeOpts?
 function M.setup(user_config)
   config_mod.setup(user_config)
 
@@ -182,7 +182,7 @@ function M.setup(user_config)
     if _adapter_keymaps_augroup then au.del_group(_adapter_keymaps_augroup) end
     _adapter_keymaps_augroup = au.group("filetree_adapter_keymaps", true)
 
-    local overrides = cfg.adapter_keymaps
+    local overrides = cfg.adapter_keymaps or {}
     au.create("FileType", function(ev)
       local buf = ev.buf
       vim.schedule(function()
@@ -291,7 +291,7 @@ end
 ---passing the neo-tree opts table and the same config you give to `setup()`.
 ---No-op for non-neotree adapters (their help systems differ).
 ---@param opts table    neo-tree opts table (mutated in place).
----@param config FiletreeConfig  Same config table passed to setup().
+---@param config FiletreeOpts  Same config table passed to setup().
 ---@return table opts
 function M.attach(opts, config)
   return require("filetree.attach").neotree(opts, config)

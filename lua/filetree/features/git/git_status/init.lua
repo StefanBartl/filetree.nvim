@@ -148,7 +148,7 @@ end
 -- ── Refresh ───────────────────────────────────────────────────────────────────
 
 local function debounce_refresh()
-  _debounce.call()
+  if _debounce then _debounce.call() end
 end
 
 ---Refresh git status for the current adapter root.
@@ -210,7 +210,7 @@ function M.setup(config, adapter)
       group = _augroup,
       buffer = buf,
       callback = function()
-        _render_debounce.call()
+        if _render_debounce then _render_debounce.call() end
       end,
     })
   end)
@@ -231,11 +231,11 @@ function M.teardown()
   M.clear()
   _adapter = nil
   if _debounce then
-    _debounce.cancel()
+    if _debounce then _debounce.cancel() end
     _debounce = nil
   end
   if _render_debounce then
-    _render_debounce.cancel()
+    if _render_debounce then _render_debounce.cancel() end
     _render_debounce = nil
   end
   if _augroup then

@@ -114,7 +114,7 @@ end
 ---@return boolean ok
 function M.diff_marked()
   local ok_marks, marks = require("filetree.features").load("marks")
-  if not ok_marks then
+  if not ok_marks or not marks then
     notify.error("marks feature not loaded")
     return false
   end

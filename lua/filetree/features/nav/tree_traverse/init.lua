@@ -20,13 +20,17 @@ local function go_to(path)
     pcall(_adapter.set_root, path)
   else
     -- Fallback: set cwd first, then re-open at cwd
-    pcall(vim.cmd, "cd " .. vim.fn.fnameescape(path:gsub("\\", "/")))
+    pcall(function()
+      vim.cmd("cd " .. vim.fn.fnameescape(path:gsub("\\", "/")))
+    end)
     pcall(_adapter.open_cwd)
   end
 
   if _cfg.sync_cwd then
     local safe_path = path:gsub("\\", "/")
-    pcall(vim.cmd, "cd " .. vim.fn.fnameescape(safe_path))
+    pcall(function()
+      vim.cmd("cd " .. vim.fn.fnameescape(safe_path))
+    end)
     notify.info("cwd → " .. safe_path)
   end
 

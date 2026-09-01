@@ -159,6 +159,9 @@ local function update_float(plain)
     _float_win = tree_win
   end
 
+  -- Nothing to write to when the window matched but no segment was ever
+  -- attached (a failed attach above leaves `_float_win` unset and returns).
+  if not _float then return end
   _float.set(" " .. plain, _cfg.winbar_hl)
 end
 

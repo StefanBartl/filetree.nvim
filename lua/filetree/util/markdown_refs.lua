@@ -171,7 +171,7 @@ end
 ---(unsaved edits above the ref) is never corrupted — a stale ref is skipped.
 ---@param line string|nil
 ---@param r table  MarkdownFileRef with `.new_target`
----@return string  possibly-rewritten line
+---@return string|nil  possibly-rewritten line; nil in, nil out
 ---@return boolean changed
 local function apply_ref(line, r)
   if not line or not r.new_target then return line, false end

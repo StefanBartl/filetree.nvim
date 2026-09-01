@@ -143,7 +143,7 @@ function M.plan(old_path, ctx)
         if mod:sub(1, 1) == "." then
           base, rest = relative_anchor(mod, file)
           relative = true
-          if not base or rest == "" then return end
+          if not base or not rest or rest == "" then return end
         else
           base, rest, relative = ctx.root, mod, false
         end

@@ -608,6 +608,7 @@ do
     name = "neotree",
     refresh = function()
       refreshed = true
+      return true
     end,
   })
 
@@ -644,7 +645,12 @@ do
   }
   package.loaded["filetree.features.infra.ignore_list"] = nil
   local il = require("filetree.features.infra.ignore_list")
-  il.setup({ enabled = true }, { name = "neotree", refresh = function() end })
+  il.setup({ enabled = true }, {
+    name = "neotree",
+    refresh = function()
+      return true
+    end,
+  })
 
   local fi = package.loaded["neo-tree"].config.filesystem.filtered_items
   check("ignore_list: visible forced to false even if pre-set true", fi.visible == false)

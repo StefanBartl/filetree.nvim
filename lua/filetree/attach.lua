@@ -344,7 +344,9 @@ end
 local function make_handler(feature, method)
   return function()
     local ok, mod = require("filetree.features").load(feature)
-    if not ok then return end
+    -- `load` returns pcall's pair: the flag and the module travel together, but
+    -- only the module answers "is there something to call".
+    if not ok or not mod then return end
     local fn = mod[method]
     if type(fn) == "function" then pcall(fn) end
   end
