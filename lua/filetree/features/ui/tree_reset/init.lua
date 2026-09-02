@@ -24,19 +24,19 @@ local M = {}
 local function do_reset()
   -- 1. Preview
   local ok1, preview = require("filetree.features").load("preview")
-  if preview and preview.close then pcall(preview.close) end
+  if ok1 and preview.close then pcall(preview.close) end
 
   -- 2. Filter
   local ok2, filter = require("filetree.features").load("filter")
-  if filter and filter.clear then pcall(filter.clear) end
+  if ok2 and filter.clear then pcall(filter.clear) end
 
   -- 3. Live search
   local ok3, ls = require("filetree.features").load("live_search")
-  if ls and ls.clear then pcall(ls.clear) end
+  if ok3 and ls.clear then pcall(ls.clear) end
 
   -- 4. Watcher quarantine
   local ok4, wq = require("filetree.features").load("watcher_quarantine")
-  if wq and wq.is_active and wq.is_active() then pcall(wq.exit) end
+  if ok4 and wq.is_active and wq.is_active() then pcall(wq.exit) end
 
   -- 5. Search highlights
   vim.cmd("nohlsearch")
