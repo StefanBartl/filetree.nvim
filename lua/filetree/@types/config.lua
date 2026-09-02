@@ -409,6 +409,7 @@
 ---@field debounce_ms?  integer   Delay after BufEnter (default 150ms).
 ---@field ignore_ft?    string[]  Filetypes that never trigger reveal.
 ---@field only_if_open? boolean   Only reveal when tree window is visible (default true).
+---@field sync_on_enter? boolean  Move the tree cursor onto the current file's node when the tree window is entered (default true).
 
 -- ── lsp_diagnostics ──────────────────────────────────────────────────────────
 

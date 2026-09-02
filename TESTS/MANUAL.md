@@ -34,14 +34,26 @@ nvim --clean --headless -u NONE -l TESTS/menu.lua
 nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
 ```
 
-**lib.nvim resolution:** the suites put a sibling `../lib.nvim` checkout on the
-runtimepath. Set `FILETREE_LIB_NVIM` to point somewhere else — e.g. a lib.nvim
-worktree carrying modules a new feature depends on that are not merged yet:
+**lib.nvim resolution:** every suite here — the four `.lua` files and
+`refs/run.lua` — resolves lib.nvim the same way, taking the first of:
+
+1. `$FILETREE_LIB_NVIM`
+2. `$LIB_NVIM_PATH` (lib.nvim's own canonical variable name)
+3. a sibling `../lib.nvim` checkout — what CI uses
+4. lazy.nvim's managed copy under `stdpath("data")/lazy/lib.nvim`
+
+Both names are accepted by every suite, so one export runs the whole directory.
+Set either to point somewhere else — e.g. a lib.nvim worktree carrying modules a
+new feature depends on that are not merged yet:
 
 ```
 FILETREE_LIB_NVIM=/path/to/lib.nvim/.claude/worktrees/<name> \
   nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
 ```
+
+The lazy fallback is what makes the suites runnable from a git worktree: there
+`../lib.nvim` resolves inside `.claude/worktrees/` and does not exist, so
+without it a variable would have to be exported just to start.
 
 ---
 

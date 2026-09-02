@@ -45,6 +45,10 @@ vim.opt.rtp:prepend(root)
 -- canonical copy of this function and the other caller patterns).
 local function add_lib_nvim()
   local candidates = {}
+  -- $FILETREE_LIB_NVIM is the name TESTS/MANUAL.md documents and the other four
+  -- suites read; $LIB_NVIM_PATH is lib.nvim's own canonical one. Accept both, so
+  -- exporting either runs every suite in TESTS/.
+  if vim.env.FILETREE_LIB_NVIM then candidates[#candidates + 1] = vim.env.FILETREE_LIB_NVIM end
   if vim.env.LIB_NVIM_PATH then candidates[#candidates + 1] = vim.env.LIB_NVIM_PATH end
   candidates[#candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
   candidates[#candidates + 1] = vim.fn.stdpath("data") .. "/lazy/lib.nvim"

@@ -673,11 +673,22 @@ Two-step reveal per buffer switch:
      the root there first is cwd_sync's job (or the tree plugin's own
      cwd-follow, e.g. neo-tree's `bind_to_cwd` + `follow_current_file`).
 
+Entering the tree window (|CTRL-W_w|, a `<C-h>` mapping, a mouse click) puts
+the tree cursor on the current file's node as a third, separate step. It runs
+outside the debounce on purpose: otherwise where the cursor landed depended on
+whether the debounced BufEnter reveal had fired yet, and a quick window switch
+lost the race — the reveal arrived to find the cursor already in the tree and
+dropped itself. The file is taken from the window you came from, falling back
+to the last real file an editor window showed.
+
 Config:
   `enabled`        boolean
   `debounce_ms`    integer   Delay after BufEnter (default 150ms).
   `ignore_ft`      string[]  Filetypes that never trigger reveal.
   `only_if_open`   boolean   Only reveal when tree window is visible
+                             (default true).
+  `sync_on_enter`  boolean   Move the tree cursor onto the current file's
+                             node when the tree window is entered
                              (default true).
 
 Commands: >

@@ -30,13 +30,31 @@
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h")
 vim.opt.rtp:prepend(root)
--- $FILETREE_LIB_NVIM overrides the sibling checkout, so this suite can run
--- against a lib.nvim worktree/branch before it is merged.
-local sibling_lib = vim.env.FILETREE_LIB_NVIM
-if not sibling_lib or sibling_lib == "" then
-  sibling_lib = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
+-- lib.nvim is a declared dependency. Candidates in order: $FILETREE_LIB_NVIM,
+-- $LIB_NVIM_PATH (the name lib.nvim's own resolve template uses, and the one
+-- TESTS/refs/run.lua reads), a sibling checkout, then lazy.nvim's managed copy.
+-- All four suites and refs/run.lua accept both variables, so one exported name
+-- runs the whole suite. The sibling is what CI relies on (it checks lib.nvim
+-- out next to this repo); the lazy fallback is what makes the suites runnable
+-- from a git worktree, where "../lib.nvim" points inside .claude/worktrees/ and
+-- does not exist.
+local lib_candidates = {}
+-- Appended one at a time rather than written as a table literal: an unset
+-- `vim.env.X` is nil, and a nil inside a table constructor truncates the array
+-- for ipairs -- with neither variable exported the whole list would be skipped
+-- and the fallbacks below would never be reached.
+for _, env in ipairs({ "FILETREE_LIB_NVIM", "LIB_NVIM_PATH" }) do
+  local v = vim.env[env]
+  if v and v ~= "" then lib_candidates[#lib_candidates + 1] = v end
 end
-if vim.fn.isdirectory(sibling_lib) == 1 then vim.opt.rtp:prepend(sibling_lib) end
+lib_candidates[#lib_candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
+lib_candidates[#lib_candidates + 1] = vim.fn.stdpath("data") .. "/lazy/lib.nvim"
+for _, candidate in ipairs(lib_candidates) do
+  if vim.fn.isdirectory(candidate .. "/lua/lib") == 1 then
+    vim.opt.rtp:prepend(candidate)
+    break
+  end
+end
 
 -- Cross-platform scratch-dir root for the many `tmp = TMP_ROOT .. "/units-*"`
 -- fixtures below. $TEMP is Windows-only; POSIX runners (incl. CI) don't set

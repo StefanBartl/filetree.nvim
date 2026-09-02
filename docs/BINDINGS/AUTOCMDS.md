@@ -18,7 +18,7 @@ filetree.nvim creates autocmds in two categories:
 
 | Feature | Event(s) | Trigger | Disable |
 |---------|---------|---------|---------|
-| `auto_reveal` | `BufEnter` | Reveal current file in tree on buffer switch | `enabled = false` or `autocmds = { auto_reveal = false }` |
+| `auto_reveal` | `BufEnter`, `WinEnter` | Reveal current file in tree on buffer switch, and on entering the tree window (`sync_on_enter`) | `enabled = false` or `autocmds = { auto_reveal = false }` |
 | `cwd_sync` | `BufEnter`, `DirChanged` | Sync Vim cwd to current node's directory | `enabled = false` or `autocmds = { cwd_sync = false }` |
 | `current_hl` | `BufEnter`, `CursorMoved` | Highlight current-file node in tree | `enabled = false` or `autocmds = { current_hl = false }` |
 | `cursor_hide` | `BufEnter`, `WinEnter`, `BufLeave`, `WinLeave` | Hide block cursor in tree window; restore on leave | `enabled = false` |
