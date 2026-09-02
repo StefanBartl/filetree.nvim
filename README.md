@@ -13,7 +13,7 @@
 ```
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Neovim](https://img.shields.io/badge/Neovim-0.8%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io)
+[![Neovim](https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io)
 [![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
 ![Status](https://img.shields.io/badge/status-alpha-red)
 
@@ -35,7 +35,7 @@ Beyond navigation (cwd modes, auto-reveal, tree traversal) and tree UI (preview,
 
 ## Requirements
 
-- Neovim >= 0.8
+- Neovim >= 0.10 — `vim.system()` and `vim.uv` are used unguarded, and lib.nvim itself requires 0.10.
 - [lib.nvim](https://github.com/StefanBartl/lib.nvim) — shared helper library. **Required** for the `:Filetree`/`:Ft` command layer (`lib.nvim.bindings.usercmd.composer`); most other integrations (notify, `find_root`, ...) still degrade gracefully with local fallbacks if it's missing, but the commands themselves won't register without it.
 - **One** of [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) or [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua)
 - Optional CLI tools (`trash-put`/`gio` for the trash feature, `rg` for

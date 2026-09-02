@@ -24,6 +24,24 @@
 local tree_attach = require("filetree.util.tree_attach")
 local keymap = require("lib.nvim.bindings.keymap")
 
+-- `vim.validate(name, value, validator)` is the 0.11 signature. Before that only
+-- the table form exists, and from 0.11 on that form is deprecated -- so neither
+-- spelling is correct across the range the README promises. Pick per version.
+-- Runtime facts do not change mid-session, so this is read once.
+local has_flat_validate = vim.fn.has("nvim-0.11") == 1
+
+---@param name string   # Argument name, for the error message.
+---@param value any
+---@param typ string     # Expected `type()`.
+local function validate(name, value, typ)
+  if has_flat_validate then
+    vim.validate(name, value, typ)
+  else
+    ---@diagnostic disable-next-line: deprecated, param-type-mismatch
+    vim.validate({ [name] = { value, typ } })
+  end
+end
+
 ---@class FiletreeBindSpec
 ---@field name string          # Action name, e.g. "copy_absolute".
 ---@field field string         # Config field holding the lhs, e.g. "keymap_abs".
@@ -113,9 +131,9 @@ end
 ---@param scope? "tree"|"global"  # Default "tree".
 ---@return Lib.Keymap.Registered[]|nil
 function M.bind(feature, cfg, specs, scope)
-  vim.validate("feature", feature, "string")
-  vim.validate("cfg", cfg, "table")
-  vim.validate("specs", specs, "table")
+  validate("feature", feature, "string")
+  validate("cfg", cfg, "table")
+  validate("specs", specs, "table")
 
   local spec_table, user = build(specs, cfg)
 
@@ -139,10 +157,10 @@ end
 ---@param buf integer
 ---@return Lib.Keymap.Registered[]
 function M.bind_buffer(feature, cfg, specs, buf)
-  vim.validate("feature", feature, "string")
-  vim.validate("cfg", cfg, "table")
-  vim.validate("specs", specs, "table")
-  vim.validate("buf", buf, "number")
+  validate("feature", feature, "string")
+  validate("cfg", cfg, "table")
+  validate("specs", specs, "table")
+  validate("buf", buf, "number")
 
   local spec_table, user = build(specs, cfg)
   return keymap.register("filetree", spec_table, user, { buffer = buf, surface = feature })

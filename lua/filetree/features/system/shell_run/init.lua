@@ -66,7 +66,7 @@ local function run_in_terminal(dir, cmd, close_on_ok, split, height)
     end,
   }
   -- `termopen()` is deprecated since 0.11, where jobstart's `term = true` does
-  -- the same thing. The README still promises 0.8, so the old call stays for
+  -- the same thing. The README promises 0.10, so the old call stays for
   -- anything older -- suppressed there because the deprecation is the point.
   local job
   if vim.fn.has("nvim-0.11") == 1 then
