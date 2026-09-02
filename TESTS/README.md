@@ -11,9 +11,9 @@ Everything CI runs, plus the manual pass it cannot.
 | [`refs/`](refs/) | fixture-based: real on-disk multi-file projects, described below |
 | [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
 
-The four `.lua` suites are headless and need no tree plugin (stub adapter);
-exit 0 is a pass. `MANUAL.md` describes each in more detail and carries the
-lib.nvim resolution notes.
+All five suites are headless and need no tree plugin (stub adapter); exit 0 is
+a pass, and CI gates on every one of them. `MANUAL.md` describes each in more
+detail and carries the lib.nvim resolution notes.
 
 ## refs/
 

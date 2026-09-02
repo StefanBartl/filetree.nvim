@@ -26,12 +26,22 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   tree-window badge in both drawing strategies, and the `:Filetree cwd …`
   command wiring incl. enum completion. Uses a stub adapter and a temp tree.
 
+- **[refs/run.lua](refs/run.lua)** — fixture-based: copies
+  `TESTS/refs/fixtures/<lang>/` to a scratch dir and renames the hub module
+  through the real feature, asserting every referencing file was rewritten and a
+  similar-but-different name was not. Covers the directory-rename cascade, the
+  live-buffer patch, `M` move and `refs undo`. Runs on either candidate-search
+  path — ripgrep when present, the capped fallback walk when not.
+
+These are the five suites CI gates on, in this order:
+
 ```
 cd /path/to/filetree.nvim
 nvim --clean --headless -u NONE -l TESTS/smoke.lua
 nvim --clean --headless -u NONE -l TESTS/units.lua
 nvim --clean --headless -u NONE -l TESTS/menu.lua
 nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
+nvim --clean --headless -u NONE -l TESTS/refs/run.lua
 ```
 
 **lib.nvim resolution:** every suite here — the four `.lua` files and

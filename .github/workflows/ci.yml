@@ -32,10 +32,16 @@ jobs:
       - name: luacheck
         run: luacheck lua docs/BINDINGS.lua TESTS
 
-  # Real gate: the headless test suite (smoke, units, menu, cwd_mode). lib.nvim
-  # is checked out as a sibling so the suites' own sibling-checkout lookup
-  # (../lib.nvim) finds it -- filetree.nvim's command layer and several
+  # Real gate: the headless test suite (smoke, units, menu, cwd_mode, refs).
+  # lib.nvim is checked out as a sibling so the suites' own sibling-checkout
+  # lookup (../lib.nvim) finds it -- filetree.nvim's command layer and several
   # features depend on it at runtime.
+  #
+  # refs/run.lua is fixture-based: it copies TESTS/refs/fixtures/<lang>/ to a
+  # scratch dir and renames a module through the real feature, asserting every
+  # referencing file follows. It needs no tree plugin and no LSP server, and
+  # runs on either candidate-search path -- ripgrep when the image has it, the
+  # capped fallback walk when it does not (both verified, same 54 checks).
   test:
     name: tests (headless)
     runs-on: ubuntu-latest
@@ -65,3 +71,4 @@ jobs:
           nvim --clean --headless -u NONE -l TESTS/units.lua
           nvim --clean --headless -u NONE -l TESTS/menu.lua
           nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
+          nvim --clean --headless -u NONE -l TESTS/refs/run.lua
