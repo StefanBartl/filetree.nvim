@@ -43,9 +43,9 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard |
 | `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard |
 | `]R` | path_copy | `keymap_project_rel` | Copy path relative to project root (cwd-independent) |
-| `d` | trash | `keymap` | Trash current node (or all marked) |
-| `U` | trash | `keymap_undo` | Undo last trash operation |
-| `<leader>th` | trash | `keymap_history` | Show trash history |
+| `d` | trash | `keymap` | Trash current node (or all marked). **`filesystem` source only** |
+| `U` | trash | `keymap_undo` | Undo last trash operation. **`filesystem` source only** |
+| `<leader>th` | trash | `keymap_history` | Show trash history. **`filesystem` source only** |
 | `gs` | live_search | `keymap` | Open live search in tree |
 | `I` | node_info | `keymap` | Show node info float |
 | `rq` | lua_require_copy | `keymap` | Copy file as `require("…")` string |
@@ -209,6 +209,27 @@ end
 The injection runs once when Neovim finishes starting (or immediately if filetree
 is loaded after startup), which handles the `lazy = false` ordering race where
 neo-tree's `setup()` may run before or after filetree's.
+
+### Per-source keymaps
+
+neo-tree draws its filesystem, buffer list, git status, symbol outline and
+diagnostics list through one window and one `neo-tree` filetype, so "bind this
+on tree buffers" means all five. A feature whose actions presuppose a
+filesystem node says so in
+[`lua/filetree/sources.lua`](../../lua/filetree/sources.lua), and is then
+neither bound nor listed in `?` anywhere else. Today that is `trash` (`d`, `U`,
+`<leader>th`), restricted to `filesystem`: there is nothing to trash in a symbol
+outline, and `<leader>th` in particular was shadowing whatever global binding a
+config had on that key while offering nothing in exchange.
+
+Both paths read that one list — the dispatcher that binds the key and the
+injection that describes it — so a key cannot be bound in a tree whose
+cheatsheet does not list it. An adapter without sources (nvim-tree) is
+unaffected: no source means no restriction.
+
+Restricted keys are also kept out of the *shared* `window.mappings` table
+rather than only filtered per source. neo-tree merges that table into every
+source itself, so anything left there would arrive in all five regardless.
 
 ### Explicit (optional)
 

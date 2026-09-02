@@ -14,10 +14,15 @@
 --- `fn` receives the tree buffer number: `fn(buf)`.
 
 local au = require("filetree.util.autocmd")
+local sources = require("filetree.sources")
 
 local M = {}
 
----@type fun(buf: integer)[]
+---@class FiletreeTreeAttachCallback
+---@field fn fun(buf: integer)
+---@field feature string|nil  # Consulted against `filetree.sources`; nil = every source.
+
+---@type FiletreeTreeAttachCallback[]
 local _callbacks = {}
 ---@type integer?
 local _augroup = nil
@@ -29,9 +34,16 @@ function M.reset()
 end
 
 ---Register a callback to run once for each tree buffer when it attaches.
+---
+---`feature` opts the callback into the source check: neo-tree draws its
+---filesystem, buffer list, git status, symbol outline and diagnostics list
+---through one `neo-tree` filetype, so "on a tree buffer" is five different
+---trees. A feature named in `filetree.sources` runs only on the ones it lists;
+---anything else runs everywhere, as all of them did before.
 ---@param fn fun(buf: integer)
-function M.on_attach(fn)
-  if type(fn) == "function" then _callbacks[#_callbacks + 1] = fn end
+---@param feature string|nil
+function M.on_attach(fn, feature)
+  if type(fn) == "function" then _callbacks[#_callbacks + 1] = { fn = fn, feature = feature } end
 end
 
 ---Install the single FileType autocmd that dispatches to all callbacks.
@@ -54,10 +66,17 @@ function M.install(adapter)
       local buf = ev.buf
       -- Defer past the adapter's own buffer-local keymap setup, then run every
       -- registered feature callback once for this buffer.
+      --
+      -- The deferral also makes the source readable: neo-tree sets
+      -- `b:neo_tree_source` in its renderer, which is after FileType -- nil in
+      -- this callback, "filesystem" by the next tick (measured 2026-09-02).
+      -- So the tick this has needed all along is exactly the one that makes a
+      -- per-source decision possible here.
       vim.schedule(function()
         if not vim.api.nvim_buf_is_valid(buf) then return end
-        for _, fn in ipairs(_callbacks) do
-          pcall(fn, buf)
+        local source = sources.of_buffer(buf)
+        for _, cb in ipairs(_callbacks) do
+          if cb.feature == nil or sources.allows(cb.feature, source) then pcall(cb.fn, buf) end
         end
       end)
     end,

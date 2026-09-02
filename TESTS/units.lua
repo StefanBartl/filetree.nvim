@@ -399,6 +399,133 @@ do
   check("extract_paths resolves via get_id", paths[2] == "E:/c/d.lua")
 end
 
+-- ── attach: a source-restricted feature stays out of the shared table ───────
+--
+-- The defect this pins: `inject` runs AFTER neo-tree.setup(), so it writes
+-- into the already-merged config and is the last word. A config that disabled
+-- a trash key for one source (`document_symbols.window.mappings["<leader>th"]
+-- = "noop"`) was silently overruled -- the key showed trash history in a
+-- symbol tree, where there is no node to have trashed.
+--
+-- Asserted on the tables rather than on a live tree, because "which table it
+-- lands in" IS the fix; a rendered tree would only show it second-hand.
+do
+  package.loaded["neo-tree"] = { config = {} }
+  local attach = dofile(root .. "/lua/filetree/attach.lua")
+  local cfg = { features = { trash = { enabled = true } } }
+
+  local shared = attach.mappings_for(cfg, nil)
+  local fs = attach.mappings_for(cfg, "filesystem")
+  local sym = attach.mappings_for(cfg, "document_symbols")
+
+  -- The three trash keys, by their documented defaults.
+  for _, lhs in ipairs({ "d", "U", "<leader>th" }) do
+    check(("attach: %q not in the shared window table"):format(lhs), shared[lhs] == nil)
+    check(("attach: %q reaches filesystem"):format(lhs), fs[lhs] ~= nil)
+    check(("attach: %q stays out of document_symbols"):format(lhs), sym[lhs] == nil)
+  end
+
+  -- An unrestricted feature must be unaffected: still in all three. That is
+  -- what keeps this a restriction rather than a general narrowing.
+  check("attach: node_info still shared", shared["I"] ~= nil)
+  check("attach: node_info still in document_symbols", sym["I"] ~= nil)
+
+  -- build_mappings keeps its old contract -- every key, restrictions ignored --
+  -- because docs and tooling ask it "what does filetree define", not "what
+  -- goes in this table".
+  local all = attach.build_mappings(cfg)
+  check("attach: build_mappings still lists <leader>th", all["<leader>th"] ~= nil)
+
+  -- The pre-setup path has to place them the same way: neo-tree merges the
+  -- shared table into every source itself, so a restricted key left in
+  -- `window` would reach all of them anyway.
+  local opts = attach.neotree({}, cfg)
+  check(
+    "attach: neotree() keeps <leader>th out of opts.window",
+    opts.window.mappings["<leader>th"] == nil
+  )
+  check(
+    "attach: neotree() puts <leader>th in filesystem",
+    opts.filesystem ~= nil and opts.filesystem.window.mappings["<leader>th"] ~= nil
+  )
+  check("attach: neotree() leaves document_symbols alone", opts.document_symbols == nil)
+  check(
+    "attach: neotree() still writes unrestricted keys to opts.window",
+    opts.window.mappings["I"] ~= nil
+  )
+end
+
+-- ── tree_attach: the dispatcher honours the same source restriction ─────────
+--
+-- The half that actually decides what a keypress does. `attach.inject` only
+-- feeds neo-tree's `?` cheatsheet; the keys themselves come from here, out of
+-- one `FileType neo-tree` autocmd that fires for all five sources alike. Both
+-- read `filetree.sources`, so a key cannot be bound where it is not listed.
+do
+  package.loaded["filetree.sources"] = nil
+  package.loaded["filetree.util.tree_attach"] = nil
+  local ta = dofile(root .. "/lua/filetree/util/tree_attach.lua")
+  local srcs = dofile(root .. "/lua/filetree/sources.lua")
+
+  check("sources: an unrestricted feature reaches any source", srcs.allows("node_info", "buffers"))
+  check("sources: trash reaches filesystem", srcs.allows("trash", "filesystem"))
+  check(
+    "sources: trash does not reach document_symbols",
+    not srcs.allows("trash", "document_symbols")
+  )
+  check("sources: trash does not reach diagnostics", not srcs.allows("trash", "diagnostics"))
+
+  -- An unknown source means two opposite things depending on who is asking,
+  -- and conflating them is how this would break NvimTree (no sources at all)
+  -- or leak into the shared window table.
+  check("sources: unknown source binds (lenient)", srcs.allows("trash", nil))
+  check("sources: unknown source is not shared (strict)", not srcs.allows("trash", nil, true))
+
+  -- The dispatcher itself, through its real autocmd rather than a stand-in:
+  -- register one restricted and one unrestricted callback, then make a buffer
+  -- look like the tree of a given source and let `FileType` fire.
+  local ran = {}
+  ta.reset()
+  ta.on_attach(function()
+    ran.trash = true
+  end, "trash")
+  ta.on_attach(function()
+    ran.plain = true
+  end)
+  ta.install(nil) -- no adapter -> the default { "neo-tree", "NvimTree" } pattern
+
+  ---@param source string|nil
+  ---@return table
+  local function attach_as(source)
+    ran = {}
+    local buf = vim.api.nvim_create_buf(false, true)
+    -- Set before the event, not after: the real ordering (renderer sets it one
+    -- tick later, which is the tick the dispatcher waits for anyway) is
+    -- measured and documented in `filetree.sources`; what is under test here
+    -- is the decision, not neo-tree's timing.
+    if source then vim.b[buf].neo_tree_source = source end
+    vim.api.nvim_set_option_value("filetype", "neo-tree", { buf = buf })
+    vim.wait(500, function()
+      return ran.plain == true
+    end, 10)
+    vim.api.nvim_buf_delete(buf, { force = true })
+    return ran
+  end
+
+  local fs_run = attach_as("filesystem")
+  check("tree_attach: filesystem runs trash", fs_run.trash == true)
+  check("tree_attach: filesystem runs the unrestricted one", fs_run.plain == true)
+
+  local sym_run = attach_as("document_symbols")
+  check("tree_attach: document_symbols skips trash", sym_run.trash == nil)
+  check("tree_attach: document_symbols still runs the unrestricted one", sym_run.plain == true)
+
+  local none_run = attach_as(nil)
+  check("tree_attach: an adapter without sources runs everything", none_run.trash == true)
+
+  ta.teardown()
+end
+
 -- ── cwd_sync: silently changes cwd + refreshes, never prompts ────────────────
 do
   local tmp = (TMP_ROOT .. "/units-cwdsync"):gsub("\\", "/")

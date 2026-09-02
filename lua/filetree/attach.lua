@@ -43,6 +43,11 @@ local M = {}
 ---@field desc    string
 ---@field default string?
 
+-- Which features are restricted to which sources lives in `filetree.sources`,
+-- shared with the binding path (`util.bind` / `util.tree_attach`) so the `?`
+-- cheatsheet and the keys it describes cannot disagree.
+local sources = require("filetree.sources")
+
 ---@type table<string, FiletreeAttachEntry[]>
 local SPEC = {
   tree_traverse = {
@@ -368,10 +373,12 @@ end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
----Build the filetree keymap table for neo-tree from a filetree config.
----@param config table            Filetree config (as passed to setup()).
----@return table<string, table>   { [lhs] = { handler, desc = "…" } }
-function M.build_mappings(config)
+---@internal
+---Build the keymap table from every feature `want` accepts.
+---@param config table
+---@param want fun(feature: string): boolean
+---@return table<string, table>
+local function build(config, want)
   local mappings = {}
   local feat_cfg = (config and config.features) or {}
   -- Opt-out model: every feature in SPEC is on by default (none are in the
@@ -379,7 +386,7 @@ function M.build_mappings(config)
   -- Only an explicit `enabled = false` removes it from the cheatsheet.
   for feature, entries in pairs(SPEC) do
     local fc = feat_cfg[feature] or {}
-    if fc.enabled ~= false then
+    if fc.enabled ~= false and want(feature) then
       for _, entry in ipairs(entries) do
         local key = resolve_key(fc, entry)
         if key then
@@ -394,36 +401,98 @@ function M.build_mappings(config)
   return mappings
 end
 
+---Build the filetree keymap table for neo-tree from a filetree config.
+---
+---Every enabled feature, source restrictions ignored -- so this stays the
+---answer to "which keys does filetree define", which is what docs and tooling
+---ask it. Injection asks a narrower question; see `M.mappings_for`.
+---@param config table            Filetree config (as passed to setup()).
+---@return table<string, table>   { [lhs] = { handler, desc = "…" } }
+function M.build_mappings(config)
+  return build(config, function()
+    return true
+  end)
+end
+
+---The keymaps that belong in one particular neo-tree mapping table.
+---
+---`source` names the neo-tree source (`"filesystem"`, `"document_symbols"`,
+---…), or is `nil` for the *shared* `window.mappings` that every source
+---inherits. A restricted feature (`filetree.sources`) never goes into the
+---shared table -- being inherited by every source is exactly what it must not
+---do, hence `strict` -- and reaches only the sources it names.
+---@param config table
+---@param source string|nil
+---@return table<string, table>
+function M.mappings_for(config, source)
+  return build(config, function(feature)
+    return sources.allows(feature, source, true)
+  end)
+end
+
+---@internal
+---`t.window.mappings`, created along the way if missing.
+---@param t table
+---@return table
+local function window_mappings(t)
+  t.window = t.window or {}
+  t.window.mappings = t.window.mappings or {}
+  return t.window.mappings
+end
+
 ---Inject enabled filetree feature keymaps into a neo-tree `opts` table's
 ---window.mappings.  Call BEFORE `require("neo-tree").setup(opts)`.
+---
+---A source-restricted feature goes into that source's own table instead of
+---the shared one, so neo-tree's merge never carries it anywhere else.
 ---@param opts table       The neo-tree opts table you will pass to setup().
 ---@param config table     The filetree config table (same one passed to setup()).
 ---@return table opts      The mutated opts (for chaining).
 function M.neotree(opts, config)
   opts = opts or {}
-  opts.window = opts.window or {}
-  opts.window.mappings = opts.window.mappings or {}
-  local mappings = M.build_mappings(config)
-  for k, v in pairs(mappings) do
-    opts.window.mappings[k] = v
+
+  -- Shared: everything a source may inherit.
+  for k, v in pairs(M.mappings_for(config, nil)) do
+    window_mappings(opts)[k] = v
   end
+
+  -- Restricted features, into their own sources only. neo-tree merges the
+  -- shared table into every source itself (`setup/init.lua`, `merge_config`),
+  -- so these are the only entries that have to be placed by hand -- writing
+  -- the whole set per source would just be copies to keep in step.
+  for feature, allowed in pairs(sources.RESTRICTED) do
+    local only = build(config, function(f)
+      return f == feature
+    end)
+    for _, src in ipairs(allowed) do
+      opts[src] = opts[src] or {}
+      local into = window_mappings(opts[src])
+      for k, v in pairs(only) do
+        into[k] = v
+      end
+    end
+  end
+
   return opts
 end
 
 ---@internal
----Merge `mappings` into every window.mappings table in `windows`.
----@param windows table[]  list of neo-tree `window` config tables
+---Merge `mappings` into one neo-tree `window` config table.
+---@param w table|nil  a neo-tree `window` config table
 ---@param mappings table
-local function merge_into_windows(windows, mappings)
-  for _, w in ipairs(windows) do
-    if type(w) == "table" then
-      w.mappings = w.mappings or {}
-      for k, v in pairs(mappings) do
-        w.mappings[k] = v
-      end
-    end
+local function merge_into_window(w, mappings)
+  if type(w) ~= "table" then return end
+  w.mappings = w.mappings or {}
+  for k, v in pairs(mappings) do
+    w.mappings[k] = v
   end
 end
+
+---@internal
+---Sources `inject` writes into. `diagnostics` is deliberately absent, as it
+---was before: nothing here has ever claimed to know that tree.
+---@type string[]
+local INJECT_SOURCES = { "filesystem", "buffers", "git_status", "document_symbols" }
 
 ---Automatically inject filetree keymaps into the LIVE neo-tree config + any open
 ---states, so they show up in `?` without the user wiring up `M.neotree`.
@@ -438,27 +507,33 @@ function M.inject(config, adapter)
   local ncfg = nt.config or (type(nt.ensure_config) == "function" and nt.ensure_config())
   if type(ncfg) ~= "table" then return false end
 
-  local mappings = M.build_mappings(config)
-  if vim.tbl_isempty(mappings) then return true end
+  if vim.tbl_isempty(M.build_mappings(config)) then return true end
 
   -- 1. Future states: neo-tree deepcopies each state from these config tables.
-  local windows = {}
-  if type(ncfg.window) == "table" then windows[#windows + 1] = ncfg.window end
-  for _, src in ipairs({ "filesystem", "buffers", "git_status", "document_symbols" }) do
+  --
+  -- Per source rather than one merged set for all of them: by the time this
+  -- runs, `neo-tree.setup()` has already folded the shared `window` into each
+  -- source, so writing here is the last word and nothing propagates on its
+  -- own. A restricted feature written into the shared table would therefore
+  -- NOT reach the sources -- and one written into every source would reach the
+  -- ones it must not.
+  merge_into_window(ncfg.window, M.mappings_for(config, nil))
+  for _, src in ipairs(INJECT_SOURCES) do
     local s = ncfg[src]
-    if type(s) == "table" and type(s.window) == "table" then windows[#windows + 1] = s.window end
+    if type(s) == "table" then merge_into_window(s.window, M.mappings_for(config, src)) end
   end
-  merge_into_windows(windows, mappings)
 
   -- 2. Already-open states: patch live window.mappings and force a rebuild of
   --    resolved_mappings (which neo-tree regenerates from window.mappings on render).
+  --    `state.name` is the source name (neo-tree's own `_for_each_state`
+  --    filters on it), so an open tree gets exactly what its source may have.
   local patched_live = false
   local ok_mgr, mgr = pcall(require, "neo-tree.sources.manager")
   if ok_mgr and type(mgr._get_all_states) == "function" then
     for _, state in ipairs(mgr._get_all_states()) do
       if type(state.window) == "table" then
         state.window.mappings = state.window.mappings or {}
-        for k, v in pairs(mappings) do
+        for k, v in pairs(M.mappings_for(config, state.name)) do
           state.window.mappings[k] = v
         end
         state.resolved_mappings = nil

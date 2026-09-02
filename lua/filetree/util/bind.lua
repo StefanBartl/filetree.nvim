@@ -141,9 +141,15 @@ function M.bind(feature, cfg, specs, scope)
     return keymap.register("filetree", spec_table, user, { surface = feature })
   end
 
+  -- The dispatcher fires for every tree buffer, and neo-tree renders five
+  -- different sources through one `neo-tree` filetype -- so a feature that only
+  -- makes sense over a filesystem node has to say so, or it binds its keys in
+  -- a symbol outline too. `filetree.sources` is the same list `attach.lua`
+  -- reads for the `?` cheatsheet, so a key cannot be bound somewhere it is not
+  -- listed, or the other way round.
   tree_attach.on_attach(function(buf)
     keymap.register("filetree", spec_table, user, { buffer = buf, surface = feature })
-  end)
+  end, feature)
 end
 
 ---Declare and bind for ONE buffer, now.
