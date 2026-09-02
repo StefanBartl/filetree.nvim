@@ -64,7 +64,7 @@ local function scan_dir(root, max_entries)
         local full = dir .. "/" .. name
         if typ == nil then
           local st = uv.fs_stat(full)
-          typ = st and st.type or nil
+          if st then typ = st.type end
         end
 
         if typ == "directory" then
