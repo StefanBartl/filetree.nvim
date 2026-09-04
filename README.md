@@ -83,6 +83,9 @@ For packer.nvim, vim-plug, and mini.deps, see [Installation](docs/installation.m
 
 ## Documentation
 
+Start at [docs/README.md](docs/README.md), which says what is where and which
+question each page answers.
+
 - [Installation](docs/installation.md) — requirements and setup for lazy.nvim, packer.nvim, vim-plug, and mini.deps.
 - [Configuration](docs/configuration.md) — full option reference, adapter selection, cwd_sync per-adapter behavior, and the ignore list.
 - [Features](docs/FEATURES/README.md) — every feature by category, default-disabled features, and deep-dives into the core ones.
@@ -90,6 +93,8 @@ For packer.nvim, vim-plug, and mini.deps, see [Installation](docs/installation.m
 - [Commands](docs/commands.md) — the `:Filetree` command tree and its autocmds.
 - [API](docs/api.md) — the public Lua API and how to register a custom adapter.
 - [Menu integration](docs/menu.md) — using filetree.nvim's actions with nvzone/menu.
+- [Bindings](docs/BINDINGS.md) — the entry point to every keymap, sub-command and autocommand, and which detail page holds what.
+- [Workflow](docs/WORKFLOW.md) — how the features combine once several of them are on at the same time.
 - [Troubleshooting](docs/troubleshooting.md) — health check, debug mode, and known adapter caveats.
 
 ## License
