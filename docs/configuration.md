@@ -22,6 +22,11 @@ require("filetree").setup({
   adapter = "auto",   -- "neotree" | "nvimtree" | "auto"
   debug   = false,    -- true → show internal debug notifications (troubleshooting)
 
+  -- One-time "which CLI tools does this plugin want, and why" popup on first
+  -- setup() after install (via lib.nvim.deps). false disables it here, in the
+  -- spec passed to setup() — no vim.g needed. See the root README.
+  deps_popup = true,
+
   -- Ignore list: hide common dirs/files from the tree by default.
   -- true (default) → built-in list (.git, node_modules, …)
   -- false          → show everything
