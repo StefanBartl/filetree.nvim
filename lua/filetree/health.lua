@@ -67,7 +67,7 @@ function M.check()
       vim.health.ok(a.name .. " (" .. a.plugin .. ") — available")
       found_any = true
     else
-      vim.health.warn(a.name .. " (" .. a.plugin .. ") — not installed")
+      vim.health.info(a.name .. " (" .. a.plugin .. ") — not installed")
     end
   end
 
