@@ -591,6 +591,15 @@ do
     "cwd_sync still reveals the file",
     revealed_path and revealed_path:gsub("\\", "/") == tmp .. "/proj/sub/file.lua"
   )
+
+  -- Drain any still-pending debounced reveal, then drop this block's autocmds
+  -- and module state. Without this the next cwd_sync block inherits a live
+  -- BufEnter handler and a populated `S.last_path`: its own `edit` fires the
+  -- stale handler, which sets `S.last_path` to that file, and the block's real
+  -- catch-up `do_reveal` then short-circuits on the `S.last_path == path`
+  -- guard and never chdirs. (Order-dependent, and it surfaced only on Linux CI.)
+  vim.wait(30)
+  require("filetree.features.nav.cwd_sync").teardown()
 end
 
 -- ── cwd_sync: startup catch-up syncs a buffer focused BEFORE setup() ran ─────
@@ -655,6 +664,9 @@ do
     "cwd_sync startup catch-up: reveals the already-focused file",
     revealed_path and revealed_path:gsub("\\", "/") == tmp .. "/proj/file.lua"
   )
+
+  vim.wait(30)
+  require("filetree.features.nav.cwd_sync").teardown()
 end
 
 -- ── neotree adapter: reveal-prompt guard ─────────────────────────────────────
