@@ -3,6 +3,16 @@
 
 local M = {}
 
+--- `ℹ️ INFO` reads faster than a bare `info()` line in a status list (adapter,
+--- backend, engine) where the column itself carries information; a plain
+--- fact (version, path, count) stays a bare `vim.health.info()`. Paired with
+--- `after/syntax/checkhealth.vim` in the nvim-config, which colors the
+--- `INFO` keyword the same as the built-in `OK`/`WARNING`/`ERROR` ones.
+---@param msg string
+local function note(msg)
+  vim.health.info("ℹ️ INFO " .. msg)
+end
+
 ---Run all :checkhealth filetree checks (lib.nvim, Neovim version, config,
 ---adapters, active adapter, features, optional dependencies, composer routes).
 function M.check()
@@ -67,7 +77,7 @@ function M.check()
       vim.health.ok(a.name .. " (" .. a.plugin .. ") — available")
       found_any = true
     else
-      vim.health.info(a.name .. " (" .. a.plugin .. ") — not installed")
+      note(a.name .. " (" .. a.plugin .. ") — not installed")
     end
   end
 
