@@ -24,12 +24,18 @@ filetree.nvim creates autocmds in two categories:
 | `cursor_hide` | `BufEnter`, `WinEnter`, `BufLeave`, `WinLeave` | Hide block cursor in tree window; restore on leave | `enabled = false` |
 | `window_style` | tree-attach, `BufWinEnter`, `WinEnter` (statusline); `ColorScheme` (highlights_isolate) | Blank statusline (on by default) / isolate tree highlights (opt-in) in tree windows | `enabled = false` or `statusline = false` / `highlights_isolate = false` |
 | `preview` | `BufLeave`, `WinLeave`, `CursorMoved` | Auto-close preview float on leave; live-update on cursor move | `enabled = false` |
-| `git_status` | `BufWritePost`, `FocusGained` | Refresh git decorations after write | `enabled = false` |
-| `file_watcher` | `User FileWatcherEvent` | Refresh tree on filesystem change | `enabled = false` |
+| `git_status` | `BufWritePost`, `FocusGained`, `CursorMoved` (re-render only, no requery) | Refresh git decorations after write / focus return | `enabled = false` |
+| `file_watcher` | tree-attach (start watch), `DirChanged` (re-watch) | `uv.fs_event` watch on the tree root; refreshes on filesystem change | `enabled = false` |
 | `session` | `VimLeavePre`, `BufHidden` (tree) | Auto-save/restore project session | `auto_save = false` / `auto_restore = false` |
-| `lsp_diagnostics` | `DiagnosticChanged` | Refresh diagnostic decorations | `enabled = false` |
-| `breadcrumbs` | `BufEnter`, `CursorMoved` | Update winbar/statusline breadcrumb | `enabled = false` |
-| `watcher_quarantine` | `User FileWatcherEvent` | Suppress watcher events during operations | `enabled = false` |
+| `lsp_diagnostics` | `DiagnosticChanged`, `BufEnter`, `BufWritePost` | Refresh diagnostic decorations | `enabled = false` |
+| `breadcrumbs` | `CursorMoved`, `BufEnter`, `WinClosed` (float mode only) | Update winbar/float/statusline breadcrumb | `enabled = false` |
+| `watcher_quarantine` | none — patches `vim.notify` and neo-tree's `fs_watch.watch_folder` callback directly, no autocmds registered | Suppresses EPERM watcher noise during operations | `enabled = false` |
+| `opened_sync` | `BufAdd`, `BufDelete`, `BufWipeout`, `BufWinEnter`, `BufWinLeave` | Debounced redraw to keep "opened files" decoration in sync (deliberately not `BufEnter` — too chatty) | `enabled = false` (adapter must expose `redraw`) |
+| `size_info` | `BufEnter`, `CursorHold` | Renders size column on tree entry; refreshes (incl. async `du`/PowerShell dir-size queries) while cursor rests | `enabled = false` |
+| `no_name_guard` | `BufWinEnter` (single buf/win pair), `BufAdd`+`BufDelete`+`BufWipeout` (swept across all windows) | Redirects a stray `[No Name]` window/buffer to a real named buffer | `enabled = false` |
+| `layout_guard` | `BufDelete`, `BufWipeout`, `WinClosed` | Opens a new empty split if only the tree window remains, so the user is never trapped inside it | `enabled = false` |
+| `auto_resize` | `VimResized`, tree-attach (apply on open/focus) | Recomputes target width from breakpoints and resizes the tree window | `enabled = false` (opt-in, default off) |
+| `ignore_list` (dim fallback) | `BufEnter`, `TextChanged` | Dims (Comment-highlight) lines matching the ignore list — **non-neotree adapters only** | `enabled = false` |
 
 ---
 
