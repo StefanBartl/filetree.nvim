@@ -33,8 +33,8 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `gm` | marks | `keymap_goto` | Go to the Nth marked node in render order (`Ngm`; a too-large count clamps to the last) |
 | `]M` | marks | `keymap_next` | Next marked node, wrapping |
 | `[M` | marks | `keymap_prev` | Previous marked node, wrapping |
-| `-` | tree_traverse | `keymap_up` | Navigate to parent directory |
-| `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
+| `-` | tree_traverse | `keymap_up` | Navigate to parent directory (×count) |
+| `+` | tree_traverse | `keymap_down` | Set current dir as tree root (×count) |
 | `B` | reveal_alt | `keymap` | Reveal the alternate buffer (`#`) in the tree |
 | `L` | cwd_mode | `keymap_cycle` | Cycle the cwd policy (follow → project → lock) |
 | `gp` | cwd_mode | `keymap_lock_here` | Lock the cwd to the node under the cursor |
@@ -89,7 +89,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `<S-CR>` | open_variants | `keymap_badd_alt` | Same as `gb` |
 | `<C-s>` | buffer_save | `keymap_adjacent` | Force-save the adjacent editor buffer |
 | `<M-s>` | buffer_save | `keymap_node` | Force-save buffer matching node under cursor |
-| `w` | window_size_cycler | `keymap` | Cycle tree width through presets (normal → large → small → …) |
+| `w` | window_size_cycler | `keymap` | Cycle tree width through presets (normal → large → small → …). With a count N (`3w`), jumps directly to preset N instead of stepping. |
 | `<leader>fm` | open_in_fm | `keymap` | Open node directory in system file manager |
 | `i` | shell_run | `keymap` | Prompt for a shell command, run in node directory |
 | `gP` | pdf_create | `keymap` | Create PDF(s) from the current node/marked nodes/folder via pdfport.nvim (confirms first) |
