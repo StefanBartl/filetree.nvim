@@ -32,7 +32,10 @@ function M.check()
   -- ── Neovim version ────────────────────────────────────────────────────────
   local version = vim.version()
   if version.major == 0 and version.minor < 10 then
-    vim.health.error("Neovim >= 0.10 is required (found " .. tostring(version) .. ")")
+    vim.health.error(
+      "Neovim >= 0.10 is required (found " .. tostring(version) .. ")",
+      { "Upgrade Neovim to 0.10+" }
+    )
   else
     vim.health.ok("Neovim " .. tostring(version))
   end
@@ -46,7 +49,7 @@ function M.check()
 
   local cfg = config_mod.get()
   if vim.tbl_isempty(cfg) then
-    vim.health.warn("filetree.setup() has not been called yet")
+    vim.health.info("filetree.setup() has not been called yet")
     return
   end
   vim.health.ok("Configuration loaded (adapter = " .. tostring(cfg.adapter) .. ")")
@@ -83,7 +86,8 @@ function M.check()
 
   if not found_any then
     vim.health.error(
-      "No supported filetree plugin found. Install neo-tree.nvim, nvim-tree.lua, oil.nvim, or mini.files."
+      "No supported filetree plugin found",
+      { "Install one of: neo-tree.nvim, nvim-tree.lua, oil.nvim, mini.files" }
     )
   end
 
@@ -138,7 +142,8 @@ function M.check()
     local ok_pp, pp = pcall(require, "pdfport")
     if not (ok_pp and type(pp.create) == "function") then
       vim.health.warn(
-        "pdf_create: pdfport.nvim not installed (or has no create() API) — the gP keymap is a no-op"
+        "pdf_create: pdfport.nvim not installed (or has no create() API) — the gP keymap is a no-op",
+        { 'Install "StefanBartl/pdfport.nvim"' }
       )
     end
   end
@@ -280,7 +285,8 @@ function M.check()
     else
       vim.health.warn(
         "ripgrep not found — reference scans fall back to a capped "
-          .. "directory walk (slower; raise refs.scan.max_files if it stops early)"
+          .. "directory walk (slower; raise refs.scan.max_files if it stops early)",
+        { "install ripgrep" }
       )
     end
   end
