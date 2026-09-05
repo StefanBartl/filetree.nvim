@@ -35,6 +35,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `[M` | marks | `keymap_prev` | Previous marked node, wrapping |
 | `-` | tree_traverse | `keymap_up` | Navigate to parent directory |
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root |
+| `B` | reveal_alt | `keymap` | Reveal the alternate buffer (`#`) in the tree |
 | `L` | cwd_mode | `keymap_cycle` | Cycle the cwd policy (follow → project → lock) |
 | `gp` | cwd_mode | `keymap_lock_here` | Lock the cwd to the node under the cursor |
 | `<C-n>` | buffer_cycle | `keymap_next` | Next buffer in the adjacent editor window (tree keeps focus) |
@@ -53,11 +54,18 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `]f` | copy_file_list | `keymap_files_rel` | Copy recursive file list (relative) |
 | `[F` | copy_file_list | `keymap_dirs_abs` | Copy recursive dir list (absolute) |
 | `]F` | copy_file_list | `keymap_dirs_rel` | Copy recursive dir list (relative) |
+| `ML` | markdown_links | `keymap` | Copy `[name](path)` markdown link for the current node |
+| `MR` | markdown_links | `keymap_recursive` | Copy markdown links recursively |
+| `MM` | markdown_links | `keymap_from_marked` | Copy markdown links from all marked nodes |
 | `a` | smart_create | `keymap` | Smart create file or directory |
 | `/` | filter | `keymap` | Enter tree filter mode |
 | `<C-c>` | filter | `keymap_clear` | Clear an applied filter directly |
 | `<Tab>` | preview | `keymap` | Text/dir: toggle floating preview; image: open via backend; PDF: pdfport/system |
 | `<CR>` | preview | `keymap_open` | Image/PDF: open via backend; other nodes: adapter's default `<CR>` |
+| `<C-b>` | preview | `keymap_scroll_up` | Scroll float preview up 1 line (×count). Float mode only. |
+| `<C-f>` | preview | `keymap_scroll_down` | Scroll float preview down 1 line (×count). Float mode only. |
+| `<PageUp>` | preview | `keymap_scroll_up10` | Scroll float preview up 10 lines (×count); in buffer-mode preview, pages the previewed file instead via native `<PageUp>` |
+| `<PageDown>` | preview | `keymap_scroll_down10` | Same as above, downward |
 | `D` | diff | `keymap` | Diff current node |
 | `<leader>sm` | open_with | `keymap` | Open with system default |
 | `r` | smart_rename | `keymap` | Rename with LSP reference update |

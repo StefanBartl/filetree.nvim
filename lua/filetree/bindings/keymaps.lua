@@ -67,6 +67,30 @@ return {
       feature = "preview",
       scope = "tree",
     },
+    {
+      lhs = "<C-b>",
+      desc = "Scroll float preview up (×count)",
+      feature = "preview",
+      scope = "tree",
+    },
+    {
+      lhs = "<C-f>",
+      desc = "Scroll float preview down (×count)",
+      feature = "preview",
+      scope = "tree",
+    },
+    {
+      lhs = "<PageUp>",
+      desc = "Page float preview up 10 (×count); pages buffer-mode preview natively",
+      feature = "preview",
+      scope = "tree",
+    },
+    {
+      lhs = "<PageDown>",
+      desc = "Page float preview down 10 (×count); pages buffer-mode preview natively",
+      feature = "preview",
+      scope = "tree",
+    },
     { lhs = "I", desc = "Node info float", feature = "node_info", scope = "tree" },
     { lhs = "w", desc = "Cycle window size", feature = "window_size_cycler", scope = "tree" },
     {
