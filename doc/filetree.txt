@@ -375,7 +375,7 @@ including ones filetree.nvim has no other way to know about.
 5.4 CWD MODES                                            *filetree-cwd-mode*
 
 cwd_sync is stateless: on every buffer switch it re-resolves a root from the
-file. A *mode* is state — "keep the cwd here regardless of which buffer is
+file. A mode is state — "keep the cwd here regardless of which buffer is
 focused" — so it lives in its own feature, `cwd_mode`, which cwd_sync asks
 before it changes anything.
 
@@ -515,7 +515,7 @@ your own config.
 `style` only changes the text, never the color.
 
 Getting the filled, capsule-like look of a vim-mode indicator (background
-color instead of just colored text) is a rendering choice for the *host*
+color instead of just colored text) is a rendering choice for the host
 statusline, not something this plugin's `text`/`hl` pair does on its own —
 `badge()` gives you the raw text and highlight group; wrapping them in a
 bg-filled highlight group with a fading separator is the same recipe you'd
