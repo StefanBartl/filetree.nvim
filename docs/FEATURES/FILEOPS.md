@@ -281,7 +281,10 @@ require("filetree").setup({
 
 The scan uses **ripgrep** as a pre-filter when it is installed (only files
 that mention the name at all are read). Without ripgrep it falls back to a
-capped libuv walk, which is slower but still correct.
+capped libuv walk, which is slower but still correct. Over ~20 extension-
+matching files that walk reads them in chunks across event-loop ticks with a
+`[filetree.refs]` progress indicator (no-op without lib.nvim) instead of
+freezing the editor for the whole scan.
 
 The per-feature options this replaces — `check_markdown_refs`,
 `refs_picker_prefer`, `smart_rename.update_references` — are migrated

@@ -1710,6 +1710,53 @@ do
   refs_apply.reset()
 end
 
+-- ── refs.scan: ripgrep-free fallback walk is chunked ────────────────────────
+-- Force the rg-unavailable path (stub vim.fn.executable) with more than
+-- WALK_CHUNK_SIZE (20) extension-matching files: the read loop must spread
+-- across event-loop ticks and still find exactly the files that hold a
+-- needle, skipping the ones that don't.
+do
+  local refs_scan = require("filetree.refs.scan")
+  local tmp = (TMP_ROOT .. "/units-refs-scan-walk"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+
+  local n = 25
+  for i = 1, n do
+    local f = string.format("%s/cand_%02d.md", tmp, i)
+    if i % 3 == 0 then
+      vim.fn.writefile({ "see NEEDLE_HIT here" }, f)
+    else
+      vim.fn.writefile({ "nothing relevant" }, f)
+    end
+  end
+
+  local orig_executable = vim.fn.executable
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.fn.executable = function(name)
+    if name == "rg" then return 0 end
+    return orig_executable(name)
+  end
+
+  local result
+  refs_scan.candidates(tmp, { "NEEDLE_HIT" }, { "md" }, {}, function(files)
+    result = files
+  end)
+  vim.fn.executable = orig_executable
+
+  local settled = vim.wait(4000, function()
+    return result ~= nil
+  end)
+  check("refs.scan(walk, wide): callback fired", settled)
+  check(
+    "refs.scan(walk, wide): found exactly the hitting files",
+    result ~= nil and #result == math.floor(n / 3),
+    tostring(result and #result)
+  )
+
+  vim.fn.delete(tmp, "rf")
+end
+
 -- ── trash: reference chooser + cleanup ──────────────────────────────────────
 -- When something links to the file being trashed, delete_current() must show
 -- the 3-way chooser (not the plain y/N popup) and, on "delete + remove
