@@ -921,6 +921,11 @@ The per-feature options this replaces (`check_markdown_refs`,
 `refs_picker_prefer`, `smart_rename.update_references`) are migrated
 automatically, with a one-time notice.
 
+Without ripgrep, the fallback walk reads extension-matching files in chunks
+across event-loop ticks once the candidate set passes ~20 files, with a
+`[filetree.refs]` progress indicator (no-op without lib.nvim) rather than
+freezing the editor for the whole scan.
+
 Commands:
   :Filetree refs undo      Revert the last reference rewrite
   :Filetree refs status    Modes, providers, ripgrep, pending undo

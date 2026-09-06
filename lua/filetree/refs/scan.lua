@@ -21,6 +21,11 @@ local ftpath = require("filetree.util.path")
 local ftfs = require("filetree.util.fs")
 local notify = require("filetree.util.notify").create("[filetree.refs]")
 
+-- Optional: a project without ripgrep can hold thousands of files, and the
+-- fallback walk below reads every extension-matching one. No-op without
+-- lib.nvim.
+local progress = require("filetree.util.progress")
+
 local M = {}
 
 -- Directories never worth scanning for references. Kept local (and not routed
@@ -131,9 +136,37 @@ local function candidates_rg(root, needles, exts, cfg, cb)
   if not ok_spawn then cb(nil) end
 end
 
+-- Candidates read per event-loop tick during the ripgrep-free walk. Each cycle
+-- here costs a `readfile`, so a project without ripgrep touching thousands of
+-- files does not lock the editor for the whole scan. A candidate set this
+-- size or smaller stays on the single-tick path below with its timing
+-- unchanged.
+local WALK_CHUNK_SIZE = 20
+
+---@internal
+---Whether `file` holds any of `needles` in its content.
+---@param file string
+---@param needles string[]
+---@return boolean
+local function file_hits(file, needles)
+  local lines = M.lines_of(file)
+  if not lines then return false end
+  for _, line in ipairs(lines) do
+    local lower = line:lower()
+    for _, n in ipairs(needles) do
+      if lower:find(n:lower(), 1, true) then return true end
+    end
+  end
+  return false
+end
+
 ---@internal
 ---ripgrep-free fallback: walk the tree, keep files with a matching extension,
 ---and plain-find the needles in their content. Capped by `scan.max_files`.
+---
+---Over `WALK_CHUNK_SIZE` candidates the reads are spread `WALK_CHUNK_SIZE` per
+---event-loop tick with a `[filetree.refs]` progress indicator, mirroring
+---`filetree.refs.apply`'s chunked path.
 ---@param root string
 ---@param needles string[]
 ---@param exts string[]
@@ -147,41 +180,63 @@ local function candidates_walk(root, needles, exts, cfg, cb)
     return PRUNE_DIRS[name] == true
   end)
 
-  local out, seen = {}, 0
+  ---@type string[]
+  local candidates = {}
   for _, file in ipairs(all) do
     local ext = file:match("%.([%w_]+)$")
-    if ext and wanted[ext:lower()] then
-      seen = seen + 1
-      if seen > max_files then
-        notify.warn(
-          string.format(
-            "reference scan stopped at %d files (install ripgrep for the fast path)",
-            max_files
-          )
-        )
-        break
-      end
-      local lines = M.lines_of(file)
-      if lines then
-        local hit = false
-        for _, line in ipairs(lines) do
-          local lower = line:lower()
-          for _, n in ipairs(needles) do
-            if lower:find(n:lower(), 1, true) then
-              hit = true
-              break
-            end
-          end
-          if hit then break end
-        end
-        if hit then out[#out + 1] = file end
-      end
-    end
+    if ext and wanted[ext:lower()] then candidates[#candidates + 1] = file end
   end
 
-  vim.schedule(function()
+  local capped = #candidates > max_files
+  local total = capped and max_files or #candidates
+  if capped then
+    notify.warn(
+      string.format(
+        "reference scan stopped at %d files (install ripgrep for the fast path)",
+        max_files
+      )
+    )
+  end
+
+  local out = {}
+
+  if total <= WALK_CHUNK_SIZE then
+    for i = 1, total do
+      if file_hits(candidates[i], needles) then out[#out + 1] = candidates[i] end
+    end
+    return vim.schedule(function()
+      cb(out)
+    end)
+  end
+
+  local h = progress.create({ title = "[filetree.refs]" })
+  local i = 0
+
+  local function step()
+    if h and h.cancelled then
+      -- Candidates found so far are still reported -- a partial reference
+      -- scan is more useful than none.
+      return cb(out)
+    end
+
+    local last = math.min(i + WALK_CHUNK_SIZE, total)
+    for j = i + 1, last do
+      if file_hits(candidates[j], needles) then out[#out + 1] = candidates[j] end
+    end
+    i = last
+
+    if h then h:update({ text = "scanning references…", current = i, total = total }) end
+
+    if i < total then
+      vim.schedule(step)
+      return
+    end
+
+    if h then h:finish(string.format("%d candidate(s) found", #out)) end
     cb(out)
-  end)
+  end
+
+  step()
 end
 
 ---Files that may contain a reference matching `needles`.
