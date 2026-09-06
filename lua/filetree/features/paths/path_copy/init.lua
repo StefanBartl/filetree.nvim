@@ -12,17 +12,22 @@
 ---   uri       file:///home/user/...   (file:// URI)
 ---   line      src/foo.lua:42          (path + cursor line in tree win)
 ---   stem      foo                     (filename without extension)
+---   project_root      /home/user/project        (detected project root, cwd-independent)
+---   project_relative  src/foo.lua               (path relative to that root)
 ---
 --- Config:
----   enabled        boolean
----   keymap_pick    string?  Opens format picker (default nil, off).
----   keymap_abs     string?  Copy absolute path directly (default "[a").
----   keymap_dirname string?  Copy absolute parent dir directly (default "]a").
----   keymap_name    string?  Copy name directly (default nil, off).
----   notify         boolean  Show a notification after copying (default true).
+---   enabled              boolean
+---   keymap_pick          string?  Opens format picker (default nil, off).
+---   keymap_abs           string?  Copy absolute path directly (default "[a").
+---   keymap_dirname       string?  Copy absolute parent dir directly (default "]a").
+---   keymap_name          string?  Copy name directly (default nil, off).
+---   keymap_project_root  string?  Copy project root directly (default "[R").
+---   keymap_project_rel   string?  Copy path relative to project root (default "]R").
+---   root_markers         string[]|false  Markers for the project-root walk (default {".git"}).
+---   notify               boolean  Show a notification after copying (default true).
 ---
 --- Commands (via :Filetree dispatcher):
----   :Filetree copy absolute|relative|name|dirname|uri|line|stem|pick
+---   :Filetree copy absolute|relative|name|dirname|uri|line|stem|project_root|project_relative|pick
 
 local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 

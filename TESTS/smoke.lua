@@ -9,7 +9,7 @@
 -- the registry resolver works, and the binding catalog is populated.
 --
 -- Usage (from the repo root):
---   nvim --clean --headless -u NONE -l test/smoke.lua
+--   nvim --clean --headless -u NONE -l TESTS/smoke.lua
 --
 -- Exit code 0 = all checks passed; 1 = a check failed (message printed).
 
@@ -263,7 +263,7 @@ do
   )
 end
 
--- 9) the shared buffer-lifecycle dispatcher
+-- 7) the shared buffer-lifecycle dispatcher
 --
 -- Ten features used to own a BufEnter autocmd each; they now register with
 -- `filetree.util.bufevents`. Two things have to hold, and neither is obvious

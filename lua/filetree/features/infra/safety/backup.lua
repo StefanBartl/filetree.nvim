@@ -31,6 +31,10 @@ local function backup_path(src)
   return _dir .. "/" .. ts .. "_" .. base
 end
 
+--- CDX: shells out to xcopy/cp -r here, while copy_move's own copy_dir()
+--- copies recursively via lib.nvim.cross.fs.mutate.copy_file (libuv, no
+--- shell). Possible consolidation onto the same primitive; out of scope
+--- for this pass.
 ---Recursively copy a file or directory.
 ---Uses `xcopy` on Windows, `cp -r` elsewhere.
 ---@param src string

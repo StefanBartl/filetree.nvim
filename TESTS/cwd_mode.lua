@@ -9,7 +9,7 @@
 -- command wiring, and the tree-window badge in both drawing strategies.
 --
 -- Usage (from the repo root):
---   nvim --clean --headless -u NONE -l test/cwd_mode.lua
+--   nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
 --
 -- Exit 0 = all passed, 1 = a check failed.
 

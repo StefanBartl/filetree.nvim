@@ -2,7 +2,7 @@
 -- Minimal test config: neo-tree.nvim + filetree.nvim, no user config loaded.
 --
 -- Usage:
---   nvim --clean -u test/minimal_neotree.lua [path]
+--   nvim --clean -u TESTS/minimal_neotree.lua [path]
 --
 -- lazy.nvim is bootstrapped into a temporary data dir so your real config
 -- is never touched.  All state (plugins, cache) lands in:
