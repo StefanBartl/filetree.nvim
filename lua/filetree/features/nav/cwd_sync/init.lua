@@ -37,13 +37,11 @@ local M = {}
 ---@class CwdSyncState
 ---@field last_path       string?  Last file we revealed.
 ---@field paused_until    number   Timestamp (uv.hrtime) after which sync resumes.
----@field user_navigated  boolean  Set when the user moved inside the tree manually.
 
 ---@type CwdSyncState
 local S = {
   last_path = nil,
   paused_until = 0,
-  user_navigated = false,
 }
 
 ---Debounce handle built in M.setup() (needs `_cfg.debounce_ms`); `{ call, cancel }`.
@@ -358,7 +356,6 @@ function M.teardown()
   end
   S.last_path = nil
   S.paused_until = 0
-  S.user_navigated = false
 end
 
 ---Manually pause auto-reveal for `ms` milliseconds.

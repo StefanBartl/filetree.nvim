@@ -217,6 +217,9 @@ return {
     { lhs = "[m", desc = "Unmark all visible", feature = "marks", scope = "tree" },
     { lhs = "<leader>mc", desc = "Clear all marks", feature = "marks", scope = "tree" },
     { lhs = "<leader>ms", desc = "Show marked nodes", feature = "marks", scope = "tree" },
+    { lhs = "gm", desc = "Go to Nth marked node (×count)", feature = "marks", scope = "tree" },
+    { lhs = "]M", desc = "Next marked node", feature = "marks", scope = "tree" },
+    { lhs = "[M", desc = "Previous marked node", feature = "marks", scope = "tree" },
   },
   system = {
     {

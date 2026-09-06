@@ -13,7 +13,7 @@
 -- loose matching).
 --
 -- The engine runs in `auto` mode here: the chooser (Update all / Select… /
--- Show diff / Leave as-is) is a UI concern covered in test/units.lua, and what
+-- Show diff / Leave as-is) is a UI concern covered in TESTS/units.lua, and what
 -- this suite is about is what actually lands on disk.
 --
 -- Usage (from the filetree.nvim repo root):

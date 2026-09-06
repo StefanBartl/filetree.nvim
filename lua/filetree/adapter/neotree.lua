@@ -605,8 +605,6 @@ local _reveal_guard_installed = false
 ---calls neo-tree's command API directly (a user's own custom keymaps, a
 ---plugin, neo-tree's own internals) can just as easily trigger it, and missing
 ---even one call site (this is exactly how the original bug report happened —
----
----@return nil
 ---several sites were correctly guarded, one was overlooked) brings the prompt
 ---back. Since every caller shares the same `neo-tree.command` module table,
 ---wrapping `execute` once here protects all of them, current and future,
@@ -616,6 +614,7 @@ local _reveal_guard_installed = false
 ---`reveal = false`, or a call that already sets `dir` or `reveal_force_cwd`
 ---itself, is left completely alone — this never changes behavior for a call
 ---that already knows what it wants.
+---@return nil
 function M.install_reveal_guard()
   if _reveal_guard_installed then return end
   local ok, commands = pcall(require, "neo-tree.command")

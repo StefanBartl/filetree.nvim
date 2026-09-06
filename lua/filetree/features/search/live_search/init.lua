@@ -120,8 +120,8 @@ local function open_input_bar(tree_winid, tree_bufnr)
     on_submit = function(query)
       if _cfg.commit_to_filter and query ~= "" then
         local ok, filter = require("filetree.features").load("filter")
-        if ok and filter and filter.set then
-          filter.set(query)
+        if ok and filter and filter.apply then
+          filter.apply(query)
           notify.info("Filter set: " .. query)
         end
       end

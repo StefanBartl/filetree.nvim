@@ -18,15 +18,23 @@
 ---             outside it is opened. With `project.sticky` (default) a file
 ---             with no detectable root of its own — a scratch note, a file
 ---             in /tmp — does not drag the cwd along either.
+---   nearest   Same shape as `project`, but walks to the nearest *package*
+---             boundary (package.json, Cargo.toml, go.mod, …) instead of the
+---             repository root — monorepo work, where "the project" means
+---             "the package I'm editing".
 ---   lock      The cwd is pinned to one directory. Buffer switches never
 ---             move it, and with `lock.enforce` (default) neither does
 ---             foreign code: a `lib.nvim.fs.dir_guard` reverts a `:cd` from
 ---             a picker, a session restore or another plugin.
 ---   manual    Nothing automatic. The cwd and the tree root only change
 ---             through explicit action (`+`/`-`, `:Filetree cwd …`).
+---   tree_leads  Direction reversed: the tree root is authoritative and the
+---             cwd follows it, rather than the cwd driving the tree.
+---
+--- Full per-mode config surface: docs/FEATURES/CORE.md.
 ---
 --- The mode is shown as a badge in the bottom-left of the tree window
---- ("PROJECT", "LOCK", "MANUAL"; nothing in follow mode) — see `indicator`.
+--- ("PROJECT", "LOCK", "MANUAL", …; nothing in follow mode) — see `indicator`.
 ---
 --- Because the pinned root is real state, other features can read it instead
 --- of guessing from the cwd: `M.root()` is the authoritative answer to "which

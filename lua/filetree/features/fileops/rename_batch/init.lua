@@ -232,16 +232,24 @@ function M.open()
     return
   end
 
-  local names = {}
+  -- Header: 2 lines (comment + blank) prepended before any autocmd is wired
+  -- up, so the BufWriteCmd below only ever has to know one offset, not patch
+  -- around a header added after the fact.
+  local HEADER_LINES = 2
+  local header = string.format(
+    "-- filetree: rename %d items. Edit names, then :w to apply or :bd to cancel.",
+    #entries
+  )
+  local lines = { header, "" }
   for _, e in ipairs(entries) do
-    names[#names + 1] = e.old_name
+    lines[#lines + 1] = e.old_name
   end
 
   -- Open horizontal split with scratch buffer
   vim.cmd("new")
   local bufnr = vim.api.nvim_get_current_buf()
   vim.api.nvim_buf_set_name(bufnr, "filetree://rename")
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, names)
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
   vim.api.nvim_set_option_value("buftype", "acwrite", { buf = bufnr })
   vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = bufnr })
   vim.api.nvim_set_option_value("swapfile", false, { buf = bufnr })
@@ -253,7 +261,11 @@ function M.open()
     group = augroup,
     buffer = bufnr,
     callback = function()
-      local new_names = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+      local all_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+      local new_names = {}
+      for i = HEADER_LINES + 1, #all_lines do
+        new_names[#new_names + 1] = all_lines[i]
+      end
       execute_renames(entries, new_names, function(ok)
         if ok then
           vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
@@ -264,47 +276,6 @@ function M.open()
     end,
   })
 
-  au.acmd("BufDelete", {
-    group = augroup,
-    buffer = bufnr,
-    once = true,
-    callback = function()
-      au.del_group(augroup)
-    end,
-  })
-
-  -- Header comment
-  local header = string.format(
-    "-- filetree: rename %d items. Edit names, then :w to apply or :bd to cancel.",
-    #entries
-  )
-  vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, { header, "" })
-  -- Offset entries by 2 lines (header + blank)
-  -- Re-adjust entries reference to skip header offset in BufWriteCmd:
-  -- The autocmd captures `entries` from the snapshot; new_names will have
-  -- the header lines so we strip them:
-  vim.api.nvim_buf_set_var(bufnr, "filetree_header_lines", 2)
-
-  -- Override execute to handle header offset
-  au.del_group(augroup)
-  augroup = au.group("filetree_rename_batch_" .. bufnr, true)
-  au.acmd("BufWriteCmd", {
-    group = augroup,
-    buffer = bufnr,
-    callback = function()
-      local all_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-      local new_names = {}
-      for i = 3, #all_lines do -- skip 2-line header
-        new_names[#new_names + 1] = all_lines[i]
-      end
-      execute_renames(entries, new_names, function(ok)
-        if ok then
-          vim.api.nvim_set_option_value("modified", false, { buf = bufnr })
-          pcall(vim.api.nvim_buf_delete, bufnr, { force = true })
-        end
-      end)
-    end,
-  })
   au.acmd("BufDelete", {
     group = augroup,
     buffer = bufnr,

@@ -96,6 +96,8 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree copy uri` | Copy as `file://` URI |
 | `:Filetree copy line` | Copy path with line number |
 | `:Filetree copy stem` | Copy stem (no extension) |
+| `:Filetree copy project_root` | Copy the detected project root (cwd-independent) |
+| `:Filetree copy project_relative` | Copy path relative to the project root |
 | `:Filetree copy pick` | Open format picker |
 
 ### Copy file list

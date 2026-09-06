@@ -11,6 +11,11 @@
 ---     hooks.on("before_delete", function(data) ... end)
 ---   end
 ---
+--- CDX: none of the events below are actually emitted anywhere in this repo
+--- (grepped for `.emit(` — only this module's own definition and doc comment
+--- match). Either the wiring in the listed features was never added, or this
+--- list is aspirational; needs a decision either way.
+---
 --- Built-in events emitted by features:
 ---   before_delete   { path: string }
 ---   after_delete    { path: string, ok: boolean }

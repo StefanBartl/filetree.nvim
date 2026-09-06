@@ -1,6 +1,6 @@
 -- menu.lua — headless unit tests for filetree.nvim's nvzone/menu integration.
 --
--- Complements test/smoke.lua and test/units.lua. Exercises
+-- Complements TESTS/smoke.lua and TESTS/units.lua. Exercises
 -- filetree.integrations.menu, which is a soft, opt-in layer: it reads
 -- require("filetree").feature(name) and require("filetree").config().menu, so
 -- it can be tested without a real adapter/tree window by stubbing the
@@ -8,7 +8,7 @@
 -- dispatcher) uses, so this is de-facto coverage of the real contract.
 --
 -- Usage (from the repo root):
---   nvim --clean --headless -u NONE -l test/menu.lua
+--   nvim --clean --headless -u NONE -l TESTS/menu.lua
 --
 -- Exit 0 = all passed, 1 = a check failed.
 

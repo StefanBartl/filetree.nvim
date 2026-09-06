@@ -227,7 +227,6 @@ function M.check()
     system = "system integration",
     lsp = "LSP",
     compare = "diff & compare",
-    integration = "plugin integrations",
     infra = "infrastructure",
   }
   local ACRONYM = { lsp = "LSP", fm = "FM", ui = "UI" }

@@ -198,18 +198,6 @@ local function open_buffer_for(file)
   return nil
 end
 
----Rewrite each ref's link target to its own `r.new_target` (must be set on
----every ref before calling — e.g. `"REF!"` for a delete, or a retargeted path
----for a rename/move). Grouped by file so each is touched at most once.
----
----When the referencing file is open in a buffer, its **buffer** is patched
----directly (not just the file on disk): Neovim does not auto-reload a buffer
----when its underlying file changes on disk until a checktime/autoread event
----fires, so a plain `writefile` would only show up after the user switched
----away and back. If that buffer had no unsaved changes, the patch is written
----straight back to disk (so it stays unmodified and in sync); if it did have
----unsaved changes, the buffer is left modified for the user to save, and disk
----is not touched (their edits win). Files not open anywhere are edited on disk.
 ---Display-friendly, deduplicated, cwd-relative list of the files a set of
 ---refs point at — the ":.":modified path of each unique `r.file`, in order
 ---of first appearance. Shared by every call site that reports "N markdown
@@ -227,6 +215,18 @@ function M.unique_files(refs)
   return files
 end
 
+---Rewrite each ref's link target to its own `r.new_target` (must be set on
+---every ref before calling — e.g. `"REF!"` for a delete, or a retargeted path
+---for a rename/move). Grouped by file so each is touched at most once.
+---
+---When the referencing file is open in a buffer, its **buffer** is patched
+---directly (not just the file on disk): Neovim does not auto-reload a buffer
+---when its underlying file changes on disk until a checktime/autoread event
+---fires, so a plain `writefile` would only show up after the user switched
+---away and back. If that buffer had no unsaved changes, the patch is written
+---straight back to disk (so it stays unmodified and in sync); if it did have
+---unsaved changes, the buffer is left modified for the user to save, and disk
+---is not touched (their edits win). Files not open anywhere are edited on disk.
 ---@param refs table[]  MarkdownFileRef[], each with `.new_target` set.
 ---@return integer files_changed
 function M.update(refs)

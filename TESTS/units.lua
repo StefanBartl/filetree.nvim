@@ -7,17 +7,17 @@
 -- FiletreeAdapter or FiletreeRef would be noise, not coverage.
 -- units.lua — headless unit tests for filetree.nvim's util layer + adapter helpers.
 --
--- Complements test/smoke.lua (which is an integration test over the registry and
+-- Complements TESTS/smoke.lua (which is an integration test over the registry and
 -- setup). This file exercises the reusable primitives directly.
 --
 -- Usage (from the repo root):
---   nvim --clean --headless -u NONE -l test/units.lua
+--   nvim --clean --headless -u NONE -l TESTS/units.lua
 --
 -- Exit 0 = all passed, 1 = a check failed.
 
 -- ":p" resolves to absolute *before* walking up two levels, so `root` stays
 -- correct even if a test later changes Neovim's cwd (":h:h" alone would give a
--- path relative to invocation-time cwd, e.g. "." when run as `-l test/units.lua`,
+-- path relative to invocation-time cwd, e.g. "." when run as `-l TESTS/units.lua`,
 -- which breaks require() after any vim.fn.chdir()).
 -- `---@diagnostic disable-next-line: duplicate-set-field` appears throughout
 -- this file. Every one of them sits on a test double: a stdlib function, a
@@ -3787,7 +3787,7 @@ do
 
   -- With a stubbed nvzone/menu: click must call menu.open(items, {mouse=true})
   -- with the SAME entries filetree.integrations.menu.items() builds (that
-  -- module's own content is covered by test/menu.lua; this only checks the
+  -- module's own content is covered by TESTS/menu.lua; this only checks the
   -- wiring calls through correctly).
   local captured
   package.loaded["menu"] = {
@@ -3978,7 +3978,6 @@ do
   end
 end
 
--- ── Report ────────────────────────────────────────────────────────────────────
 -- ── trash: AppleScript quoting ────────────────────────
 --
 -- The macOS fallback embeds the path in an AppleScript string literal, where
@@ -4004,6 +4003,7 @@ do
   end
 end
 
+-- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")
