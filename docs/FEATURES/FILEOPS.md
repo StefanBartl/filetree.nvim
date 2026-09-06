@@ -219,6 +219,12 @@ corrupted; a file that is open in a buffer is patched **in that buffer**
 (and written back only if it had no unsaved changes). `:Filetree refs
 undo` reverts the last batch of rewrites.
 
+When the change spans more than eight files, the rewrites (and an undo of
+them) run in chunks across event-loop ticks with the same optional
+`lib.nvim.progress` indicator the paste and trash flows use
+(`updating references… N/total`), so a project-wide rename never freezes
+the editor. A smaller change is applied synchronously, as before.
+
 Deleting is the mirror image: trash offers to blank the now-dangling
 markdown links to `REF!` before the file goes, so the break is visible
 instead of silent. Code references are deliberately left alone there —

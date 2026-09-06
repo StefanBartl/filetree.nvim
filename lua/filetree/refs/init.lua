@@ -361,19 +361,20 @@ function M.undo()
     return
   end
   local label = apply.last_label()
-  local restored, files = apply.undo()
-  if restored > 0 then
-    notify.info(
-      string.format(
-        "Reverted %d reference(s) in %d file(s) (%s)",
-        restored,
-        files,
-        label or "reference update"
+  apply.undo(function(restored, files)
+    if restored > 0 then
+      notify.info(
+        string.format(
+          "Reverted %d reference(s) in %d file(s) (%s)",
+          restored,
+          files,
+          label or "reference update"
+        )
       )
-    )
-  else
-    notify.warn("Nothing was reverted (files changed since the update?)")
-  end
+    else
+      notify.warn("Nothing was reverted (files changed since the update?)")
+    end
+  end)
 end
 
 ---Summary of the current state, for `:Filetree refs status`.
