@@ -31,7 +31,7 @@ what actually runs. Inspect it live with:
   - [Keymap prefixes at a glance](#keymap-prefixes-at-a-glance)
   - [Known conflicts](#known-conflicts)
   - [Remapping and disabling](#remapping-and-disabling)
-  - [which-key and the neo-tree `?` cheatsheet](#which-key-and-the-neo-tree--cheatsheet)
+  - [The neo-tree `?` cheatsheet](#the-neo-tree--cheatsheet)
 
 ---
 
@@ -137,11 +137,7 @@ require("filetree").setup({
 })
 ```
 
-## which-key and the neo-tree `?` cheatsheet
-
-**which-key:** if which-key.nvim is installed, `setup()` registers the leader
-group labels automatically (v2 and v3 APIs). Individual keys carry a `desc`, so
-which-key lists them without extra wiring.
+## The neo-tree `?` cheatsheet
 
 **neo-tree `?`:** neo-tree builds its help screen from its own
 `window.mappings` config, not from the buffer's actual keymaps — so keys set by
