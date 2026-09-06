@@ -17,7 +17,7 @@ jobs:
     name: lint (stylua + luacheck)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: stylua (check)
         uses: JohnnyMorganz/stylua-action@v4
@@ -27,7 +27,7 @@ jobs:
           args: --check .
 
       - name: Install luacheck
-        run: sudo apt-get update && sudo apt-get install -y luarocks && sudo luarocks install luacheck
+        run: sudo apt-get update && sudo apt-get install -y luarocks && sudo luarocks install luacheck 1.2.0
 
       - name: luacheck
         run: luacheck lua docs/BINDINGS.lua TESTS
@@ -47,12 +47,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout filetree.nvim
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: filetree.nvim
 
       - name: Checkout lib.nvim
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: StefanBartl/lib.nvim
           path: lib.nvim
