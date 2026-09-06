@@ -19,7 +19,18 @@
 
 local scan = require("filetree.refs.scan")
 
+-- Optional: a wide symbol rename (`:Filetree refs`) rewrites every referencing
+-- file — buffer patch or readfile/writefile per file. Over a large project
+-- that is a multi-second freeze with no feedback. No-op without lib.nvim.
+local progress = require("filetree.util.progress")
+
 local M = {}
+
+--- Files rewritten per event-loop tick in the async path. A file here costs a
+--- `readfile`/`writefile` pair (or a buffer round-trip), so this is smaller
+--- than a pure-scan chunk. A set this size or smaller is applied synchronously
+--- (no scheduling, no indicator) to keep a small rename's timing unchanged.
+local APPLY_CHUNK_SIZE = 8
 
 ---@class FiletreeRefsUndoToken
 ---@field entries FiletreeRefsUndoEntry[]
@@ -115,59 +126,105 @@ end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
----Apply `refs` (each with `new_target` set).
----@param refs FiletreeRef[]
----@param opts? { label?: string, undo?: boolean }
----@return integer applied, integer files_changed
-function M.run(refs, opts)
-  opts = opts or {}
-  local applied, files_changed = 0, 0
-  ---@type FiletreeRefsUndoEntry[]
-  local undo_entries = {}
+---@internal
+---Rewrite every ref belonging to one file — in its buffer if it is open,
+---otherwise straight on disk. Returns how many refs landed and the pre-change
+---content of every line it touched (for the undo stack).
+---@param file string
+---@param by_line table<integer, FiletreeRef[]>
+---@return integer file_applied, table<integer, string> before
+local function apply_file(file, by_line)
+  local bufnr = scan.buffer_for(file)
+  local before = {} ---@type table<integer, string>
+  local file_applied = 0
 
-  for file, by_line in pairs(group(refs)) do
-    local bufnr = scan.buffer_for(file)
-    local before = {} ---@type table<integer, string>
-    local file_applied = 0
-
-    if bufnr then
-      local was_modified = vim.bo[bufnr].modified
+  if bufnr then
+    local was_modified = vim.bo[bufnr].modified
+    for lineno, line_refs in pairs(by_line) do
+      local line = vim.api.nvim_buf_get_lines(bufnr, lineno - 1, lineno, false)[1]
+      if line then
+        local new_line, n = rewrite_line(line, line_refs)
+        if n > 0 then
+          before[lineno] = line
+          vim.api.nvim_buf_set_lines(bufnr, lineno - 1, lineno, false, { new_line })
+          file_applied = file_applied + n
+        end
+      end
+    end
+    if file_applied > 0 and not was_modified then
+      -- Persist without firing BufWritePre autocmds (formatters, trailing-
+      -- whitespace strippers, …) so this stays a minimal, surgical edit.
+      pcall(vim.api.nvim_buf_call, bufnr, function()
+        vim.cmd("silent noautocmd keepjumps write")
+      end)
+    end
+  else
+    local ok, lines = pcall(vim.fn.readfile, file)
+    if ok and type(lines) == "table" then
       for lineno, line_refs in pairs(by_line) do
-        local line = vim.api.nvim_buf_get_lines(bufnr, lineno - 1, lineno, false)[1]
+        local line = lines[lineno]
         if line then
           local new_line, n = rewrite_line(line, line_refs)
           if n > 0 then
             before[lineno] = line
-            vim.api.nvim_buf_set_lines(bufnr, lineno - 1, lineno, false, { new_line })
+            lines[lineno] = new_line
             file_applied = file_applied + n
           end
         end
       end
-      if file_applied > 0 and not was_modified then
-        -- Persist without firing BufWritePre autocmds (formatters, trailing-
-        -- whitespace strippers, …) so this stays a minimal, surgical edit.
-        pcall(vim.api.nvim_buf_call, bufnr, function()
-          vim.cmd("silent noautocmd keepjumps write")
-        end)
-      end
-    else
-      local ok, lines = pcall(vim.fn.readfile, file)
-      if ok and type(lines) == "table" then
-        for lineno, line_refs in pairs(by_line) do
-          local line = lines[lineno]
-          if line then
-            local new_line, n = rewrite_line(line, line_refs)
-            if n > 0 then
-              before[lineno] = line
-              lines[lineno] = new_line
-              file_applied = file_applied + n
-            end
-          end
-        end
-        if file_applied > 0 then pcall(vim.fn.writefile, lines, file) end
-      end
+      if file_applied > 0 then pcall(vim.fn.writefile, lines, file) end
     end
+  end
 
+  return file_applied, before
+end
+
+---@internal
+---Push one apply onto the undo stack, trimming it to `undo_depth()`.
+---@param undo_entries FiletreeRefsUndoEntry[]
+---@param applied integer
+---@param files_changed integer
+---@param label string
+local function push_undo(undo_entries, applied, files_changed, label)
+  _undo_stack[#_undo_stack + 1] = {
+    entries = undo_entries,
+    count = applied,
+    files = files_changed,
+    label = label,
+  }
+  while #_undo_stack > undo_depth() do
+    table.remove(_undo_stack, 1)
+  end
+end
+
+---Apply `refs` (each with `new_target` set).
+---
+---When `on_done` is given and the change spans more than `APPLY_CHUNK_SIZE`
+---files, the files are rewritten `APPLY_CHUNK_SIZE` per event-loop tick with a
+---`[filetree.refs]` progress indicator, and the totals are delivered through
+---`on_done` instead of the return values (a project-wide rename touches every
+---referencing file — one synchronous loop freezes the editor for the whole
+---run). A smaller change, and every caller that passes no `on_done`, keep the
+---fully synchronous path and its return values unchanged.
+---@param refs FiletreeRef[]
+---@param opts? { label?: string, undo?: boolean }
+---@param on_done? fun(applied: integer, files_changed: integer)
+---@return integer applied, integer files_changed
+function M.run(refs, opts, on_done)
+  opts = opts or {}
+  local by_file = group(refs)
+  ---@type string[]
+  local files = {}
+  for file in pairs(by_file) do
+    files[#files + 1] = file
+  end
+  table.sort(files) -- deterministic order
+
+  local applied, files_changed = 0, 0
+  ---@type FiletreeRefsUndoEntry[]
+  local undo_entries = {}
+
+  local function tally(file, file_applied, before)
     if file_applied > 0 then
       applied = applied + file_applied
       files_changed = files_changed + 1
@@ -175,19 +232,53 @@ function M.run(refs, opts)
     end
   end
 
-  if applied > 0 and opts.undo ~= false then
-    _undo_stack[#_undo_stack + 1] = {
-      entries = undo_entries,
-      count = applied,
-      files = files_changed,
-      label = opts.label or "reference update",
-    }
-    while #_undo_stack > undo_depth() do
-      table.remove(_undo_stack, 1)
+  local function finalize()
+    if applied > 0 and opts.undo ~= false then
+      push_undo(undo_entries, applied, files_changed, opts.label or "reference update")
     end
   end
 
-  return applied, files_changed
+  if type(on_done) ~= "function" or #files <= APPLY_CHUNK_SIZE then
+    for _, file in ipairs(files) do
+      tally(file, apply_file(file, by_file[file]))
+    end
+    finalize()
+    if on_done then on_done(applied, files_changed) end
+    return applied, files_changed
+  end
+
+  local h = progress.create({ title = "[filetree.refs]" })
+  local total = #files
+  local i = 0
+
+  local function step()
+    if h and h.cancelled then
+      -- Already-written files stay written; report what landed so far.
+      finalize()
+      on_done(applied, files_changed)
+      return
+    end
+
+    local last = math.min(i + APPLY_CHUNK_SIZE, total)
+    for j = i + 1, last do
+      tally(files[j], apply_file(files[j], by_file[files[j]]))
+    end
+    i = last
+
+    if h then h:update({ text = "updating references…", current = i, total = total }) end
+
+    if i < total then
+      vim.schedule(step)
+      return
+    end
+
+    if h then h:finish(string.format("%d reference(s) in %d file(s)", applied, files_changed)) end
+    finalize()
+    on_done(applied, files_changed)
+  end
+
+  step()
+  return applied, files_changed -- best-effort snapshot; async callers use on_done
 end
 
 ---Whether there is anything to undo.
@@ -203,48 +294,101 @@ function M.last_label()
   return top and top.label or nil
 end
 
+---@internal
+---Restore one undo entry's lines, but only where the current content is still
+---exactly what this module wrote — an edit made since then wins.
+---@param entry FiletreeRefsUndoEntry
+---@return integer file_restored
+local function undo_file(entry)
+  local bufnr = scan.buffer_for(entry.file)
+  local file_restored = 0
+
+  if bufnr then
+    local was_modified = vim.bo[bufnr].modified
+    for lineno, old_line in pairs(entry.lines) do
+      vim.api.nvim_buf_set_lines(bufnr, lineno - 1, lineno, false, { old_line })
+      file_restored = file_restored + 1
+    end
+    if file_restored > 0 and not was_modified then
+      pcall(vim.api.nvim_buf_call, bufnr, function()
+        vim.cmd("silent noautocmd keepjumps write")
+      end)
+    end
+  else
+    local ok, lines = pcall(vim.fn.readfile, entry.file)
+    if ok and type(lines) == "table" then
+      for lineno, old_line in pairs(entry.lines) do
+        if lines[lineno] then
+          lines[lineno] = old_line
+          file_restored = file_restored + 1
+        end
+      end
+      if file_restored > 0 then pcall(vim.fn.writefile, lines, entry.file) end
+    end
+  end
+
+  return file_restored
+end
+
 ---Undo the most recent apply. Lines are restored only where the current
 ---content is still what this module wrote — an edit made since then wins.
+---
+---Chunked with a progress indicator when `on_done` is given and the entry
+---spans more than `APPLY_CHUNK_SIZE` files, mirroring `M.run`.
+---@param on_done? fun(restored: integer, files_changed: integer, label: string?)
 ---@return integer restored, integer files_changed, string? label
-function M.undo()
+function M.undo(on_done)
   local token = table.remove(_undo_stack)
-  if not token then return 0, 0, nil end
+  if not token then
+    if on_done then on_done(0, 0, nil) end
+    return 0, 0, nil
+  end
 
   local restored, files_changed = 0, 0
-  for _, entry in ipairs(token.entries) do
-    local bufnr = scan.buffer_for(entry.file)
-    local file_restored = 0
 
-    if bufnr then
-      local was_modified = vim.bo[bufnr].modified
-      for lineno, old_line in pairs(entry.lines) do
-        vim.api.nvim_buf_set_lines(bufnr, lineno - 1, lineno, false, { old_line })
-        file_restored = file_restored + 1
-      end
-      if file_restored > 0 and not was_modified then
-        pcall(vim.api.nvim_buf_call, bufnr, function()
-          vim.cmd("silent noautocmd keepjumps write")
-        end)
-      end
-    else
-      local ok, lines = pcall(vim.fn.readfile, entry.file)
-      if ok and type(lines) == "table" then
-        for lineno, old_line in pairs(entry.lines) do
-          if lines[lineno] then
-            lines[lineno] = old_line
-            file_restored = file_restored + 1
-          end
-        end
-        if file_restored > 0 then pcall(vim.fn.writefile, lines, entry.file) end
-      end
-    end
-
+  local function tally(file_restored)
     if file_restored > 0 then
       restored = restored + file_restored
       files_changed = files_changed + 1
     end
   end
 
+  if type(on_done) ~= "function" or #token.entries <= APPLY_CHUNK_SIZE then
+    for _, entry in ipairs(token.entries) do
+      tally(undo_file(entry))
+    end
+    if on_done then on_done(restored, files_changed, token.label) end
+    return restored, files_changed, token.label
+  end
+
+  local h = progress.create({ title = "[filetree.refs]" })
+  local total = #token.entries
+  local i = 0
+
+  local function step()
+    if h and h.cancelled then
+      on_done(restored, files_changed, token.label)
+      return
+    end
+
+    local last = math.min(i + APPLY_CHUNK_SIZE, total)
+    for j = i + 1, last do
+      tally(undo_file(token.entries[j]))
+    end
+    i = last
+
+    if h then h:update({ text = "restoring references…", current = i, total = total }) end
+
+    if i < total then
+      vim.schedule(step)
+      return
+    end
+
+    if h then h:finish(string.format("%d reference(s) in %d file(s)", restored, files_changed)) end
+    on_done(restored, files_changed, token.label)
+  end
+
+  step()
   return restored, files_changed, token.label
 end
 

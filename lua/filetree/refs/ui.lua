@@ -118,25 +118,31 @@ end
 -- ── Chooser ───────────────────────────────────────────────────────────────────
 
 ---@internal
+---Apply `refs`, notify the outcome, and hand the applied count to `done`.
+---`apply.run` rewrites a wide file set asynchronously (chunked, with a
+---progress indicator), so the result arrives through the callback — for a
+---small rename it just fires synchronously within this call.
 ---@param refs FiletreeRef[]
 ---@param opts { label?: string }
-local function do_apply(refs, opts)
-  local applied, files_changed = apply.run(refs, { label = opts.label })
-  if applied > 0 then
-    notify.info(
-      string.format(
-        "Updated %d reference(s) in %d file(s)%s",
-        applied,
-        files_changed,
-        applied < #refs
-            and string.format(" (%d skipped: line changed since the scan)", #refs - applied)
-          or ""
+---@param done fun(applied: integer)
+local function do_apply(refs, opts, done)
+  apply.run(refs, { label = opts.label }, function(applied, files_changed)
+    if applied > 0 then
+      notify.info(
+        string.format(
+          "Updated %d reference(s) in %d file(s)%s",
+          applied,
+          files_changed,
+          applied < #refs
+              and string.format(" (%d skipped: line changed since the scan)", #refs - applied)
+            or ""
+        )
       )
-    )
-  else
-    notify.warn("No reference could be updated (lines changed since the scan?)")
-  end
-  return applied
+    else
+      notify.warn("No reference could be updated (lines changed since the scan?)")
+    end
+    done(applied)
+  end)
 end
 
 ---Ask what to do with `refs`, then do it.
@@ -147,7 +153,7 @@ function M.confirm_and_apply(refs, opts, done)
   done = done or function() end
   if #refs == 0 or opts.mode == "off" then return done(0) end
 
-  if opts.mode == "auto" then return done(do_apply(refs, opts)) end
+  if opts.mode == "auto" then return do_apply(refs, opts, done) end
 
   local title = opts.title or "References"
   notify.info(M.summary(refs) .. ": " .. table.concat(M.unique_files(refs), ", "))
@@ -158,13 +164,17 @@ function M.confirm_and_apply(refs, opts, done)
       { "Update all", "Select…", "Show diff", "Leave as-is" },
       function(choice)
         if choice == "Update all" then
-          done(do_apply(refs, opts))
+          do_apply(refs, opts, done)
         elseif choice == "Select…" then
           refs_picker().pick(
             refs,
             { prefer = opts.picker or "auto", title = title },
             function(selected)
-              done(#selected > 0 and do_apply(selected, opts) or 0)
+              if #selected > 0 then
+                do_apply(selected, opts, done)
+              else
+                done(0)
+              end
             end,
             function()
               done(0)

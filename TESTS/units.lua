@@ -1642,6 +1642,74 @@ do
   pcall(vim.api.nvim_buf_delete, dbuf, { force = true })
 end
 
+-- ── refs.apply: a wide change is applied in chunks, totals via on_done ──────
+-- More than APPLY_CHUNK_SIZE (8) referencing files: apply must spread the
+-- rewrites across event-loop ticks and deliver the totals through the
+-- callback, and undo must reverse every one of them.
+do
+  local refs_apply = require("filetree.refs.apply")
+  refs_apply.reset()
+  local tmp = (TMP_ROOT .. "/units-refs-wide"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+
+  local n = 20
+  local refs = {}
+  for i = 1, n do
+    local f = string.format("%s/ref_%02d.md", tmp, i)
+    vim.fn.writefile({ "top", "link [x](old.md) here", "bottom" }, f)
+    refs[#refs + 1] = {
+      file = f,
+      line = 2,
+      col = 10,
+      target = "old.md",
+      display = "[x](old.md)",
+      new_target = "new.md",
+    }
+  end
+
+  local done_applied, done_files
+  local snap = refs_apply.run(refs, { label = "wide rename" }, function(applied, files_changed)
+    done_applied, done_files = applied, files_changed
+  end)
+  check(
+    "refs.apply(wide): sync return is a partial snapshot",
+    snap > 0 and snap < n,
+    tostring(snap)
+  )
+  local settled = vim.wait(4000, function()
+    return done_applied ~= nil
+  end)
+  check(
+    "refs.apply(wide): on_done fired with the real total",
+    settled and done_applied == n,
+    tostring(done_applied)
+  )
+  check("refs.apply(wide): every file counted", done_files == n, tostring(done_files))
+  check(
+    "refs.apply(wide): last file was actually rewritten",
+    vim.fn.readfile(string.format("%s/ref_%02d.md", tmp, n))[2] == "link [x](new.md) here"
+  )
+
+  local undone_restored
+  refs_apply.undo(function(restored)
+    undone_restored = restored
+  end)
+  local undo_settled = vim.wait(4000, function()
+    return undone_restored ~= nil
+  end)
+  check(
+    "refs.apply(wide): undo restored every reference",
+    undo_settled and undone_restored == n,
+    tostring(undone_restored)
+  )
+  check(
+    "refs.apply(wide): undo reverted the last file on disk",
+    vim.fn.readfile(string.format("%s/ref_%02d.md", tmp, n))[2] == "link [x](old.md) here"
+  )
+  refs_apply.reset()
+end
+
 -- ── trash: reference chooser + cleanup ──────────────────────────────────────
 -- When something links to the file being trashed, delete_current() must show
 -- the 3-way chooser (not the plain y/N popup) and, on "delete + remove

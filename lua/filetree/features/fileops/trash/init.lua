@@ -187,8 +187,17 @@ local function confirm_popup(path, cb)
         body = info_body(path),
         question = string.format("Send to trash? (%d ref(s) will be marked REF!)", #found),
         on_choice = function(yes)
-          if yes then refs.apply.run(found, { label = "delete: " .. name }) end
-          cb(yes)
+          if yes then
+            -- Rewrite the references first (async for a wide set), then let
+            -- the delete proceed — a cancelled delete must not leave blanked
+            -- links behind, and the file must still exist while refs to it
+            -- are being rewritten.
+            refs.apply.run(found, { label = "delete: " .. name }, function()
+              cb(true)
+            end)
+          else
+            cb(false)
+          end
         end,
       })
       return
@@ -199,15 +208,21 @@ local function confirm_popup(path, cb)
       { "Delete + remove refs", "Inspect first", "Delete, keep refs", "Cancel" },
       function(choice)
         if choice == "Delete + remove refs" then
-          refs.apply.run(found, { label = "delete: " .. name })
-          cb(true)
+          refs.apply.run(found, { label = "delete: " .. name }, function()
+            cb(true)
+          end)
         elseif choice == "Inspect first" then
           refs_picker.pick(
             found,
             { prefer = refs.config().picker, title = "References to " .. name },
             function(selected)
-              if #selected > 0 then refs.apply.run(selected, { label = "delete: " .. name }) end
-              cb(true)
+              if #selected > 0 then
+                refs.apply.run(selected, { label = "delete: " .. name }, function()
+                  cb(true)
+                end)
+              else
+                cb(true)
+              end
             end,
             function()
               confirm_popup(path, cb)
