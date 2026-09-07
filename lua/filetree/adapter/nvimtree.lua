@@ -240,7 +240,10 @@ function M.open_reveal(path, _parent_levels)
     if not ok1 then return false end
   end
   local ok2 = pcall(function()
-    a.tree.find_file(path)
+    -- Modern Opts form -- the legacy string form still works internally
+    -- (nvim-tree wraps it into { buf = path } itself either way), but this
+    -- is the form the current @param actually declares.
+    a.tree.find_file({ buf = path })
   end)
   return ok2
 end

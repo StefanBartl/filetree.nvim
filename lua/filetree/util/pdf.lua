@@ -190,7 +190,10 @@ function M.open(path, opts)
   if ok and type(pp.open) == "function" then
     local ok2, err = pcall(pp.open, {
       path = path,
-      mode = mode,
+      -- "picker" always returns earlier in every caller (see pdf_open's
+      -- own open()); "system" is handled above. Only "buffer"/"terminal"
+      -- (and "float", not yet wired to any entry point) reach pdfport.
+      mode = mode --[[@as PdfPort.RendererMode]],
       backend_id = opts.backend,
       split = opts.split,
       focus = opts.focus,
