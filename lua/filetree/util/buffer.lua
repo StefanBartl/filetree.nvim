@@ -50,10 +50,12 @@ M.TREE_FT = {
 -- `lib.nvim.memo` (which is pure LRU memoization): buffer validity changes over
 -- time (a buffer can become unlisted, unreadable, or wiped without our seeing a
 -- BufDelete), so results must expire (TTL) and be invalidatable — semantics memo
--- does not provide. Weak keys let entries GC with the buffer numbers.
+-- does not provide. Cleanup on deletion is the `BufDelete` autocmd below
+-- (`M.invalidate`), not table GC: a plain integer bufnr is never a
+-- collectible value, so `setmetatable(_cache, { __mode = "k" })` — tried
+-- here previously — never actually dropped anything on its own.
 ---@type table<integer, {valid:boolean, timestamp:number}>
 local _cache = {}
-setmetatable(_cache, { __mode = "k" })
 
 local CACHE_TTL = 1000 -- ms
 
