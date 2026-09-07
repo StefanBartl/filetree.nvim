@@ -34,3 +34,9 @@ is the short version of all of it.
 returns every keymap, sub-command and autocommand as data, for anything that
 wants to render or check them. **`install.json`** declares the external tools
 this plugin can use, for `:Lib deps show filetree.nvim`.
+
+## Working on it
+
+| Page | Answers |
+| --- | --- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Ground rules, project layout, and how to add an adapter or a feature |
