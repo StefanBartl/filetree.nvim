@@ -148,13 +148,20 @@ end
 -- Auto mode: apply every found reference without asking, so the assertions
 -- below are about what the providers found, not about the chooser.
 local refs = require("filetree.refs")
-refs.setup({
+
+-- The config every block below starts from. `run_plaintext_comment_check`
+-- re-applies a variant of it and this restores the baseline afterwards.
+local BASE_REFS_CFG = {
   on_rename = "auto",
   on_move = "auto",
   on_delete = "auto",
   providers = { markdown = true, lua = true, python = true, ts_js = true },
   wiki_links = false,
-})
+  -- The experimental plaintext provider is off by default; the "plaintext"
+  -- LANGS entry and the comment-toggle check below need it on.
+  experimental = { plaintext = { enabled = true, comments = true } },
+}
+refs.setup(vim.deepcopy(BASE_REFS_CFG))
 
 -- ── Language specs ────────────────────────────────────────────────────────────
 -- checks[i].old == checks[i].new marks a negative control: the file must
@@ -246,6 +253,49 @@ local LANGS = {
         file = "src/other/unrelated.ts",
         old = 'from "../util/shared_other"',
         new = 'from "../util/shared_other"',
+      },
+    },
+  },
+  {
+    -- Experimental plaintext provider: bare paths in running prose, no link
+    -- syntax around them. Two spellings (relative + project-root) point at the
+    -- same moved file from two directories; a same-prefix sibling
+    -- (Tester_helper.md) and an unrelated doc are the negative controls.
+    name = "plaintext",
+    hub = "notes/Tester.md",
+    new_name = "Renamed.md",
+    checks = {
+      {
+        file = "docs/index.md",
+        old = "../notes/Tester.md",
+        new = "../notes/Renamed.md",
+      },
+      {
+        file = "docs/index.md",
+        old = "/notes/Tester.md",
+        new = "/notes/Renamed.md",
+      },
+      {
+        file = "docs/sub/deep.md",
+        old = "../../notes/Tester.md",
+        new = "../../notes/Renamed.md",
+      },
+      {
+        -- a bare filename with no path prefix, resolved against its own
+        -- directory (notes/) — the hub lives there, so this points at it
+        file = "notes/README.md",
+        old = "in Tester.md",
+        new = "in Renamed.md",
+      },
+      {
+        file = "docs/index.md",
+        old = "../notes/Tester_helper.md",
+        new = "../notes/Tester_helper.md",
+      },
+      {
+        file = "docs/other.md",
+        old = "../notes/Tester_helper.md",
+        new = "../notes/Tester_helper.md",
       },
     },
   },
@@ -520,6 +570,77 @@ local function run_move_feature_check()
   )
 end
 
+-- ── plaintext provider: code-comment scanning + the `comments` toggle ──────
+-- The prose case is covered by the LANGS entry above; this exercises the
+-- source-file path: a bare path in a `--` comment IS rewritten while the same
+-- path in a real string literal on a code line is NOT, and setting
+-- `comments = false` turns the comment scanning off too.
+local function run_plaintext_comment_check()
+  local function rename_hub(work, plaintext_cfg)
+    local cfg = vim.deepcopy(BASE_REFS_CFG)
+    cfg.experimental = { plaintext = plaintext_cfg }
+    refs.setup(cfg)
+
+    local hub_old = work .. "/notes/Tester.md"
+    local done = false
+    local smart_rename = require("filetree.features.fileops.smart_rename")
+    smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, {
+      get_current_node = function()
+        return { path = hub_old, type = "file" }
+      end,
+      refresh = function()
+        done = true
+        return true
+      end,
+    })
+    next_input = "Renamed.md"
+    smart_rename.rename_current()
+    vim.wait(5000, function()
+      return done
+    end, 20)
+  end
+
+  print("\n== plaintext (comments = true) ==")
+  local work = scratch_root .. "/plaintext_comments"
+  vim.fn.delete(work, "rf")
+  copy_dir(fixtures_root .. "/plaintext", work)
+  rename_hub(work, { enabled = true, comments = true })
+
+  local app = read(work .. "/src/app.lua")
+  check(
+    "plaintext comments=true: comment line rewritten",
+    app ~= nil and app:find("-- Doc reference: ../notes/Renamed.md", 1, true) ~= nil,
+    app
+  )
+  check(
+    "plaintext comments=true: code string literal left untouched",
+    app ~= nil and app:find('local doc = "../notes/Tester.md"', 1, true) ~= nil,
+    app
+  )
+
+  print("\n== plaintext (comments = false) ==")
+  local work2 = scratch_root .. "/plaintext_nocomments"
+  vim.fn.delete(work2, "rf")
+  copy_dir(fixtures_root .. "/plaintext", work2)
+  rename_hub(work2, { enabled = true, comments = false })
+
+  local app2 = read(work2 .. "/src/app.lua")
+  check(
+    "plaintext comments=false: comment line NOT rewritten",
+    app2 ~= nil and app2:find("-- Doc reference: ../notes/Tester.md", 1, true) ~= nil,
+    app2
+  )
+  -- Prose in the same tree is still rewritten regardless of the toggle.
+  local idx2 = read(work2 .. "/docs/index.md")
+  check(
+    "plaintext comments=false: prose still rewritten",
+    idx2 ~= nil and idx2:find("../notes/Renamed.md", 1, true) ~= nil,
+    idx2
+  )
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG))
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -527,6 +648,7 @@ end
 run_lua_buffer_check()
 run_lua_directory_cascade_check()
 run_move_feature_check()
+run_plaintext_comment_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))

@@ -74,6 +74,10 @@ registry.register(require("filetree.refs.providers.markdown"))
 registry.register(require("filetree.refs.providers.lua"))
 registry.register(require("filetree.refs.providers.python"))
 registry.register(require("filetree.refs.providers.ts_js"))
+-- Experimental, self-gated: its `plan()` returns nil unless
+-- `refs.experimental.plaintext.enabled` is set, so registering it
+-- unconditionally is inert until asked for.
+registry.register(require("filetree.refs.providers.plaintext"))
 
 -- ── Mode helpers ──────────────────────────────────────────────────────────────
 
@@ -397,8 +401,15 @@ function M.status()
     "providers:",
   }
   local flags = _cfg.providers or {}
+  local plaintext_on = _cfg.experimental
+    and _cfg.experimental.plaintext
+    and _cfg.experimental.plaintext.enabled == true
   for _, p in ipairs(registry.all()) do
-    lines[#lines + 1] = string.format("  %s %s", flags[p.name] ~= false and "●" or "○", p.name)
+    -- `plaintext` is gated by `experimental.plaintext.enabled`, not by the
+    -- `providers` map every other provider reads, so report its real state.
+    local on = p.name == "plaintext" and plaintext_on or flags[p.name] ~= false
+    local tag = p.name == "plaintext" and "  (experimental)" or ""
+    lines[#lines + 1] = string.format("  %s %s%s", on and "●" or "○", p.name, tag)
   end
   lines[#lines + 1] = apply.can_undo() and ("undo available: " .. (apply.last_label() or "?"))
     or "undo available: —"

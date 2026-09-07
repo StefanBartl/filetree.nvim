@@ -68,6 +68,12 @@ require("filetree").setup({
     prefer_lsp = true,    -- skip the textual code providers when a language
                           -- server already applied a workspace edit
     wiki_links = false,   -- also scan [[wiki]]-style markdown links
+    experimental = {      -- in-development reference features, each opt-in
+      plaintext = {        -- rewrite bare paths in prose / code comments
+        enabled  = false,  -- (a match is rewritten only when it resolves to
+        comments = true,   --  exactly the moved file); see FEATURES/FILEOPS.md
+      },                   --  #references. extensions/comment_extensions
+    },                     --  override the provider's built-in lists.
     scan = {
       root              = "project",  -- "project" (nearest root) | "cwd"
       respect_gitignore = true,

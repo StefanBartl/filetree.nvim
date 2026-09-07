@@ -67,6 +67,20 @@
 ---@field python?   boolean
 ---@field ts_js?    boolean
 
+---Config for the experimental `plaintext` provider: rewrite bare filesystem
+---paths written as running text (prose or code comments), not just paths
+---inside link/require/import syntax. Opt-in; a match is rewritten only when it
+---resolves to exactly the moved file.
+---@class FiletreeRefsPlaintextConfig
+---@field enabled?            boolean   Turn the provider on (default false).
+---@field comments?           boolean   Also scan comment lines in source files, not only prose/text files (default true).
+---@field extensions?         string[]  Prose/text extensions scanned in full. Unset ⇒ provider built-in list (md, markdown, mdx, txt, text, rst, org, adoc, norg, …).
+---@field comment_extensions? string[]  Source extensions whose comment lines are scanned. Unset ⇒ provider built-in list (lua, py, js, jsx, ts, tsx, sh, vim, c, cpp, rs, go, rb, java, toml, yaml, …).
+
+---In-development reference features. Each is opt-in and its shape may change.
+---@class FiletreeRefsExperimentalConfig
+---@field plaintext? FiletreeRefsPlaintextConfig
+
 ---@class FiletreeRefsConfig
 ---@field enabled?    boolean
 ---@field providers?  FiletreeRefsProvidersConfig
@@ -77,6 +91,7 @@
 ---@field picker?     "auto"|"telescope"|"fzf-lua"|"quickfix"
 ---@field prefer_lsp? boolean   Skip textual code providers when an LSP client applied a workspace edit.
 ---@field wiki_links? boolean   Also rewrite `[[wiki]]`-style markdown links (default false).
+---@field experimental? FiletreeRefsExperimentalConfig  In-development reference features, each opt-in.
 ---@field scan?       FiletreeRefsScanConfig
 ---@field undo?       boolean   Keep an undo token per apply (default true).
 ---@field undo_depth  integer?  How many applies stay undoable (default 10). The stack holds only the replaced line content, so raising this is cheap.

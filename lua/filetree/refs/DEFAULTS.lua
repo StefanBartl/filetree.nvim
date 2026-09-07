@@ -45,6 +45,30 @@ return {
   -- scanned when asked for.
   wiki_links = false,
 
+  -- In-development reference features. Each one is opt-in and its config
+  -- shape may still change between releases — kept under `experimental` so
+  -- that is unambiguous. Only scalars live here on purpose: the list-shaped
+  -- options (`extensions`, `comment_extensions`) default to the provider's
+  -- own built-in lists when left unset, because `vim.tbl_deep_extend` merges
+  -- lists by index and would otherwise leave stray default entries behind a
+  -- shorter user list.
+  experimental = {
+    -- Rewrite bare filesystem paths written as running text — `see
+    -- ../Test/Tester.md for the format` in prose, or the same in a code
+    -- comment — not just paths inside link/require/import syntax. A bare
+    -- token has a wider false-positive surface, so a match is only rewritten
+    -- when it *resolves to exactly the moved file*. See
+    -- docs/FEATURES/FILEOPS.md#references.
+    plaintext = {
+      enabled = false,
+      -- Also scan comment lines in source files (.lua/.py/.js/…), not only
+      -- prose/text files. Set false to restrict to prose/text.
+      comments = true,
+      -- extensions          = { "md", "txt", … }  -- override prose list
+      -- comment_extensions  = { "lua", "py", … }  -- override comment list
+    },
+  },
+
   scan = {
     root = "project", -- "project" (nearest root) | "cwd"
     respect_gitignore = true,
