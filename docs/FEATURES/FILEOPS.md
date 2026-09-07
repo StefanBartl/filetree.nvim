@@ -238,10 +238,26 @@ a `require("REF!")` is worse than an obviously stale one.
 | `lua` | `require("a.b")` / `require "a.b"`, including the submodule cascade when a directory moves | on |
 | `python` | `import a.b`, `from a.b import x`, and relative `from .x import y` | on |
 | `ts_js` | `import`/`export … from`, dynamic `import()`, CJS `require()`, relative specifiers plus `tsconfig`/`jsconfig` `paths` aliases | **off** |
+| `plaintext` | a bare filesystem path written as running text — `see ../Test/Tester.md for the format` in prose, or the same in a code comment — with no link/require/import syntax around it | **off** (experimental) |
 
 `ts_js` is opt-in: `tsserver` implements `willRenameFiles` and does a
 better job when it is running, so the textual provider is there for
 projects without it.
+
+`plaintext` is opt-in **and experimental** (`refs.experimental.plaintext`,
+so it is clear it is new and its config shape may still move). A bare token
+has a wider false-positive surface than a bracketed link, so the resolver is
+the only thing between "looks like a path" and "gets rewritten": a token is
+touched **only when it resolves to exactly the file that moved**, the same
+test the markdown provider applies. It scans prose/text files in full
+(`.md`, `.txt`, `.rst`, `.org`, `.adoc`, …) and — unless
+`experimental.plaintext.comments = false` — the comment lines of source
+files (`.lua`, `.py`, `.js`, `.ts`, …); a path in a string literal on a real
+code line is left to that language's own provider. It never touches a token
+already inside link/`src=`/`href=`/`[id]:`/`[[wiki]]` syntax (the markdown
+provider owns those) or an external URL. gopath.nvim resolves the same
+kind of bare path *under the cursor* for navigation — this is the write
+side of the same idea, applied after a move.
 
 A markdown file can link to *any* file type, so the markdown provider
 runs for every move — renaming `foo.lua` fixes the docs that link to it,
@@ -268,6 +284,16 @@ require("filetree").setup({
     picker    = "auto",   -- "auto" | "telescope" | "fzf-lua" | "quickfix"
     prefer_lsp = true,    -- don't re-do what a language server already rewrote
     wiki_links = false,   -- also scan [[wiki]]-style links
+    experimental = {
+      -- Rewrite bare paths written as running text / code comments, not just
+      -- paths inside link/require/import syntax. Opt-in; shape may change.
+      plaintext = {
+        enabled  = false,
+        comments = true,   -- also scan comment lines in source files
+        -- extensions         = { … }  -- override the prose/text file list
+        -- comment_extensions = { … }  -- override the source-file list
+      },
+    },
     scan = {
       root              = "project",  -- "project" (nearest root) | "cwd"
       respect_gitignore = true,
