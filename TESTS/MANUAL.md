@@ -26,6 +26,12 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   tree-window badge in both drawing strategies, and the `:Filetree cwd …`
   command wiring incl. enum completion. Uses a stub adapter and a temp tree.
 
+- **[sidebar_guard.lua](sidebar_guard.lua)** — unit: the `nav/sidebar_guard`
+  feature. A window carrying a `neo-tree` filetype buffer plus a stub adapter
+  and a stubbed `neo-tree.events` exercise the `winfixbuf` pin, the
+  BEFORE/AFTER_OPEN lift for source switching, teardown, and the non-neotree
+  no-op.
+
 - **[refs/run.lua](refs/run.lua)** — fixture-based: copies
   `TESTS/refs/fixtures/<lang>/` to a scratch dir and renames the hub module
   through the real feature, asserting every referencing file was rewritten and a
@@ -447,6 +453,22 @@ print("second set_nodes: " .. tostring((pcall(tree.set_nodes, tree, { tree:get_n
 | O.3 | Re-run the snippet after `require("filetree").setup({ features = { tree_integrity = { enabled = false } } })` | `by_id: root` and `second set_nodes: false` — the upstream bug, unguarded |
 | O.4 | With the guard back on: expand a directory that sits next to a grouped one-child chain (`a/b/c` shown as one line), repeatedly | No `[Neo-tree ERROR] Error setting nodes` in `:messages`, and the grouped chain still renders as one line |
 | O.5 | `:checkhealth filetree` | `tree_integrity installed`, plus a healed count if this session hit the corruption |
+
+---
+
+### P. sidebar_guard — the tabline-hijack fix
+
+`TESTS/sidebar_guard.lua` covers the winfixbuf pin/lift/teardown logic against
+a stubbed neo-tree; this checks the real end-to-end behaviour with a tabline
+plugin installed (NvChad's tabufline, bufferline.nvim, …).
+
+| # | Test | Expected |
+|---|------|----------|
+| P.1 | `:lua =vim.wo[vim.fn.win_getid(vim.fn.winnr())].winfixbuf` with the cursor in the tree | `true` |
+| P.2 | Tree open on the **left**, focus inside the tree, click a buffer in the tabline | The file opens in an editor window; the tree stays put on the left, same width. It does **not** reopen on the right. |
+| P.3 | Same, tree on the **right** | Symmetric — tree stays on the right. |
+| P.4 | Switch source via the `source_selector` winbar (filesystem → buffers → git_status …) | Still works — the buffer swaps in place, no error, and `winfixbuf` is `true` again afterwards (P.1). |
+| P.5 | `require("filetree").setup({ features = { sidebar_guard = { enabled = false } } })`, then repeat P.2 | The old bug is back: the tree jumps to the other side. |
 
 ---
 

@@ -215,6 +215,41 @@ function M.check()
     end
   end
 
+  -- sidebar_guard: whether `&winfixbuf` exists at all, and whether an open
+  -- tree window is actually pinned right now.
+  if is_enabled("sidebar_guard") then
+    local ok_ad, adapter_mod2 = pcall(require, "filetree.adapter")
+    local active_adapter = ok_ad and adapter_mod2.get() or nil
+    if vim.fn.exists("&winfixbuf") ~= 1 then
+      vim.health.info("sidebar_guard: no-op — this Neovim build has no &winfixbuf (< 0.10)")
+    elseif active_adapter and active_adapter.name ~= "neotree" then
+      vim.health.info("sidebar_guard: no-op — only the neo-tree adapter is affected")
+    else
+      local pinned, total = 0, 0
+      for _, w in ipairs(vim.api.nvim_list_wins()) do
+        local ok_b, is_tree = pcall(function()
+          return require("filetree.util.buffer").is_tree_buffer(vim.api.nvim_win_get_buf(w))
+        end)
+        if ok_b and is_tree and vim.api.nvim_win_get_config(w).relative == "" then
+          total = total + 1
+          local ok_w, v = pcall(function()
+            return vim.wo[w].winfixbuf
+          end)
+          if ok_w and v then pinned = pinned + 1 end
+        end
+      end
+      if total == 0 then
+        vim.health.ok("sidebar_guard active (no tree window open to check)")
+      elseif pinned == total then
+        vim.health.ok(("sidebar_guard active (%d tree window(s) pinned)"):format(total))
+      else
+        vim.health.warn(
+          ("sidebar_guard: %d of %d tree window(s) not pinned"):format(total - pinned, total)
+        )
+      end
+    end
+  end
+
   -- Human-readable category headings + feature names.
   local CATEGORY_LABELS = {
     nav = "navigation & reveal",

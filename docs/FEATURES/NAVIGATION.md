@@ -117,3 +117,30 @@ bookkeeping during open/close.
 
 - **Module:** [`features/nav/no_name_guard/init.lua`](../../lua/filetree/features/nav/no_name_guard/init.lua)
 - **Config:** `opts.features.no_name_guard.enabled` (default `true`)
+
+## Sidebar Guard
+
+Pins the tree window with `winfixbuf` so a stray `:buffer N` — most often a
+mouse click on a buffer in a tabline (NvChad's tabufline, bufferline, …)
+while the cursor is *inside* the tree — cannot swap the tree's buffer out
+of its window.
+
+Without the pin, that swap displaces the tree, and neo-tree's own recovery
+(`buffer_enter_event`) then reopens the sidebar through a bare `:vsplit`:
+with the default `splitright = false` the new file window lands to the
+*left* of the tree and shoves the sidebar to the right. The repro is
+exactly "tree open on the left, click a tabline buffer, tree jumps to the
+right".
+
+Callers that respect `winfixbuf` (NvChad's `goto_buf`, neo-tree's own
+`open_file`) put the file in a real editor window instead; callers that
+don't get a harmless error rather than a reparented tree. The flag is
+lifted only for the one legitimate in-window buffer swap — switching
+source via the `source_selector` winbar — which neo-tree brackets with its
+`NEO_TREE_WINDOW_BEFORE_OPEN` / `_AFTER_OPEN` events.
+
+neo-tree + Neovim 0.10+ only (`&winfixbuf`); a no-op for every other
+adapter and on older Neovim.
+
+- **Module:** [`features/nav/sidebar_guard/init.lua`](../../lua/filetree/features/nav/sidebar_guard/init.lua)
+- **Config:** `opts.features.sidebar_guard.enabled` (default `true`), `opts.features.sidebar_guard.winfixbuf` (default `true` — set `false` to keep the feature registered but leave `winfixbuf` untouched)
