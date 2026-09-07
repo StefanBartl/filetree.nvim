@@ -60,7 +60,12 @@ local VALID_POSITIONS = { left = true, right = true, float = true, current = tru
 local function get_current_position()
   local state = get_state()
   local pos = state and state.current_position
-  if type(pos) == "string" and VALID_POSITIONS[pos] then return pos end
+  if type(pos) == "string" and VALID_POSITIONS[pos] then
+    -- VALID_POSITIONS narrows out "bottom" (added upstream, not supported
+    -- here) at runtime; the table lookup does not narrow the type itself.
+    ---@cast pos FiletreeTreePosition
+    return pos
+  end
   return "left"
 end
 
@@ -621,6 +626,9 @@ function M.install_reveal_guard()
   if not ok or type(commands.execute) ~= "function" then return end
 
   local original_execute = commands.execute
+  -- Deliberate monkeypatch of neo-tree's own module table, not a
+  -- redefinition -- see the doc-comment on install_reveal_guard above.
+  ---@diagnostic disable-next-line: duplicate-set-field
   commands.execute = function(args, ...)
     if
       type(args) == "table"

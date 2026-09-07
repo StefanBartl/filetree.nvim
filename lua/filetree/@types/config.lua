@@ -630,7 +630,7 @@
 
 ---@class FiletreePdfCreateResult
 ---@field path    string    The input path this result is for.
----@field status  "ok"|"error"|"skipped"
+---@field status  "ok"|"error"|"partial"|"skipped" "skipped" is filetree's own (no kind/producer); the rest mirror PdfPort.ResultStatus.
 ---@field output  string?   Created PDF path, when status == "ok".
 ---@field error   string?   Failure reason, when status == "error".
 

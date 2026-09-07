@@ -156,6 +156,9 @@ local function apply_neotree(names, adapter)
   -- 1. Future states: neo-tree deepcopies from this config template.
   ncfg.filesystem.filtered_items = ncfg.filesystem.filtered_items or {}
   local fi = ncfg.filesystem.filtered_items
+  -- Guaranteed non-nil by the assignment just above; LuaLS does not carry
+  -- that narrowing through the field re-read.
+  ---@cast fi table
   fi.hide_by_name = merge_hide_by_name(fi.hide_by_name, names)
   -- Force-hide, even if the user's own neo-tree opts already set
   -- `visible = true` (e.g. a leftover personal preference): `visible = true`
