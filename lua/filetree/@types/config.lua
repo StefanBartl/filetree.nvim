@@ -84,6 +84,7 @@
 ---@field shell_run           FiletreeShellRunConfig?
 ---@field layout_guard        FiletreeLayoutGuardConfig?
 ---@field no_name_guard       FiletreeNoNameGuardConfig?
+---@field sidebar_guard       FiletreeSidebarGuardConfig?
 ---@field buffer_cycle        FiletreeBufferCycleConfig?
 ---@field cwd_sync            FiletreeCwdSyncConfig?
 ---@field cwd_mode            FiletreeCwdModeOpts?
@@ -136,6 +137,15 @@
 ---@class FiletreeLayoutGuardConfig
 ---@field enabled    boolean
 ---@field delay_ms   integer   Milliseconds before guard fires after a window closes (default 50).
+
+-- ── sidebar_guard ─────────────────────────────────────────────────────────────
+
+---@class FiletreeSidebarGuardConfig
+---@field enabled    boolean  Pin the tree window with `winfixbuf` so a stray `:buffer`/
+---                           tabline-click can't hijack it and make it reopen on the wrong
+---                           side (default true; neo-tree + Neovim 0.10+ only, else a no-op).
+---@field winfixbuf? boolean  Set false to keep the feature registered but not touch
+---                           `winfixbuf` (default true).
 
 -- ── no_name_guard ─────────────────────────────────────────────────────────────
 

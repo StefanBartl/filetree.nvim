@@ -58,6 +58,14 @@ return {
     no_name_guard = {
       enabled = true,
     },
+    -- Pin the tree window with `winfixbuf` so a stray `:buffer` / tabline
+    -- mouse-click can't swap the tree buffer out of its window and make
+    -- neo-tree reopen the sidebar on the wrong side. neo-tree + Neovim 0.10+
+    -- only; a no-op otherwise. See docs/FEATURES/NAVIGATION.md#sidebar-guard.
+    sidebar_guard = {
+      enabled = true,
+      winfixbuf = true,
+    },
     cwd_sync = {
       enabled = false,
       debounce_ms = 150,

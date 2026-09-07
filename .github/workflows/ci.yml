@@ -72,4 +72,5 @@ jobs:
           nvim --clean --headless -u NONE -l TESTS/units.lua
           nvim --clean --headless -u NONE -l TESTS/menu.lua
           nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
+          nvim --clean --headless -u NONE -l TESTS/sidebar_guard.lua
           nvim --clean --headless -u NONE -l TESTS/refs/run.lua
