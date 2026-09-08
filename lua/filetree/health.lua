@@ -6,8 +6,9 @@ local M = {}
 --- `ℹ️ INFO` reads faster than a bare `info()` line in a status list (adapter,
 --- backend, engine) where the column itself carries information; a plain
 --- fact (version, path, count) stays a bare `vim.health.info()`. Paired with
---- `after/syntax/checkhealth.vim` in the nvim-config, which colors the
---- `INFO` keyword the same as the built-in `OK`/`WARNING`/`ERROR` ones.
+--- `after/syntax/checkhealth.vim` in lib.nvim (a hard dependency here, so it
+--- ships for every consumer, not just this repo's own config), which colors
+--- the `INFO` keyword the same as the built-in `OK`/`WARNING`/`ERROR` ones.
 ---@param msg string
 local function note(msg)
   vim.health.info("ℹ️ INFO " .. msg)
