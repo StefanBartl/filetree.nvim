@@ -123,6 +123,18 @@ local SPEC = {
       desc = "filetree: copy path relative to project root",
       default = "]R",
     },
+    {
+      field = "keymap_buffer_rel",
+      method = "copy_buffer_relative",
+      desc = "filetree: copy path relative to the open buffer",
+      default = "]b",
+    },
+    {
+      field = "keymap_env_root",
+      method = "copy_env_rooted",
+      desc = "filetree: copy path with an env-var root",
+      default = "[e",
+    },
   },
   trash = {
     {

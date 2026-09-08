@@ -461,6 +461,14 @@ local TREE = {
       local f = ft("path_copy")
       if f then f.copy_project_relative() end
     end,
+    buffer_relative = function(_)
+      local f = ft("path_copy")
+      if f then f.copy_buffer_relative() end
+    end,
+    env_rooted = function(_)
+      local f = ft("path_copy")
+      if f then f.copy_env_rooted() end
+    end,
     pick = function(_)
       local f = ft("path_copy")
       if f then f.pick() end

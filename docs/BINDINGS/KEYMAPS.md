@@ -44,6 +44,8 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard |
 | `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard |
 | `]R` | path_copy | `keymap_project_rel` | Copy path relative to project root (cwd-independent) |
+| `]b` | path_copy | `keymap_buffer_rel` | Copy path relative to the buffer open in the editor (`./x`, `../x`) |
+| `[e` | path_copy | `keymap_env_root` | Copy absolute path with an env-var root folded in (`$REPOS_DIR/…`) |
 | `d` | trash | `keymap` | Trash current node (or all marked). **`filesystem` source only** |
 | `U` | trash | `keymap_undo` | Undo last trash operation. **`filesystem` source only** |
 | `<leader>th` | trash | `keymap_history` | Show trash history. **`filesystem` source only** |

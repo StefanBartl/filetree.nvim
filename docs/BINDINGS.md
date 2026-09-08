@@ -82,7 +82,7 @@ Enough to predict where a key lives without opening the full table:
 
 | Prefix | Meaning | Examples |
 | --- | --- | --- |
-| `[` / `]` | Paired copy/navigation actions — `[` for the "absolute/upper" variant, `]` for the "relative/lower" one | `[a`/`]a` path, `[R`/`]R` project root, `[f`/`]f` file list, `[m`/`]m` mark all/unmark all |
+| `[` / `]` | Paired copy/navigation actions — `[` for the "absolute/upper" variant, `]` for the "relative/lower" one | `[a`/`]a` path, `[R`/`]R` project root, `[f`/`]f` file list, `[m`/`]m` mark all/unmark all. Two paths have no counterpart and so stand alone: `]b` (relative to the open buffer) and `[e` (`$REPOS_DIR/…`) |
 | `<leader>` | The few actions that open a panel or reach outside the tree | `<leader>ms` marks list, `<leader>th` trash history, `<leader>rb` batch rename, `<leader>fm` file manager, `<leader>sm` system open |
 | `s` | Open the node somewhere else | `sg` vsplit, `sv` split, `st` tab |
 | `t` | Force telescope specifically, where a generic key already exists | `tf` find, `tg` grep |

@@ -254,6 +254,9 @@ require("lazy").setup({
             enabled = true,
             keymap_abs = "[a", -- copy absolute path (original: [a)
             keymap_dirname = "]a", -- copy absolute parent directory (original: ]a)
+            keymap_buffer_rel = "]b", -- copy path relative to the open buffer (./x, ../x)
+            keymap_env_root = "[e", -- copy absolute path with an env-var root
+            env_roots = { "REPOS_DIR" },
           },
           copy_file_list = {
             enabled = true,

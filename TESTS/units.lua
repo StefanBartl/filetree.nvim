@@ -4003,6 +4003,70 @@ do
   end
 end
 
+-- ── util.path: dot_relative / env_rooted ─────────────────────────────────────
+-- Both are pure string transforms over absolute paths -- nothing is stat'ed --
+-- so the fixture root only has to be absolute on the running OS, not to exist.
+do
+  local path = require("filetree.util.path")
+  local R = (vim.fn.has("win32") == 1) and "C:/ft-units" or "/ft-units"
+
+  check(
+    "path.dot_relative: a descendant gets an explicit ./",
+    path.dot_relative(R .. "/docs/ROADMAP/ROADMAP.md", R .. "/docs/ROADMAP") == "./ROADMAP.md"
+  )
+  check(
+    "path.dot_relative: a deeper descendant keeps its subpath",
+    path.dot_relative(R .. "/docs/ROADMAP/ROADMAP.md", R) == "./docs/ROADMAP/ROADMAP.md"
+  )
+  -- The case cwd-relative copying gets wrong: the link is written in
+  -- docs/ROADMAP/, so the target one directory up is "../BINDINGS.md".
+  check(
+    "path.dot_relative: a sibling directory climbs with ..",
+    path.dot_relative(R .. "/docs/BINDINGS.md", R .. "/docs/ROADMAP") == "../BINDINGS.md"
+  )
+  check(
+    "path.dot_relative: the base itself is .",
+    path.dot_relative(R .. "/docs", R .. "/docs") == "."
+  )
+  -- A dotfile starts with "." too, and must still be prefixed -- the guard has
+  -- to test for a "./" or "../" segment, not merely for a leading dot.
+  check(
+    "path.dot_relative: a dotfile is still prefixed",
+    path.dot_relative(R .. "/docs/.hidden.md", R .. "/docs") == "./.hidden.md"
+  )
+
+  local saved = vim.env.FILETREE_UNITS_ROOT
+  vim.env.FILETREE_UNITS_ROOT = R .. "/repos"
+  check(
+    "path.env_rooted: a path under the variable is rewritten",
+    path.env_rooted(R .. "/repos/filetree.nvim/lua/x.lua", { "FILETREE_UNITS_ROOT" })
+      == "$FILETREE_UNITS_ROOT/filetree.nvim/lua/x.lua"
+  )
+  check(
+    "path.env_rooted: the root itself needs no trailing slash",
+    path.env_rooted(R .. "/repos", { "FILETREE_UNITS_ROOT" }) == "$FILETREE_UNITS_ROOT"
+  )
+  check(
+    "path.env_rooted: a path outside comes back absolute",
+    path.env_rooted(R .. "/elsewhere/x.lua", { "FILETREE_UNITS_ROOT" }) == R .. "/elsewhere/x.lua"
+  )
+  check(
+    "path.env_rooted: an unset variable is skipped",
+    path.env_rooted(R .. "/repos/x.lua", { "FILETREE_UNITS_NOT_SET" }) == R .. "/repos/x.lua"
+  )
+  -- Longest match wins, so a repo dir nested inside a home dir reports the
+  -- repo dir -- the more specific of the two -- whatever order they are listed.
+  local saved_home = vim.env.FILETREE_UNITS_HOME
+  vim.env.FILETREE_UNITS_HOME = R
+  check(
+    "path.env_rooted: the longest matching root wins",
+    path.env_rooted(R .. "/repos/x.lua", { "FILETREE_UNITS_HOME", "FILETREE_UNITS_ROOT" })
+      == "$FILETREE_UNITS_ROOT/x.lua"
+  )
+  vim.env.FILETREE_UNITS_HOME = saved_home
+  vim.env.FILETREE_UNITS_ROOT = saved
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
