@@ -43,13 +43,16 @@ local function stub_action(name, fns)
   return t, calls
 end
 
-local function install_stub(menu_cfg, present_features)
+local function install_stub(menu_cfg, present_features, adapter)
   package.loaded["filetree"] = {
     feature = function(n)
       return present_features[n]
     end,
     config = function()
       return { menu = menu_cfg }
+    end,
+    adapter = function()
+      return adapter
     end,
   }
   package.loaded["filetree.integrations.menu"] = nil
@@ -131,6 +134,141 @@ do
   )
   local menu5 = install_stub({ enable = false }, features)
   eq("menu.submenu(): nil when there is nothing to show", menu5.submenu(), nil)
+
+  package.loaded["filetree"] = nil
+  package.loaded["filetree.integrations.menu"] = nil
+end
+
+-- ── Regression: a disabled entry in the MIDDLE of a group must not drop ─────
+-- entries after it (a table constructor with a nil in a non-trailing slot
+-- makes `ipairs` stop early — add_group must not iterate that way).
+do
+  local features = {}
+  -- fileops group order is: smart_create, smart_rename, rename_batch, move,
+  -- create_from_template. Disable smart_rename (position 2) only — every
+  -- entry after it must still appear.
+  features.smart_create = (stub_action("smart_create", { "create" }))
+  -- smart_rename intentionally omitted (disabled) -> position 2 is nil.
+  features.rename_batch = (stub_action("rename_batch", { "open" }))
+  features.move = (stub_action("move", { "move" }))
+  features.create_from_template = (stub_action("create_from_template", { "open_current" }))
+
+  local menu = install_stub({ enable = true }, features)
+  local list = names(menu.items())
+
+  check("hole regression: entry before the gap present", has(list, "  Create file / dir"))
+  check(
+    "hole regression: disabled entry (the gap itself) absent",
+    not has(list, "  Rename (LSP refs)")
+  )
+  check("hole regression: entry right after the gap present", has(list, "  Batch rename"))
+  check("hole regression: entry two after the gap present", has(list, "  Move to…"))
+  check("hole regression: last entry in the group present", has(list, "  New from template"))
+
+  package.loaded["filetree"] = nil
+  package.loaded["filetree.integrations.menu"] = nil
+end
+
+-- ── marks group ───────────────────────────────────────────────────────────────
+do
+  local features = {}
+  features.marks = (
+    stub_action(
+      "marks",
+      { "toggle_current", "mark_all_visible", "unmark_all_visible", "clear_all", "show" }
+    )
+  )
+
+  local menu = install_stub({ enable = true }, features)
+  local list = names(menu.items())
+
+  check("marks: toggle entry present", has(list, "  Toggle mark"))
+  check("marks: mark all entry present", has(list, "  Mark all visible"))
+  check("marks: unmark all entry present", has(list, "  Unmark all visible"))
+  check("marks: clear entry present", has(list, "  Clear marks"))
+  check("marks: show entry present", has(list, "  Show marked nodes"))
+
+  local menu2 = install_stub({ enable = true, marks = false }, features)
+  check(
+    "marks opt-out: marks=false hides the group",
+    not has(names(menu2.items()), "  Toggle mark")
+  )
+
+  package.loaded["filetree"] = nil
+  package.loaded["filetree.integrations.menu"] = nil
+end
+
+-- ── window group / window_entry() ────────────────────────────────────────────
+do
+  local closed_calls, opened_calls = 0, 0
+  local open_reveal_arg
+
+  local adapter_open = {
+    is_open = function()
+      return true
+    end,
+    close = function()
+      closed_calls = closed_calls + 1
+    end,
+  }
+  local adapter_closed = {
+    is_open = function()
+      return false
+    end,
+    open_reveal = function(path)
+      opened_calls = opened_calls + 1
+      open_reveal_arg = path
+    end,
+    open_cwd = function()
+      opened_calls = opened_calls + 1
+    end,
+  }
+
+  -- Tree open -> "Close filetree", both via items() and window_entry() directly.
+  local menu_open = install_stub({ enable = true }, {}, adapter_open)
+  local list_open = names(menu_open.items())
+  check("window: tree open -> Close entry present", has(list_open, "  Close filetree"))
+  check("window: tree open -> Open entry absent", not has(list_open, "  Open filetree"))
+
+  local we = menu_open.window_entry()
+  check("window_entry(): non-nil when tree is open", we ~= nil)
+  assert(we, "window_entry() returned nil while the stub adapter reports the tree open")
+  we.cmd()
+  eq("window_entry(): cmd() calls adapter.close()", closed_calls, 1)
+
+  -- Tree closed -> "Open filetree", reveals the given buffer's file.
+  local scratch = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(scratch, "/tmp/filetree-menu-test.lua")
+  -- filereadable() gates the reveal-vs-cwd branch; this file need not exist
+  -- on disk for the "falls back to open_cwd" branch, so cover that instead.
+  local menu_closed = install_stub({ enable = true }, {}, adapter_closed)
+  local list_closed = names(menu_closed.items())
+  check("window: tree closed -> Open entry present", has(list_closed, "  Open filetree"))
+  check("window: tree closed -> Close entry absent", not has(list_closed, "  Close filetree"))
+
+  local we2 = menu_closed.window_entry(scratch)
+  assert(we2, "window_entry() returned nil while the stub adapter reports the tree closed")
+  we2.cmd()
+  eq("window_entry(): cmd() calls adapter.open_cwd() for an unreadable path", opened_calls, 1)
+  eq("window_entry(): open_reveal() was not called for an unreadable path", open_reveal_arg, nil)
+  pcall(vim.api.nvim_buf_delete, scratch, { force = true })
+
+  -- Group opt-out and master switch.
+  local menu3 = install_stub({ enable = true, window = false }, {}, adapter_open)
+  check(
+    "window opt-out: window=false hides the group",
+    not has(names(menu3.items()), "  Close filetree")
+  )
+
+  local menu4 = install_stub({ enable = false }, {}, adapter_open)
+  check(
+    "window: master switch enable=false yields nil from window_entry()",
+    menu4.window_entry() == nil
+  )
+
+  -- No adapter resolved at all (e.g. setup() not called yet) -> nil, not an error.
+  local menu5 = install_stub({ enable = true }, {}, nil)
+  check("window: no adapter -> window_entry() is nil, not an error", menu5.window_entry() == nil)
 
   package.loaded["filetree"] = nil
   package.loaded["filetree.integrations.menu"] = nil

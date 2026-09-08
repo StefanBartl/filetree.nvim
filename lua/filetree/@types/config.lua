@@ -23,6 +23,8 @@
 ---@field paths     boolean?  copy path / markdown link (default true).
 ---@field search    boolean?  find files / grep in dir (default true).
 ---@field info      boolean?  node info (default true).
+---@field marks     boolean?  toggle / mark all / unmark all / clear / show marked (default true).
+---@field window    boolean?  open/close the tree itself (default true).
 
 --- The **resolved** configuration, as `config.get()` returns it and as every
 --- consumer downstream of `setup()` receives it: `config.DEFAULTS`, then the

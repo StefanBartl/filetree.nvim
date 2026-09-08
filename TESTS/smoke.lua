@@ -314,6 +314,54 @@ do
   ft.setup({ adapter = "stub" })
 end
 
+-- 6) menu integration: every (feature, function) pair the context menu wires
+-- up resolves to a REAL function on the real feature module, not just a
+-- non-nil stub (unlike TESTS/menu.lua, which stubs "filetree" entirely).
+-- `entry()`'s self-gating in filetree.integrations.menu means a renamed or
+-- removed function silently DROPS the menu item instead of erroring -- this
+-- is the guard against that going unnoticed. Mirrors the pairs `items()`
+-- actually calls `entry()` with; keep the two lists in sync by hand.
+do
+  ft.setup({ adapter = "stub" })
+  local MENU_PAIRS = {
+    { "smart_create", "create" },
+    { "smart_rename", "rename_current" },
+    { "rename_batch", "open" },
+    { "move", "move" },
+    { "create_from_template", "open_current" },
+    { "copy_move", "stage_copy" },
+    { "copy_move", "stage_cut" },
+    { "copy_move", "paste" },
+    { "trash", "delete_current" },
+    { "open_variants", "open_vsplit" },
+    { "open_variants", "open_split" },
+    { "open_variants", "open_tabnew" },
+    { "open_with", "open_system" },
+    { "open_in_fm", "open" },
+    { "path_copy", "pick" },
+    { "markdown_links", "link_current" },
+    { "find_files", "find" },
+    { "grep_in_dir", "grep" },
+    { "node_info", "show_current" },
+    { "marks", "toggle_current" },
+    { "marks", "mark_all_visible" },
+    { "marks", "unmark_all_visible" },
+    { "marks", "clear_all" },
+    { "marks", "show" },
+  }
+  local bad = {}
+  for _, pair in ipairs(MENU_PAIRS) do
+    local fname, fn = pair[1], pair[2]
+    local mod = ft.feature(fname)
+    if not (mod and type(mod[fn]) == "function") then bad[#bad + 1] = fname .. "." .. fn end
+  end
+  check(
+    "context-menu (feature, function) pairs all resolve to real functions",
+    #bad == 0,
+    table.concat(bad, ", ")
+  )
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim smoke: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
