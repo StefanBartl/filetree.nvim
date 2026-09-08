@@ -58,8 +58,21 @@ local function current_node()
   return node
 end
 
----Markdown link for the current node.
+---Markdown link for the current node, or one link per marked node when any
+---are marked (same "marks if any, else current" idiom as copy_file_list /
+---fileops' copy_move and trash) — `MM` (`link_from_marked`) stays as an
+---explicit, marks-only alias.
 function M.link_current()
+  local ok, marks = require("filetree.features").load("marks")
+  if ok and marks and marks.count() > 0 then
+    local lines = {}
+    for _, path in ipairs(marks.get_marked()) do
+      lines[#lines + 1] = to_link(path)
+    end
+    copy_to_reg(lines)
+    return
+  end
+
   local node = current_node()
   if not node then return end
   copy_to_reg({ to_link(node.path) })

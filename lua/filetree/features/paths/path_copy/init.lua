@@ -144,7 +144,12 @@ local FORMATS = {
     return "file://" .. (abs:sub(1, 1) == "/" and abs or "/" .. abs)
   end,
   line = function(path)
-    local ln = cursor_line()
+    -- Per-node line via the adapter's line map (needed once `path` can be one
+    -- of several marked nodes, not just the one under the cursor); falls back
+    -- to the window cursor for the single-node case, or when a marked node
+    -- isn't currently rendered (e.g. inside a collapsed directory).
+    local ln = _adapter and _adapter.get_node_line and _adapter.get_node_line(path)
+    if not ln then ln = cursor_line() end
     local rel = vim.fn.fnamemodify(path, ":.")
     return ln and (rel .. ":" .. ln) or rel
   end,
@@ -191,24 +196,45 @@ local FORMAT_ORDER = {
 
 -- ── Copy helper ───────────────────────────────────────────────────────────────
 
-local function do_copy(fmt)
+---Paths to copy: every marked node when any are marked, else just the node
+---under the cursor — same "marks if any, else current" idiom as
+---copy_file_list / fileops' copy_move and trash.
+---@return string[]
+local function get_targets()
+  local ok, marks = require("filetree.features").load("marks")
+  if ok and marks and marks.count() > 0 then return marks.get_marked() end
   local path = current_node_path()
-  if not path then
-    notify.warn("No node under cursor")
-    return
-  end
+  return path and { path } or {}
+end
 
+local function do_copy(fmt)
   local builder = FORMATS[fmt]
   if not builder then
     notify.warn("Unknown format: " .. fmt)
     return
   end
 
-  local text = builder(path)
+  local targets = get_targets()
+  if #targets == 0 then
+    notify.warn("No node under cursor")
+    return
+  end
+
+  local lines = {}
+  for _, path in ipairs(targets) do
+    lines[#lines + 1] = builder(path)
+  end
+  local text = table.concat(lines, "\n")
   vim.fn.setreg("+", text)
   vim.fn.setreg('"', text)
 
-  if _cfg.notify then notify.info(string.format("[%s] %s", fmt, text)) end
+  if _cfg.notify then
+    if #lines == 1 then
+      notify.info(string.format("[%s] %s", fmt, lines[1]))
+    else
+      notify.info(string.format("[%s] Copied %d path(s)", fmt, #lines))
+    end
+  end
 end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
@@ -220,21 +246,25 @@ for _, fmt in ipairs(FORMAT_ORDER) do
 end
 
 function M.pick()
-  local path = current_node_path()
-  if not path then
+  local targets = get_targets()
+  if #targets == 0 then
     notify.warn("No node under cursor")
     return
   end
 
   local built = {}
   for _, fmt in ipairs(FORMAT_ORDER) do
-    built[#built + 1] = { fmt = fmt, text = FORMATS[fmt](path) }
+    local lines = {}
+    for _, path in ipairs(targets) do
+      lines[#lines + 1] = FORMATS[fmt](path)
+    end
+    built[#built + 1] = { fmt = fmt, text = table.concat(lines, "\n") }
   end
 
   ui_select(built, {
     prompt = "Copy path",
     format_item = function(item)
-      return string.format("%-10s %s", item.fmt, item.text)
+      return string.format("%-10s %s", item.fmt, (item.text:gsub("\n", " | ")))
     end,
   }, function(item)
     if not item then return end
