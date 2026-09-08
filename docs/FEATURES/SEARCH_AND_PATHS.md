@@ -46,6 +46,11 @@ Copies the node's absolute path or its parent directory's path
 (`[a`/`]a`), or the path relative to the project root (`[R`/`]R`) — keys
 covering the "I need this path somewhere else" cases without a prompt.
 
+Mark-aware: with nodes marked (see [Marks](INTEGRATIONS.md#marks)), every `path_copy`
+keymap — including `pick` — copies one line per marked node instead of just
+the node under the cursor. Same rule as `copy_move`/`trash`: marks win when
+any are set, otherwise it's the cursor's node.
+
 Two more answer the cases where neither the cwd nor the project root is
 the right frame of reference:
 
@@ -97,6 +102,11 @@ Copies a recursive listing of files and/or directories under the node —
 `[f`/`]f` for files, `[F`/`]F` for directories — useful for pasting a
 directory's contents into an issue, a prompt, or a script.
 
+Mark-aware: with nodes marked (see [Marks](INTEGRATIONS.md#marks)), the
+listing is collected from every marked node (deduplicated) instead of just
+the one under the cursor — mark three directories, then `]f` copies the
+combined relative file listing across all three.
+
 - **Module:** `lua/filetree/features/paths/copy_file_list/`
 - **Keymaps:** `[f`, `]f`, `[F`, `]F`
 
@@ -105,7 +115,8 @@ directory's contents into an issue, a prompt, or a script.
 Copies the current node, a recursive listing, or every marked node as
 Markdown links (`ML`/`MR`/`MM`) — for dropping references into a README
 or a design doc directly from the tree, no manual path-to-link
-formatting.
+formatting. `ML` is mark-aware: with nodes marked it links all of them
+(one per line), same as `MM`; `MM` stays as an explicit marks-only keymap.
 
 - **Module:** `lua/filetree/features/paths/markdown_links/`
 - **Keymaps:** `ML`, `MR`, `MM`

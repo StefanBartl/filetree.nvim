@@ -75,54 +75,98 @@ local function copy_to_reg(lines)
   notify.info(string.format("Copied %d path(s):\n%s", #lines, table.concat(preview, "\n")))
 end
 
----Get path of current node (file → itself, directory → itself).
----@return string?
-local function current_path()
-  if not _adapter then return nil end
+---Collect the paths to operate on: every marked node when any are marked,
+---else just the node under the cursor. Same "marks if any, else current"
+---idiom as `copy_move`/`trash` (fileops), applied here so `[f`/`]f`/`[F`/`]F`
+---act on a multi-node selection instead of only ever the cursor's node.
+---@return string[]
+local function get_targets()
+  local ok, marks = require("filetree.features").load("marks")
+  if ok and marks and marks.count() > 0 then return marks.get_marked() end
+  if not _adapter then return {} end
   local node = _adapter.get_current_node()
-  if not node or not node.path then
-    notify.warn("No current node")
-    return nil
+  return node and node.path and { node.path } or {}
+end
+
+---@param targets string[]
+---@param relative boolean
+---@return string[]
+local function collect_files_multi(targets, relative)
+  local seen, out = {}, {}
+  for _, path in ipairs(targets) do
+    for _, f in ipairs(collect_files(path, relative)) do
+      if not seen[f] then
+        seen[f] = true
+        out[#out + 1] = f
+      end
+    end
   end
-  return node.path
+  return out
+end
+
+---@param targets string[]
+---@param relative boolean
+---@return string[]
+local function collect_dirs_multi(targets, relative)
+  local seen, out = {}, {}
+  for _, path in ipairs(targets) do
+    local items
+    if vim.fn.isdirectory(path) == 1 then
+      items = collect_dirs(path, relative)
+    else
+      -- File node: contribute just its parent directory.
+      local dir = vim.fn.fnamemodify(path, ":h"):gsub("\\", "/")
+      if relative then
+        local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
+        dir = dir:gsub("^" .. vim.pesc(cwd), "")
+        if dir == "" then dir = "." end
+      end
+      items = { dir }
+    end
+    for _, d in ipairs(items) do
+      if not seen[d] then
+        seen[d] = true
+        out[#out + 1] = d
+      end
+    end
+  end
+  return out
 end
 
 function M.copy_files_abs()
-  local path = current_path()
-  if not path then return end
-  copy_to_reg(collect_files(path, false))
+  local targets = get_targets()
+  if #targets == 0 then
+    notify.warn("No current node")
+    return
+  end
+  copy_to_reg(collect_files_multi(targets, false))
 end
 
 function M.copy_files_rel()
-  local path = current_path()
-  if not path then return end
-  copy_to_reg(collect_files(path, true))
+  local targets = get_targets()
+  if #targets == 0 then
+    notify.warn("No current node")
+    return
+  end
+  copy_to_reg(collect_files_multi(targets, true))
 end
 
 function M.copy_dirs_abs()
-  local path = current_path()
-  if not path then return end
-  if vim.fn.isdirectory(path) == 1 then
-    copy_to_reg(collect_dirs(path, false))
-  else
-    -- File node: return just the parent directory
-    copy_to_reg({ vim.fn.fnamemodify(path, ":h"):gsub("\\", "/") })
+  local targets = get_targets()
+  if #targets == 0 then
+    notify.warn("No current node")
+    return
   end
+  copy_to_reg(collect_dirs_multi(targets, false))
 end
 
 function M.copy_dirs_rel()
-  local path = current_path()
-  if not path then return end
-  if vim.fn.isdirectory(path) == 1 then
-    copy_to_reg(collect_dirs(path, true))
-  else
-    -- File node: return just the parent directory (relative)
-    local cwd = vim.fn.getcwd():gsub("\\", "/"):gsub("/?$", "/")
-    local dir = vim.fn.fnamemodify(path, ":h"):gsub("\\", "/")
-    dir = dir:gsub("^" .. vim.pesc(cwd), "")
-    if dir == "" then dir = "." end
-    copy_to_reg({ dir })
+  local targets = get_targets()
+  if #targets == 0 then
+    notify.warn("No current node")
+    return
   end
+  copy_to_reg(collect_dirs_multi(targets, true))
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
