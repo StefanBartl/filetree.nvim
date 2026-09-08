@@ -43,12 +43,43 @@ picker engine as `find_files`; `tg` forces telescope specifically.
 ## Path Copy
 
 Copies the node's absolute path or its parent directory's path
-(`[a`/`]a`), or the path relative to the project root (`[R`/`]R`) — four
-keys covering the "I need this path somewhere else" cases without a
-prompt.
+(`[a`/`]a`), or the path relative to the project root (`[R`/`]R`) — keys
+covering the "I need this path somewhere else" cases without a prompt.
+
+Two more answer the cases where neither the cwd nor the project root is
+the right frame of reference:
+
+`]b` copies the path **relative to the buffer open in the editor**, in
+the `./x` / `../x` form a Markdown link target needs. This is the one
+that makes a pasted link actually resolve: with the cwd at the repo
+root, `docs/ROADMAP/ROADMAP.md` is correct in the root README and wrong
+in `docs/ROADMAP/Notes.md`, where the same file is `./ROADMAP.md`. `]b`
+reads the open buffer's directory instead of the cwd, so it is right in
+both. The base is the editor window's file, then the alternate file
+(`#`), then the cwd — so it still answers something when the tree is the
+only window.
+
+`[e` copies the **absolute** path, but folds a configured environment
+variable back into its root: `$REPOS_DIR/filetree.nvim/lua/x.lua` rather
+than `E:/repos/filetree.nvim/lua/x.lua`. Written into a note, that path
+still means the same file on a machine where the checkout lives on
+another drive. The variables to try are `env_roots` (default
+`{ "REPOS_DIR" }`, written without the `$`); the longest match wins, so
+a `$REPOS_DIR` inside `$HOME` beats `$HOME`. With no variable matching,
+the plain absolute path comes back.
+
+```lua
+path_copy = {
+  enabled = true,
+  keymap_buffer_rel = "]b",
+  keymap_env_root = "[e",
+  -- Longest match wins; each name is written without the `$`.
+  env_roots = { "REPOS_DIR", "XDG_CONFIG_HOME", "HOME" },
+}
+```
 
 - **Module:** `lua/filetree/features/paths/path_copy/`
-- **Keymaps:** `[a`, `]a`, `[R`, `]R`
+- **Keymaps:** `[a`, `]a`, `[R`, `]R`, `]b`, `[e`
 
 ## Lua Require Copy
 

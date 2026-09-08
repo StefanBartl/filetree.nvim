@@ -182,6 +182,18 @@ return {
     { lhs = "[a", desc = "Copy absolute path", feature = "path_copy", scope = "tree" },
     { lhs = "]a", desc = "Copy absolute parent directory", feature = "path_copy", scope = "tree" },
     {
+      lhs = "]b",
+      desc = "Copy path relative to the open buffer (./x, ../x)",
+      feature = "path_copy",
+      scope = "tree",
+    },
+    {
+      lhs = "[e",
+      desc = "Copy path with an env-var root ($REPOS_DIR/…)",
+      feature = "path_copy",
+      scope = "tree",
+    },
+    {
       lhs = "rq",
       desc = 'Copy as require("…")',
       feature = "lua_require_copy",

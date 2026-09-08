@@ -143,6 +143,121 @@ function M.relative(p, base)
   return M.slashify(vim.fn.fnamemodify(abs_p, ":~:."))
 end
 
+---@internal
+---POSIX-style relative path from `base` to `p`, climbing with `..` when `p` is
+---not a descendant. Both arguments must already be absolute, forward-slash and
+---without a trailing slash. Mirrors `lib.nvim.fs.relpath`; used only when that
+---is unavailable, so both paths produce the same string.
+---@param abs_p    string
+---@param abs_base string
+---@return string
+local function relpath_fallback(abs_p, abs_base)
+  if abs_p == abs_base then return "." end
+  if abs_p:sub(1, #abs_base + 1) == abs_base .. "/" then return abs_p:sub(#abs_base + 2) end
+
+  -- Two Windows drive letters share no root, so no relative form exists.
+  local function root_of(s)
+    return s:match("^(%a:)/") or (s:sub(1, 1) == "/" and "/") or ""
+  end
+  if root_of(abs_p) ~= root_of(abs_base) then return abs_p end
+
+  local base_segs, path_segs = {}, {}
+  for seg in abs_base:gmatch("[^/]+") do
+    base_segs[#base_segs + 1] = seg
+  end
+  for seg in abs_p:gmatch("[^/]+") do
+    path_segs[#path_segs + 1] = seg
+  end
+
+  local i = 1
+  while base_segs[i] and path_segs[i] and base_segs[i] == path_segs[i] do
+    i = i + 1
+  end
+
+  local parts = {}
+  for _ = i, #base_segs do
+    parts[#parts + 1] = ".."
+  end
+  for j = i, #path_segs do
+    parts[#parts + 1] = path_segs[j]
+  end
+  return #parts > 0 and table.concat(parts, "/") or "."
+end
+
+---Return `p` relative to `base` in the form a Markdown link target needs:
+---`./x/y` for a descendant, `../x/y` for anything else under a shared root.
+---
+---This is deliberately not `M.relative`. That one answers "how do I *show* this
+---path" and falls back to a `~`-tildified `:~:.` form for a non-descendant,
+---which is unusable as a link target; this one answers "what do I *write* into
+---a file living in `base`", so it climbs out with `..` and marks a descendant
+---with an explicit `./` — a bare `docs/X.md` resolves against the reader's cwd
+---in some renderers, `./docs/X.md` never does.
+---
+---Returns the absolute path unchanged when the two share no root at all
+---(different Windows drive letters) — there is no relative form then.
+---@param p    string
+---@param base string  Base *directory* (for a file, pass its parent).
+---@return string
+function M.dot_relative(p, base)
+  local abs_p = M.to_unix(p):gsub("/+$", "")
+  local abs_base = M.to_unix(base):gsub("/+$", "")
+
+  local rel
+  if _has_lib_relpath then
+    local ok, r = pcall(_lib_relpath, abs_p, abs_base)
+    if ok and type(r) == "string" then rel = r end
+  end
+  rel = rel or relpath_fallback(abs_p, abs_base)
+
+  -- An absolute result is the "no relative form exists" case; leave it be.
+  if rel:match("^%a:/") or rel:sub(1, 1) == "/" then return rel end
+  if rel == "." or rel == ".." then return rel end
+  if rel:match("^%.%.?/") then return rel end
+  return "./" .. rel
+end
+
+---Rewrite `p` as `$VAR/rest` when it lives under the directory one of `names`
+---points at. The longest match wins, so `$REPOS_DIR` beats a `$HOME` that
+---contains it. Unset, empty and non-matching variables are skipped; when none
+---matches, the plain absolute path comes back.
+---
+---The point is a path that survives being pasted into a note read on another
+---machine, where the repo checkout sits on a different drive: `$REPOS_DIR/x`
+---means the same thing on both, `E:/repos/x` does not.
+---@param p     string
+---@param names string[]  Environment variable names, written without the `$`.
+---@return string path
+---@return string? name  The variable that matched, if any.
+function M.env_rooted(p, names)
+  local abs = M.to_unix(p):gsub("/+$", "")
+  -- Windows compares paths case-insensitively, and the drive letter alone can
+  -- differ in case between `$REPOS_DIR` and what the tree reports for a file
+  -- under it — a case-sensitive compare would just never match there.
+  local function fold(s)
+    return platform.is_windows() and s:lower() or s
+  end
+  local folded = fold(abs)
+
+  local best_name, best_len
+  for _, name in ipairs(names or {}) do
+    local root = vim.env[name]
+    if type(root) == "string" and root ~= "" then
+      local abs_root = M.to_unix(root):gsub("/+$", "")
+      local folded_root = fold(abs_root)
+      local under = folded == folded_root or folded:sub(1, #folded_root + 1) == folded_root .. "/"
+      if abs_root ~= "" and under and (not best_len or #abs_root > best_len) then
+        best_name, best_len = name, #abs_root
+      end
+    end
+  end
+
+  if not best_name then return abs end
+  local rest = abs:sub(best_len + 2)
+  if rest == "" then return "$" .. best_name, best_name end
+  return "$" .. best_name .. "/" .. rest, best_name
+end
+
 ---Escape a path for use as a vim command argument.
 ---@param p string
 ---@return string

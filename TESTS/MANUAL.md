@@ -212,14 +212,18 @@ Exercises: `vim.ui.input`, floating prompt buffers, dimming.
 
 Exercises: `vim.fn.setreg`, notifications.
 
-**path_copy** (keymaps `<leader>yp`/`[a`/`]a`/`<leader>yn` in the tree):
+**path_copy** (keymaps `<leader>yp`/`[a`/`]a`/`<leader>yn`/`]b`/`[e` in the tree):
 
 | # | Test | Expected |
 |---|------|----------|
-| F.1 | `<leader>yp` | A floating picker with 7 format options |
+| F.1 | `<leader>yp` | A floating picker with every format option |
 | F.2 | `[a` | Notification `"Copied: /absolute/path"`; pasting with `<C-r>+` in the editor confirms it |
 | F.3 | `]a` | The path relative to the cwd |
 | F.4 | `<leader>yn` | The filename only |
+| F.4a | Open `docs/ROADMAP/Notes.md` in the editor, then `]b` on `docs/ROADMAP/ROADMAP.md` | `./ROADMAP.md` — NOT the cwd-relative `docs/ROADMAP/ROADMAP.md` |
+| F.4b | Same, but `]b` on `docs/BINDINGS.md` | `../BINDINGS.md` |
+| F.4c | With `$REPOS_DIR` set and the repo under it, `[e` on any node | `$REPOS_DIR/filetree.nvim/…`, not the drive-letter path |
+| F.4d | `[e` on a node outside every `env_roots` directory | The plain absolute path, no `$` prefix |
 
 **copy_file_list** (keymaps `[f`/`]f`/`[F`/`]F` in the tree):
 

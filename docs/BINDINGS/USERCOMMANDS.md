@@ -98,6 +98,8 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree copy stem` | Copy stem (no extension) |
 | `:Filetree copy project_root` | Copy the detected project root (cwd-independent) |
 | `:Filetree copy project_relative` | Copy path relative to the project root |
+| `:Filetree copy buffer_relative` | Copy path relative to the buffer open in the editor (`./x`, `../x`) |
+| `:Filetree copy env_rooted` | Copy absolute path with an env-var root folded in (`$REPOS_DIR/…`) |
 | `:Filetree copy pick` | Open format picker |
 
 ### Copy file list

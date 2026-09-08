@@ -671,7 +671,13 @@
 ---@field keymap_name         string?  Copy filename only (default nil, off).
 ---@field keymap_project_root string?  Copy absolute project root path (default "[R").
 ---@field keymap_project_rel  string?  Copy path relative to project root (default "]R").
+---@field keymap_buffer_rel   string?  Copy path relative to the buffer open in the editor,
+---                                    in `./x` / `../x` form (default "]b").
+---@field keymap_env_root     string?  Copy absolute path with an env-var root folded in,
+---                                    e.g. `$REPOS_DIR/foo.nvim/x.lua` (default "[e").
 ---@field root_markers?       string[]|false  Markers for project-root detection (default { ".git" }); false → use cwd.
+---@field env_roots?          string[]  Env var names tried by `env_rooted`, longest match wins
+---                                     (default { "REPOS_DIR" }); written without the `$`.
 ---@field notify?             boolean  Show notification after copy (default true).
 
 -- ── live_search ──────────────────────────────────────────────────────────────

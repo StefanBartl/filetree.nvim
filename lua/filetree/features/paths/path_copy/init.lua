@@ -14,6 +14,8 @@
 ---   stem      foo                     (filename without extension)
 ---   project_root      /home/user/project        (detected project root, cwd-independent)
 ---   project_relative  src/foo.lua               (path relative to that root)
+---   buffer_relative   ./ROADMAP.md              (relative to the OPEN buffer's directory)
+---   env_rooted        $REPOS_DIR/foo.nvim/x.lua (absolute, with an env-var root folded in)
 ---
 --- Config:
 ---   enabled              boolean
@@ -23,11 +25,14 @@
 ---   keymap_name          string?  Copy name directly (default nil, off).
 ---   keymap_project_root  string?  Copy project root directly (default "[R").
 ---   keymap_project_rel   string?  Copy path relative to project root (default "]R").
+---   keymap_buffer_rel    string?  Copy path relative to the open buffer (default "]b").
+---   keymap_env_root      string?  Copy path with an env-var root (default "[e").
 ---   root_markers         string[]|false  Markers for the project-root walk (default {".git"}).
+---   env_roots            string[]  Env vars tried for `env_rooted` (default { "REPOS_DIR" }).
 ---   notify               boolean  Show a notification after copying (default true).
 ---
 --- Commands (via :Filetree dispatcher):
----   :Filetree copy absolute|relative|name|dirname|uri|line|stem|project_root|project_relative|pick
+---   :Filetree copy absolute|relative|name|dirname|uri|line|stem|project_root|project_relative|buffer_relative|env_rooted|pick
 
 local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 
@@ -44,7 +49,10 @@ local _cfg = {
   keymap_name = nil,
   keymap_project_root = "[R", -- copy absolute project root path
   keymap_project_rel = "]R", -- copy node path relative to project root
+  keymap_buffer_rel = "]b", -- copy path relative to the buffer open in the editor
+  keymap_env_root = "[e", -- copy absolute path with $REPOS_DIR-style root
   root_markers = { ".git" },
+  env_roots = { "REPOS_DIR" },
   notify = true,
 }
 
@@ -70,6 +78,35 @@ local function resolve_root(path)
 end
 
 -- ── Format builders ───────────────────────────────────────────────────────────
+
+---Directory the *open buffer* lives in — the base a Markdown link written
+---into that buffer resolves against.
+---
+---cwd is the wrong base for this and that is the whole point: with the cwd at
+---the repo root, `docs/ROADMAP/ROADMAP.md` is right for a link written in the
+---root README and wrong for one written in `docs/ROADMAP/Notes.md`, where the
+---same file is `./ROADMAP.md`. So the base is the editor window's file, then
+---the alternate file, and only then the cwd.
+---@return string
+local function editor_dir()
+  local buffer = require("filetree.util.buffer")
+  local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid() or nil
+  if tree_win and tree_win <= 0 then tree_win = nil end
+
+  local win = buffer.find_editor_win(tree_win)
+  if win then
+    local name = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win))
+    if name ~= "" then return vim.fn.fnamemodify(name, ":p:h") end
+  end
+
+  -- No editor window in this tab (tree opened alone): the alternate file is
+  -- the last thing that was edited, which is what the user still means by
+  -- "the open buffer".
+  local alt = vim.fn.expand("#:p")
+  if alt ~= "" then return vim.fn.fnamemodify(alt, ":h") end
+
+  return vim.fn.getcwd()
+end
 
 local function current_node_path()
   if not _adapter then return nil end
@@ -115,6 +152,16 @@ local FORMATS = {
   project_root = function(path)
     return resolve_root(path)
   end,
+  -- Relative to the directory of the buffer open in the editor (]b), in the
+  -- `./x` / `../x` form a Markdown link target needs. See `editor_dir`.
+  buffer_relative = function(path)
+    return require("filetree.util.path").dot_relative(path, editor_dir())
+  end,
+  -- Absolute, but with a configured env var folded back into the root ([e):
+  -- `$REPOS_DIR/foo.nvim/x.lua` instead of `E:/repos/foo.nvim/x.lua`.
+  env_rooted = function(path)
+    return (require("filetree.util.path").env_rooted(path, _cfg.env_roots or {}))
+  end,
   -- Path relative to the project root (]R), independent of the current cwd.
   project_relative = function(path)
     local root = resolve_root(path)
@@ -138,6 +185,8 @@ local FORMAT_ORDER = {
   "line",
   "project_root",
   "project_relative",
+  "buffer_relative",
+  "env_rooted",
 }
 
 -- ── Copy helper ───────────────────────────────────────────────────────────────
@@ -234,6 +283,18 @@ function M.setup(config, adapter)
       field = "keymap_project_rel",
       rhs = M.copy_project_relative,
       desc = "copy path relative to project root",
+    },
+    {
+      name = "buffer_relative",
+      field = "keymap_buffer_rel",
+      rhs = M.copy_buffer_relative,
+      desc = "copy path relative to the open buffer",
+    },
+    {
+      name = "env_rooted",
+      field = "keymap_env_root",
+      rhs = M.copy_env_rooted,
+      desc = "copy path with an env-var root ($REPOS_DIR/…)",
     },
   })
 end
