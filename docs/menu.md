@@ -3,8 +3,17 @@
 filetree.nvim ships a context menu for [nvzone/menu](https://github.com/nvzone/menu)
 but does **not** depend on it — the plugin *owns* its entries (create, rename,
 copy/cut/paste, trash, open variants, path/markdown-link copy, find/grep, node
-info) and degrades to a single notify, not an error, if nvzone/menu isn't
-installed.
+info, marks, open/close the tree itself) and degrades to a single notify, not
+an error, if nvzone/menu isn't installed.
+
+Entries are self-gating in a way that's worth trusting: `filetree.integrations.menu`
+never lists an action whose feature function doesn't actually exist (disabled
+feature, or an unknown name) — the entry is silently omitted rather than
+wired to something that would error when clicked. `TESTS/smoke.lua` checks
+every `(feature, function)` pair `items()` uses against the real feature
+modules (not stubs), so a renamed/removed function fails CI instead of just
+quietly dropping a menu entry; `TESTS/menu.lua` covers the gating/opt-out
+logic itself against stubs.
 
 ## Right-click, out of the box
 

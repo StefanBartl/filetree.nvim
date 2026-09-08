@@ -49,6 +49,8 @@ return {
     paths = true, -- copy path / markdown link
     search = true, -- find files / grep in dir
     info = true, -- node info
+    marks = true, -- toggle / mark all / unmark all / clear / show marked
+    window = true, -- open/close the tree itself
   },
   features = {
     layout_guard = {
