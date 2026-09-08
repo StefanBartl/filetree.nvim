@@ -95,6 +95,12 @@ The reference engine is the part that is hard to get elsewhere: rename or move a
 file and the markdown links, `require()` calls and `import` statements pointing
 at it are rewritten to match — for markdown, Lua, Python and TypeScript/JavaScript.
 
+Marks are the plugin's one cross-cutting primitive: `m` a handful of nodes
+anywhere in the tree — across directories, across scrolling — and copy, move,
+trash, diff (two marks), copy-as-markdown-link, or create-PDF all read that same
+set instead of acting on just the node under the cursor. One selection, reused
+by whichever feature you reach for next; see [Marks](docs/FEATURES/INTEGRATIONS.md#marks).
+
 ---
 
 ## Around it
@@ -209,6 +215,7 @@ as default-off. The ones worth knowing on day one:
 | --- | --- |
 | `?` | The cheatsheet for the buffer you are in |
 | Auto-reveal | The tree follows the buffer you switch to |
+| Marks | `m` marks a node; copy, move, trash, diff and more act on the whole set |
 | Preview | The node under the cursor, without opening it |
 | Smart rename | Rename, and rewrite the markdown links, `require()`s and `import`s pointing at it |
 | Batch rename | The same, over a whole directory, with a preview |
