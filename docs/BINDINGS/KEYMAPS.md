@@ -40,23 +40,23 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `gp` | cwd_mode | `keymap_lock_here` | Lock the cwd to the node under the cursor |
 | `<C-n>` | buffer_cycle | `keymap_next` | Next buffer in the adjacent editor window (tree keeps focus) |
 | `<C-p>` | buffer_cycle | `keymap_prev` | Previous buffer in the adjacent editor window (tree keeps focus) |
-| `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard |
-| `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard |
-| `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard |
-| `]R` | path_copy | `keymap_project_rel` | Copy path relative to project root (cwd-independent) |
-| `]b` | path_copy | `keymap_buffer_rel` | Copy path relative to the buffer open in the editor (`./x`, `../x`) |
-| `[e` | path_copy | `keymap_env_root` | Copy absolute path with an env-var root folded in (`$REPOS_DIR/…`) |
+| `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard (or all marked) |
+| `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard (or all marked) |
+| `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard (or all marked) |
+| `]R` | path_copy | `keymap_project_rel` | Copy path relative to project root, cwd-independent (or all marked) |
+| `]b` | path_copy | `keymap_buffer_rel` | Copy path relative to the buffer open in the editor, `./x`/`../x` (or all marked) |
+| `[e` | path_copy | `keymap_env_root` | Copy absolute path with an env-var root folded in, `$REPOS_DIR/…` (or all marked) |
 | `d` | trash | `keymap` | Trash current node (or all marked). **`filesystem` source only** |
 | `U` | trash | `keymap_undo` | Undo last trash operation. **`filesystem` source only** |
 | `<leader>th` | trash | `keymap_history` | Show trash history. **`filesystem` source only** |
 | `gs` | live_search | `keymap` | Open live search in tree |
 | `I` | node_info | `keymap` | Show node info float |
 | `rq` | lua_require_copy | `keymap` | Copy file as `require("…")` string |
-| `[f` | copy_file_list | `keymap_files_abs` | Copy recursive file list (absolute) |
-| `]f` | copy_file_list | `keymap_files_rel` | Copy recursive file list (relative) |
-| `[F` | copy_file_list | `keymap_dirs_abs` | Copy recursive dir list (absolute) |
-| `]F` | copy_file_list | `keymap_dirs_rel` | Copy recursive dir list (relative) |
-| `ML` | markdown_links | `keymap` | Copy `[name](path)` markdown link for the current node |
+| `[f` | copy_file_list | `keymap_files_abs` | Copy recursive file list, absolute (or all marked) |
+| `]f` | copy_file_list | `keymap_files_rel` | Copy recursive file list, relative (or all marked) |
+| `[F` | copy_file_list | `keymap_dirs_abs` | Copy recursive dir list, absolute (or all marked) |
+| `]F` | copy_file_list | `keymap_dirs_rel` | Copy recursive dir list, relative (or all marked) |
+| `ML` | markdown_links | `keymap` | Copy `[name](path)` markdown link for the current node (or all marked) |
 | `MR` | markdown_links | `keymap_recursive` | Copy markdown links recursively |
 | `MM` | markdown_links | `keymap_from_marked` | Copy markdown links from all marked nodes |
 | `a` | smart_create | `keymap` | Smart create file or directory |
