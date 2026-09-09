@@ -3953,6 +3953,22 @@ do
     vim.inspect(unhl_calls)
   )
 
+  -- The next-tick re-application (guarding against a same-tick wipe by a
+  -- reactive re-render elsewhere) genuinely happens, not just the immediate
+  -- one -- wait for it rather than assuming it landed within one tick.
+  vim.wait(200, function()
+    return #hl_calls >= 2
+  end, 5)
+  check(
+    "context_menu extras: highlight is re-applied on the next tick too",
+    #hl_calls >= 2,
+    vim.inspect(hl_calls)
+  )
+  check(
+    "context_menu extras: every re-application targets the same node",
+    hl_calls[2] == nil or hl_calls[2].path == cur_node.path
+  )
+
   -- Tree docked "left": the menu must open beside it (relative to the tree
   -- window's own right edge), never on top of it.
   local floats = {}

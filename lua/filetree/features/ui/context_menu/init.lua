@@ -78,12 +78,42 @@ local function ensure_node_hl()
   pcall(vim.api.nvim_set_hl, 0, NODE_HL, { link = "Visual", default = true })
 end
 
+-- Bumped on every clear -- lets a deferred re-application (below) tell "the
+-- click I was applied for is still the live one" from "a newer click, or an
+-- explicit clear, has already superseded me" without needing a timer to
+-- cancel itself.
+local _hl_generation = 0
+
 ---@internal
 local function clear_node_highlight()
   if _highlighted_path and _adapter and _adapter.unhighlight_node then
     pcall(_adapter.unhighlight_node, _highlighted_path)
   end
   _highlighted_path = nil
+  _hl_generation = _hl_generation + 1
+end
+
+---@internal
+--- Apply the extmark for `path`, unless a newer click (or an explicit
+--- clear) has since moved `_hl_generation` past `generation` -- see the
+--- three call sites in `highlight_current_node` for why this runs more
+--- than once. `announce`: only the first, immediate attempt warns on
+--- failure; a real failure is a persistent condition (the adapter/node
+--- itself), not a transient one the later attempts would recover from
+--- differently, so repeating the same warning three times adds noise
+--- without adding information.
+---@param path string
+---@param generation integer
+---@param announce boolean
+local function apply_highlight_now(path, generation, announce)
+  if generation ~= _hl_generation then return end
+  if not _adapter or not _adapter.highlight_node then return end
+  local ok = _adapter.highlight_node(path, NODE_HL)
+  if ok then
+    _highlighted_path = path
+  elseif announce then
+    notify.warn("context_menu: adapter.highlight_node() failed for " .. path)
+  end
 end
 
 ---@internal
@@ -101,6 +131,18 @@ end
 --- highlight never having been applied at all. `CursorMoved` only fires
 --- from an actual cursor move while the tree buffer is the one being
 --- edited, which cannot happen while a floating menu holds focus.
+---
+--- Applied three times, not once: `move_to_click`'s cursor move can itself
+--- set off a reactive re-render in the tree plugin behind the adapter --
+--- often debounced -- and a same-tick extmark can be wiped moments later by
+--- that re-render with nothing visibly wrong at click time (confirmed live:
+--- `adapter.highlight_node()` reports success, the row never actually shows
+--- highlighted). Immediate + next-tick (`vim.schedule`) + a delayed pass
+--- past typical debounce windows (`vim.defer_fn`, 150ms) covers same-tick,
+--- next-tick and debounced wipes without this needing to know which one a
+--- given backend actually does. Nothing here reaches into a specific tree
+--- plugin -- every attempt goes through `_adapter.highlight_node`, same as
+--- the very first one did.
 local function highlight_current_node()
   if not _adapter or not _adapter.get_current_node or not _adapter.highlight_node then
     notify.warn(
@@ -118,13 +160,17 @@ local function highlight_current_node()
   end
 
   ensure_node_hl()
-  clear_node_highlight() -- in case a previous click's highlight is still up
-  local hl_ok = _adapter.highlight_node(node.path, NODE_HL)
-  if hl_ok then
-    _highlighted_path = node.path
-  else
-    notify.warn("context_menu: adapter.highlight_node() failed for " .. node.path)
-  end
+  clear_node_highlight() -- in case a previous click's highlight is still up; bumps the generation
+  local generation = _hl_generation
+  local path = node.path
+
+  apply_highlight_now(path, generation, true)
+  vim.schedule(function()
+    apply_highlight_now(path, generation, false)
+  end)
+  vim.defer_fn(function()
+    apply_highlight_now(path, generation, false)
+  end, 150)
 
   local buf = vim.api.nvim_get_current_buf()
   _hl_augroup = vim.api.nvim_create_augroup("FiletreeContextMenuHlFallback", { clear = true })
