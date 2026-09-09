@@ -88,9 +88,19 @@ end
 
 ---@internal
 --- Highlight the node the menu is about to act on. A one-shot fallback
---- (next cursor move or buffer leave in the tree) also clears it, in case
---- the renderer never gives back a close hook to do it promptly (nvzone/menu
---- has none) or the menu fails to open at all.
+--- (the next time the cursor actually moves within the tree buffer) also
+--- clears it, in case the renderer never gives back a close hook to do it
+--- promptly (nvzone/menu has none) or the menu fails to open at all.
+---
+--- Deliberately `CursorMoved` only, NOT `BufLeave`: opening the menu itself
+--- moves focus to its own window (kit's float is `enter = true`; nvzone/menu
+--- likely does the same), which fires `BufLeave` on the tree buffer as a
+--- pure side effect of the menu appearing -- before the user has even seen
+--- it. That cleared the highlight instantly on every click, which is a
+--- silent no-op from the user's perspective: indistinguishable from the
+--- highlight never having been applied at all. `CursorMoved` only fires
+--- from an actual cursor move while the tree buffer is the one being
+--- edited, which cannot happen while a floating menu holds focus.
 local function highlight_current_node()
   if not _adapter or not _adapter.get_current_node or not _adapter.highlight_node then return end
   local node = _adapter.get_current_node()
@@ -102,7 +112,7 @@ local function highlight_current_node()
 
   local buf = vim.api.nvim_get_current_buf()
   _hl_augroup = vim.api.nvim_create_augroup("FiletreeContextMenuHlFallback", { clear = true })
-  vim.api.nvim_create_autocmd({ "CursorMoved", "BufLeave" }, {
+  vim.api.nvim_create_autocmd("CursorMoved", {
     group = _hl_augroup,
     buffer = buf,
     once = true,
