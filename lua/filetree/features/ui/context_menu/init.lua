@@ -102,13 +102,29 @@ end
 --- from an actual cursor move while the tree buffer is the one being
 --- edited, which cannot happen while a floating menu holds focus.
 local function highlight_current_node()
-  if not _adapter or not _adapter.get_current_node or not _adapter.highlight_node then return end
+  if not _adapter or not _adapter.get_current_node or not _adapter.highlight_node then
+    notify.warn(
+      "context_menu: adapter is missing get_current_node/highlight_node -- cannot highlight"
+    )
+    return
+  end
   local node = _adapter.get_current_node()
-  if not node or not node.path then return end
+  if not node or not node.path then
+    -- Diagnostic, not silence: a report of "no highlight" with nothing here
+    -- means this branch, not a rendering problem -- get_current_node() (or
+    -- the cursor move that precedes it) is the thing to look at next.
+    notify.warn("context_menu: adapter.get_current_node() returned nothing to highlight")
+    return
+  end
 
   ensure_node_hl()
   clear_node_highlight() -- in case a previous click's highlight is still up
-  if _adapter.highlight_node(node.path, NODE_HL) then _highlighted_path = node.path end
+  local hl_ok = _adapter.highlight_node(node.path, NODE_HL)
+  if hl_ok then
+    _highlighted_path = node.path
+  else
+    notify.warn("context_menu: adapter.highlight_node() failed for " .. node.path)
+  end
 
   local buf = vim.api.nvim_get_current_buf()
   _hl_augroup = vim.api.nvim_create_augroup("FiletreeContextMenuHlFallback", { clear = true })
