@@ -111,8 +111,11 @@ Right-click (`<RightMouse>`) opens a context menu through
 `lib.nvim.contextmenu`, which draws with
 [nvzone/menu](https://github.com/nvzone/menu) if it is installed, or its own
 themed `lib.nvim.ui.kit.menu` (no third-party plugin needed) otherwise —
-either way, right-click works out of the box. See
-[docs/menu.md](../menu.md) for the entries offered.
+either way, right-click works out of the box. With the kit renderer, the
+clicked node's line is highlighted for as long as the menu stays open, and
+with the tree docked left/right the menu opens beside it rather than on top
+of it. See [docs/menu.md](../menu.md) for the entries offered and the full
+detail on both.
 
 - **Module:** `lua/filetree/features/ui/context_menu/`
 - **Keymaps:** `<RightMouse>`

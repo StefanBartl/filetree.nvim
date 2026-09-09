@@ -12,9 +12,26 @@
 --
 -- Exit 0 = all passed, 1 = a check failed.
 
+-- ── Locate the repo root relative to this file, put it (and lib.nvim) on rtp ──
+-- See TESTS/smoke.lua for why this block exists: filetree.integrations.menu
+-- now requires lib.nvim.ui.nerd_font (icon glyphs), so this suite needs
+-- lib.nvim findable too, same as smoke.lua/units.lua already do.
 local this = debug.getinfo(1, "S").source:sub(2)
 local root = vim.fn.fnamemodify(this, ":p:h:h")
 vim.opt.rtp:prepend(root)
+local lib_candidates = {}
+for _, env in ipairs({ "FILETREE_LIB_NVIM", "LIB_NVIM_PATH" }) do
+  local v = vim.env[env]
+  if v and v ~= "" then lib_candidates[#lib_candidates + 1] = v end
+end
+lib_candidates[#lib_candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/lib.nvim"
+lib_candidates[#lib_candidates + 1] = vim.fn.stdpath("data") .. "/lazy/lib.nvim"
+for _, candidate in ipairs(lib_candidates) do
+  if vim.fn.isdirectory(candidate .. "/lua/lib") == 1 then
+    vim.opt.rtp:prepend(candidate)
+    break
+  end
+end
 
 local passed, failed = 0, 0
 local function check(name, ok, detail)
@@ -98,10 +115,10 @@ do
   local items = menu.items()
   local list = names(items)
 
-  check("menu: create entry present (feature enabled)", has(list, "  Create file / dir"))
-  check("menu: trash entry present", has(list, "  Trash"))
-  check("menu: path_copy entry present", has(list, "  Copy path…"))
-  check("menu: node_info entry present", has(list, "  Node info"))
+  check("menu: create entry present (feature enabled)", has(list, "Create file / dir"))
+  check("menu: trash entry present", has(list, "Trash"))
+  check("menu: path_copy entry present", has(list, "Copy path…"))
+  check("menu: node_info entry present", has(list, "Node info"))
   check(
     "menu: entry omitted when its feature is disabled/absent",
     not has(list, "New from template")
@@ -110,6 +127,16 @@ do
   check("menu: does not start with a separator", items[1] and items[1].name ~= "separator")
   check("menu: does not end with a separator", items[#items] and items[#items].name ~= "separator")
 
+  -- Every real row carries an icon (separators/headings don't need one).
+  local missing_icon
+  for _, it in ipairs(items) do
+    if it.name ~= "separator" and not it.__heading and (it.icon == nil or it.icon == "") then
+      missing_icon = it.name
+      break
+    end
+  end
+  check("menu: every entry has an icon", missing_icon == nil, tostring(missing_icon))
+
   items[1].cmd()
   eq("menu entry cmd() invokes the underlying feature function (count)", #create_calls, 1)
   eq("menu entry cmd() calls the right feature.function", create_calls[1], "smart_create.create")
@@ -117,9 +144,9 @@ do
   -- Group-level opt-out: disabling clipboard + search removes exactly those.
   local menu2 = install_stub({ enable = true, clipboard = false, search = false }, features)
   local list2 = names(menu2.items())
-  check("menu opt-out: clipboard=false hides the copy entry", not has(list2, "  Copy"))
-  check("menu opt-out: search=false hides find_files", not has(list2, "  Find files"))
-  check("menu opt-out: unrelated groups (delete) stay", has(list2, "  Trash"))
+  check("menu opt-out: clipboard=false hides the copy entry", not has(list2, "Copy"))
+  check("menu opt-out: search=false hides find_files", not has(list2, "Find files"))
+  check("menu opt-out: unrelated groups (delete) stay", has(list2, "Trash"))
 
   -- Master switch: enable=false yields nothing at all.
   local menu3 = install_stub({ enable = false }, features)
@@ -156,14 +183,14 @@ do
   local menu = install_stub({ enable = true }, features)
   local list = names(menu.items())
 
-  check("hole regression: entry before the gap present", has(list, "  Create file / dir"))
+  check("hole regression: entry before the gap present", has(list, "Create file / dir"))
   check(
     "hole regression: disabled entry (the gap itself) absent",
-    not has(list, "  Rename (LSP refs)")
+    not has(list, "Rename (LSP refs)")
   )
-  check("hole regression: entry right after the gap present", has(list, "  Batch rename"))
-  check("hole regression: entry two after the gap present", has(list, "  Move to…"))
-  check("hole regression: last entry in the group present", has(list, "  New from template"))
+  check("hole regression: entry right after the gap present", has(list, "Batch rename"))
+  check("hole regression: entry two after the gap present", has(list, "Move to…"))
+  check("hole regression: last entry in the group present", has(list, "New from template"))
 
   package.loaded["filetree"] = nil
   package.loaded["filetree.integrations.menu"] = nil
@@ -182,17 +209,14 @@ do
   local menu = install_stub({ enable = true }, features)
   local list = names(menu.items())
 
-  check("marks: toggle entry present", has(list, "  Toggle mark"))
-  check("marks: mark all entry present", has(list, "  Mark all visible"))
-  check("marks: unmark all entry present", has(list, "  Unmark all visible"))
-  check("marks: clear entry present", has(list, "  Clear marks"))
-  check("marks: show entry present", has(list, "  Show marked nodes"))
+  check("marks: toggle entry present", has(list, "Toggle mark"))
+  check("marks: mark all entry present", has(list, "Mark all visible"))
+  check("marks: unmark all entry present", has(list, "Unmark all visible"))
+  check("marks: clear entry present", has(list, "Clear marks"))
+  check("marks: show entry present", has(list, "Show marked nodes"))
 
   local menu2 = install_stub({ enable = true, marks = false }, features)
-  check(
-    "marks opt-out: marks=false hides the group",
-    not has(names(menu2.items()), "  Toggle mark")
-  )
+  check("marks opt-out: marks=false hides the group", not has(names(menu2.items()), "Toggle mark"))
 
   package.loaded["filetree"] = nil
   package.loaded["filetree.integrations.menu"] = nil
@@ -227,8 +251,8 @@ do
   -- Tree open -> "Close filetree", both via items() and window_entry() directly.
   local menu_open = install_stub({ enable = true }, {}, adapter_open)
   local list_open = names(menu_open.items())
-  check("window: tree open -> Close entry present", has(list_open, "  Close filetree"))
-  check("window: tree open -> Open entry absent", not has(list_open, "  Open filetree"))
+  check("window: tree open -> Close entry present", has(list_open, "Close filetree"))
+  check("window: tree open -> Open entry absent", not has(list_open, "Open filetree"))
 
   local we = menu_open.window_entry()
   check("window_entry(): non-nil when tree is open", we ~= nil)
@@ -243,8 +267,8 @@ do
   -- on disk for the "falls back to open_cwd" branch, so cover that instead.
   local menu_closed = install_stub({ enable = true }, {}, adapter_closed)
   local list_closed = names(menu_closed.items())
-  check("window: tree closed -> Open entry present", has(list_closed, "  Open filetree"))
-  check("window: tree closed -> Close entry absent", not has(list_closed, "  Close filetree"))
+  check("window: tree closed -> Open entry present", has(list_closed, "Open filetree"))
+  check("window: tree closed -> Close entry absent", not has(list_closed, "Close filetree"))
 
   local we2 = menu_closed.window_entry(scratch)
   assert(we2, "window_entry() returned nil while the stub adapter reports the tree closed")
@@ -257,7 +281,7 @@ do
   local menu3 = install_stub({ enable = true, window = false }, {}, adapter_open)
   check(
     "window opt-out: window=false hides the group",
-    not has(names(menu3.items()), "  Close filetree")
+    not has(names(menu3.items()), "Close filetree")
   )
 
   local menu4 = install_stub({ enable = false }, {}, adapter_open)

@@ -15,6 +15,14 @@
 --- so this feature needs neither directly. It is never require()d until the
 --- first click. On by default (opt-out); degrades to a single notify, not an
 --- error, only if lib.nvim itself predates `lib.nvim.contextmenu`.
+---
+--- Two extras, both kit-renderer only (lib.nvim.contextmenu has no
+--- equivalent hook for nvzone/menu, so they no-op there):
+---  * the clicked node's line is highlighted for as long as the menu stays
+---    open, so it is never ambiguous which node an entry would act on;
+---  * with the tree docked left/right, the menu opens beside the tree
+---    window instead of at the click -- which would otherwise sit on top
+---    of, and often fully hide, the very row it is highlighting.
 
 local notify = require("filetree.util.notify").create("[filetree.context_menu]")
 local bind = require("filetree.util.bind")
@@ -29,6 +37,9 @@ local _cfg = {
 
 ---@type boolean
 local _warned_missing = false
+
+---@type FiletreeAdapter?
+local _adapter = nil
 
 ---Move the tree cursor to the node under the mouse pointer, best-effort.
 ---Neovim already repositions the cursor for a plain buffer-local mouse
@@ -46,15 +57,112 @@ local function move_to_click()
   )
 end
 
+-- ── Clicked-node highlight, for the life of the menu ────────────────────────
+
+local NODE_HL = "FiletreeContextMenuNode"
+local _hl_ensured = false
+---@type string?
+local _highlighted_path = nil
+---@type integer?
+local _hl_augroup = nil
+
+---@internal
+local function ensure_node_hl()
+  if _hl_ensured then return end
+  _hl_ensured = true
+  -- `default = true`: a colorscheme or the user's own config may already
+  -- define this group (or link it elsewhere); this only supplies a sensible
+  -- fallback, never overrides one already set. Linked rather than a fixed
+  -- hex color so it matches whatever theme is active, the same way the kit
+  -- menu's own selection highlight does.
+  pcall(vim.api.nvim_set_hl, 0, NODE_HL, { link = "Visual", default = true })
+end
+
+---@internal
+local function clear_node_highlight()
+  if _highlighted_path and _adapter and _adapter.unhighlight_node then
+    pcall(_adapter.unhighlight_node, _highlighted_path)
+  end
+  _highlighted_path = nil
+end
+
+---@internal
+--- Highlight the node the menu is about to act on. A one-shot fallback
+--- (next cursor move or buffer leave in the tree) also clears it, in case
+--- the renderer never gives back a close hook to do it promptly (nvzone/menu
+--- has none) or the menu fails to open at all.
+local function highlight_current_node()
+  if not _adapter or not _adapter.get_current_node or not _adapter.highlight_node then return end
+  local node = _adapter.get_current_node()
+  if not node or not node.path then return end
+
+  ensure_node_hl()
+  clear_node_highlight() -- in case a previous click's highlight is still up
+  if _adapter.highlight_node(node.path, NODE_HL) then _highlighted_path = node.path end
+
+  local buf = vim.api.nvim_get_current_buf()
+  _hl_augroup = vim.api.nvim_create_augroup("FiletreeContextMenuHlFallback", { clear = true })
+  vim.api.nvim_create_autocmd({ "CursorMoved", "BufLeave" }, {
+    group = _hl_augroup,
+    buffer = buf,
+    once = true,
+    callback = clear_node_highlight,
+  })
+end
+
+-- ── Positioning beside the tree, when it is docked left/right ───────────────
+
+---@internal
+--- Extra `lib.nvim.contextmenu.open` opts that anchor the menu just outside
+--- the tree window (`relative = "win"`, offset from ITS top-left corner) so
+--- it never overlaps the tree itself -- and so never the highlighted row
+--- from `highlight_current_node` either. `{}` (fall back to the default
+--- mouse anchor) whenever the tree's side isn't left/right: "float"/
+--- "current" have no fixed edge to dock the menu against, and covering the
+--- tree briefly there is the accepted tradeoff -- the row is still marked,
+--- just not necessarily visible the whole time the menu is open.
+---@return table
+local function beside_tree_opts()
+  if not _adapter or not _adapter.get_winid or not _adapter.get_position then return {} end
+  local winid = _adapter.get_winid()
+  if not winid or not vim.api.nvim_win_is_valid(winid) then return {} end
+  local pos = _adapter.get_position()
+  if pos ~= "left" and pos ~= "right" then return {} end
+
+  local row = 0
+  local ok_cur, cur = pcall(vim.api.nvim_win_get_cursor, winid)
+  if ok_cur then row = math.max(0, cur[1] - 1) end
+
+  if pos == "left" then
+    -- Float's top-left corner sits at the tree window's own right edge.
+    return {
+      relative = "win",
+      win = winid,
+      anchor = "NW",
+      row = row,
+      col = vim.api.nvim_win_get_width(winid),
+    }
+  end
+  -- "right": float's top-RIGHT corner sits at the tree window's left edge
+  -- (col = 0) -- extends leftward, away from the tree, without needing to
+  -- know the float's own width up front.
+  return { relative = "win", win = winid, anchor = "NE", row = row, col = 0 }
+end
+
 local function open_menu()
   move_to_click()
+  highlight_current_node()
 
   local ok_items, items_mod = pcall(require, "filetree.integrations.menu")
   local items = ok_items and items_mod.items() or {}
-  if #items == 0 then return end -- nothing enabled/available to show
+  if #items == 0 then
+    clear_node_highlight()
+    return -- nothing enabled/available to show
+  end
 
   local ok_cm, contextmenu = pcall(require, "lib.nvim.contextmenu")
   if not ok_cm or type(contextmenu.open) ~= "function" then
+    clear_node_highlight()
     if not _warned_missing then
       notify.info(
         "lib.nvim.contextmenu unavailable — context_menu has nothing to open (update lib.nvim, or set features.context_menu.enabled = false)"
@@ -64,7 +172,12 @@ local function open_menu()
     return
   end
 
-  contextmenu.open(items, { mouse = true })
+  local open_opts = vim.tbl_extend("force", { mouse = true }, beside_tree_opts())
+  local surf = contextmenu.open(items, open_opts)
+  -- Kit renderer: clear promptly when the menu actually closes, on top of
+  -- the CursorMoved/BufLeave fallback above. nvzone/menu (surf is nil here)
+  -- has no close hook to offer, so the fallback is all it gets.
+  if surf and surf.on_close then surf:on_close(clear_node_highlight) end
 end
 
 ---@param config FiletreeContextMenuConfig
@@ -76,6 +189,7 @@ function M.setup(config, adapter)
   -- who never configures features.context_menu at all still needs the default
   -- keymap to survive, not get wiped out by `config` not mentioning it.
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _adapter = adapter
 
   if not _cfg.keymap then return end
 
@@ -86,6 +200,12 @@ end
 
 function M.teardown()
   _warned_missing = false
+  clear_node_highlight()
+  if _hl_augroup then
+    pcall(vim.api.nvim_del_augroup_by_id, _hl_augroup)
+    _hl_augroup = nil
+  end
+  _adapter = nil
 end
 
 return M
