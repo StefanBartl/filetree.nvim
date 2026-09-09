@@ -3742,7 +3742,7 @@ do
   check("breadcrumbs float: teardown closes it", #floats() == before)
 end
 
--- ── context_menu: right-click binding, opt-out default, soft nvzone/menu dep ──
+-- ── context_menu: right-click binding, opt-out default, via lib.nvim.contextmenu ──
 do
   local stub = setmetatable({
     name = "units-stub-context-menu",
@@ -3780,13 +3780,24 @@ do
   end
   check("context_menu: default keymap '<RightMouse>' bound", km["<RightMouse>"] ~= nil)
 
-  -- Without nvzone/menu on rtp: clicking must not error, just degrade quietly.
+  -- Without nvzone/menu on rtp: lib.nvim.contextmenu falls back to its own
+  -- kit renderer (no third-party dependency), so a click must not just avoid
+  -- erroring -- it must actually open something. This is the regression
+  -- this block exists for: the feature used to require("menu") directly and
+  -- only ever degrade to a notify when nvzone/menu wasn't installed, which
+  -- meant right-click opened NOTHING at all on a setup that (deliberately)
+  -- doesn't have nvzone/menu.
   package.loaded["menu"] = nil
+  local kit_menu = require("lib.nvim.ui.kit.menu")
+  kit_menu.close() -- in case an earlier test left one open
   local ok_no_menu = pcall(km["<RightMouse>"].callback)
   check("context_menu: click without nvzone/menu installed does not error", ok_no_menu)
+  check("context_menu: falls back to the kit renderer and actually opens it", kit_menu.is_open())
+  kit_menu.close()
 
-  -- With a stubbed nvzone/menu: click must call menu.open(items, {mouse=true})
-  -- with the SAME entries filetree.integrations.menu.items() builds (that
+  -- With a stubbed nvzone/menu: lib.nvim.contextmenu must prefer it (its
+  -- documented "auto" default) and call menu.open(items, {mouse=true}) with
+  -- the SAME entries filetree.integrations.menu.items() builds (that
   -- module's own content is covered by TESTS/menu.lua; this only checks the
   -- wiring calls through correctly).
   local captured
@@ -3803,6 +3814,18 @@ do
     check("context_menu: passes a non-empty item list", #captured.items > 0)
   end
   package.loaded["menu"] = nil
+
+  -- lib.nvim.contextmenu itself missing (an old lib.nvim): degrades to a
+  -- notify, same as the "nothing to open" case always did.
+  package.preload["lib.nvim.contextmenu"] = function()
+    error("simulated: lib.nvim too old to have contextmenu")
+  end
+  package.loaded["lib.nvim.contextmenu"] = nil
+  local ok_no_lib = pcall(km["<RightMouse>"].callback)
+  package.preload["lib.nvim.contextmenu"] = nil
+  package.loaded["lib.nvim.contextmenu"] = nil
+  require("lib.nvim.contextmenu") -- restore the real module for later tests
+  check("context_menu: missing lib.nvim.contextmenu does not error either", ok_no_lib)
 
   -- keymap = false disables the binding without disabling the feature.
   local stub2 = setmetatable({

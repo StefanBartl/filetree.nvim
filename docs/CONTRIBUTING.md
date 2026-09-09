@@ -44,7 +44,7 @@ require("filetree").setup({ adapter = "neotree" })
 | `lua/filetree/refs/` | The reference engine: markdown, Lua, Python, TypeScript/JavaScript |
 | `lua/filetree/bindings/` | The `:Filetree`/`:Ft` route tree, keymaps and autocmds |
 | `lua/filetree/config/` | Defaults, the feature table, `setup()` validation |
-| `lua/filetree/integrations/` | Soft-dependency bridges (nvzone/menu) |
+| `lua/filetree/integrations/` | Soft-dependency bridges (lib.nvim.contextmenu) |
 | `lua/filetree/util/`, `assets/` | Shared helpers and static assets |
 | `lua/filetree/health.lua` | `:checkhealth filetree` |
 | `docs/` | Everything the README links to |

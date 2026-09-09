@@ -18,7 +18,7 @@ is the short version of all of it.
 | [BINDINGS.md](BINDINGS.md) | The entry point to every keymap, `:Filetree` sub-command and autocommand — there are more than fit one readable page, so it hands off to [BINDINGS/](BINDINGS/) and says which page holds what |
 | [commands.md](commands.md) | The `:Filetree` sub-command reference (the command name is configurable) |
 | [keymaps.md](keymaps.md) | The tree-buffer keys, their defaults, and how to remap or switch one off |
-| [menu.md](menu.md) | The context menu shipped for `nvzone/menu`, and what it offers |
+| [menu.md](menu.md) | The context menu (nvzone/menu or the kit renderer), and what it offers |
 | [api.md](api.md) | Every Lua function a config or another plugin can call |
 | [WORKFLOW.md](WORKFLOW.md) | The different question: not what each feature does, but how they combine once several of them exist at once |
 
