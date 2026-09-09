@@ -44,6 +44,24 @@ Right-click a node — that's the whole setup, with or without
 degrades to a single notify (not repeated, and not an error) only if
 `lib.nvim` itself predates `lib.nvim.contextmenu`.
 
+Every entry carries an icon (via `lib.nvim.ui.nerd_font`; a one-cell ASCII
+fallback when `vim.g.have_nerd_font` isn't set), so the icon column lines up
+whether or not a given entry has a glyph the same way `lib.nvim.contextmenu`
+already draws it for every other consumer.
+
+Two more things happen only with the kit renderer (`lib.nvim.contextmenu`'s
+own fallback -- nvzone/menu exposes neither hook this needs):
+
+- **The clicked node's line stays highlighted for as long as the menu is
+  open**, so which node an entry would act on is never a guess. Cleared when
+  the menu closes, or on the next cursor move/buffer leave if the renderer
+  never reports back that it closed at all.
+- **With the tree docked left or right, the menu opens beside the tree
+  window instead of on top of it** — anchored to the tree window's own edge,
+  so it can never cover (and hide) the row it just highlighted. With the
+  tree floating or in the current window there is no fixed edge to dock
+  against, so the menu falls back to opening at the click as before.
+
 ## Building your own trigger
 
 The entries themselves live in `filetree.integrations.menu`, independent of

@@ -16,7 +16,40 @@
 --- the menu before running `cmd`, so the tree window/node is the active context —
 --- exactly as if the corresponding keymap had been pressed.
 
+local nerd = require("lib.nvim.ui.nerd_font")
+
 local M = {}
+
+---@internal
+--- One glyph per entry, one cell each (see lib.nvim.ui.nerd_font -- shown
+--- only when the user has declared `vim.g.have_nerd_font = true`; a plain
+--- ASCII fallback otherwise, so the column always lines up either way).
+--- Named by group, not by entry: several entries in the same group share a
+--- family (e.g. every "open in X" is the same external-link glyph) rather
+--- than each getting a bespoke one, which would say more than the icon
+--- column is meant to.
+---@type table<string, string>
+local ICON = {
+  create = nerd.glyph("F0415", "+"), -- plus
+  rename = nerd.glyph("F03EB", "r"), -- pencil
+  batch_rename = nerd.glyph("F0C60", "l"), -- format-list-bulleted
+  move = nerd.glyph("F0BB1", "m"), -- swap-horizontal
+  template = nerd.glyph("F0214", "n"), -- file-outline
+  copy = nerd.glyph("F018F", "c"), -- content-copy
+  cut = nerd.glyph("F0190", "x"), -- content-cut
+  paste = nerd.glyph("F0192", "p"), -- content-paste
+  trash = nerd.glyph("F01B4", "d"), -- trash-can
+  open_external = nerd.glyph("F03CC", "o"), -- open-in-new
+  copy_path = nerd.glyph("F018F", "c"), -- content-copy
+  markdown_link = nerd.glyph("F0354", "M"), -- language-markdown
+  search = nerd.glyph("F0349", "f"), -- magnify
+  info = nerd.glyph("F02FC", "i"), -- information-outline
+  mark_on = nerd.glyph("F0C52", "m"), -- checkbox-marked-outline
+  mark_off = nerd.glyph("F0131", "u"), -- checkbox-blank-outline
+  mark_list = nerd.glyph("F0C60", "l"), -- format-list-bulleted
+  window = nerd.glyph("F0855", "w"), -- dock-left
+  filetree = nerd.glyph("F0641", "T"), -- file-tree
+}
 
 ---@internal
 --- Resolve a loaded feature module (nil when the feature is disabled/absent).
@@ -46,13 +79,15 @@ end
 ---@param fn string     function on the feature module
 ---@param label string  menu label
 ---@param rtxt? string  right-aligned hint (usually the default keymap)
+---@param icon? string  leading glyph, drawn in its own column -- see ICON above
 ---@return table|nil
-local function entry(name, fn, label, rtxt)
+local function entry(name, fn, label, rtxt, icon)
   local f = feature(name)
   if not (f and type(f[fn]) == "function") then return nil end
   return {
     name = label,
     rtxt = rtxt,
+    icon = icon,
     cmd = function()
       local ff = feature(name)
       if ff and type(ff[fn]) == "function" then ff[fn]() end
@@ -110,7 +145,8 @@ function M.window_entry(bufnr)
   if is_open then
     if type(adapter.close) ~= "function" then return nil end
     return {
-      name = "  Close filetree",
+      name = "Close filetree",
+      icon = ICON.window,
       cmd = function()
         adapter.close()
       end,
@@ -123,7 +159,8 @@ function M.window_entry(bufnr)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
   local path = vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_get_name(bufnr) or ""
   return {
-    name = "  Open filetree",
+    name = "Open filetree",
+    icon = ICON.window,
     cmd = function()
       if path ~= "" and vim.fn.filereadable(path) == 1 then
         adapter.open_reveal(path)
@@ -151,62 +188,66 @@ function M.items()
   if on("fileops") then
     add_group(
       out,
-      entry("smart_create", "create", "  Create file / dir", "a"),
-      entry("smart_rename", "rename_current", "  Rename (LSP refs)", "r"),
-      entry("rename_batch", "open", "  Batch rename", "<leader>rb"),
-      entry("move", "move", "  Move to…", "M"),
-      entry("create_from_template", "open_current", "  New from template", "A")
+      entry("smart_create", "create", "Create file / dir", "a", ICON.create),
+      entry("smart_rename", "rename_current", "Rename (LSP refs)", "r", ICON.rename),
+      entry("rename_batch", "open", "Batch rename", "<leader>rb", ICON.batch_rename),
+      entry("move", "move", "Move to…", "M", ICON.move),
+      entry("create_from_template", "open_current", "New from template", "A", ICON.template)
     )
   end
 
   if on("clipboard") then
     add_group(
       out,
-      entry("copy_move", "stage_copy", "  Copy", "c"),
-      entry("copy_move", "stage_cut", "  Cut", "x"),
-      entry("copy_move", "paste", "  Paste", "p")
+      entry("copy_move", "stage_copy", "Copy", "c", ICON.copy),
+      entry("copy_move", "stage_cut", "Cut", "x", ICON.cut),
+      entry("copy_move", "paste", "Paste", "p", ICON.paste)
     )
   end
 
-  if on("delete") then add_group(out, entry("trash", "delete_current", "  Trash", "d")) end
+  if on("delete") then
+    add_group(out, entry("trash", "delete_current", "Trash", "d", ICON.trash))
+  end
 
   if on("open") then
     add_group(
       out,
-      entry("open_variants", "open_vsplit", "  Open in vsplit", "sg"),
-      entry("open_variants", "open_split", "  Open in split", "sv"),
-      entry("open_variants", "open_tabnew", "  Open in tab", "st"),
-      entry("open_with", "open_system", "  Open with system app", "<leader>sm"),
-      entry("open_in_fm", "open", "  Reveal in file manager", "<leader>fm")
+      entry("open_variants", "open_vsplit", "Open in vsplit", "sg", ICON.open_external),
+      entry("open_variants", "open_split", "Open in split", "sv", ICON.open_external),
+      entry("open_variants", "open_tabnew", "Open in tab", "st", ICON.open_external),
+      entry("open_with", "open_system", "Open with system app", "<leader>sm", ICON.open_external),
+      entry("open_in_fm", "open", "Reveal in file manager", "<leader>fm", ICON.open_external)
     )
   end
 
   if on("paths") then
     add_group(
       out,
-      entry("path_copy", "pick", "  Copy path…", "[a"),
-      entry("markdown_links", "link_current", "  Markdown link", "ML")
+      entry("path_copy", "pick", "Copy path…", "[a", ICON.copy_path),
+      entry("markdown_links", "link_current", "Markdown link", "ML", ICON.markdown_link)
     )
   end
 
   if on("search") then
     add_group(
       out,
-      entry("find_files", "find", "  Find files", "f"),
-      entry("grep_in_dir", "grep", "  Grep in dir", "gr")
+      entry("find_files", "find", "Find files", "f", ICON.search),
+      entry("grep_in_dir", "grep", "Grep in dir", "gr", ICON.search)
     )
   end
 
-  if on("info") then add_group(out, entry("node_info", "show_current", "  Node info", "I")) end
+  if on("info") then
+    add_group(out, entry("node_info", "show_current", "Node info", "I", ICON.info))
+  end
 
   if on("marks") then
     add_group(
       out,
-      entry("marks", "toggle_current", "  Toggle mark", "m"),
-      entry("marks", "mark_all_visible", "  Mark all visible", "]m"),
-      entry("marks", "unmark_all_visible", "  Unmark all visible", "[m"),
-      entry("marks", "clear_all", "  Clear marks", "<leader>mc"),
-      entry("marks", "show", "  Show marked nodes", "<leader>ms")
+      entry("marks", "toggle_current", "Toggle mark", "m", ICON.mark_on),
+      entry("marks", "mark_all_visible", "Mark all visible", "]m", ICON.mark_on),
+      entry("marks", "unmark_all_visible", "Unmark all visible", "[m", ICON.mark_off),
+      entry("marks", "clear_all", "Clear marks", "<leader>mc", ICON.mark_off),
+      entry("marks", "show", "Show marked nodes", "<leader>ms", ICON.mark_list)
     )
   end
 
@@ -222,7 +263,7 @@ end
 function M.submenu(label)
   local items = M.items()
   if #items == 0 then return nil end
-  return { name = label or "  Filetree", items = items }
+  return { name = label or "Filetree", icon = ICON.filetree, items = items }
 end
 
 return M

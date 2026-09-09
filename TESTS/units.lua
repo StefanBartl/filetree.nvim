@@ -3864,6 +3864,113 @@ do
   check("context_menu: keymap=false does not bind '<RightMouse>'", not has_rm)
 end
 
+-- ── context_menu: node highlight + beside-tree positioning (kit renderer) ───
+do
+  local hl_calls, unhl_calls = {}, {}
+  local tree_win = vim.api.nvim_get_current_win() -- stand-in for the tree window
+  local cur_node = { path = "/tmp/units-context-menu-node.txt", type = "file" }
+
+  local stub = setmetatable({
+    name = "units-stub-context-menu-3",
+    filetypes = { "units-context-menu-ft3" },
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    highlight_node = function(path, hl)
+      hl_calls[#hl_calls + 1] = { path = path, hl = hl }
+      return true
+    end,
+    unhighlight_node = function(path)
+      unhl_calls[#unhl_calls + 1] = path
+      return true
+    end,
+    get_winid = function()
+      return tree_win
+    end,
+    get_position = function()
+      return "left"
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  -- context_menu's own config merges onto its PREVIOUS state rather than
+  -- resetting (so a user who never touches the option keeps whatever they
+  -- set before) -- the prior block above ends with keymap = false, which
+  -- would otherwise leak into this one. Force the default key back on.
+  ft.setup({
+    adapter = "units-stub-context-menu-3",
+    features = { context_menu = { keymap = "<RightMouse>" } },
+  })
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(buf)
+  vim.bo[buf].filetype = "units-context-menu-ft3"
+  vim.wait(200, function()
+    return false
+  end)
+
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
+    km[m.lhs] = m
+  end
+
+  package.loaded["menu"] = nil -- force the kit fallback, which returns a surf
+  local ok_click = pcall(km["<RightMouse>"].callback)
+  check("context_menu extras: click does not error", ok_click)
+  check(
+    "context_menu extras: highlighted exactly the clicked node's path",
+    #hl_calls == 1 and hl_calls[1].path == cur_node.path,
+    vim.inspect(hl_calls)
+  )
+  check(
+    "context_menu extras: used the FiletreeContextMenuNode highlight group",
+    #hl_calls == 1 and hl_calls[1].hl == "FiletreeContextMenuNode"
+  )
+
+  local kit_menu = require("lib.nvim.ui.kit.menu")
+  check("context_menu extras: kit menu is open after the click", kit_menu.is_open())
+
+  -- Tree docked "left": the menu must open beside it (relative to the tree
+  -- window's own right edge), never on top of it.
+  local floats = {}
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_config(w).relative ~= "" then floats[#floats + 1] = w end
+  end
+  local menu_win = floats[#floats]
+  if menu_win then
+    local cfg = vim.api.nvim_win_get_config(menu_win)
+    check("context_menu extras: menu docks relative to the tree window", cfg.relative == "win")
+    check("context_menu extras: anchored on the tree window itself", cfg.win == tree_win)
+    check(
+      "context_menu extras: sits at the tree window's right edge, not overlapping it",
+      cfg.col == vim.api.nvim_win_get_width(tree_win),
+      tostring(cfg.col)
+    )
+  else
+    check("context_menu extras: a menu float exists to check positioning on", false)
+  end
+
+  kit_menu.close()
+  check(
+    "context_menu extras: unhighlight_node called (via on_close) when the menu closed",
+    #unhl_calls == 1 and unhl_calls[1] == cur_node.path,
+    vim.inspect(unhl_calls)
+  )
+
+  package.loaded["menu"] = nil
+  vim.cmd("bwipeout! " .. buf)
+end
+
 -- ── util.window: new editor windows stay clear of the tree's side ───────────
 -- Regression: a bare `:vsplit` from the (full-width) tree window follows
 -- 'splitright', so with the default `splitright = false` the new window landed
