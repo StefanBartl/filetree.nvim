@@ -3940,6 +3940,19 @@ do
   local kit_menu = require("lib.nvim.ui.kit.menu")
   check("context_menu extras: kit menu is open after the click", kit_menu.is_open())
 
+  -- The highlight must still be up right here, before the menu is closed --
+  -- this is the regression check: opening the menu moves focus to its own
+  -- floating window, which fires BufLeave on the tree buffer as a side
+  -- effect of the menu merely appearing. A fallback that reacted to
+  -- BufLeave (an earlier version of this feature did) cleared the
+  -- highlight on that same tick, before the user ever saw it -- silently
+  -- indistinguishable from the highlight never having been applied.
+  check(
+    "context_menu extras: highlight is NOT cleared just from the menu taking focus",
+    #unhl_calls == 0,
+    vim.inspect(unhl_calls)
+  )
+
   -- Tree docked "left": the menu must open beside it (relative to the tree
   -- window's own right edge), never on top of it.
   local floats = {}

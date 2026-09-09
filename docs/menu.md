@@ -54,8 +54,9 @@ own fallback -- nvzone/menu exposes neither hook this needs):
 
 - **The clicked node's line stays highlighted for as long as the menu is
   open**, so which node an entry would act on is never a guess. Cleared when
-  the menu closes, or on the next cursor move/buffer leave if the renderer
-  never reports back that it closed at all.
+  the menu closes, or on the next real cursor move in the tree if the
+  renderer never reports back that it closed at all (opening the menu
+  itself moves focus to its own window, which must not count as "closed").
 - **With the tree docked left or right, the menu opens beside the tree
   window instead of on top of it** — anchored to the tree window's own edge,
   so it can never cover (and hide) the row it just highlighted. With the
