@@ -107,9 +107,11 @@ a doc file.
 
 ## Context Menu
 
-Right-click (`<RightMouse>`) opens a context menu via
-[nvzone/menu](https://github.com/nvzone/menu) — a soft dependency, inert
-(no menu, no error) if it isn't installed. See
+Right-click (`<RightMouse>`) opens a context menu through
+`lib.nvim.contextmenu`, which draws with
+[nvzone/menu](https://github.com/nvzone/menu) if it is installed, or its own
+themed `lib.nvim.ui.kit.menu` (no third-party plugin needed) otherwise —
+either way, right-click works out of the box. See
 [docs/menu.md](../menu.md) for the entries offered.
 
 - **Module:** `lua/filetree/features/ui/context_menu/`

@@ -56,7 +56,7 @@ question each page answers.
 - [Keymaps](docs/keymaps.md) — remapping, disabling, which-key integration, and the neo-tree cheatsheet.
 - [Commands](docs/commands.md) — the `:Filetree` command tree and its autocmds.
 - [Lua API](docs/api.md) — the public API, and how to register a custom adapter.
-- [Menu integration](docs/menu.md) — using filetree.nvim's actions with nvzone/menu.
+- [Menu integration](docs/menu.md) — the context menu, and using filetree.nvim's actions in your own.
 - [Bindings](docs/BINDINGS.md) — the entry point to every keymap, subcommand and autocommand, and which detail page holds what.
 - [Workflow](docs/WORKFLOW.md) — how the features combine once several are on at the same time.
 - [Troubleshooting](docs/troubleshooting.md) — health check, debug mode, and the known adapter caveats.
@@ -142,7 +142,7 @@ Optional, each detected at runtime and degrading to nothing when absent:
 | `rg` (ripgrep) | Grep-in-dir and the reference scan |
 | [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | `.pdf` nodes rendered into a buffer |
 | [which-key.nvim](https://github.com/folke/which-key.nvim) | Labels for the keymap set |
-| [nvzone/menu](https://github.com/nvzone/menu) | A host for the context-menu entries — see [Integrations](#integrations) |
+| [nvzone/menu](https://github.com/nvzone/menu) | Renders the context menu if installed; `lib.nvim.ui.kit.menu` draws it otherwise, so right-click works either way — see [Integrations](#integrations) |
 
 The CLI tools are declared in [docs/install.json](docs/install.json) and read by
 lib.nvim's
@@ -243,11 +243,13 @@ providing them. See
 ### Context menu
 
 filetree.nvim contributes context-aware entries in the shape
-[nvzone/menu](https://github.com/nvzone/menu) expects, acting on the node under
-the cursor. filetree.nvim has **no** dependency on `menu` and never opens a
-context menu itself; a host — typically your own `<RightMouse>` dispatcher —
-composes them into its own menu. The wiring is
-[docs/menu.md](docs/menu.md).
+[nvzone/menu](https://github.com/nvzone/menu) expects, acting on the node
+under the cursor — and, on the tree's own buffer, opens them itself via
+`lib.nvim.contextmenu`, which needs neither `nvzone/menu` nor any other
+third-party menu plugin (it falls back to its own kit renderer). A host —
+typically your own `<RightMouse>` dispatcher, for buffers filetree.nvim
+doesn't own — can still compose the same entries into its own menu. The
+wiring is [docs/menu.md](docs/menu.md).
 
 ---
 

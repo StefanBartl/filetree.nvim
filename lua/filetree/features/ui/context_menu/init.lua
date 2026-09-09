@@ -1,19 +1,20 @@
 ---@module 'filetree.features.context_menu'
----@brief Right-click context menu in the tree, via nvzone/menu (soft dependency).
+---@brief Right-click context menu in the tree, via lib.nvim.contextmenu.
 ---@description
 --- Binds a mouse trigger (default `<RightMouse>`) inside the tree buffer.
 --- On click: moves the cursor to the clicked node first (so the menu acts on
 --- what was actually clicked, not wherever the cursor happened to be), then
---- opens `nvzone/menu` positioned at the mouse, populated with
+--- opens the menu through `lib.nvim.contextmenu`, populated with
 --- `filetree.integrations.menu.items()` — the SAME curated, self-gating entry
 --- list a host config could already wire up by hand. This feature only adds
 --- the trigger; which entries appear is still controlled entirely by the
 --- top-level `menu` config (group-level opt-out — see @types/config.lua).
 ---
---- Soft dependency: nvzone/menu is never require()d until the first click, and
---- a missing plugin degrades to a single notify, not an error. On by default
---- (opt-out) — inert without nvzone/menu installed, so there is nothing to
---- turn off unless you specifically don't want the trigger bound.
+--- `lib.nvim.contextmenu` resolves its own renderer -- nvzone/menu when it is
+--- installed, `lib.nvim.ui.kit.menu` (no third-party dependency) otherwise --
+--- so this feature needs neither directly. It is never require()d until the
+--- first click. On by default (opt-out); degrades to a single notify, not an
+--- error, only if lib.nvim itself predates `lib.nvim.contextmenu`.
 
 local notify = require("filetree.util.notify").create("[filetree.context_menu]")
 local bind = require("filetree.util.bind")
@@ -48,22 +49,22 @@ end
 local function open_menu()
   move_to_click()
 
-  local ok_menu, menu = pcall(require, "menu")
-  if not ok_menu or type(menu.open) ~= "function" then
+  local ok_items, items_mod = pcall(require, "filetree.integrations.menu")
+  local items = ok_items and items_mod.items() or {}
+  if #items == 0 then return end -- nothing enabled/available to show
+
+  local ok_cm, contextmenu = pcall(require, "lib.nvim.contextmenu")
+  if not ok_cm or type(contextmenu.open) ~= "function" then
     if not _warned_missing then
       notify.info(
-        "nvzone/menu not installed — context_menu has nothing to open (install it, or set features.context_menu.enabled = false)"
+        "lib.nvim.contextmenu unavailable — context_menu has nothing to open (update lib.nvim, or set features.context_menu.enabled = false)"
       )
       _warned_missing = true
     end
     return
   end
 
-  local ok_items, items_mod = pcall(require, "filetree.integrations.menu")
-  local items = ok_items and items_mod.items() or {}
-  if #items == 0 then return end -- nothing enabled/available to show
-
-  menu.open(items, { mouse = true })
+  contextmenu.open(items, { mouse = true })
 end
 
 ---@param config FiletreeContextMenuConfig
