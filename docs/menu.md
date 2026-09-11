@@ -7,8 +7,8 @@ filetree.nvim ships a context menu, drawn through
 kit is already using) otherwise. Either way filetree.nvim itself does **not**
 depend on nvzone/menu directly — the plugin *owns* its entries (create,
 rename, copy/cut/paste, trash, open variants, path/markdown-link copy,
-find/grep, node info, marks, open/close the tree itself); only `lib.nvim`
-decides how they get drawn.
+find/grep, node info, `:Inspect`, marks, open/close the tree itself); only
+`lib.nvim` decides how they get drawn.
 
 Entries are self-gating in a way that's worth trusting: `filetree.integrations.menu`
 never lists an action whose feature function doesn't actually exist (disabled
@@ -99,7 +99,7 @@ require("filetree").setup({
     open      = true, -- vsplit / split / tab / system app / file manager
     paths     = true, -- copy path / markdown link
     search    = true, -- find files / grep in dir
-    info      = true, -- node info
+    info      = true, -- node info + Inspect (`:Inspect`, highlight/treesitter groups at the click)
   },
 })
 ```

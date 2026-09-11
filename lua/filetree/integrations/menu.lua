@@ -237,7 +237,21 @@ function M.items()
   end
 
   if on("info") then
-    add_group(out, entry("node_info", "show_current", "Node info", "I", ICON.info))
+    add_group(
+      out,
+      entry("node_info", "show_current", "Node info", "I", ICON.info),
+      -- Not gated through `entry()`/`feature()`: `:Inspect` is a builtin
+      -- Neovim command, not a filetree feature -- shows the highlight/
+      -- treesitter groups painted on the clicked tree line, which is
+      -- exactly the tool a highlight bug on a node needs.
+      {
+        name = "Inspect",
+        icon = ICON.info,
+        cmd = function()
+          pcall(vim.cmd, "Inspect")
+        end,
+      }
+    )
   end
 
   if on("marks") then
