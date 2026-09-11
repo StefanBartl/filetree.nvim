@@ -22,6 +22,8 @@ local notify = require("filetree.util.notify").create("[filetree.session]")
 local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local bufutil = require("filetree.util.buffer")
+local is_subpath = require("lib.nvim.fs.is_subpath")
+local normkey = require("lib.nvim.fs.normkey")
 local M = {}
 
 ---@type FiletreeSessionConfig
@@ -84,12 +86,22 @@ end
 
 local function project_key()
   local ok_pr, pr = require("filetree.features").load("project_root")
+  local raw
   if ok_pr and pr and type(pr.find) == "function" then
     local buf = vim.api.nvim_get_current_buf()
     local name = vim.api.nvim_buf_get_name(buf)
-    return pr.find(name ~= "" and name or vim.fn.getcwd())
+    raw = pr.find(name ~= "" and name or vim.fn.getcwd())
+  else
+    raw = vim.fn.getcwd()
   end
-  return vim.fn.getcwd()
+  -- Canonicalized (forward slashes, uppercase drive letter, realpath-
+  -- resolved): `pr.find()` and `getcwd()` hand back whichever separator/case
+  -- style their input happened to use, so the same project was silently
+  -- keying two or more divergent entries in the store -- confirmed live via
+  -- "E:/repos/lib.nvim" and "E:\repos\lib.nvim" sitting side by side in
+  -- sessions.json for the one directory.
+  local canon = normkey(raw)
+  return canon ~= "" and canon or raw
 end
 
 -- ── Save / Restore ────────────────────────────────────────────────────────────
@@ -115,6 +127,22 @@ function M.save()
   local root = _adapter.get_root_path and _adapter.get_root_path() or nil
 
   local key = project_key()
+
+  -- The adapter's visual root can be caught mid-flight: cwd_sync's chdir
+  -- fires DirChanged, and neo-tree's own bind_to_cwd re-roots the tree in
+  -- response to it -- but debounced. BufHidden on the tree buffer (the other
+  -- trigger for this save) fires synchronously and can read the OLD root
+  -- before that debounce settles, persisting a stale ancestor (e.g.
+  -- "E:/repos") under the new project's key ("E:/repos/ui.nvim"). Restoring
+  -- that later jumps the cwd straight back out to it -- the exact bug this
+  -- guards against. A root that is not the project itself or a directory
+  -- inside it is never a legitimate per-project root, stale read or hand-
+  -- edited store alike, so it is dropped rather than trusted.
+  if root and root ~= "" then
+    local nroot = normkey(root)
+    if nroot == "" or not is_subpath(nroot, key) then root = nil end
+  end
+
   _sessions[key] = {
     adapter = _adapter.name,
     root = root,
@@ -137,8 +165,14 @@ function M.restore()
   if entry.adapter and entry.adapter ~= _adapter.name then return end
 
   vim.defer_fn(function()
-    -- Restore tree root
-    if entry.root and _adapter.set_root then pcall(_adapter.set_root, entry.root) end
+    -- Restore tree root -- same invariant as M.save(): a root outside the
+    -- project it was saved under is stale or foreign data, not something to
+    -- act on. Guards entries written before this check existed, and any
+    -- future write path that skips M.save() (a hand-edited store, a script).
+    if entry.root and _adapter.set_root then
+      local nroot = normkey(entry.root)
+      if nroot ~= "" and is_subpath(nroot, key) then pcall(_adapter.set_root, entry.root) end
+    end
 
     -- Restore expanded dirs
     if entry.expanded and #entry.expanded > 0 and _adapter.expand_paths then
