@@ -224,7 +224,7 @@ tree is the active context. Opt out per group via `config.menu`: >
         open      = true, -- vsplit / split / tab / system app / file manager
         paths     = true, -- copy path / markdown link
         search    = true, -- find files / grep in dir
-        info      = true, -- node info
+        info      = true, -- node info + Inspect (`:Inspect`)
       },
     })
 <

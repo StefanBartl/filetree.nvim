@@ -119,6 +119,7 @@ do
   check("menu: trash entry present", has(list, "Trash"))
   check("menu: path_copy entry present", has(list, "Copy path…"))
   check("menu: node_info entry present", has(list, "Node info"))
+  check("menu: Inspect entry present (not feature-gated)", has(list, "Inspect"))
   check(
     "menu: entry omitted when its feature is disabled/absent",
     not has(list, "New from template")
@@ -147,6 +148,13 @@ do
   check("menu opt-out: clipboard=false hides the copy entry", not has(list2, "Copy"))
   check("menu opt-out: search=false hides find_files", not has(list2, "Find files"))
   check("menu opt-out: unrelated groups (delete) stay", has(list2, "Trash"))
+
+  -- info=false hides both node_info AND Inspect — the latter isn't gated by
+  -- its own feature (there is none), only by the group.
+  local menu_no_info = install_stub({ enable = true, info = false }, features)
+  local list_no_info = names(menu_no_info.items())
+  check("menu opt-out: info=false hides node_info", not has(list_no_info, "Node info"))
+  check("menu opt-out: info=false hides Inspect too", not has(list_no_info, "Inspect"))
 
   -- Master switch: enable=false yields nothing at all.
   local menu3 = install_stub({ enable = false }, features)
