@@ -5,6 +5,12 @@
 --- records it for later restoration. Integrates with the safety feature for
 --- optional pre-trash backup.
 ---
+--- `mode = "permanent"` (opt-in; default is "trash") skips the OS trash
+--- entirely and deletes the path for good via the same libuv/Vim-builtin
+--- primitive `util.conflict` already uses for an "Overwrite" paste — no
+--- shell, no undo, no trash history entry: there is nothing left to
+--- restore, so `U`/`:Filetree trash history` have nothing to show for it.
+---
 --- Deleting `d` (current node, or all marked nodes if any are marked):
 ---   - `confirm = false`: deletes everything straight away, no prompt.
 ---   - a single item: one y/N.
@@ -33,6 +39,10 @@ local undo = require("filetree.features.fileops.trash.undo")
 local notify = require("filetree.util.notify").create("[filetree.trash]")
 
 local buffer = require("filetree.util.buffer")
+-- The same cross-platform (no shell) recursive delete `copy_move`'s
+-- "Overwrite" resolution already uses — reused here for `mode = "permanent"`
+-- instead of a second delete primitive.
+local conflict = require("filetree.util.conflict")
 local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
@@ -56,6 +66,10 @@ local M = {}
 ---@type FiletreeTrashConfig
 local _cfg = {
   enabled = false,
+  -- "permanent" is opt-in: it is a genuine, unrecoverable delete (no OS
+  -- trash, no `U`/history entry), so the safer default stays "trash" even
+  -- though it costs an extra config line to opt into "gone for good".
+  mode = "trash",
   -- Deliberately true, unlike copy_move/rename_batch's confirm=false default:
   -- trashing is the one destructive action here whose target files aren't
   -- necessarily what the user thinks they are (mis-clicks on the wrong node,
@@ -77,6 +91,37 @@ local _adapter = nil
 
 -- ── Helpers ───────────────────────────────────────────────────────────────────
 
+---@internal
+---Whether `path` is going to be gone for good.
+---@return boolean
+local function is_permanent()
+  return _cfg.mode == "permanent"
+end
+
+---@internal
+---The confirm question for `path` (or the whole-batch variant when `path`
+---is omitted) — worded so a permanent delete never reads like a trash
+---(recoverable) one, since the two share every dialog in this module.
+---@param path string?
+---@param extra string?  Appended as-is (e.g. " (2 ref(s) will be marked REF!)").
+---@return string
+local function confirm_question(path, extra)
+  local q = is_permanent() and "Permanently delete (cannot be undone)?" or "Send to trash?"
+  if path then q = q .. "\n  " .. path end
+  if extra then q = q .. extra end
+  return q
+end
+
+---@internal
+---"Moved N/M to trash" vs "Permanently deleted N/M" — see `confirm_question`.
+---@param ok_count integer
+---@param total integer
+---@return string
+local function summary_line(ok_count, total)
+  if is_permanent() then return string.format("Permanently deleted %d/%d", ok_count, total) end
+  return string.format("Moved %d/%d to trash", ok_count, total)
+end
+
 ---Single-item y/N confirm for the SYNCHRONOUS `M.delete(path)` API path only
 ---(direct/programmatic callers, not the interactive `d` keymap — that goes
 ---through the nicer async `confirm_popup` below). Deliberately stays on the
@@ -88,17 +133,21 @@ local _adapter = nil
 ---@param path string
 ---@return boolean confirmed
 local function confirm(path)
-  local answer = vim.fn.confirm("Send to trash?\n  " .. path, "&Yes\n&No", 2)
+  local answer = vim.fn.confirm(confirm_question(path), "&Yes\n&No", 2)
   return answer == 1
 end
 
----Actually trash one path — NO confirmation (the caller has already handled
----that, at whatever granularity). Sends to trash, records undo, and force-closes
----any open buffer for the file (or, for a directory, nested under it) so a stale
----buffer never lingers pointing at a deleted file. Does NOT refresh the tree;
----callers refresh once after a whole batch.
+---Actually delete one path — NO confirmation (the caller has already handled
+---that, at whatever granularity). Force-closes any open buffer for the file
+---(or, for a directory, nested under it) so a stale buffer never lingers
+---pointing at a deleted file. Does NOT refresh the tree; callers refresh once
+---after a whole batch.
+---
+---`mode = "trash"` (default) sends to the OS trash and records undo;
+---`mode = "permanent"` deletes for good via `util.conflict` — no undo, no
+---history entry, since there is nothing left to restore.
 ---@param path string
----@param cb fun(ok: boolean)  invoked on the main loop once the trash attempt settled
+---@param cb fun(ok: boolean)  invoked on the main loop once the delete attempt settled
 ---@return nil
 local function do_trash(path, cb)
   if vim.fn.filereadable(path) == 0 and vim.fn.isdirectory(path) == 0 then
@@ -108,16 +157,30 @@ local function do_trash(path, cb)
   end
 
   if _cfg.dry_run then
-    notify.info("[dry-run] would trash: " .. path)
-    undo.record(path)
+    notify.info(
+      "[dry-run] would " .. (is_permanent() and "permanently delete: " or "trash: ") .. path
+    )
+    if not is_permanent() then undo.record(path) end
     cb(true)
     return
   end
 
-  -- Optional pre-trash backup via safety feature
+  -- Optional pre-trash backup via safety feature (arguably more useful in
+  -- permanent mode than trash mode, since it is the only way back at all).
   if _cfg.use_safety then
     local ok_sf, safety = require("filetree.features").load("safety")
     if ok_sf and safety then pcall(safety.before_delete, path) end
+  end
+
+  if is_permanent() then
+    if not conflict.remove_existing(path) then
+      notify.error("Delete failed: " .. path)
+      cb(false)
+      return
+    end
+    buffer.close_for_path(path)
+    cb(true)
+    return
   end
 
   local function spawn()
@@ -241,7 +304,7 @@ local function confirm_popup(path, cb)
       ui_confirm({
         title = " Trash ",
         body = info_body(path),
-        question = "Send to trash?",
+        question = confirm_question(),
         on_choice = function(yes)
           if yes then
             do_trash(path, cb)
@@ -328,7 +391,7 @@ local function confirm_popup(path, cb)
       ui_confirm({
         title = " Trash ",
         body = info_body(path),
-        question = string.format("Send to trash? (%s)", table.concat(parts, "; ")),
+        question = confirm_question(nil, string.format(" (%s)", table.concat(parts, "; "))),
         on_choice = function(yes)
           if yes then
             trash_then_cleanup(incoming_refs, cb)
@@ -428,7 +491,7 @@ local function finalize(ok_count, total, cancelled)
     if ok_m and marks then pcall(marks.clear_all) end
     if _adapter then pcall(_adapter.refresh) end
   end
-  local parts = { string.format("Moved %d/%d to trash", ok_count, total) }
+  local parts = { summary_line(ok_count, total) }
   if cancelled > 0 then parts[#parts + 1] = string.format("(%d skipped)", cancelled) end
   notify.info(table.concat(parts, " "))
 end
@@ -448,7 +511,7 @@ local function run_all(paths)
   local function step()
     i = i + 1
     if i > #paths then
-      if prog then prog:finish(string.format("Moved %d/%d to trash", ok_count, #paths)) end
+      if prog then prog:finish(summary_line(ok_count, #paths)) end
       finalize(ok_count, #paths, 0)
       return
     end
@@ -473,7 +536,7 @@ local function run_individual(paths)
   local function step()
     i = i + 1
     if i > #paths then
-      if prog then prog:finish(string.format("Moved %d/%d to trash", ok_count, #paths)) end
+      if prog then prog:finish(summary_line(ok_count, #paths)) end
       finalize(ok_count, #paths, cancelled)
       return
     end
