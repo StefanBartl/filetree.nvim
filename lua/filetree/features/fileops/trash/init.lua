@@ -15,6 +15,14 @@
 --- file (or, for a directory, nested under it) so a stale buffer never lingers
 --- pointing at a file that no longer exists (see util.buffer.close_for_path).
 ---
+--- The single-item confirm popup also runs both directions of the reference
+--- engine: incoming refs (other files pointing at the one being deleted —
+--- offered to mark REF!) and outgoing asset links (files the one being
+--- deleted points at, under a configured assets folder — offered for
+--- cascade-deletion when nothing else still references them; see
+--- docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md). Neither exists for a
+--- multi-item "delete all at once" batch, same as before this feature.
+---
 --- Keymaps (in tree buffer, default):
 ---   d            Trash current node (or all marked nodes)
 ---   U            Undo last trash operation
@@ -28,9 +36,11 @@ local buffer = require("filetree.util.buffer")
 local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
--- References that would dangle once the file is gone: the engine finds them
--- (markdown links only — see refs.for_delete) and this feature decides what to
--- do with them before the delete happens.
+-- References that would dangle once the file is gone (markdown links only —
+-- see refs.for_delete), AND assets the file itself links out to that would be
+-- orphaned by its deletion (refs.outgoing_assets — see
+-- docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md). This feature decides what to
+-- do with both before the delete happens.
 local refs = require("filetree.refs")
 -- Optional: progress indicator for a multi-item batch (no other feedback
 -- otherwise while several files are sent to trash one after another).
@@ -153,18 +163,83 @@ local function info_body(path)
   return { "  " .. path }
 end
 
----Show the nice info+yes/no popup for a single path. When something links to
----it, a chooser (delete+cleanup / inspect references / delete only / cancel)
----replaces the plain yes/no.
+---@internal
+---Basenames of `assets`, for a notify line — full paths would be noise once
+---there is more than one.
+---@param assets FiletreeAssetCandidate[]
+---@return string[]
+local function asset_basenames(assets)
+  local out = {}
+  for _, c in ipairs(assets) do
+    out[#out + 1] = vim.fn.fnamemodify(c.resolved, ":t")
+  end
+  return out
+end
+
+---@internal
+---Delete every approved asset through the same trash/undo path as the
+---primary file (`do_trash`, defined above) — not a plain `fs_unlink` — so
+---`:Filetree trash undo`/`U` can bring an asset back the same way it brings
+---back the file that linked to it (Cascade_Delete_Assets.md §8: each asset
+---still lands as its OWN undo entry, not grouped with the primary file's —
+---undoing the whole batch as one unit is a follow-up, not built here).
+---Sequential like `run_all`, for the same reason: parallel trashing would
+---race the watcher-release dance `do_trash` does per path.
+---@param candidates FiletreeAssetCandidate[]
+---@param done fun()
+local function delete_assets(candidates, done)
+  local i = 0
+  local function step()
+    i = i + 1
+    if i > #candidates then return done() end
+    do_trash(candidates[i].resolved, function()
+      step()
+    end)
+  end
+  step()
+end
+
+---Show the nice info+yes/no popup for a single path. When the file has
+---incoming references, outgoing links to now-orphaned assets, or both, a
+---chooser replaces the plain yes/no — one dialog for both directions rather
+---than two separate popups (Cascade_Delete_Assets.md §4).
 ---
----Unlike a rename, the scan has to finish *before* the dialog can be drawn —
----its text depends on what was found — so this waits for it rather than
----overlapping it with anything.
+---Unlike a rename, both scans have to finish *before* the dialog can be
+---drawn — its text depends on what was found — so this waits for them
+---rather than overlapping either with the delete itself. The two scans
+---(incoming refs, outgoing assets) run concurrently with EACH OTHER, since
+---neither depends on the other's result.
 ---@param path string
 ---@param cb fun(yes: boolean)
 local function confirm_popup(path, cb)
-  refs.for_delete({ path }, nil, function(found)
-    if #found == 0 then
+  local name = vim.fn.fnamemodify(path, ":t")
+  local pending = 2
+  ---@type FiletreeRef[]?
+  local incoming_refs
+  ---@type FiletreeAssetCandidate[]?, FiletreeAssetCandidate[]?
+  local deletable_assets, kept_assets
+
+  local function proceed()
+    if pending > 0 or not incoming_refs or not deletable_assets then return end
+
+    -- An asset that qualifies (right root, right extension) but is still
+    -- linked from some OTHER surviving file is never offered — but the user
+    -- should still learn why an apparent orphan wasn't offered, rather than
+    -- silently seeing nothing (§3, point 3).
+    if #kept_assets > 0 then
+      notify.info(
+        string.format(
+          "%d asset(s) still referenced elsewhere, left alone: %s",
+          #kept_assets,
+          table.concat(asset_basenames(kept_assets), ", ")
+        )
+      )
+    end
+
+    local has_refs = #incoming_refs > 0
+    local has_assets = #deletable_assets > 0
+
+    if not has_refs and not has_assets then
       ui_confirm({
         title = " Trash ",
         body = info_body(path),
@@ -174,25 +249,67 @@ local function confirm_popup(path, cb)
       return
     end
 
-    local name = vim.fn.fnamemodify(path, ":t")
-    notify.info(refs.ui.summary(found) .. ": " .. table.concat(refs.ui.unique_files(found), ", "))
+    if has_refs then
+      notify.info(
+        refs.ui.summary(incoming_refs)
+          .. ": "
+          .. table.concat(refs.ui.unique_files(incoming_refs), ", ")
+      )
+    end
+    if has_assets then
+      notify.info(
+        string.format(
+          "%d orphaned asset(s) found: %s",
+          #deletable_assets,
+          table.concat(asset_basenames(deletable_assets), ", ")
+        )
+      )
+    end
 
-    -- `refs.on_delete = "auto"` means "don't ask about the references" -- not
-    -- "don't ask about the delete". So the ordinary confirmation still runs,
-    -- and the cleanup happens only once it came back yes: a cancelled delete
-    -- must not leave blanked-out links behind.
+    ---@internal
+    ---Rewrite `refs_to_apply` (if any), then delete every approved asset (if
+    ---any), then hand back. Both happen before `cb(true)`, same reasoning as
+    ---the ref-only path this replaces: a cancelled delete must never leave a
+    ---half-finished cleanup behind, and the file must still exist while refs
+    ---to it are being rewritten.
+    ---@param refs_to_apply FiletreeRef[]
+    ---@param done fun()
+    local function cleanup(refs_to_apply, done)
+      local function after_refs()
+        if has_assets then
+          delete_assets(deletable_assets, done)
+        else
+          done()
+        end
+      end
+      if #refs_to_apply > 0 then
+        refs.apply.run(refs_to_apply, { label = "delete: " .. name }, after_refs)
+      else
+        after_refs()
+      end
+    end
+
+    -- `refs.on_delete = "auto"` means "don't ask about the cleanup specifics"
+    -- -- not "don't ask about the delete". So the ordinary confirmation still
+    -- runs, and the cleanup happens only once it came back yes: a cancelled
+    -- delete must not leave blanked-out links or half-deleted assets behind.
+    -- The same switch governs both directions for now -- an asset-specific
+    -- on/off belongs to the config block step 4 adds, not this one.
     if refs.mode("delete") == "auto" then
+      local parts = {}
+      if has_refs then
+        parts[#parts + 1] = string.format("%d ref(s) will be marked REF!", #incoming_refs)
+      end
+      if has_assets then
+        parts[#parts + 1] = string.format("%d asset(s) will be deleted", #deletable_assets)
+      end
       ui_confirm({
         title = " Trash ",
         body = info_body(path),
-        question = string.format("Send to trash? (%d ref(s) will be marked REF!)", #found),
+        question = string.format("Send to trash? (%s)", table.concat(parts, "; ")),
         on_choice = function(yes)
           if yes then
-            -- Rewrite the references first (async for a wide set), then let
-            -- the delete proceed — a cancelled delete must not leave blanked
-            -- links behind, and the file must still exist while refs to it
-            -- are being rewritten.
-            refs.apply.run(found, { label = "delete: " .. name }, function()
+            cleanup(incoming_refs, function()
               cb(true)
             end)
           else
@@ -203,38 +320,93 @@ local function confirm_popup(path, cb)
       return
     end
 
-    confirm_choice(
-      string.format("Trash %s (%d ref(s) found)", name, #found),
-      { "Delete + remove refs", "Inspect first", "Delete, keep refs", "Cancel" },
-      function(choice)
-        if choice == "Delete + remove refs" then
-          refs.apply.run(found, { label = "delete: " .. name }, function()
-            cb(true)
-          end)
-        elseif choice == "Inspect first" then
-          refs_picker.pick(
-            found,
-            { prefer = refs.config().picker, title = "References to " .. name },
-            function(selected)
-              if #selected > 0 then
-                refs.apply.run(selected, { label = "delete: " .. name }, function()
-                  cb(true)
-                end)
-              else
-                cb(true)
-              end
-            end,
-            function()
-              confirm_popup(path, cb)
-            end -- Esc/cancel -> back to this same chooser
-          )
-        elseif choice == "Delete, keep refs" then
+    local title_parts = {}
+    if has_refs then title_parts[#title_parts + 1] = string.format("%d ref(s)", #incoming_refs) end
+    if has_assets then
+      title_parts[#title_parts + 1] = string.format("%d asset(s)", #deletable_assets)
+    end
+    local title = string.format("Trash %s (%s found)", name, table.concat(title_parts, ", "))
+
+    -- Labels adapt to what was actually found, rather than a fixed fifth
+    -- branch, so a ref-only or asset-only delete keeps reading exactly like
+    -- it did before this feature existed.
+    local delete_label = "Delete + remove refs"
+    if has_refs and has_assets then
+      delete_label = "Delete + clean up refs & assets"
+    elseif has_assets then
+      delete_label = "Delete + remove assets"
+    end
+    local keep_label = "Delete, keep refs"
+    if has_refs and has_assets then
+      keep_label = "Delete, keep refs & assets"
+    elseif has_assets then
+      keep_label = "Delete, keep assets"
+    end
+
+    -- "Inspect first" only ever selects among INCOMING refs (unchanged from
+    -- before this feature) — a second, asset-specific picker is a follow-up,
+    -- not part of wiring this into the existing dialog. It's left out of the
+    -- option list entirely for an asset-only delete, where there is nothing
+    -- incoming to inspect.
+    local options = { delete_label }
+    if has_refs then options[#options + 1] = "Inspect first" end
+    options[#options + 1] = keep_label
+    options[#options + 1] = "Cancel"
+
+    confirm_choice(title, options, function(choice)
+      if choice == delete_label then
+        cleanup(incoming_refs, function()
           cb(true)
+        end)
+      elseif choice == "Inspect first" then
+        refs_picker.pick(
+          incoming_refs,
+          {
+            prefer = refs.config().picker,
+            title = "References to " .. name .. (has_assets and string.format(
+              " (%d asset(s) will also be cleaned up)",
+              #deletable_assets
+            ) or ""),
+          },
+          function(selected)
+            -- Selecting zero refs to update still cascades the approved
+            -- assets: "Inspect first" is selectivity over WHICH refs get
+            -- rewritten, not an opt-out of the asset cleanup.
+            cleanup(selected, function()
+              cb(true)
+            end)
+          end,
+          function()
+            confirm_popup(path, cb)
+          end -- Esc/cancel -> back to this same chooser
+        )
+      elseif choice == keep_label then
+        cb(true)
+      else
+        cb(false)
+      end
+    end)
+  end
+
+  refs.for_delete({ path }, nil, function(found)
+    incoming_refs = found
+    pending = pending - 1
+    proceed()
+  end)
+
+  refs.outgoing_assets(path, nil, function(candidates)
+    deletable_assets, kept_assets = {}, {}
+    for _, c in ipairs(candidates) do
+      if c.is_asset then
+        if c.still_referenced then
+          kept_assets[#kept_assets + 1] = c
         else
-          cb(false)
+          deletable_assets[#deletable_assets + 1] = c
         end
       end
-    )
+    end
+    pending = pending - 1
+    proceed()
   end)
 end
 
