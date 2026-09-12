@@ -2008,6 +2008,7 @@ do
   ft.register_adapter(stub)
   ft.setup({
     adapter = "units-stub-asset-delete",
+    refs = { outgoing_assets = { enabled = true, on_delete = "ask" } },
     features = { trash = { enabled = true, confirm = true } },
   })
 
@@ -2108,6 +2109,7 @@ do
   ft.register_adapter(stub)
   ft.setup({
     adapter = "units-stub-asset-survives",
+    refs = { outgoing_assets = { enabled = true, on_delete = "ask" } },
     features = { trash = { enabled = true, confirm = true } },
   })
 
@@ -2121,6 +2123,99 @@ do
   eq("trash+assets survives: victim file removed", vim.fn.filereadable(victim), 0)
   eq(
     "trash+assets survives: the still-referenced asset was NOT deleted",
+    vim.fn.filereadable(asset),
+    1
+  )
+
+  package.loaded["filetree.features.fileops.trash.platform"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.util.confirm"] = nil
+  package.loaded["filetree.features.fileops.trash"] = nil
+end
+
+-- ── trash: cascade-delete-assets — off by default (step 4's config gate) ────
+-- Same shape as "orphaned asset offered and deleted" above, but with NO
+-- `refs.outgoing_assets` config at all: the feature must stay off (plain
+-- y/N popup, asset untouched) until a config explicitly turns it on, even
+-- though the asset itself would otherwise qualify (right root, right
+-- extension, no other referrer).
+do
+  local tmp = (TMP_ROOT .. "/units-trash-asset-gate-off"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/assets", "p")
+  local victim = tmp .. "/victim.md"
+  local asset = tmp .. "/assets/shot.png"
+  vim.fn.writefile({ "{}" }, tmp .. "/.luarc.json") -- project marker: scan root
+  vim.fn.writefile({ "x" }, asset)
+  vim.fn.writefile({ "# Victim", "![shot](assets/shot.png)" }, victim)
+
+  package.loaded["filetree.features.fileops.trash.platform"] = {
+    available = function()
+      return true
+    end,
+    send = function(p, cb)
+      os.remove(p)
+      if cb then cb({ ok = true }) end
+    end,
+  }
+  local choice_fired = false
+  ---@diagnostic disable-next-line: duplicate-set-field
+  package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
+    choice_fired = true
+    on_choice(choices[1])
+  end
+  local confirmed_question
+  ---@diagnostic disable-next-line: duplicate-set-field
+  package.loaded["filetree.util.confirm"] = function(opts)
+    confirmed_question = opts.question
+    opts.on_choice(true)
+  end
+  package.loaded["filetree.features.fileops.trash"] = nil -- reload with stubs
+
+  local cur_node = { path = victim, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-asset-gate-off",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-asset-gate-off",
+    -- No `refs.outgoing_assets` key at all -> DEFAULTS' `enabled = false`.
+    features = { trash = { enabled = true, confirm = true } },
+  })
+
+  ft.feature("trash").delete_current()
+  vim.wait(5000, function()
+    return vim.fn.filereadable(victim) == 0
+  end, 20)
+
+  check(
+    "trash+assets gate off: the plain y/N popup was used, not the chooser",
+    confirmed_question ~= nil
+  )
+  check("trash+assets gate off: the chooser never fired", not choice_fired)
+  eq("trash+assets gate off: victim file removed", vim.fn.filereadable(victim), 0)
+  eq(
+    "trash+assets gate off: the otherwise-qualifying asset was left untouched",
     vim.fn.filereadable(asset),
     1
   )

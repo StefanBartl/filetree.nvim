@@ -106,6 +106,20 @@ function M.active(op, override)
   return M.mode(op, override) ~= "off" and #registry.enabled(_cfg) > 0
 end
 
+---The configured mode for the cascade-delete-assets check, honouring a
+---per-call override. Deliberately its own switch, not folded into `M.mode`:
+---it governs the OPPOSITE direction (what a file about to be deleted points
+---at, not who points at it), so a user may want one without the other —
+---see `FiletreeRefsOutgoingAssetsConfig`.
+---@param override? "ask"|"auto"|"off"
+---@return "ask"|"auto"|"off"
+function M.outgoing_assets_mode(override)
+  if override then return override end
+  local oa = _cfg.outgoing_assets
+  if not oa or not oa.enabled then return "off" end
+  return oa.on_delete or "ask"
+end
+
 -- ── Context ───────────────────────────────────────────────────────────────────
 
 ---@internal
@@ -376,15 +390,27 @@ end
 ---Outgoing links of `path` (the file about to be deleted), classified: which
 ---of them resolve under a configured assets root with an allowed extension
 ---(`is_asset`), and — only for those — whether some other surviving file
----still references the same target (`still_referenced`). Step 2 of the
----cascade-delete-assets concept; not wired into the delete flow yet (that's
----`d`/`trash`'s job, step 3) and takes `roots`/`extensions` per call rather
----than reading a shared config block (step 4).
+---still references the same target (`still_referenced`). Wired into `d`/
+---`trash`'s confirm dialog (step 3).
+---
+---Gated on `refs.outgoing_assets.enabled`/`on_delete` (default: off — see
+---`outgoing_assets_mode`), independently of the main `on_delete` switch
+---above; `opts.mode` overrides it for one call the same way `opts.mode`
+---overrides `M.mode` elsewhere in this module. `opts.roots`/`opts.extensions`
+---override the configured defaults for one call; when omitted, the
+---configured (or built-in default) values are used.
 ---@param path string
----@param opts? { root?: string, roots?: string[], extensions?: string[] }
+---@param opts? { root?: string, roots?: string[], extensions?: string[], mode?: "ask"|"auto"|"off" }
 ---@param cb fun(candidates: FiletreeAssetCandidate[])
 function M.outgoing_assets(path, opts, cb)
-  assets.classify(path, opts, cb)
+  opts = opts or {}
+  if M.outgoing_assets_mode(opts.mode) == "off" then return cb({}) end
+  local oa = _cfg.outgoing_assets or {}
+  assets.classify(path, {
+    root = opts.root,
+    roots = opts.roots or oa.roots,
+    extensions = opts.extensions or oa.extensions,
+  }, cb)
 end
 
 -- ── Undo ──────────────────────────────────────────────────────────────────────
@@ -442,6 +468,16 @@ function M.status()
     local tag = p.name == "plaintext" and "  (experimental)" or ""
     lines[#lines + 1] = string.format("  %s %s%s", on and "●" or "○", p.name, tag)
   end
+
+  local oa = _cfg.outgoing_assets or {}
+  lines[#lines + 1] = string.format(
+    "outgoing_assets: enabled=%s  on_delete=%s  roots=%s  extensions=%s",
+    tostring(oa.enabled == true),
+    oa.on_delete or "ask",
+    table.concat(oa.roots or {}, ","),
+    table.concat(oa.extensions or {}, ",")
+  )
+
   lines[#lines + 1] = apply.can_undo() and ("undo available: " .. (apply.last_label() or "?"))
     or "undo available: —"
   return lines

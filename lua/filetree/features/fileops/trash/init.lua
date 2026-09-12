@@ -293,9 +293,18 @@ local function confirm_popup(path, cb)
     -- -- not "don't ask about the delete". So the ordinary confirmation still
     -- runs, and the cleanup happens only once it came back yes: a cancelled
     -- delete must not leave blanked-out links or half-deleted assets behind.
-    -- The same switch governs both directions for now -- an asset-specific
-    -- on/off belongs to the config block step 4 adds, not this one.
-    if refs.mode("delete") == "auto" then
+    --
+    -- refs.on_delete and refs.outgoing_assets.on_delete are independent
+    -- switches (step 4's config block) -- a direction that found nothing
+    -- (has_refs/has_assets false) never gets a say, and between the two that
+    -- did, "ask" from either wins over "auto" from the other: auto-applying
+    -- a change the user asked to be asked about is the wrong default to err
+    -- toward. A dialog that independently offers/withholds each direction
+    -- (rather than "ask" promoting the WHOLE thing to asking) would need two
+    -- separate toggles, not one chooser -- a real follow-up, not this step.
+    local ref_wants_ask = has_refs and refs.mode("delete") == "ask"
+    local asset_wants_ask = has_assets and refs.outgoing_assets_mode() == "ask"
+    if not ref_wants_ask and not asset_wants_ask then
       local parts = {}
       if has_refs then
         parts[#parts + 1] = string.format("%d ref(s) will be marked REF!", #incoming_refs)

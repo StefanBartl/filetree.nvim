@@ -119,20 +119,35 @@
 ---@class FiletreeRefsExperimentalConfig
 ---@field plaintext? FiletreeRefsPlaintextConfig
 
+---Cascade-delete-assets (`docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md`): when
+---a file is deleted, detect links it holds to asset files under a configured
+---root and offer to delete those too, once nothing else still references
+---them — the mirror of `on_delete`/`for_delete` above (which handle the
+---OPPOSITE direction), hence its own on/off and ask/auto switch. Read by
+---`filetree.refs.outgoing_assets` (the gate) and `filetree.refs.assets`
+---(the `roots`/`extensions` classifier inputs, when a call doesn't override
+---them itself).
+---@class FiletreeRefsOutgoingAssetsConfig
+---@field enabled?    boolean            Turn the feature on (default false — opt-in until proven).
+---@field on_delete?  "ask"|"auto"|"off" Independent of the main `on_delete` above. "off" also short-circuits `enabled`.
+---@field roots?      string[]           Folder name(s) a link must resolve under, tried relative to the linking file's own directory first, then the project root (default `{"assets"}`).
+---@field extensions? string[]           Allowlist of extensions that qualify as an asset (never a denylist).
+
 ---@class FiletreeRefsConfig
----@field enabled?    boolean
----@field providers?  FiletreeRefsProvidersConfig
----@field on_rename?  "ask"|"auto"|"off"
----@field on_move?    "ask"|"auto"|"off"
----@field on_delete?  "ask"|"auto"|"off"
----@field copy?       boolean   Scan for refs on a *copy* too (default false: a copy breaks nothing).
----@field picker?     "auto"|"telescope"|"fzf-lua"|"quickfix"
----@field prefer_lsp? boolean   Skip textual code providers when an LSP client applied a workspace edit.
----@field wiki_links? boolean   Also rewrite `[[wiki]]`-style markdown links (default false).
----@field experimental? FiletreeRefsExperimentalConfig  In-development reference features, each opt-in.
----@field scan?       FiletreeRefsScanConfig
----@field undo?       boolean   Keep an undo token per apply (default true).
----@field undo_depth  integer?  How many applies stay undoable (default 10). The stack holds only the replaced line content, so raising this is cheap.
+---@field enabled?         boolean
+---@field providers?       FiletreeRefsProvidersConfig
+---@field on_rename?       "ask"|"auto"|"off"
+---@field on_move?         "ask"|"auto"|"off"
+---@field on_delete?       "ask"|"auto"|"off"
+---@field copy?            boolean   Scan for refs on a *copy* too (default false: a copy breaks nothing).
+---@field picker?          "auto"|"telescope"|"fzf-lua"|"quickfix"
+---@field prefer_lsp?      boolean   Skip textual code providers when an LSP client applied a workspace edit.
+---@field wiki_links?      boolean   Also rewrite `[[wiki]]`-style markdown links (default false).
+---@field outgoing_assets? FiletreeRefsOutgoingAssetsConfig  Cascade-delete-assets, opt-in.
+---@field experimental?    FiletreeRefsExperimentalConfig  In-development reference features, each opt-in.
+---@field scan?            FiletreeRefsScanConfig
+---@field undo?            boolean   Keep an undo token per apply (default true).
+---@field undo_depth       integer?  How many applies stay undoable (default 10). The stack holds only the replaced line content, so raising this is cheap.
 
 ---One entry of the undo stack: the lines an apply replaced, per file.
 ---@class FiletreeRefsUndoEntry

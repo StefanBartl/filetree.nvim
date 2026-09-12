@@ -45,6 +45,39 @@ return {
   -- scanned when asked for.
   wiki_links = false,
 
+  -- Cascade-delete-assets (docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md): when
+  -- a file is deleted, detect links it holds to asset files (screenshots,
+  -- etc.) under a configured root and offer to delete those too, once
+  -- nothing else still references them. The mirror of the on_delete/for_delete
+  -- pipeline above (which handles the OPPOSITE direction: who points AT the
+  -- file being deleted), so it gets its own on/off and ask/auto switch rather
+  -- than sharing `on_delete` — a user may want one direction without the
+  -- other. Opt-in (`enabled = false`) until this has real mileage; wired into
+  -- `d`/trash's confirm dialog regardless of this flag, but a no-op while off.
+  outgoing_assets = {
+    enabled = false,
+    on_delete = "ask", -- "ask" | "auto" | "off" — "off" here also short-circuits `enabled`
+
+    -- Tried first relative to the linking file's own directory (the
+    -- per-doc-folder convention `images.nvim`'s `paste.dir` already uses),
+    -- then relative to the project root. A link outside every root is
+    -- disqualified regardless of extension.
+    roots = { "assets" },
+
+    -- Allowlist, never a denylist: an unrecognized extension (a linked
+    -- source/text file) must never be offered by accident. Deliberately
+    -- excludes `pdf` from the default — a linked PDF is often a real
+    -- document, not a disposable screenshot; add it explicitly if wanted.
+    extensions = { "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "mp4", "mov" },
+
+    -- No separate `providers` toggle here: the top-level `providers` table
+    -- above already governs whether markdown takes part at all (it gates
+    -- both the incoming-refs and the outgoing-links path through the same
+    -- registry), and it is the only provider that implements outgoing links
+    -- today (see `filetree.refs.outgoing`). A second, independent switch
+    -- would have nothing to switch yet.
+  },
+
   -- In-development reference features. Each one is opt-in and its config
   -- shape may still change between releases — kept under `experimental` so
   -- that is unambiguous. Only scalars live here on purpose: the list-shaped

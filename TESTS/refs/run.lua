@@ -782,7 +782,10 @@ local function run_outgoing_assets_check()
 
   local doc = work .. "/doc.md"
   local found, done = nil, false
-  refs.outgoing_assets(doc, { root = work }, function(candidates)
+  -- `mode = "auto"` overrides the (now off-by-default) enabled gate for
+  -- this call -- this suite tests the classifier itself, not the gate
+  -- (that's `run_outgoing_assets_gate_check` below).
+  refs.outgoing_assets(doc, { root = work, mode = "auto" }, function(candidates)
     found = candidates
     done = true
   end)
@@ -844,6 +847,63 @@ local function run_outgoing_assets_check()
   )
 end
 
+-- ── refs.outgoing_assets(): the config gate (step 4) ─────────────────────────
+-- `outgoing_assets.enabled` defaults to false -- the classifier must not run
+-- at all (not even the outgoing scan underneath it) until a config turns it
+-- on, and must run once one does, with no per-call override needed.
+local function run_outgoing_assets_gate_check()
+  print("\n== refs.outgoing_assets (config gate) ==")
+
+  local work = scratch_root .. "/outgoing_assets_gate"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/assets", "p")
+  vim.fn.writefile({ "x" }, work .. "/assets/shot.png")
+  vim.fn.writefile({ "![shot](assets/shot.png)" }, work .. "/doc.md")
+
+  -- Default config (BASE_REFS_CFG has no outgoing_assets key -> DEFAULTS'
+  -- `enabled = false` applies): the gate must return an empty list without
+  -- being asked to via `mode`.
+  refs.setup(vim.deepcopy(BASE_REFS_CFG))
+  local off_result, off_done = nil, false
+  refs.outgoing_assets(work .. "/doc.md", { root = work }, function(candidates)
+    off_result = candidates
+    off_done = true
+  end)
+  check(
+    "outgoing_assets gate: off by default, resolves synchronously to empty",
+    off_done and off_result and #off_result == 0
+  )
+
+  -- Turning it on via refs.setup (not a per-call override) must produce the
+  -- same result the "auto" override produced in run_outgoing_assets_check.
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_assets = { enabled = true, on_delete = "auto" }
+  refs.setup(cfg)
+  local on_result, on_done = nil, false
+  refs.outgoing_assets(work .. "/doc.md", { root = work }, function(candidates)
+    on_result = candidates
+    on_done = true
+  end)
+  vim.wait(2000, function()
+    return on_done
+  end, 10)
+  check(
+    "outgoing_assets gate: enabled via config, no per-call override needed",
+    on_done and on_result and #on_result == 1 and on_result[1].is_asset == true,
+    on_result and vim.inspect(on_result) or "nil"
+  )
+
+  -- `:Filetree refs status` (refs.status()) must report the block.
+  local status = table.concat(refs.status(), "\n")
+  check(
+    "outgoing_assets gate: refs.status() reports the block",
+    status:find("outgoing_assets: enabled=true", 1, true) ~= nil,
+    status
+  )
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -854,6 +914,7 @@ run_move_feature_check()
 run_plaintext_comment_check()
 run_outgoing_scan_check()
 run_outgoing_assets_check()
+run_outgoing_assets_gate_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))
