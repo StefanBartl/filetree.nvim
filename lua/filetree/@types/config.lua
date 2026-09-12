@@ -317,6 +317,7 @@
 
 ---@class FiletreeTrashConfig
 ---@field enabled?             boolean
+---@field mode?                "trash"|"permanent"  "trash" (OS trash/recycle bin, undoable via `U`/history) or "permanent" (fs delete, no undo). Default: "trash".
 ---@field confirm?             boolean  Ask before trashing (default true, unlike paste/rename_batch; see top-level `confirmations`).
 ---@field use_safety?          boolean  Create a backup before trashing (default false).
 ---@field dry_run?             boolean  Log without actually trashing (default false).

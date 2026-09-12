@@ -1445,6 +1445,77 @@ do
   package.loaded["filetree.features.fileops.trash"] = nil
 end
 
+-- ── trash: mode = "permanent" skips the OS trash and undo history ───────────
+-- Opt-in permanent delete must never touch the trash backend at all (the
+-- platform stub errors if called) and must not add a trash-history entry —
+-- there is nothing to restore, so `U`/history must not pretend otherwise.
+do
+  local tmp = (TMP_ROOT .. "/units-trash-permanent"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local file = tmp .. "/doomed.txt"
+  vim.fn.writefile({ "x" }, file)
+
+  -- If permanent mode ever fell through to the OS trash, this stub's error
+  -- would fail the test loudly instead of the assertion below staying silent.
+  package.loaded["filetree.features.fileops.trash.platform"] = {
+    available = function()
+      return true
+    end,
+    send = function()
+      error('mode = "permanent" must never call the trash backend')
+    end,
+  }
+  package.loaded["filetree.features.fileops.trash"] = nil -- reload with the stub
+
+  local cur_node = { path = file, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-permanent",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-permanent",
+    features = { trash = { enabled = true, confirm = false, mode = "permanent" } },
+  })
+
+  local history_before = #require("filetree.features.fileops.trash.undo").history()
+
+  ft.feature("trash").delete_current()
+  vim.wait(2000, function()
+    return vim.fn.filereadable(file) == 0
+  end, 10)
+
+  eq("trash mode=permanent: file actually gone from disk", vim.fn.filereadable(file), 0)
+  eq(
+    "trash mode=permanent: no trash-history entry recorded",
+    #require("filetree.features.fileops.trash.undo").history(),
+    history_before
+  )
+
+  package.loaded["filetree.features.fileops.trash.platform"] = nil
+  package.loaded["filetree.features.fileops.trash"] = nil
+end
+
 -- ── trash: multi-mark batch chooser deletes all + clears marks ──────────────
 -- With >1 item, delete_current() shows ONE chooser (hover_select) instead of
 -- prompting per file. Stub the chooser to pick "Delete all at once" and stub

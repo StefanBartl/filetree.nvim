@@ -147,15 +147,25 @@ tpl.move("go_test.go", -1)   -- same as pressing <M-k> on it
 
 ## Trash
 
-Cross-platform trash (not permanent delete) with undo — `d` to trash,
-`U` to undo, `<leader>th` for trash history. How far back that reaches is
-`features.trash.max_history` (default 50, `0` = unlimited): a preference,
-not a limit protecting anything, since the history is a small JSON file. Marking multiple nodes and
+Cross-platform trash with undo — `d` to trash, `U` to undo, `<leader>th`
+for trash history. How far back that reaches is `features.trash.max_history`
+(default 50, `0` = unlimited): a preference, not a limit protecting
+anything, since the history is a small JSON file. Marking multiple nodes and
 trashing them opens one batch confirmation instead of one prompt per
 file, and force-closes any open buffers backed by the deleted paths so
 they don't linger as edits-to-nowhere. Same optional progress indicator
 as Copy / Move above, for both the "delete all at once" and "confirm
 each individually" batch paths.
+
+`features.trash.mode` is `"trash"` by default — Windows Recycle Bin,
+macOS Finder/Trash, or `gio trash`/`trash-put` on Linux (XDG-trash
+fallback when neither is installed), all via `lib.nvim.fs.trash`. Set it
+to `"permanent"` to skip the OS trash and delete for good instead — no
+shell, same libuv/Vim-builtin primitive the "Overwrite" paste resolution
+uses. Opt-in on purpose: a permanent delete has no `U`/history entry to
+fall back on, so the confirm dialog's wording changes to make that
+explicit ("Permanently delete (cannot be undone)?") rather than sharing
+the "Send to trash?" phrasing.
 
 When something links to the file being deleted, the plain yes/no becomes a
 chooser — **Delete + remove refs** (blanks the dangling links to `REF!`),
@@ -164,6 +174,7 @@ See [References](#references).
 
 - **Module:** `lua/filetree/features/fileops/trash/`
 - **Keymaps:** `d`, `U`, `<leader>th`
+- **Config:** `features.trash.mode` (`"trash"` | `"permanent"`, default `"trash"`)
 
 ## Dry run for copy/move and batch rename (2026-08-24)
 
