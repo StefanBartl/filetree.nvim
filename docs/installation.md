@@ -2,12 +2,30 @@
 
 ## Requirements
 
-- Neovim >= 0.8
-- [lib.nvim](https://github.com/StefanBartl/lib.nvim) — shared helper library (declared
-  dependency; filetree degrades gracefully with local fallbacks if it is missing)
-- **One** of:
-  - [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim)
-  - [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua)
+| | |
+| --- | --- |
+| Neovim | **0.10+** — `vim.system()` and `vim.uv` are used unguarded, and lib.nvim itself requires 0.10 |
+| [lib.nvim](https://github.com/StefanBartl/lib.nvim) | required — the `:Filetree`/`:Ft` command layer is built on `usercmd.composer`. Most other uses (notify, `find_root`) have local fallbacks, but the commands do not register without it |
+| One of [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) or [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua) | required — netrw, oil.nvim and mini.files are supported as additional adapters, not as the primary one |
+
+Optional, each detected at runtime and degrading to nothing when absent:
+
+| | |
+| --- | --- |
+| `trash-put` / `gio` | The trash feature; without one, delete is a real delete |
+| `rg` (ripgrep) | Grep-in-dir and the reference scan |
+| [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | `.pdf` nodes rendered into a buffer |
+| [which-key.nvim](https://github.com/folke/which-key.nvim) | Labels for the keymap set |
+| [nvzone/menu](https://github.com/nvzone/menu) | Renders the context menu if installed; `lib.nvim.ui.kit.menu` draws it otherwise, so right-click works either way — see [Integrations](integrations.md) |
+
+The CLI tools above are declared in [install.json](install.json) and read by
+lib.nvim's
+[deps module](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/deps/README.md).
+A popup explains what is missing the first time `setup()` runs after
+installing; `:Lib deps show filetree.nvim` repeats it any time, and it is
+folded into `:checkhealth filetree`. Turn the popup off in this plugin's own
+spec with `deps_popup = false`, or globally with
+`vim.g.lib_nvim_deps_disable_first_run = true`.
 
 ## Installation methods
 
