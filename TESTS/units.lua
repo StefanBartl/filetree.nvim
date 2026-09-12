@@ -1947,6 +1947,190 @@ do
   package.loaded["filetree.features.fileops.trash"] = nil
 end
 
+-- ── trash: cascade-delete-assets — orphaned asset offered and deleted ───────
+-- Step 3 of the cascade-delete-assets concept
+-- (docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md): a markdown file that links
+-- to an image under assets/ which nothing else references has no INCOMING
+-- refs of its own, so this must still trigger the chooser (asset-only, no
+-- "Inspect first" branch) and, on confirm, cascade-delete the asset too.
+do
+  local tmp = (TMP_ROOT .. "/units-trash-asset-delete"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/assets", "p")
+  local victim = tmp .. "/victim.md"
+  local asset = tmp .. "/assets/shot.png"
+  vim.fn.writefile({ "{}" }, tmp .. "/.luarc.json") -- project marker: scan root
+  vim.fn.writefile({ "x" }, asset)
+  vim.fn.writefile({ "# Victim", "![shot](assets/shot.png)" }, victim)
+
+  package.loaded["filetree.features.fileops.trash.platform"] = {
+    available = function()
+      return true
+    end,
+    send = function(p, cb)
+      os.remove(p)
+      if cb then cb({ ok = true }) end
+    end,
+  }
+  local select_prompt, select_choices = nil, nil
+  ---@diagnostic disable-next-line: duplicate-set-field
+  package.loaded["filetree.util.confirm_choice"] = function(question, choices, on_choice)
+    select_prompt = question
+    select_choices = choices
+    on_choice(choices[1]) -- "Delete + remove assets"
+  end
+  package.loaded["filetree.features.fileops.trash"] = nil -- reload with stubs
+
+  local cur_node = { path = victim, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-asset-delete",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-asset-delete",
+    features = { trash = { enabled = true, confirm = true } },
+  })
+
+  ft.feature("trash").delete_current()
+  vim.wait(5000, function()
+    return vim.fn.filereadable(victim) == 0
+  end, 20)
+
+  check(
+    "trash+assets: an orphaned asset triggers the chooser, no incoming refs needed",
+    select_prompt ~= nil and select_prompt:find("asset", 1, true) ~= nil,
+    tostring(select_prompt)
+  )
+  check(
+    "trash+assets: no 'Inspect first' offered when there are no incoming refs",
+    select_choices ~= nil
+      and (function()
+        for _, c in ipairs(select_choices) do
+          if c == "Inspect first" then return false end
+        end
+        return true
+      end)()
+  )
+  eq("trash+assets: victim file removed", vim.fn.filereadable(victim), 0)
+  eq("trash+assets: the orphaned asset was cascade-deleted too", vim.fn.filereadable(asset), 0)
+
+  package.loaded["filetree.features.fileops.trash.platform"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.features.fileops.trash"] = nil
+end
+
+-- ── trash: cascade-delete-assets — asset still referenced elsewhere survives ─
+-- Same shape, but a SECOND markdown file also links to the same asset: the
+-- classifier's incoming-safety recheck must exclude it from the delete
+-- offer, and with no incoming refs to the victim either, the plain y/N popup
+-- is used (not the chooser) even though an asset link exists on the page.
+do
+  local tmp = (TMP_ROOT .. "/units-trash-asset-survives"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/assets", "p")
+  local victim = tmp .. "/victim.md"
+  local other = tmp .. "/other.md"
+  local asset = tmp .. "/assets/shared.png"
+  vim.fn.writefile({ "{}" }, tmp .. "/.luarc.json") -- project marker: scan root
+  vim.fn.writefile({ "x" }, asset)
+  vim.fn.writefile({ "# Victim", "![shared](assets/shared.png)" }, victim)
+  vim.fn.writefile({ "Also shared: ![shared](assets/shared.png)" }, other)
+
+  package.loaded["filetree.features.fileops.trash.platform"] = {
+    available = function()
+      return true
+    end,
+    send = function(p, cb)
+      os.remove(p)
+      if cb then cb({ ok = true }) end
+    end,
+  }
+  -- The plain y/N popup is expected here, not the chooser -- confirm_choice
+  -- must never fire when the only asset found is one that survives.
+  local choice_fired = false
+  ---@diagnostic disable-next-line: duplicate-set-field
+  package.loaded["filetree.util.confirm_choice"] = function(_question, choices, on_choice)
+    choice_fired = true
+    on_choice(choices[1])
+  end
+  local confirmed_question
+  ---@diagnostic disable-next-line: duplicate-set-field
+  package.loaded["filetree.util.confirm"] = function(opts)
+    confirmed_question = opts.question
+    opts.on_choice(true)
+  end
+  package.loaded["filetree.features.fileops.trash"] = nil -- reload with stubs
+
+  local cur_node = { path = victim, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-asset-survives",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-asset-survives",
+    features = { trash = { enabled = true, confirm = true } },
+  })
+
+  ft.feature("trash").delete_current()
+  vim.wait(5000, function()
+    return vim.fn.filereadable(victim) == 0
+  end, 20)
+
+  check("trash+assets survives: the plain y/N popup was used", confirmed_question ~= nil)
+  check("trash+assets survives: the chooser never fired", not choice_fired)
+  eq("trash+assets survives: victim file removed", vim.fn.filereadable(victim), 0)
+  eq(
+    "trash+assets survives: the still-referenced asset was NOT deleted",
+    vim.fn.filereadable(asset),
+    1
+  )
+
+  package.loaded["filetree.features.fileops.trash.platform"] = nil
+  package.loaded["filetree.util.confirm_choice"] = nil
+  package.loaded["filetree.util.confirm"] = nil
+  package.loaded["filetree.features.fileops.trash"] = nil
+end
+
 -- ── smart_rename: reference engine -> update refs to the new path ───────────
 -- Same chooser pattern as trash, but post-rename (no "cancel" -- the rename
 -- already happened) and the "update all" path rewrites to the file's new name
