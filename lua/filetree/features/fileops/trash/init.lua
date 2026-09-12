@@ -164,19 +164,6 @@ local function info_body(path)
 end
 
 ---@internal
----Basenames of `assets`, for a notify line — full paths would be noise once
----there is more than one.
----@param assets FiletreeAssetCandidate[]
----@return string[]
-local function asset_basenames(assets)
-  local out = {}
-  for _, c in ipairs(assets) do
-    out[#out + 1] = vim.fn.fnamemodify(c.resolved, ":t")
-  end
-  return out
-end
-
----@internal
 ---Delete every approved asset through the same trash/undo path as the
 ---primary file (`do_trash`, defined above) — not a plain `fs_unlink` — so
 ---`:Filetree trash undo`/`U` can bring an asset back the same way it brings
@@ -185,21 +172,30 @@ end
 ---undoing the whole batch as one unit is a follow-up, not built here).
 ---Sequential like `run_all`, for the same reason: parallel trashing would
 ---race the watcher-release dance `do_trash` does per path.
+---A failed asset trash does not stop the rest of the batch (the other
+---candidates are independent), but it must not be silently swallowed either
+---— `done` still fires so the caller isn't left hanging, and the failure is
+---surfaced via a single summary notify.
 ---@param candidates FiletreeAssetCandidate[]
 ---@param done fun()
 local function delete_assets(candidates, done)
-  local i = 0
+  local i, failed = 0, 0
   local function step()
     i = i + 1
-    if i > #candidates then return done() end
-    do_trash(candidates[i].resolved, function()
+    if i > #candidates then
+      if failed > 0 then notify.warn(string.format("%d asset(s) could not be trashed", failed)) end
+      return done()
+    end
+    do_trash(candidates[i].resolved, function(ok)
+      if not ok then failed = failed + 1 end
       step()
     end)
   end
   step()
 end
 
----Show the nice info+yes/no popup for a single path. When the file has
+---Show the nice info+yes/no popup for a single path, THEN (once the user
+---agrees) actually trash it and run any approved cleanup. When the file has
 ---incoming references, outgoing links to now-orphaned assets, or both, a
 ---chooser replaces the plain yes/no — one dialog for both directions rather
 ---than two separate popups (Cascade_Delete_Assets.md §4).
@@ -210,7 +206,9 @@ end
 ---(incoming refs, outgoing assets) run concurrently with EACH OTHER, since
 ---neither depends on the other's result.
 ---@param path string
----@param cb fun(yes: boolean)
+---@param cb fun(ok: boolean)  Whether `path` actually ended up trashed
+---                            (declining, or the trash attempt itself
+---                            failing, both report false).
 local function confirm_popup(path, cb)
   local name = vim.fn.fnamemodify(path, ":t")
   local pending = 2
@@ -231,7 +229,7 @@ local function confirm_popup(path, cb)
         string.format(
           "%d asset(s) still referenced elsewhere, left alone: %s",
           #kept_assets,
-          table.concat(asset_basenames(kept_assets), ", ")
+          table.concat(refs.assets.basenames(kept_assets), ", ")
         )
       )
     end
@@ -244,7 +242,13 @@ local function confirm_popup(path, cb)
         title = " Trash ",
         body = info_body(path),
         question = "Send to trash?",
-        on_choice = cb,
+        on_choice = function(yes)
+          if yes then
+            do_trash(path, cb)
+          else
+            cb(false)
+          end
+        end,
       })
       return
     end
@@ -261,32 +265,41 @@ local function confirm_popup(path, cb)
         string.format(
           "%d orphaned asset(s) found: %s",
           #deletable_assets,
-          table.concat(asset_basenames(deletable_assets), ", ")
+          table.concat(refs.assets.basenames(deletable_assets), ", ")
         )
       )
     end
 
     ---@internal
-    ---Rewrite `refs_to_apply` (if any), then delete every approved asset (if
-    ---any), then hand back. Both happen before `cb(true)`, same reasoning as
-    ---the ref-only path this replaces: a cancelled delete must never leave a
-    ---half-finished cleanup behind, and the file must still exist while refs
-    ---to it are being rewritten.
+    ---Trash `path` itself FIRST, and only once that actually succeeded,
+    ---rewrite `refs_to_apply` (if any) and delete every approved asset (if
+    ---any). Primary-first, on purpose: an asset is only truly orphaned, and
+    ---an incoming ref only truly dangling, once the file that made it so is
+    ---actually gone — not merely approved for deletion. Doing cleanup before
+    ---the primary trash was confirmed to have succeeded meant a failed trash
+    ---(permission error, external process failure) could still leave assets
+    ---deleted and refs rewritten out from under a file that was still sitting
+    ---there, unchanged, pointing at them.
     ---@param refs_to_apply FiletreeRef[]
-    ---@param done fun()
-    local function cleanup(refs_to_apply, done)
-      local function after_refs()
-        if has_assets then
-          delete_assets(deletable_assets, done)
-        else
-          done()
+    ---@param done fun(ok: boolean)
+    local function trash_then_cleanup(refs_to_apply, done)
+      do_trash(path, function(ok)
+        if not ok then return done(false) end -- do_trash already notified the error
+        local function after_refs()
+          if has_assets then
+            delete_assets(deletable_assets, function()
+              done(true)
+            end)
+          else
+            done(true)
+          end
         end
-      end
-      if #refs_to_apply > 0 then
-        refs.apply.run(refs_to_apply, { label = "delete: " .. name }, after_refs)
-      else
-        after_refs()
-      end
+        if #refs_to_apply > 0 then
+          refs.apply.run(refs_to_apply, { label = "delete: " .. name }, after_refs)
+        else
+          after_refs()
+        end
+      end)
     end
 
     -- `refs.on_delete = "auto"` means "don't ask about the cleanup specifics"
@@ -318,9 +331,7 @@ local function confirm_popup(path, cb)
         question = string.format("Send to trash? (%s)", table.concat(parts, "; ")),
         on_choice = function(yes)
           if yes then
-            cleanup(incoming_refs, function()
-              cb(true)
-            end)
+            trash_then_cleanup(incoming_refs, cb)
           else
             cb(false)
           end
@@ -364,9 +375,7 @@ local function confirm_popup(path, cb)
 
     confirm_choice(title, options, function(choice)
       if choice == delete_label then
-        cleanup(incoming_refs, function()
-          cb(true)
-        end)
+        trash_then_cleanup(incoming_refs, cb)
       elseif choice == "Inspect first" then
         refs_picker.pick(
           incoming_refs,
@@ -381,16 +390,14 @@ local function confirm_popup(path, cb)
             -- Selecting zero refs to update still cascades the approved
             -- assets: "Inspect first" is selectivity over WHICH refs get
             -- rewritten, not an opt-out of the asset cleanup.
-            cleanup(selected, function()
-              cb(true)
-            end)
+            trash_then_cleanup(selected, cb)
           end,
           function()
             confirm_popup(path, cb)
           end -- Esc/cancel -> back to this same chooser
         )
       elseif choice == keep_label then
-        cb(true)
+        do_trash(path, cb)
       else
         cb(false)
       end
@@ -404,16 +411,7 @@ local function confirm_popup(path, cb)
   end)
 
   refs.outgoing_assets(path, nil, function(candidates)
-    deletable_assets, kept_assets = {}, {}
-    for _, c in ipairs(candidates) do
-      if c.is_asset then
-        if c.still_referenced then
-          kept_assets[#kept_assets + 1] = c
-        else
-          deletable_assets[#deletable_assets + 1] = c
-        end
-      end
-    end
+    deletable_assets, kept_assets = refs.assets.split(candidates)
     pending = pending - 1
     proceed()
   end)
@@ -482,16 +480,17 @@ local function run_individual(paths)
     if prog then
       prog:update({ text = vim.fn.fnamemodify(paths[i], ":t"), current = i - 1, total = #paths })
     end
-    confirm_popup(paths[i], function(yes)
-      if not yes then
+    -- confirm_popup now owns the actual trash attempt (see its own doc
+    -- comment) — a `false` here covers both "declined" and "trash failed"
+    -- (do_trash already showed a specific error notify for the latter), so
+    -- both fold into the same `cancelled`/"skipped" tally.
+    confirm_popup(paths[i], function(ok)
+      if ok then
+        ok_count = ok_count + 1
+      else
         cancelled = cancelled + 1
-        step()
-        return
       end
-      do_trash(paths[i], function(ok)
-        if ok then ok_count = ok_count + 1 end
-        step()
-      end)
+      step()
     end)
   end
   step()
@@ -562,10 +561,12 @@ function M.delete_current()
     return
   end
 
-  -- Single item → the nice info+yes/no popup.
+  -- Single item → the nice info+yes/no popup. confirm_popup performs the
+  -- actual trash itself (see its own doc comment), so this only reports the
+  -- outcome — it does not hand off to run_all.
   if #paths == 1 then
-    confirm_popup(paths[1], function(yes)
-      if yes then run_all(paths) end
+    confirm_popup(paths[1], function(ok)
+      if ok then finalize(1, 1, 0) end
     end)
     return
   end

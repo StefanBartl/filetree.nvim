@@ -75,29 +75,52 @@ end
 
 ---@internal
 ---Every OTHER file (not `exclude_file`, the one being deleted) that
----currently references `asset_path` — the incoming-safety recheck. Reuses
----`filetree.refs`'s own scan primitive directly rather than `for_delete`:
----this asks "is it referenced at all", a broader question than
----`for_delete`'s "which refs need a dangling-link marker" (which only
----providers with `delete_target` — markdown alone — take part in).
----@param asset_path string
+---currently references any of `asset_paths` — the incoming-safety recheck,
+---batched into ONE scan for the whole set of candidates rather than one
+---full-project scan per asset (a file linking N images used to fire N
+---concurrent scans on every delete). Reuses `filetree.refs`'s own scan
+---primitive directly rather than `for_delete`: this asks "is it referenced
+---at all", a broader question than `for_delete`'s "which refs need a
+---dangling-link marker" (which only providers with `delete_target` —
+---markdown alone — take part in).
+---@param asset_paths string[]
 ---@param exclude_file string
 ---@param root string  Same search root `classify` already resolved for the
 ---                     root-containment check — passed through explicitly so
 ---                     this scan doesn't re-resolve it (and risk resolving to
----                     something else) from the asset's own path.
----@param cb fun(referenced_by: string[])
-local function still_referenced(asset_path, exclude_file, root, cb)
+---                     something else) from any one asset's own path.
+---@param cb fun(referenced_by: table<string, string[]>)  asset path -> referencing files
+local function still_referenced_batch(asset_paths, exclude_file, root, cb)
+  if #asset_paths == 0 then return cb({}) end
+
+  local by_asset = {}
+  for _, p in ipairs(asset_paths) do
+    by_asset[p] = {}
+  end
+
   local refs = require("filetree.refs")
-  refs.scan({ asset_path }, { op = "delete", root = root }, function(result)
-    local seen, by = {}, {}
+  -- `mode = "auto"` forces this scan to run regardless of the main
+  -- `refs.enabled`/`refs.on_delete` switch: this is `outgoing_assets`' own
+  -- safety recheck, gated by the caller already having established that
+  -- `outgoing_assets` itself is active (see `outgoing_assets_mode`) — it must
+  -- not silently go blind just because the UNRELATED incoming-refs direction
+  -- is configured "off".
+  refs.scan(asset_paths, { op = "delete", root = root, mode = "auto" }, function(result)
+    -- Each `FiletreeRef.source` is the exact asset path its provider plan
+    -- was built for (see `providers/markdown.lua`'s `plan`), so one merged
+    -- scan result still resolves back to the specific asset it's about.
+    local seen = {}
     for _, r in ipairs(result.refs) do
-      if not pathutil.same(r.file, exclude_file) and not seen[r.file] then
-        seen[r.file] = true
-        by[#by + 1] = r.file
+      local bucket = r.source and by_asset[r.source]
+      if bucket and not pathutil.same(r.file, exclude_file) then
+        local key = r.source .. "\0" .. r.file
+        if not seen[key] then
+          seen[key] = true
+          bucket[#bucket + 1] = r.file
+        end
       end
     end
-    cb(by)
+    cb(by_asset)
   end)
 end
 
@@ -121,12 +144,7 @@ function M.classify(path, opts, cb)
   outgoing.scan(path, opts, function(links)
     local root = opts.root or outgoing.resolve_root(path)
     local candidates = {}
-    local pending = 0
-    local scan_done = false
-
-    local function finish_if_done()
-      if scan_done and pending == 0 then cb(candidates) end
-    end
+    local asset_candidates = {}
 
     for _, link in ipairs(links) do
       if link.exists then
@@ -140,21 +158,59 @@ function M.classify(path, opts, cb)
         candidate.referenced_by = {}
         candidates[#candidates + 1] = candidate
 
-        if is_asset then
-          pending = pending + 1
-          still_referenced(candidate.resolved, path, root, function(by)
-            candidate.still_referenced = #by > 0
-            candidate.referenced_by = by
-            pending = pending - 1
-            finish_if_done()
-          end)
-        end
+        if is_asset then asset_candidates[#asset_candidates + 1] = candidate end
       end
     end
 
-    scan_done = true
-    finish_if_done()
+    if #asset_candidates == 0 then return cb(candidates) end
+
+    local asset_paths = {}
+    for _, c in ipairs(asset_candidates) do
+      asset_paths[#asset_paths + 1] = c.resolved
+    end
+
+    still_referenced_batch(asset_paths, path, root, function(by_asset)
+      for _, c in ipairs(asset_candidates) do
+        local by = by_asset[c.resolved] or {}
+        c.still_referenced = #by > 0
+        c.referenced_by = by
+      end
+      cb(candidates)
+    end)
   end)
+end
+
+---Split classified candidates into what's actually safe to delete vs. what
+---is being kept back because some OTHER surviving file still references it.
+---Every consumer of `refs.outgoing_assets` (filetree's own trash dialog,
+---fileops.nvim's soft integration) needs exactly this bucketing, so it lives
+---here once rather than being re-derived at each call site.
+---@param candidates FiletreeAssetCandidate[]
+---@return FiletreeAssetCandidate[] deletable, FiletreeAssetCandidate[] kept
+function M.split(candidates)
+  local deletable, kept = {}, {}
+  for _, c in ipairs(candidates) do
+    if c.is_asset then
+      if c.still_referenced then
+        kept[#kept + 1] = c
+      else
+        deletable[#deletable + 1] = c
+      end
+    end
+  end
+  return deletable, kept
+end
+
+---Basenames of `assets`, for a notify line — full paths would be noise once
+---there is more than one.
+---@param assets FiletreeAssetCandidate[]
+---@return string[]
+function M.basenames(assets)
+  local out = {}
+  for _, c in ipairs(assets) do
+    out[#out + 1] = vim.fn.fnamemodify(c.resolved, ":t")
+  end
+  return out
 end
 
 return M

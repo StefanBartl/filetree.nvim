@@ -230,6 +230,29 @@ markdown links to `REF!` before the file goes, so the break is visible
 instead of silent. Code references are deliberately left alone there —
 a `require("REF!")` is worse than an obviously stale one.
 
+### Cascade-delete-assets
+
+The opposite direction of the same delete: `refs.outgoing_assets` looks at
+what the file *about to be deleted* itself links out to (via
+`docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md`) and offers to delete those
+targets too, once nothing else still references them — a markdown note
+linking to `assets/shot.png` deletes the screenshot along with the note
+instead of leaving it orphaned. Three checks gate every candidate: it must
+resolve under a configured assets root (`{"assets"}` by default, checked
+relative to the linking file's own directory first, then the project root),
+its extension must be on an allowlist (image/video shapes; never a
+denylist — an unrecognized extension is never offered by accident), and no
+OTHER surviving file may still reference it.
+
+**Off by default** (`refs.outgoing_assets.enabled = false`), independently
+of the main `on_delete` switch above — a user may want incoming REF!
+markers without cascade-delete-assets, or vice versa. It is opt-in until
+this has real mileage: unlike the incoming-refs direction, which only ever
+*marks* a link, this one *deletes files*, and doing that automatically by
+default the first time someone upgrades is the wrong default to risk.
+Wired into `d`/trash's confirm dialog regardless of the flag, but a no-op
+while off — turning it on needs nothing beyond the config below.
+
 ### Languages
 
 | Provider | Covers | Default |
@@ -293,6 +316,13 @@ require("filetree").setup({
         -- extensions         = { … }  -- override the prose/text file list
         -- comment_extensions = { … }  -- override the source-file list
       },
+    },
+    -- Cascade-delete-assets: opt-in, independent of `on_delete` above.
+    outgoing_assets = {
+      enabled    = false,
+      on_delete  = "ask",  -- "ask" | "auto" | "off"
+      -- roots      = { "assets" }  -- override the default asset-folder name(s)
+      -- extensions = { "png", … }  -- override the default extension allowlist
     },
     scan = {
       root              = "project",  -- "project" (nearest root) | "cwd"

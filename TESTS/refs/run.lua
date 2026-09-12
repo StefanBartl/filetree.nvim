@@ -904,6 +904,60 @@ local function run_outgoing_assets_gate_check()
   refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
 end
 
+-- ── refs.outgoing_assets(): independent of the main on_delete switch ────────
+-- `outgoing_assets` documents itself as independent of the main
+-- `on_delete`/`enabled` switch above (a user may want cascade-delete-assets
+-- without incoming REF! markers, or vice versa). The safety recheck inside
+-- the classifier (`still_referenced`, which asks "does some OTHER file still
+-- link to this asset?") used to route through `refs.scan` with no mode
+-- override, so it silently inherited the MAIN `on_delete` gate instead of
+-- `outgoing_assets`' own — with the main switch off, every asset came back
+-- "not referenced elsewhere" regardless of truth. This isolates that one
+-- combination: main `on_delete = "off"`, `outgoing_assets` on and `"auto"`.
+local function run_outgoing_assets_independent_switch_check()
+  print("\n== refs.outgoing_assets (independent of main on_delete) ==")
+
+  local work = scratch_root .. "/outgoing_assets_independent"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/assets", "p")
+  vim.fn.writefile({ "x" }, work .. "/assets/shared.png")
+  vim.fn.writefile({ "Shared: ![shared](assets/shared.png)" }, work .. "/doc.md")
+  -- The surviving second referrer -- if the safety recheck silently never
+  -- runs, this file is invisible and shared.png looks like a safe orphan.
+  vim.fn.writefile({ "Also shared: ![shared](assets/shared.png)" }, work .. "/other.md")
+
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.on_delete = "off" -- the UNRELATED incoming-refs direction, switched off
+  cfg.outgoing_assets = { enabled = true, on_delete = "auto" }
+  refs.setup(cfg)
+
+  local found, done = nil, false
+  refs.outgoing_assets(work .. "/doc.md", { root = work }, function(candidates)
+    found = candidates
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+
+  local shared = found
+  for _, c in ipairs(found or {}) do
+    if c.target == "assets/shared.png" then shared = c end
+  end
+  check(
+    "outgoing_assets independent switch: classification returned",
+    done and found and #found == 1
+  )
+  check(
+    "outgoing_assets independent switch: shared.png IS still referenced by other.md, "
+      .. "even with the main on_delete switch off",
+    shared and shared.is_asset == true and shared.still_referenced == true,
+    shared and vim.inspect(shared) or "nil"
+  )
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -915,6 +969,7 @@ run_plaintext_comment_check()
 run_outgoing_scan_check()
 run_outgoing_assets_check()
 run_outgoing_assets_gate_check()
+run_outgoing_assets_independent_switch_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))

@@ -58,17 +58,18 @@ return {
     enabled = false,
     on_delete = "ask", -- "ask" | "auto" | "off" — "off" here also short-circuits `enabled`
 
-    -- Tried first relative to the linking file's own directory (the
-    -- per-doc-folder convention `images.nvim`'s `paste.dir` already uses),
-    -- then relative to the project root. A link outside every root is
-    -- disqualified regardless of extension.
-    roots = { "assets" },
-
-    -- Allowlist, never a denylist: an unrecognized extension (a linked
-    -- source/text file) must never be offered by accident. Deliberately
-    -- excludes `pdf` from the default — a linked PDF is often a real
-    -- document, not a disposable screenshot; add it explicitly if wanted.
-    extensions = { "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "mp4", "mov" },
+    -- `roots`/`extensions` are deliberately left unset here, same reasoning
+    -- as `experimental.plaintext` below: `vim.tbl_deep_extend` merges
+    -- list-shaped tables by index, so a hardcoded default here would leave
+    -- stray entries behind a shorter user-supplied list (e.g. narrowing
+    -- `extensions` to `{"png"}` would silently keep every other default
+    -- extension too). Left unset, `filetree.refs.assets` falls back to its
+    -- own `DEFAULT_ROOTS`/`DEFAULT_EXTENSIONS` — tried first relative to the
+    -- linking file's own directory, then the project root; extensions are an
+    -- allowlist (image/video shapes), never a denylist, and deliberately
+    -- exclude `pdf` (often a real document, not a disposable screenshot).
+    -- roots      = { "assets" }
+    -- extensions = { "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "mp4", "mov" }
 
     -- No separate `providers` toggle here: the top-level `providers` table
     -- above already governs whether markdown takes part at all (it gates
