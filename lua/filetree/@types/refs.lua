@@ -48,6 +48,36 @@
 ---@field delete_target? string  What a reference to a *deleted* file is rewritten to, so
 ---                              the dangling link stays visible. Only providers that
 ---                              declare one take part in `refs.for_delete`.
+---@field extensions? string[]  Files that can hold this provider's link syntax at all.
+---                              Read by `filetree.refs.outgoing` to skip a file the
+---                              provider could never produce a match in; a provider
+---                              without one is treated as unrestricted. Set by markdown.
+---@field each_link_target? fun(text: string, cfg: FiletreeRefsConfig, fn: fun(col: integer, target: string, decoded: string, kind: string))
+---                              Walk every path-like (non-external) link target in one
+---                              line of text — the outgoing counterpart of `plan()`'s
+---                              `extract` (which finds references *to* a specific path;
+---                              this finds every link *from* one, regardless of target).
+---                              Only providers that can link out to arbitrary files
+---                              implement one — a code provider's outgoing references
+---                              are require()/import statements pointing at code, never
+---                              at binary assets, so it has nothing to contribute here.
+---                              Set by markdown; used by `filetree.refs.outgoing`.
+
+---One outgoing link found while scanning a file's own content for
+---`filetree.refs.outgoing` — see that module for how it differs from `FiletreeRef`
+---(which is always about a reference found *elsewhere*, pointing at the file
+---being mutated).
+---@class FiletreeOutgoingLink
+---@field file     string   Absolute path of the file the link was found in (the scanned path).
+---@field line     integer  1-based line number.
+---@field col      integer  1-based byte column of the raw target within the line.
+---@field text     string   Full line content at scan time.
+---@field target   string   The link exactly as written ("./assets/shot.png"), undecoded.
+---@field resolved string   Absolute path the target resolves to (best-effort).
+---@field exists   boolean  Whether `resolved` names a file that exists on disk right now.
+---@field provider string   Name of the provider that produced this link ("markdown").
+---@field kind     string   Provider-specific link kind ("inline"|"refdef"|"html"|"wiki").
+---@field display  string   Picker/quickfix display text.
 
 ---Result of a scan: the refs themselves plus the plans that produced them
 ---(kept so the resolve step can call the right `retarget`).

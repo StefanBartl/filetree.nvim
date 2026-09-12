@@ -30,6 +30,7 @@ local registry = require("filetree.refs.registry")
 local scan = require("filetree.refs.scan")
 local apply = require("filetree.refs.apply")
 local ui = require("filetree.refs.ui")
+local outgoing = require("filetree.refs.outgoing")
 local ftpath = require("filetree.util.path")
 local notify = require("filetree.util.notify").create("[filetree.refs]")
 
@@ -354,6 +355,20 @@ function M.for_delete(paths, opts, cb)
     end
     cb(out)
   end)
+end
+
+---Outgoing links found in `path`'s own current content, resolved to absolute
+---paths — the mirror of `for_delete` above: that one asks "who points at
+---this file", this asks "what does this file point at". Step 1 of the
+---cascade-delete-assets concept (`docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md`)
+---— no assets-folder/extension classifier yet, every resolved link target
+---comes back. Call it the moment a delete is triggered, while `path` still
+---exists (same prefetch-before-mutation discipline as `prefetch` above).
+---@param path string
+---@param opts? { root?: string }
+---@param cb fun(links: FiletreeOutgoingLink[])
+function M.outgoing(path, opts, cb)
+  outgoing.scan(path, opts, cb)
 end
 
 -- ── Undo ──────────────────────────────────────────────────────────────────────
