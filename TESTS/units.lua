@@ -775,7 +775,12 @@ do
   check("ignore_list: '.agents' hidden (from lib.nvim's list)", fi.hide_by_name[".agents"] == true)
   check("ignore_list: '.claude' hidden (from lib.nvim's list)", fi.hide_by_name[".claude"] == true)
   check("ignore_list: not array-shaped (no numeric key 1)", fi.hide_by_name[1] == nil)
-  vim.wait(150, function()
+  -- apply_neotree() defers adapter.refresh() by 100ms (debounce, matching the
+  -- convention elsewhere in this codebase — see watcher_quarantine/handle_guard).
+  -- A 150ms wait budget left only 50ms of slack over that timer, which a busy
+  -- CI runner can burn through — the flaky failure this margin fixes. 500ms
+  -- matches the budget this suite gives other 100-150ms-scale deferred ops.
+  vim.wait(500, function()
     return refreshed
   end)
   check("ignore_list: adapter.refresh() called", refreshed)
