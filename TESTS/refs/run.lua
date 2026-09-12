@@ -641,6 +641,113 @@ local function run_plaintext_comment_check()
   refs.setup(vim.deepcopy(BASE_REFS_CFG))
 end
 
+-- ── refs.outgoing(): what a file links out to (not what links to it) ────────
+-- Step 1 of the cascade-delete-assets concept
+-- (docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md) — no classifier yet, so this
+-- only checks that every path-like link is found and resolved, external
+-- links and pure anchors are not, and a file with nothing to link out to
+-- comes back empty.
+local function run_outgoing_scan_check()
+  print("\n== refs.outgoing ==")
+
+  local work = scratch_root .. "/outgoing"
+  vim.fn.delete(work, "rf")
+  copy_dir(fixtures_root .. "/markdown", work)
+
+  local readme = work .. "/README.md"
+  local found, done = nil, false
+  refs.outgoing(readme, nil, function(links)
+    found = links
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+
+  ---One link matching both `target` (as written) and `kind` — several of
+  ---README.md's links share a target string ("./docs/guide.md" appears as an
+  ---inline link, an html href, and a reference-definition), so `kind` is
+  ---needed to tell them apart rather than just counting hits on the target.
+  local function by(links, target, kind)
+    for _, l in ipairs(links) do
+      if l.target == target and l.kind == kind then return l end
+    end
+    return nil
+  end
+
+  local function normalized(p)
+    return (p or ""):gsub("\\", "/")
+  end
+
+  check("outgoing: scan returned synchronously", done)
+  check(
+    "outgoing: found the inline link to docs/guide.md",
+    found and by(found, "./docs/guide.md", "inline") ~= nil
+  )
+  check(
+    "outgoing: found the bare-relative link to docs/notes.md",
+    found and by(found, "docs/notes.md", "inline") ~= nil
+  )
+  check(
+    "outgoing: found the inline image link to img/diagram.png",
+    found and by(found, "./img/diagram.png", "inline") ~= nil
+  )
+  check(
+    "outgoing: found the same target again via the html href (a distinct ref, not a dedup)",
+    found and by(found, "./docs/guide.md", "html") ~= nil
+  )
+  check(
+    "outgoing: found the same target a third time via the reference-definition",
+    found and by(found, "./docs/guide.md", "refdef") ~= nil
+  )
+  check(
+    "outgoing: same-named file in a different folder resolves to its own path, not docs/guide.md",
+    found
+      and (function()
+        local l = by(found, "./docs/guides/guide.md", "inline")
+        return l ~= nil and normalized(l.resolved):find("docs/guides/guide.md", 1, true) ~= nil
+      end)()
+  )
+  check("outgoing: the diagram link resolves to a file that exists", found and (function()
+    local l = by(found, "./img/diagram.png", "inline")
+    return l ~= nil and l.exists == true
+  end)())
+  check("outgoing: the external URL is not returned at all", found and (function()
+    for _, l in ipairs(found) do
+      if l.target:find("example.com", 1, true) then return false end
+    end
+    return true
+  end)())
+
+  -- guide.md itself links nowhere — must come back empty, not error.
+  local guide_links, guide_done = nil, false
+  refs.outgoing(work .. "/docs/guide.md", nil, function(links)
+    guide_links = links
+    guide_done = true
+  end)
+  vim.wait(2000, function()
+    return guide_done
+  end, 10)
+  check(
+    "outgoing: a file with no links out returns an empty list",
+    guide_done and #guide_links == 0
+  )
+
+  -- A non-markdown file must not be walked at all (extension gate).
+  local nonexistent_ext_done, nonexistent_ext_links = false, nil
+  refs.outgoing(work .. "/pyproject.toml", nil, function(links)
+    nonexistent_ext_links = links
+    nonexistent_ext_done = true
+  end)
+  vim.wait(2000, function()
+    return nonexistent_ext_done
+  end, 10)
+  check(
+    "outgoing: a non-markdown file is skipped by the extension gate",
+    nonexistent_ext_done and #nonexistent_ext_links == 0
+  )
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -649,6 +756,7 @@ run_lua_buffer_check()
 run_lua_directory_cascade_check()
 run_move_feature_check()
 run_plaintext_comment_check()
+run_outgoing_scan_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))

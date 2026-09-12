@@ -35,6 +35,12 @@ M.delete_target = "REF!"
 ---Files that can hold markdown references.
 local EXTENSIONS = { "md", "markdown", "mdx", "mdown", "qmd", "rmd" }
 
+---Exposed so `filetree.refs.outgoing` can check "does this provider even
+---apply to this file" before walking its lines, the same way the ripgrep
+---prefilter in `plan()` restricts *which* files get searched for incoming
+---references.
+M.extensions = EXTENSIONS
+
 -- ── Target scanning ───────────────────────────────────────────────────────────
 
 ---@internal
@@ -165,6 +171,28 @@ local function wiki_match(target, file, root, wanted, is_dir)
     end
   end
   return nil, nil, nil
+end
+
+---Walk every *path-like* target this file links out to — external URLs,
+---protocols and pure anchors already filtered out, exactly like `plan()`'s
+---`extract` does internally. Used by `filetree.refs.outgoing` to find what a
+---file points at, the mirror of `plan()` above (which finds what points at a
+---specific file).
+---
+---`target` is the raw (possibly percent-encoded) path slice, kept as written
+---for display — the same convention `plan().extract` uses for the `target`
+---field of a `FiletreeRef`. `decoded` is what a caller should resolve to an
+---absolute path.
+---@param text string
+---@param cfg FiletreeRefsConfig
+---@param fn fun(col: integer, target: string, decoded: string, kind: "inline"|"refdef"|"html"|"wiki")
+function M.each_link_target(text, cfg, fn)
+  each_target(text, cfg, function(col, raw, kind)
+    if is_external(raw) then return end
+    local target = path_part(raw)
+    if target == "" then return end
+    fn(col, target, url_decode(target), kind)
+  end)
 end
 
 -- ── Provider ──────────────────────────────────────────────────────────────────
