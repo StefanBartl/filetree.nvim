@@ -31,6 +31,7 @@ local scan = require("filetree.refs.scan")
 local apply = require("filetree.refs.apply")
 local ui = require("filetree.refs.ui")
 local outgoing = require("filetree.refs.outgoing")
+local assets = require("filetree.refs.assets")
 local ftpath = require("filetree.util.path")
 local notify = require("filetree.util.notify").create("[filetree.refs]")
 
@@ -39,6 +40,7 @@ local M = {}
 M.registry = registry
 M.apply = apply
 M.ui = ui
+M.assets = assets
 
 -- ── Config ────────────────────────────────────────────────────────────────────
 
@@ -369,6 +371,20 @@ end
 ---@param cb fun(links: FiletreeOutgoingLink[])
 function M.outgoing(path, opts, cb)
   outgoing.scan(path, opts, cb)
+end
+
+---Outgoing links of `path` (the file about to be deleted), classified: which
+---of them resolve under a configured assets root with an allowed extension
+---(`is_asset`), and — only for those — whether some other surviving file
+---still references the same target (`still_referenced`). Step 2 of the
+---cascade-delete-assets concept; not wired into the delete flow yet (that's
+---`d`/`trash`'s job, step 3) and takes `roots`/`extensions` per call rather
+---than reading a shared config block (step 4).
+---@param path string
+---@param opts? { root?: string, roots?: string[], extensions?: string[] }
+---@param cb fun(candidates: FiletreeAssetCandidate[])
+function M.outgoing_assets(path, opts, cb)
+  assets.classify(path, opts, cb)
 end
 
 -- ── Undo ──────────────────────────────────────────────────────────────────────

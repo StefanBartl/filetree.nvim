@@ -79,6 +79,14 @@
 ---@field kind     string   Provider-specific link kind ("inline"|"refdef"|"html"|"wiki").
 ---@field display  string   Picker/quickfix display text.
 
+---One outgoing link, classified for the cascade-delete-assets concept
+---(`filetree.refs.assets`) — everything `FiletreeOutgoingLink` has, plus
+---whether it qualifies as a deletable asset.
+---@class FiletreeAssetCandidate : FiletreeOutgoingLink
+---@field is_asset         boolean   Resolves under a configured assets root AND its extension is allowed.
+---@field still_referenced boolean   Some file OTHER than the one being deleted still links to it. Only ever computed (and meaningful) when `is_asset` is true.
+---@field referenced_by    string[]  Absolute paths of those other files, when `still_referenced`.
+
 ---Result of a scan: the refs themselves plus the plans that produced them
 ---(kept so the resolve step can call the right `retarget`).
 ---@class FiletreeRefScanResult

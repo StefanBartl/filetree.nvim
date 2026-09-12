@@ -748,6 +748,102 @@ local function run_outgoing_scan_check()
   )
 end
 
+-- ── refs.outgoing_assets(): the cascade-delete-assets classifier ────────────
+-- Step 2 of the cascade-delete-assets concept
+-- (docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md) — a small, purpose-built tree
+-- (not the shared markdown fixture) isolates the three criteria: under a
+-- configured root, an allowed extension, and not still referenced by some
+-- OTHER surviving file. Each case changes exactly one criterion so a
+-- passing test can't be hiding a coincidence.
+local function run_outgoing_assets_check()
+  print("\n== refs.outgoing_assets ==")
+
+  local work = scratch_root .. "/outgoing_assets"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/assets", "p")
+  vim.fn.writefile({ "[tool.filetree]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "x" }, work .. "/assets/shot.png")
+  vim.fn.writefile({ "x" }, work .. "/assets/shared.png")
+  vim.fn.writefile({ "x" }, work .. "/toplevel.png")
+  -- Lives INSIDE assets/ (so the root check alone would pass) but has a
+  -- disallowed extension -- isolates the extension criterion from the root
+  -- one, unlike toplevel.png below (right extension, wrong location).
+  vim.fn.writefile({ "-- a lua file, not an asset" }, work .. "/assets/code.lua")
+  vim.fn.writefile({
+    "Shot: ![shot](assets/shot.png)",
+    "Shared: ![shared](assets/shared.png)",
+    "Code: [code](assets/code.lua)",
+    "Top-level image outside assets/: ![top](toplevel.png)",
+    "Missing: ![gone](assets/gone.png)",
+  }, work .. "/doc.md")
+  -- Also links assets/shared.png -- the one asset with a surviving
+  -- second referrer once doc.md (the file "being deleted") is excluded.
+  vim.fn.writefile({ "Also shared: ![shared](assets/shared.png)" }, work .. "/other.md")
+
+  local doc = work .. "/doc.md"
+  local found, done = nil, false
+  refs.outgoing_assets(doc, { root = work }, function(candidates)
+    found = candidates
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+
+  local function by(candidates, target)
+    for _, c in ipairs(candidates) do
+      if c.target == target then return c end
+    end
+    return nil
+  end
+
+  check("outgoing_assets: classification returned", done)
+  check(
+    "outgoing_assets: exactly 4 candidates (the dangling link is excluded)",
+    found and #found == 4
+  )
+
+  local shot = found and by(found, "assets/shot.png")
+  check(
+    "outgoing_assets: shot.png is an asset (under assets/, .png allowed)",
+    shot and shot.is_asset == true
+  )
+  check(
+    "outgoing_assets: shot.png has no other referrer -- safe to delete",
+    shot and shot.still_referenced == false
+  )
+
+  local shared = found and by(found, "assets/shared.png")
+  check("outgoing_assets: shared.png is an asset too", shared and shared.is_asset == true)
+  check(
+    "outgoing_assets: shared.png IS still referenced by other.md -- must not be offered",
+    shared and shared.still_referenced == true and #shared.referenced_by == 1
+  )
+  check(
+    "outgoing_assets: the referrer is other.md, not doc.md itself",
+    shared
+      and shared.referenced_by[1]
+      and shared.referenced_by[1]:gsub("\\", "/"):find("other.md", 1, true) ~= nil
+  )
+
+  local code = found and by(found, "assets/code.lua")
+  check(
+    "outgoing_assets: assets/code.lua is NOT an asset -- right location, wrong extension",
+    code and code.is_asset == false
+  )
+
+  local top = found and by(found, "toplevel.png")
+  check(
+    "outgoing_assets: toplevel.png is NOT an asset -- right extension, but outside assets/",
+    top and top.is_asset == false
+  )
+
+  check(
+    "outgoing_assets: the dangling link (assets/gone.png) is not in the result at all",
+    found and by(found, "assets/gone.png") == nil
+  )
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -757,6 +853,7 @@ run_lua_directory_cascade_check()
 run_move_feature_check()
 run_plaintext_comment_check()
 run_outgoing_scan_check()
+run_outgoing_assets_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))

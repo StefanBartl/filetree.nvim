@@ -22,14 +22,15 @@ local M = {}
 -- `FiletreeOutgoingLink` is declared in `@types/refs.lua`, alongside the rest
 -- of the reference engine's shared shapes — not re-declared here.
 
----@internal
 ---Search root for `path`: the nearest project root, or the cwd. Mirrors
 ---`filetree.refs`'s own (private) `make_ctx`/`resolve_root` — kept as a
 ---separate copy rather than exposed from there, since `refs/init.lua`
----requires this module and a back-reference would cycle.
+---requires this module and a back-reference would cycle. Exported (not
+---`@internal`) so `filetree.refs.assets` can resolve the same root without a
+---third copy.
 ---@param path string
 ---@return string
-local function resolve_root(path)
+function M.resolve_root(path)
   local cfg = require("filetree.refs").config()
   if cfg.scan and cfg.scan.root == "cwd" then return vim.fn.getcwd() end
   local ok_pr, project_root = require("filetree.features").load("project_root")
@@ -126,7 +127,7 @@ function M.scan(path, opts, cb)
   local lines = scan.lines_of(path)
   if not lines then return cb({}) end
 
-  local root = opts.root or resolve_root(path)
+  local root = opts.root or M.resolve_root(path)
   local out = {}
 
   for _, provider in ipairs(providers) do
