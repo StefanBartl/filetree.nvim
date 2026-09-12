@@ -16,6 +16,7 @@ local scan = require("filetree.refs.scan")
 local pathutil = require("filetree.refs.pathutil")
 local registry = require("filetree.refs.registry")
 local ftpath = require("filetree.util.path")
+local notify = require("filetree.util.notify").create("[filetree.refs.outgoing]")
 
 local M = {}
 
@@ -132,26 +133,47 @@ function M.scan(path, opts, cb)
 
   for _, provider in ipairs(providers) do
     for lineno, text in ipairs(lines) do
-      provider.each_link_target(text, cfg, function(col, target, decoded, kind)
-        local resolved, exists = resolve_one(decoded, path, root)
-        out[#out + 1] = {
-          file = path,
-          line = lineno,
-          col = col,
-          text = text,
-          target = target,
-          resolved = resolved,
-          exists = exists,
-          provider = provider.name,
-          kind = kind,
-          display = string.format(
-            "%s:%d: %s",
-            vim.fn.fnamemodify(resolved, ":."),
+      -- Guarded the same way `refs/init.lua`'s `M.prefetch` guards
+      -- `provider.plan`: one bad line (or a future provider's edge case)
+      -- must not abort the whole classification — the caller (`refs.assets`,
+      -- and through it the delete confirm dialog) would otherwise never get
+      -- its callback invoked at all.
+      local ok, err = pcall(
+        provider.each_link_target,
+        text,
+        cfg,
+        function(col, target, decoded, kind)
+          local resolved, exists = resolve_one(decoded, path, root)
+          out[#out + 1] = {
+            file = path,
+            line = lineno,
+            col = col,
+            text = text,
+            target = target,
+            resolved = resolved,
+            exists = exists,
+            provider = provider.name,
+            kind = kind,
+            display = string.format(
+              "%s:%d: %s",
+              vim.fn.fnamemodify(resolved, ":."),
+              lineno,
+              vim.trim(text)
+            ),
+          }
+        end
+      )
+      if not ok then
+        notify.debug(
+          string.format(
+            "provider '%s' failed on %s:%d: %s",
+            provider.name,
+            path,
             lineno,
-            vim.trim(text)
-          ),
-        }
-      end)
+            tostring(err)
+          )
+        )
+      end
     end
   end
 

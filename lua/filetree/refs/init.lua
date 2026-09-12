@@ -474,8 +474,11 @@ function M.status()
     "outgoing_assets: enabled=%s  on_delete=%s  roots=%s  extensions=%s",
     tostring(oa.enabled == true),
     oa.on_delete or "ask",
-    table.concat(oa.roots or {}, ","),
-    table.concat(oa.extensions or {}, ",")
+    -- `roots`/`extensions` are unset by default (see DEFAULTS.lua) and fall
+    -- back to `assets`' own built-in lists at call time — mirror that here so
+    -- the status line reflects what a scan would actually use.
+    table.concat(oa.roots or assets.DEFAULT_ROOTS, ","),
+    table.concat(oa.extensions or assets.DEFAULT_EXTENSIONS, ",")
   )
 
   lines[#lines + 1] = apply.can_undo() and ("undo available: " .. (apply.last_label() or "?"))
