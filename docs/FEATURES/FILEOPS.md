@@ -462,9 +462,21 @@ A directory target only ever gets a symlink: neither Windows nor POSIX
 lets an unprivileged process hard-link a directory. A file target is
 offered the Symlink / Hardlink choice.
 
+`:Filetree link mark [path]` / `:Filetree link paste` are a faster
+mark-once, paste-many pair for the same job. Marking with no path uses the
+node under the cursor when the tree is focused, else the focused editor
+buffer's file; an explicit path (relative or absolute) always wins.
+Pasting inserts the marked source into the node under the cursor and picks
+the link kind itself instead of asking: directories always get a symlink;
+files get a hardlink on Windows (needs no elevation or Developer Mode,
+unlike a Windows symlink) and a symlink elsewhere. Marking again replaces
+the previous source; pasting does not clear it, so one marked source can
+be linked into several places in a row.
+
 Usercmd-first, like Path Copy's format picker: no key is bound by
-default, so set `features.link_create.keymap` if you want one.
+default, so set `features.link_create.keymap` (or `.keymap_mark` /
+`.keymap_paste`) if you want one.
 
 - **Module:** `lua/filetree/features/fileops/link_create/`
-- **Commands:** `:Filetree link`
-- **Config:** `features.link_create.keymap` (unset by default)
+- **Commands:** `:Filetree link`, `:Filetree link mark [path]`, `:Filetree link paste`
+- **Config:** `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all unset by default)

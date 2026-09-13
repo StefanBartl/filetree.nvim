@@ -2960,6 +2960,243 @@ do
   package.loaded["filetree.features.fileops.link_create"] = nil
 end
 
+-- ── link_create mark/paste: explicit path, staged across two pastes ─────────
+-- The fast-path pair, as opposed to `create()`'s prompt: mark once, paste into
+-- several nodes without re-marking or being asked Symlink/Hardlink each time.
+-- Link kind is picked by platform + source type instead (see M.paste), which
+-- is exactly the choice that avoids the Windows-symlink-needs-elevation
+-- problem the two tests above have to work around: a file on Windows gets an
+-- (unprivileged) hardlink, elsewhere an (unprivileged) symlink -- so, unlike
+-- those two, this one asserts the created link's kind unconditionally.
+do
+  local tmp = (TMP_ROOT .. "/units-linkmark-explicit"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/src", "p")
+  vim.fn.mkdir(tmp .. "/dest1", "p")
+  vim.fn.mkdir(tmp .. "/dest2", "p")
+  local target = tmp .. "/src/target.txt"
+  vim.fn.writefile({ "hello mark" }, target)
+
+  local cur_node = { path = tmp .. "/dest1", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-linkmark-explicit",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-linkmark-explicit",
+    features = { link_create = { enabled = true } },
+  })
+  local lc = ft.feature("link_create")
+
+  local captured
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(m)
+    captured = m
+  end
+  lc.mark(target)
+  check(
+    "link_create mark: explicit path notifies with the marked file's name",
+    captured ~= nil and captured:find("target.txt", 1, true) ~= nil,
+    tostring(captured)
+  )
+
+  lc.paste()
+  vim.notify = orig_notify
+
+  check(
+    "link_create mark/paste: link created in dest1/, with matching content",
+    vim.fn.filereadable(tmp .. "/dest1/target.txt") == 1
+      and table.concat(vim.fn.readfile(tmp .. "/dest1/target.txt"), "\n") == "hello mark"
+  )
+
+  local platform = require("filetree.util.platform")
+  local link_stat = (vim.uv or vim.loop).fs_lstat(tmp .. "/dest1/target.txt")
+  check(
+    "link_create mark/paste: file link kind matches the platform (hardlink on Windows, symlink elsewhere)",
+    link_stat ~= nil and link_stat.type == (platform.is_windows() and "file" or "link"),
+    vim.inspect(link_stat)
+  )
+
+  -- Move to a second destination and paste again -- the marked source must
+  -- still be there, i.e. paste() does not consume/clear it (a link, unlike a
+  -- cut, never removes the source, so re-pasting the same mark elsewhere is
+  -- the whole point of a "mark once" step).
+  cur_node = { path = tmp .. "/dest2", type = "directory" }
+  lc.paste()
+
+  check(
+    "link_create mark/paste: mark survives a paste -- second paste into dest2/ also lands",
+    vim.fn.filereadable(tmp .. "/dest2/target.txt") == 1
+      and table.concat(vim.fn.readfile(tmp .. "/dest2/target.txt"), "\n") == "hello mark"
+  )
+
+  package.loaded["filetree.features.fileops.link_create"] = nil
+end
+
+-- ── link_create mark: no path -- tree node under cursor, else focused buffer ─
+do
+  local tmp = (TMP_ROOT .. "/units-linkmark-implicit"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/dest", "p")
+  local node_file = tmp .. "/node.txt"
+  local buffer_file = tmp .. "/buffer.txt"
+  vim.fn.writefile({ "from node" }, node_file)
+  vim.fn.writefile({ "from buffer" }, buffer_file)
+
+  local cur_node = { path = node_file, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-linkmark-implicit",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-linkmark-implicit",
+    features = { link_create = { enabled = true } },
+  })
+  local lc = ft.feature("link_create")
+
+  -- Focused buffer = a fake tree buffer (filetype "neo-tree", matching
+  -- buffer.is_tree_buffer()'s fallback list) -- mark() with no path must
+  -- prefer the node under the cursor over anything buffer-related.
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(tree_buf)
+  vim.bo[tree_buf].filetype = "neo-tree"
+
+  lc.mark()
+  cur_node = { path = tmp .. "/dest", type = "directory" }
+  lc.paste()
+  check(
+    "link_create mark: no path, tree buffer focused -- marks the node under the cursor",
+    vim.fn.filereadable(tmp .. "/dest/node.txt") == 1
+      and table.concat(vim.fn.readfile(tmp .. "/dest/node.txt"), "\n") == "from node"
+  )
+
+  -- Now focus a real, ordinary file buffer instead -- mark() with no path
+  -- must fall back to it once the tree is no longer the focused buffer.
+  vim.cmd("edit " .. vim.fn.fnameescape(buffer_file))
+  lc.mark()
+  lc.paste()
+  check(
+    "link_create mark: no path, editor buffer focused -- marks the focused buffer's file",
+    vim.fn.filereadable(tmp .. "/dest/buffer.txt") == 1
+      and table.concat(vim.fn.readfile(tmp .. "/dest/buffer.txt"), "\n") == "from buffer"
+  )
+
+  package.loaded["filetree.features.fileops.link_create"] = nil
+end
+
+-- ── link_create paste: no marked source, and already-exists guard ───────────
+do
+  local tmp = (TMP_ROOT .. "/units-linkmark-guards"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/dest", "p")
+  local target = tmp .. "/target.txt"
+  vim.fn.writefile({ "guarded" }, target)
+
+  local cur_node = { path = tmp .. "/dest", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-linkmark-guards",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-linkmark-guards",
+    features = { link_create = { enabled = true } },
+  })
+  local lc = ft.feature("link_create")
+
+  local captured
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(m)
+    captured = m
+  end
+
+  lc.paste() -- nothing marked yet
+  check(
+    "link_create paste: no source marked -- warns instead of erroring",
+    captured ~= nil and captured:lower():find("no link source marked", 1, true) ~= nil,
+    tostring(captured)
+  )
+
+  lc.mark(target)
+  vim.fn.writefile({ "already here" }, tmp .. "/dest/target.txt") -- pre-existing collision
+  captured = nil
+  lc.paste()
+  vim.notify = orig_notify
+
+  check(
+    "link_create paste: existing name at the destination is not overwritten",
+    captured ~= nil and captured:lower():find("already exists", 1, true) ~= nil,
+    tostring(captured)
+  )
+  check(
+    "link_create paste: the pre-existing file's content is untouched",
+    table.concat(vim.fn.readfile(tmp .. "/dest/target.txt"), "\n") == "already here"
+  )
+
+  package.loaded["filetree.features.fileops.link_create"] = nil
+end
+
 -- ── rename_batch: confirm=true asks kit.confirm (async), not the old ────────
 -- blocking `vim.fn.input("...[y/N]...")` freetext prompt.
 do

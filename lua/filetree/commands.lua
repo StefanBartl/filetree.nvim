@@ -197,10 +197,23 @@ local TREE = {
   end,
 
   -- ── link_create ─────────────────────────────────────────────────────────────
-  link = function(_)
-    local f = ft("link_create")
-    if f then f.create() end
-  end,
+  -- :Filetree link              → prompt for a target, choose Symlink/Hardlink
+  -- :Filetree link mark [path]  → mark a source (node/buffer/path, no prompt)
+  -- :Filetree link paste        → paste the marked source, link kind by OS
+  link = {
+    [""] = function(_)
+      local f = ft("link_create")
+      if f then f.create() end
+    end,
+    mark = function(args)
+      local f = ft("link_create")
+      if f then f.mark(#args > 0 and table.concat(args, " ") or nil) end
+    end,
+    paste = function(_)
+      local f = ft("link_create")
+      if f then f.paste() end
+    end,
+  },
 
   -- ── reveal ──────────────────────────────────────────────────────────────────
   -- :Filetree reveal           → reveal current buffer
