@@ -97,8 +97,21 @@ end
 ---@param is_dir boolean
 local function do_create(target, link_path, kind, is_dir)
   local ok, err
+  local fell_back = false
   if kind == "Hardlink" then
     ok, err = mutate.hardlink(target, link_path)
+    if not ok and type(err) == "string" and err:match("^EXDEV") then
+      -- A hard link cannot cross filesystems or drive letters, on any OS --
+      -- unlike a move (see filetree.util.mutate), there is no copy-based
+      -- fallback that would still BE a hard link, so a symlink is the only
+      -- link that still works here. Same trigger (EXDEV, not transient, so
+      -- not retried), different fallback: this can be reached both from
+      -- `M.paste`'s own Hardlink pick (files, on Windows) and from `M.create`'s
+      -- user-chosen one, on any platform.
+      kind = "Symlink"
+      fell_back = true
+      ok, err = mutate.symlink(target, link_path, is_dir)
+    end
   else
     ok, err = mutate.symlink(target, link_path, is_dir)
   end
@@ -108,7 +121,11 @@ local function do_create(target, link_path, kind, is_dir)
     return
   end
 
-  notify.info(kind .. " created: " .. path.relative(link_path) .. " -> " .. path.relative(target))
+  local msg = kind .. " created: " .. path.relative(link_path) .. " -> " .. path.relative(target)
+  if fell_back then
+    msg = msg .. " (hardlink not possible across drives/filesystems, used a symlink instead)"
+  end
+  notify.info(msg)
   if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
 end
 
@@ -208,7 +225,9 @@ end
 ---Directories only ever get a symlink (neither OS allows an unprivileged hard
 ---link to one). Files get a hardlink on Windows — needs no elevation or
 ---Developer Mode, unlike a Windows symlink — and a symlink elsewhere, the
----POSIX idiom.
+---POSIX idiom. If the source and destination turn out to be on different
+---drives/filesystems, a hardlink can't be created at all (EXDEV, on any OS);
+---`do_create` falls back to a symlink automatically in that case.
 function M.paste()
   if not _marked then
     notify.warn("No link source marked — use `:Filetree link mark` first")

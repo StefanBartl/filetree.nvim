@@ -3197,6 +3197,112 @@ do
   package.loaded["filetree.features.fileops.link_create"] = nil
 end
 
+-- ── link_create paste: EXDEV on hardlink falls back to a real symlink ───────
+-- Regression coverage for a real report: paste() picking "Hardlink" for a
+-- file on Windows, then failing outright the moment source and destination
+-- turn out to be on different drives -- a hard link can never cross
+-- filesystems/drives on any OS, unlike a move (see filetree.util.mutate,
+-- which already falls back for exactly this reason). do_create is now
+-- supposed to retry as a symlink when hardlink fails with EXDEV.
+--
+-- Two real temp dirs under TMP_ROOT can't reproduce EXDEV (same drive), so
+-- mutate.hardlink is faked to return it; mutate.symlink is left real, so the
+-- fallback this exercises actually writes a link to disk. `platform.is_windows`
+-- is also forced true so `paste()` picks "Hardlink" regardless of the machine
+-- actually running this suite.
+do
+  local tmp = (TMP_ROOT .. "/units-linkmark-exdev"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/dest", "p")
+  local target = tmp .. "/target.txt"
+  vim.fn.writefile({ "cross device" }, target)
+
+  local cur_node = { path = tmp .. "/dest", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-linkmark-exdev",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-linkmark-exdev",
+    features = { link_create = { enabled = true } },
+  })
+  local lc = ft.feature("link_create")
+
+  local platform = require("filetree.util.platform")
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local orig_is_windows = platform.is_windows
+  local orig_hardlink = mutate.hardlink
+  ---@diagnostic disable-next-line: duplicate-set-field
+  platform.is_windows = function()
+    return true
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  mutate.hardlink = function(_, _)
+    return false, "EXDEV: cross-device link not permitted: fake"
+  end
+
+  lc.mark(target)
+  local captured
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(m)
+    captured = m
+  end
+  lc.paste()
+  vim.notify = orig_notify
+  platform.is_windows = orig_is_windows
+  mutate.hardlink = orig_hardlink
+
+  local msg = (captured or ""):lower()
+  if msg:find("used a symlink instead", 1, true) then
+    check("link_create paste: EXDEV on hardlink falls back to a real symlink", true)
+    local link_stat = (vim.uv or vim.loop).fs_lstat(tmp .. "/dest/target.txt")
+    check(
+      "link_create paste: the fallback link actually exists as a symlink",
+      link_stat ~= nil and link_stat.type == "link",
+      vim.inspect(link_stat)
+    )
+  elseif msg:find("failed to create symlink", 1, true) then
+    -- The fallback was attempted (proving the fix works) but this environment
+    -- can't create a symlink at all -- same accommodation as the dir-target
+    -- test above (needs Developer Mode/elevation on Windows).
+    print(
+      "  note link_create: EXDEV fallback attempted a symlink, but this environment can't create one -- "
+        .. tostring(captured)
+    )
+  else
+    -- Neither branch matched: the fallback was never attempted at all (e.g.
+    -- this fix regressed and paste() is still reporting the raw EXDEV error).
+    check(
+      "link_create paste: EXDEV on hardlink triggers the symlink fallback",
+      false,
+      tostring(captured)
+    )
+  end
+
+  package.loaded["filetree.features.fileops.link_create"] = nil
+end
+
 -- ── rename_batch: confirm=true asks kit.confirm (async), not the old ────────
 -- blocking `vim.fn.input("...[y/N]...")` freetext prompt.
 do
