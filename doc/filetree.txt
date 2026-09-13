@@ -26,6 +26,7 @@ CONTENTS                                                    *filetree-contents*
      5.10 No Name Guard ................... |filetree-no-name-guard|
      5.11 References ....................... |filetree-refs|
      5.12 Move ............................. |filetree-move|
+     5.13 Feature reference ......................|filetree-feature-reference|
   6. Adapters ............................... |filetree-adapters|
   7. Public API ............................. |filetree-api|
   8. Health check ........................... |filetree-health|
@@ -960,6 +961,921 @@ Config:
 
 Commands:
   :Filetree move [destination]
+
+==============================================================================
+5.13 FEATURE REFERENCE                            *filetree-feature-reference*
+
+Every feature that has no section of its own above. Generated from
+docs/FEATURES/*.md and the binding catalog by scripts/gen_vimdoc_reference.lua
+-- edit those, not this section.
+
+The markdown originals carry the tables, worked examples and cross-links that
+do not survive the trip into help format; reach for them when an entry here is
+thinner than the question you arrived with.
+
+
+COMPARE
+  Diff ........................................................|filetree-diff|
+
+FILEOPS
+  Buffer Save ..........................................|filetree-buffer-save|
+  Copy / Move ............................................|filetree-copy-move|
+  Link Create ..........................................|filetree-link-create|
+  Open Replace ........................................|filetree-open-replace|
+  Open Variants ......................................|filetree-open-variants|
+  Batch Rename ........................................|filetree-rename-batch|
+  Smart Create ........................................|filetree-smart-create|
+  Smart Rename ........................................|filetree-smart-rename|
+  Trash ......................................................|filetree-trash|
+
+GIT
+  Git Status ............................................|filetree-git-status|
+
+INFRA
+  File Watcher ........................................|filetree-file-watcher|
+  Handle Guard ........................................|filetree-handle-guard|
+  Hooks API ..............................................|filetree-hooks-api|
+  Ignore List ..........................................|filetree-ignore-list|
+  Project Root ........................................|filetree-project-root|
+  Tree Integrity ....................................|filetree-tree-integrity|
+  Watcher Quarantine ............................|filetree-watcher-quarantine|
+
+LSP
+  LSP Diagnostics ..................................|filetree-lsp-diagnostics|
+
+NAV
+  Auto Resize (opt-in) .................................|filetree-auto-resize|
+  Buffer Cycle ........................................|filetree-buffer-cycle|
+  Reveal Alt ............................................|filetree-reveal-alt|
+  Sidebar Guard ......................................|filetree-sidebar-guard|
+  Tree Traverse ......................................|filetree-tree-traverse|
+
+ORG
+  Marks ......................................................|filetree-marks|
+  Session ..................................................|filetree-session|
+
+PATHS
+  Copy File List ....................................|filetree-copy-file-list|
+  Lua Require Copy ................................|filetree-lua-require-copy|
+  Markdown Links ....................................|filetree-markdown-links|
+  Path Copy ..............................................|filetree-path-copy|
+
+SEARCH
+  Filter ....................................................|filetree-filter|
+  Find Files ............................................|filetree-find-files|
+  Grep In Directory ....................................|filetree-grep-in-dir|
+  Live Search ..........................................|filetree-live-search|
+
+SYSTEM
+  Open With ..............................................|filetree-open-with|
+  PDF Create ............................................|filetree-pdf-create|
+  PDF bridge (pdfport.nvim) ...............................|filetree-pdf-open|
+  Shell Run ..............................................|filetree-shell-run|
+
+UI
+  Breadcrumbs ..........................................|filetree-breadcrumbs|
+  Cheatsheet ............................................|filetree-cheatsheet|
+  Context Menu ........................................|filetree-context-menu|
+  Cursor Hide ..........................................|filetree-cursor-hide|
+  Node Info ..............................................|filetree-node-info|
+  Opened-buffer Sync ...................................|filetree-opened-sync|
+  Preview ..................................................|filetree-preview|
+  Size Info ..............................................|filetree-size-info|
+  Tree Reset ............................................|filetree-tree-reset|
+  Window Size Cycler ............................|filetree-window-size-cycler|
+  Window Style ........................................|filetree-window-style|
+
+------------------------------------------------------------------------------
+DIFF                                                           *filetree-diff*
+
+`D` diffs the node under the cursor — against the working tree, a git
+revision, or another node, depending on how it's invoked. Native diffmode
+under the hood, nothing custom rendered.
+
+Keymaps: D
+
+Module: lua/filetree/features/compare/diff/
+
+------------------------------------------------------------------------------
+BUFFER SAVE                                             *filetree-buffer-save*
+
+Force-save the adjacent editor's buffer (`<C-s>`) or the node's own buffer if
+it's open elsewhere (`<M-s>`), without leaving the tree window.
+
+Keymaps: <C-s> <M-s>
+
+Module: lua/filetree/features/fileops/buffer_save/
+
+------------------------------------------------------------------------------
+COPY MOVE                                                 *filetree-copy-move*
+
+Stage one or more nodes with `c` (copy) or `x` (cut), then `p` to paste them
+under the cursor's directory — the same stage-then-paste model as a system
+file manager, works across multiple marked nodes at once.
+
+If any staged item's name already exists at the paste target, a prompt appears
+before anything is touched: Overwrite (replaces the existing item — backed
+up first when `use_safety` is on), Keep both (pastes alongside it as `name
+(2).ext`), Skip (leaves that item out of this paste; a skipped cut stays
+staged so you can resolve it and paste again instead of it silently
+vanishing), or Cancel (aborts the whole paste, nothing is touched). No
+conflicts means no prompt — pasting into an empty or non-colliding directory
+behaves exactly as before.
+
+A multi-item paste shows a progress indicator (current item, N/M, final
+summary) via the optional `lib.nvim.progress` dependency — see Progress
+indicators's `progress_style` option (top-level
+`require("filetree").setup({...})` config, not per-feature).
+
+A cut+paste is a move, so it runs the reference engine too — the scan starts
+when you press `x`, and overlaps with you navigating to the paste target. A
+copy never breaks a reference (the original stays put), so copies are not
+scanned.
+
+Keymaps: c x p P <C-c>
+
+Module: lua/filetree/features/fileops/copy_move/
+
+------------------------------------------------------------------------------
+LINK CREATE                                             *filetree-link-create*
+
+`:Filetree link` creates a symlink or hardlink inside the current tree
+directory, pointing at a path you type into a prompt. The link is named after
+the target's basename, and lands in the node under the cursor — its own
+directory if it is one, otherwise its parent, the same resolution Smart Create
+uses.
+
+A directory target only ever gets a symlink: neither Windows nor POSIX lets an
+unprivileged process hard-link a directory. A file target is offered the
+Symlink / Hardlink choice.
+
+Usercmd-first, like Path Copy's format picker: no key is bound by default, so
+set `features.link_create.keymap` if you want one.
+
+Config: `features.link_create.keymap` (unset by default)
+
+Commands: `:Filetree link`
+
+Module: lua/filetree/features/fileops/link_create/
+
+------------------------------------------------------------------------------
+OPEN REPLACE                                           *filetree-open-replace*
+
+Opens the node under the cursor into an existing editor window — never into
+the tree's own — in two shapes that differ in what becomes of the buffer
+already sitting there.
+
+`O` replaces: `:edit` over the editor window. The previous buffer stays in the
+buffer list, it just isn't on screen any more.
+
+`<M-CR>` (and `<C-CR>`) swaps: the previous buffer is closed as well, and the
+new file takes over the slot it held in the bufferline. Reach for it when the
+buffer list is a working set rather than a history — opening five files to
+find the one you wanted otherwise leaves four behind to close by hand.
+
+A swap refuses to run when the focused buffer has unsaved changes: it says so
+and does nothing at all, rather than opening the file and quietly leaving the
+old buffer behind (which would just be `O`). Write it first, or use `O`.
+
+Keeping the slot needs a buffer list that has slots. Neovim's own order is the
+buffer numbers, and those only ever increase — a file opened now can never
+sort ahead of one opened earlier, and no API moves it, because there is
+nothing to move: the order isn't stored, it's derived. Tabline plugins in the
+NvChad lineage keep `vim.t.bufs`, a per-tabpage list they order themselves,
+and that one *can* be rewritten — so the new buffer is put back at the index
+the replaced one held. Without such a list the swap still swaps; the new file
+simply lands where its buffer number puts it, which is last. Nothing errors,
+and there is nothing to configure for it — the list is either there or it
+isn't.
+
+Two keys for one action because which of them the terminal delivers isn't ours
+to decide: many terminals send plain `<CR>` for Ctrl+Enter, in which case
+`<C-CR>` never fires and the tree's own `<CR>` behaves as always. Alt+Enter
+travels further, so it's the primary.
+
+>lua
+open_replace = {
+  keymap          = "O",        -- replace; previous buffer stays listed
+  keymap_swap     = "<M-CR>",   -- swap; previous buffer closed
+  keymap_swap_alt = "<C-CR>",   -- same, where the terminal distinguishes it
+  close_tree      = true,       -- close the tree after `keymap`
+  swap_close_tree = false,      -- ... and after a swap
+  keep_position   = true,       -- new buffer takes the replaced one's slot
+},
+<
+
+Keymaps: O <M-CR> <C-CR>
+
+Module: lua/filetree/features/fileops/open_replace/
+
+------------------------------------------------------------------------------
+OPEN VARIANTS                                         *filetree-open-variants*
+
+Open a node in a split (`sg`), vsplit (`sv`), tab (`st`), or add it to the
+buffer list without switching focus (`gb`/`<S-CR>`) — every common "open,
+but not by replacing my current window" shape in one feature.
+
+Keymaps: sg sv st gb <S-CR>
+
+Module: lua/filetree/features/fileops/open_variants/
+
+------------------------------------------------------------------------------
+RENAME BATCH                                           *filetree-rename-batch*
+
+`<leader>rb` opens an edit-buffer listing every node in view; editing a line
+and saving renames the corresponding file — a bulk rename express lane for
+renaming several files at once without one prompt per file.
+
+Keymaps: <leader>rb
+
+Module: lua/filetree/features/fileops/rename_batch/
+
+------------------------------------------------------------------------------
+SMART CREATE                                           *filetree-smart-create*
+
+`a` creates a file or directory under the cursor, template-aware — typing a
+trailing `/` creates a directory, anything else a file, with parent
+directories created as needed.
+
+Keymaps: a
+
+Module: lua/filetree/features/fileops/smart_create/
+
+------------------------------------------------------------------------------
+SMART RENAME                                           *filetree-smart-rename*
+
+`r` renames the node under the cursor and updates every LSP reference to it
+project-wide, the same guarantee an IDE's "rename symbol" gives you, applied
+to a file/module rename instead of a variable.
+
+Whatever the language server does *not* rewrite — markdown links always,
+plus `require()`/`import` statements when no server handled the rename (for
+Lua that is always, since lua_ls never implements `workspace/willRenameFiles`)
+— is picked up by the reference engine.
+
+Keymaps: r
+
+Module: lua/filetree/features/fileops/smart_rename/
+
+------------------------------------------------------------------------------
+TRASH                                                         *filetree-trash*
+
+Cross-platform trash with undo — `d` to trash, `U` to undo, `<leader>th` for
+trash history. How far back that reaches is `features.trash.max_history`
+(default 50, `0` = unlimited): a preference, not a limit protecting anything,
+since the history is a small JSON file. Marking multiple nodes and trashing
+them opens one batch confirmation instead of one prompt per file, and
+force-closes any open buffers backed by the deleted paths so they don't linger
+as edits-to-nowhere. Same optional progress indicator as Copy / Move above,
+for both the "delete all at once" and "confirm each individually" batch paths.
+
+`features.trash.mode` is `"trash"` by default — Windows Recycle Bin, macOS
+Finder/Trash, or `gio trash`/`trash-put` on Linux (XDG-trash fallback when
+neither is installed), all via `lib.nvim.fs.trash`. Set it to `"permanent"` to
+skip the OS trash and delete for good instead — no shell, same
+libuv/Vim-builtin primitive the "Overwrite" paste resolution uses. Opt-in on
+purpose: a permanent delete has no `U`/history entry to fall back on, so the
+confirm dialog's wording changes to make that explicit ("Permanently delete
+(cannot be undone)?") rather than sharing the "Send to trash?" phrasing.
+
+When something links to the file being deleted, the plain yes/no becomes a
+chooser — Delete + remove refs (blanks the dangling links to `REF!`),
+Inspect first (pick which ones), Delete, keep refs, Cancel. See References.
+
+Keymaps: d U <leader>th
+
+Config: `features.trash.mode` (`"trash"` | `"permanent"`, default `"trash"`)
+
+Module: lua/filetree/features/fileops/trash/
+
+------------------------------------------------------------------------------
+GIT STATUS                                               *filetree-git-status*
+
+Decorates tree nodes with git status (modified/staged/untracked/…), resolved
+per adapter — each backend surfaces this through its own native mechanism
+rather than filetree.nvim reimplementing git status parsing.
+
+Module: lua/filetree/features/git/git_status/
+
+------------------------------------------------------------------------------
+FILE WATCHER                                           *filetree-file-watcher*
+
+Watches the tree root directory for filesystem changes via `vim.uv.fs_event`
+(libuv) and auto-refreshes the tree — `ReadDirectoryChangesW` on Windows,
+inotify/kqueue on POSIX. Debounces bursts of events before calling
+`adapter.refresh()`, and re-arms whenever the tree root changes.
+
+Config: `opts.features.file_watcher` — `enabled` (default false, opt-in),
+        `debounce_ms` (500), `watch_recursive` (true), `ignore_events` (`{}`)
+
+Usercmds: `:Filetree watcher enter [ms]`, `:Filetree watcher exit`
+
+Module: lua/filetree/features/infra/file_watcher/
+
+------------------------------------------------------------------------------
+HANDLE GUARD                                           *filetree-handle-guard*
+
+Fixes the same Windows/WSL file-lock at its source instead of hiding it:
+neo-tree's own directory watchers (with `use_libuv_file_watcher = true`) keep
+an OS handle open per expanded directory and never close it, so
+renaming/deleting a watched directory can intermittently fail with
+`EPERM`/`ERROR_SHARING_VIOLATION` because filetree's own watcher is still
+holding it. Once enabled it wires automatically into the fileops that move/
+rename/trash a watched path (via `lib.nvim.cross.fs.mutate`'s `on_retry` hook
+calling `M.release(path)`), closing the offending libuv handle so the retry
+succeeds. neo-tree adapter + Windows/WSL only — a safe no-op everywhere
+else, so the fileops' hook can always be passed unconditionally.
+
+Config: `opts.features.handle_guard.enabled` (default false, opt-in —
+        patches a neo-tree internal and closes libuv handles it owns)
+
+Usercmds: `:Filetree handles` — lists tracked handles, flags any pointing at
+          a path that no longer exists (the leak signature)
+
+Module: lua/filetree/features/infra/handle_guard/
+
+------------------------------------------------------------------------------
+HOOKS API                                                 *filetree-hooks-api*
+
+Programmatic hook registration so other code (or a user's own config) can
+react to tree events without patching filetree itself.
+
+Usercmds: `:Filetree hooks events`, `:Filetree hooks clear [event]`
+
+Module: lua/filetree/features/infra/hooks_api/
+
+------------------------------------------------------------------------------
+IGNORE LIST                                             *filetree-ignore-list*
+
+Hides common filesystem clutter from the tree by default — `.git`,
+`.github`, `node_modules`, `.venv`, `__pycache__`, build/`dist`/`target`
+directories, `.DS_Store`, editor dirs, and similar. Toggle at runtime with the
+adapter's own native "show hidden" key (`H` on neo-tree/nvim-tree).
+
+Config: top-level `opts.ignore_list` — `true` (default, built-in list, also
+        reads `lib.nvim` config if present), `false` (show everything), or a
+        `string[]` that fully replaces the built-in list
+
+Module: lua/filetree/features/infra/ignore_list/
+
+------------------------------------------------------------------------------
+PROJECT ROOT                                           *filetree-project-root*
+
+Shared, cached project-root detection used by `cwd_sync` and other features
+that need "which project is this file in" without a policy attached. Walks up
+from a file/directory for any of `markers` (`.git`, `package.json`,
+`Cargo.toml`, `go.mod`, ... — a broad default list), returns the deepest
+directory holding one, and falls back to the file's own parent (or cwd, with
+`fallback = "cwd"`) when nothing is found. Every directory resolved — not
+just the query directory, every intermediate directory walked past en route
+— is cached for the session.
+
+`cwd_mode.resolve()` is the plugin's one canonical marker-based walk when
+`cwd_mode` is enabled; `project_root` (and `cwd_sync.root_markers`) is the
+fallback path for a `cwd_mode`-less setup, so a repo running both doesn't end
+up with the cwd anchored to the git root while a search scopes itself to the
+nearest `package.json`.
+
+Config: `opts.features.project_root` — `enabled` (default `true`),
+        `markers`, `fallback` (`"parent"|"cwd"`), `cache` (default `true`)
+
+Module: lua/filetree/features/infra/project_root/
+
+------------------------------------------------------------------------------
+TREE INTEGRITY                                       *filetree-tree-integrity*
+
+Fixes an upstream crash that otherwise breaks a neo-tree session until it is
+closed and re-opened:
+
+>
+[Neo-tree ERROR] Error setting nodes:  .../nui/tree/init.lua:494:
+attempt to index local 'node' (a nil value)
+<
+
+— followed by a dump of the entire tree, on every render from then on.
+
+nui's node initialization is not idempotent: it *consumes* a node's
+`__children`, keeping only their ids in `_child_ids`. `Tree:set_nodes()` first
+deletes the parent's whole subtree from its `by_id` index and then
+re-initializes whatever it was handed, so handing it *live* nodes re-registers
+those nodes but not their children — `by_id` loses them while `_child_ids`
+still lists them. The next `set_nodes()` over that subtree indexes a nil node
+and throws, and because it throws before `_child_ids` is reset, the
+inconsistency is permanent.
+
+neo-tree reaches that call from one place: the `group_empty_dirs` branch for a
+lazily loaded single sub-folder (`ui/renderer.lua`, with the default
+`scan_mode = "shallow"`), which re-exports a whole level with
+`state.tree:get_nodes(parentId)` and passes those live nodes straight back.
+Expanding a directory next to a one-child chain is enough.
+
+This feature wraps `NuiTree.set_nodes` with a pre-pass that (a) hands every
+live node its children back as `__children`, so the re-initialization rebuilds
+the subtree instead of orphaning it — nothing is lost and expanded
+directories stay expanded — and (b) drops ids already missing from `by_id`,
+so an *already*-corrupted tree repairs itself on the next render rather than
+throwing. Fresh nodes (the normal `create_nodes()` path) are not touched at
+all, so nui behaves exactly as before wherever it was already correct.
+
+Left on by default, unlike the two features above: it changes nothing on a
+healthy tree, costs one pass over the subtree being replaced, and the crash it
+prevents is not recoverable without re-opening the tree. Disabling it is a
+one-liner if a future nui release fixes this upstream.
+
+Config: `opts.features.tree_integrity` — `enabled` (default true), `silent`
+        (true — set false to get a debug note whenever a corrupt subtree is
+        healed)
+
+Module: lua/filetree/features/infra/tree_integrity/
+
+------------------------------------------------------------------------------
+WATCHER QUARANTINE                               *filetree-watcher-quarantine*
+
+On Windows, libuv file watchers can emit spurious `EPERM` errors when a file
+or directory is deleted/moved while watched. This feature suspends watching
+for a configurable window and suppresses the resulting error notifications —
+it hides the symptom rather than fixing the cause (see `handle_guard` below
+for the fix). Complementary, not a replacement: the two can run together.
+
+Config: `opts.features.watcher_quarantine` — `enabled` (default false),
+        `duration_ms` (500), `silent` (true), `patch_neotree_watch` (true —
+        wraps neo-tree's `fs_watch` callbacks to swallow EPERM)
+
+Usercmds: `:Filetree watcher enter [ms]`, `:Filetree watcher exit` (shared
+          dispatcher with `file_watcher`)
+
+Module: lua/filetree/features/infra/watcher_quarantine/
+
+------------------------------------------------------------------------------
+LSP DIAGNOSTICS                                     *filetree-lsp-diagnostics*
+
+Decorates tree nodes with LSP diagnostic severity (error/warn/…) rolled up
+from the files under them, so a directory with a broken file inside it is
+visible without expanding into it first.
+
+Module: lua/filetree/features/lsp/lsp_diagnostics/
+
+------------------------------------------------------------------------------
+AUTO RESIZE                                             *filetree-auto-resize*
+
+Responsive tree sidebar width driven by `VimResized`: breakpoints map editor
+column count to a tree width, defaulting to `<100 cols → 25`, `<140 → 30`,
+`≥140 → 35` (the largest breakpoint ≤ current columns wins). Off by
+default because it fights the manually-driven `window_size_cycler` (on by
+default) — enabling both means every manual resize gets silently reverted on
+the next `VimResized`.
+
+Config: `opts.features.auto_resize.enabled` (default false), `breakpoints`,
+        `min_width` (20), `max_width` (60)
+
+Usercmds: `:Filetree resize [width]`
+
+Module: lua/filetree/features/nav/auto_resize/
+
+------------------------------------------------------------------------------
+BUFFER CYCLE                                           *filetree-buffer-cycle*
+
+`<C-n>`/`<C-p>` cycle the buffer shown in the *adjacent* editor window (like
+`:bnext`/`:bprevious`) while focus stays in the tree — verified against a
+live neo-tree buffer to not collide with neo-tree's own default
+`window.mappings` (unlike `<C-f>`/`<C-b>`, which neo-tree claims natively for
+`scroll_preview`).
+
+Keymaps: <C-n> <C-p>
+
+Module: lua/filetree/features/nav/buffer_cycle/
+
+------------------------------------------------------------------------------
+REVEAL ALT                                               *filetree-reveal-alt*
+
+`B` resolves the alternate buffer (`#`) and calls `adapter.open_reveal()` on
+it, adjusting the tree root if the file lives outside the current one — the
+tree-buffer analogue of `:e #`.
+
+Keymaps: B
+
+Module: lua/filetree/features/nav/reveal_alt/
+
+------------------------------------------------------------------------------
+SIDEBAR GUARD                                         *filetree-sidebar-guard*
+
+Pins the tree window with `winfixbuf` so a stray `:buffer N` — most often a
+mouse click on a buffer in a tabline (NvChad's tabufline, bufferline, …)
+while the cursor is *inside* the tree — cannot swap the tree's buffer out of
+its window.
+
+Without the pin, that swap displaces the tree, and neo-tree's own recovery
+(`buffer_enter_event`) then reopens the sidebar through a bare `:vsplit`: with
+the default `splitright = false` the new file window lands to the *left* of
+the tree and shoves the sidebar to the right. The repro is exactly "tree open
+on the left, click a tabline buffer, tree jumps to the right".
+
+Callers that respect `winfixbuf` (NvChad's `goto_buf`, neo-tree's own
+`open_file`) put the file in a real editor window instead; callers that don't
+get a harmless error rather than a reparented tree. The flag is lifted only
+for the one legitimate in-window buffer swap — switching source via the
+`source_selector` winbar — which neo-tree brackets with its
+`NEO_TREE_WINDOW_BEFORE_OPEN` / `_AFTER_OPEN` events.
+
+neo-tree + Neovim 0.10+ only (`&winfixbuf`); a no-op for every other adapter
+and on older Neovim.
+
+Config: `opts.features.sidebar_guard.enabled` (default `true`),
+        `opts.features.sidebar_guard.winfixbuf` (default `true` — set
+        `false` to keep the feature registered but leave `winfixbuf`
+        untouched)
+
+Module: lua/filetree/features/nav/sidebar_guard/
+
+------------------------------------------------------------------------------
+TREE TRAVERSE                                         *filetree-tree-traverse*
+
+`-` navigates up to the parent directory, `+` sets the directory under the
+cursor as the new tree root — via `adapter.set_root()` where supported,
+falling back to `:cd` + `adapter.open_cwd()` otherwise. A manual re-root here
+is reported to `cwd_mode.notify_manual_root()` when that feature is active, so
+a `lock`/`project`/`tree_leads` policy moves its pin instead of fighting the
+user's own `+`/`-` press.
+
+Keymaps: - +
+
+Usercmds: `:Filetree traverse up`, `:Filetree traverse down`
+
+Module: lua/filetree/features/nav/tree_traverse/
+
+------------------------------------------------------------------------------
+MARKS                                                         *filetree-marks*
+
+Toggle a mark on the node under the cursor (`m`), batch mark/unmark
+(`]m`/`[m`), clear every mark (`<leader>mc`) and list them (`<leader>ms`) —
+the selection mechanism several fileops features (trash, copy/move,
+copy_file_list) build on for "act on more than one node at once".
+
+Navigating and selecting marks (2026-08-24)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Marks were set one line at a time and, once set, had no way back to them. Two
+additions close the flag/option audit's entries:
+
+Jumping. `Ngm` goes to the Nth marked node in render order, `]M`/`[M` cycle to
+the next/previous one, wrapping. Navigation follows the tree *as rendered*,
+not `get_marked()`'s alphabetical order — that is the right answer for "what
+is marked" and the wrong one for moving around, and a marked node inside a
+collapsed directory has no line to jump to at all. An out-of-range count
+clamps to the last mark rather than erroring, the way `G` treats one.
+
+Visual-mode marking. `m` over a selection marks every node in it, `[m`
+unmarks. These are the only Visual-mode keymaps filetree binds, and the
+audit's entry about there being none was really about this: a line range over
+a rendered tree is exactly a set of nodes, which is the one thing a tree
+buffer's Visual mode is good for. Marking a run of files no longer means
+pressing `m` once per line.
+
+Diffing two marked files against each other was listed as missing, but
+`diff_marked()` has always done exactly that (it requires exactly two marks
+and diffs them against one another, not against the current buffer) —
+nothing to add.
+
+`goto_adjacent_mark`, `mark_visual`) plus `m`/`[m` in Visual mode (`]M`),
+`marks.keymap_prev` (`[M`)
+
+Keymaps: m ]m [m <leader>mc <leader>ms gm ]M [M
+
+Config: `marks.keymap_goto` (default `gm`), `marks.keymap_next`
+
+Module: lua/filetree/features/org/marks/
+
+------------------------------------------------------------------------------
+SESSION                                                     *filetree-session*
+
+Persists and restores tree state (root, expanded nodes, marks) across Neovim
+sessions, so reopening a project brings the tree back roughly where you left
+it rather than starting fresh every time.
+
+Module: lua/filetree/features/org/session/
+
+------------------------------------------------------------------------------
+COPY FILE LIST                                       *filetree-copy-file-list*
+
+Copies a recursive listing of files and/or directories under the node —
+`[f`/`]f` for files, `[F`/`]F` for directories — useful for pasting a
+directory's contents into an issue, a prompt, or a script.
+
+Mark-aware: with nodes marked (see Marks), the listing is collected from every
+marked node (deduplicated) instead of just the one under the cursor — mark
+three directories, then `]f` copies the combined relative file listing across
+all three.
+
+Keymaps: [f ]f [F ]F
+
+Module: lua/filetree/features/paths/copy_file_list/
+
+------------------------------------------------------------------------------
+LUA REQUIRE COPY                                   *filetree-lua-require-copy*
+
+`rq` copies the node as a `require("…")` string, resolved the same way
+FILEOPS.md's `create_from_template` resolves its `${module}` template variable
+— for a Lua file under a real `lua/` directory, the canonical dotted module
+path.
+
+Keymaps: rq
+
+Module: lua/filetree/features/paths/lua_require_copy/
+
+------------------------------------------------------------------------------
+MARKDOWN LINKS                                       *filetree-markdown-links*
+
+Copies the current node, a recursive listing, or every marked node as Markdown
+links (`ML`/`MR`/`MM`) — for dropping references into a README or a design
+doc directly from the tree, no manual path-to-link formatting. `ML` is
+mark-aware: with nodes marked it links all of them (one per line), same as
+`MM`; `MM` stays as an explicit marks-only keymap.
+
+Keymaps: ML MR MM
+
+Module: lua/filetree/features/paths/markdown_links/
+
+------------------------------------------------------------------------------
+PATH COPY                                                 *filetree-path-copy*
+
+Copies the node's absolute path or its parent directory's path (`[a`/`]a`), or
+the path relative to the project root (`[R`/`]R`) — keys covering the "I
+need this path somewhere else" cases without a prompt.
+
+Mark-aware: with nodes marked (see Marks), every `path_copy` keymap —
+including `pick` — copies one line per marked node instead of just the node
+under the cursor. Same rule as `copy_move`/`trash`: marks win when any are
+set, otherwise it's the cursor's node.
+
+Two more answer the cases where neither the cwd nor the project root is the
+right frame of reference:
+
+`]b` copies the path relative to the buffer open in the editor, in the `./x` /
+`../x` form a Markdown link target needs. This is the one that makes a pasted
+link actually resolve: with the cwd at the repo root,
+`docs/ROADMAP/ROADMAP.md` is correct in the root README and wrong in
+`docs/ROADMAP/Notes.md`, where the same file is `./ROADMAP.md`. `]b` reads the
+open buffer's directory instead of the cwd, so it is right in both. The base
+is the editor window's file, then the alternate file (`#`), then the cwd —
+so it still answers something when the tree is the only window.
+
+`[e` copies the absolute path, but folds a configured environment variable
+back into its root: `$REPOS_DIR/filetree.nvim/lua/x.lua` rather than
+`E:/repos/filetree.nvim/lua/x.lua`. Written into a note, that path still means
+the same file on a machine where the checkout lives on another drive. The
+variables to try are `env_roots` (default `{ "REPOS_DIR" }`, written without
+the `$`); the longest match wins, so a `$REPOS_DIR` inside `$HOME` beats
+`$HOME`. With no variable matching, the plain absolute path comes back.
+
+>lua
+path_copy = {
+  enabled = true,
+  keymap_buffer_rel = "]b",
+  keymap_env_root = "[e",
+  -- Longest match wins; each name is written without the `$`.
+  env_roots = { "REPOS_DIR", "XDG_CONFIG_HOME", "HOME" },
+}
+<
+
+Keymaps: [a ]a ]b [e
+
+Module: lua/filetree/features/paths/path_copy/
+
+------------------------------------------------------------------------------
+FILTER                                                       *filetree-filter*
+
+Live-filters the tree listing as you type (`/`) — narrows what's shown
+without leaving the tree, unlike find/grep below which open a separate picker.
+
+Keymaps: / <C-c>
+
+Module: lua/filetree/features/search/filter/
+
+------------------------------------------------------------------------------
+FIND FILES                                               *filetree-find-files*
+
+`f` finds files via whichever picker engine is available — telescope,
+fzf-lua, mini.pick, or a built-in fallback — auto-detected. `tf` forces
+telescope specifically, for a config running more than one picker plugin side
+by side.
+
+Keymaps: f tf
+
+Module: lua/filetree/features/search/find_files/
+
+------------------------------------------------------------------------------
+GREP IN DIR                                             *filetree-grep-in-dir*
+
+`gr` greps inside the node's directory using the same auto-detected picker
+engine as `find_files`; `tg` forces telescope specifically.
+
+Keymaps: gr tg
+
+Module: lua/filetree/features/search/grep_in_dir/
+
+------------------------------------------------------------------------------
+LIVE SEARCH                                             *filetree-live-search*
+
+Incremental search inside the tree (`gs`) — jumps between matches without
+filtering the listing down, complementing `filter` rather than duplicating it.
+
+Keymaps: gs
+
+Module: lua/filetree/features/search/live_search/
+
+------------------------------------------------------------------------------
+OPEN WITH                                                 *filetree-open-with*
+
+Opens the node with a configured external application (`<leader>sm`) — for
+file types you want handled by a specific program rather than Neovim's own
+`preview`/`open` path.
+
+Keymaps: <leader>sm
+
+Config: external-app mapping — see configuration.md
+
+Module: lua/filetree/features/system/open_with/
+
+------------------------------------------------------------------------------
+PDF CREATE                                               *filetree-pdf-create*
+
+The write direction of the same bridge: `gP` turns the image, markdown, text,
+HTML or office file(s) under the cursor into PDF(s). It always confirms first
+— unlike PDF open, which only reads, this writes new files to disk.
+
+Targets are gathered in the same order as Trash and Copy / Move: marked nodes
+if any are marked, where a marked directory expands to its own creatable
+direct children; otherwise the node under the cursor — a file means that one
+file, a directory means every direct child file pdfport can convert.
+Non-recursive on purpose: "all files in the folder" is this folder's own
+files, not a project-wide sweep.
+
+One PDF is produced per input file, next to its source (`on_conflict =
+"suffix"` by default) — a multi-file selection does not merge into one
+document. Files pdfport has no producer for are skipped and reported in the
+summary rather than treated as an error.
+
+Off by default, and pdfport.nvim is a soft dependency: without it the keymap
+warns and does nothing, rather than filetree requiring pdfport just to load.
+
+`on_conflict` (default `"suffix"`), `confirm` (default `true`)
+
+Keymaps: gP
+
+Config: `features.pdf_create.enabled` (default `false`),
+
+Module: lua/filetree/features/system/pdf_create/
+
+------------------------------------------------------------------------------
+PDF OPEN                                                   *filetree-pdf-open*
+
+When pdfport.nvim is installed, `.pdf` nodes dispatched through `preview`
+(UI.md) or opened directly can route through pdfport's own backend fallback
+chain (render into a buffer) instead of always shelling out to the system PDF
+reader. Soft dependency — without pdfport.nvim installed, `.pdf` nodes just
+open with the system reader, no prompt.
+
+`pdf_open`'s default keymap (`gp`) opens directly in `default_mode` (default
+"buffer"), no prompt. Set `default_mode = "picker"` (or bind `keymap_picker`)
+instead to get pdfport's own "open PDF as…" chooser — every backend/mode
+pdfport knows about, plus "system application", which is always offered even
+without pdfport.nvim installed (falls back to the system reader directly, no
+empty prompt).
+
+wired into `preview` — UI.md); see pdfport.nvim for the render side
+
+Module: lua/filetree/features/system/pdf_open/
+
+------------------------------------------------------------------------------
+SHELL RUN                                                 *filetree-shell-run*
+
+`i` prompts for a shell command and runs it in the node's directory — for
+one-off commands (`npm install`, `go build`) scoped to wherever the cursor
+happens to be in the tree, no manual `cd` first.
+
+Keymaps: i
+
+Module: lua/filetree/features/system/shell_run/
+
+------------------------------------------------------------------------------
+BREADCRUMBS                                             *filetree-breadcrumbs*
+
+Shows the path from the tree root down to the current node, so a deeply nested
+file's location is legible without scrolling up through every parent
+directory.
+
+Module: lua/filetree/features/ui/breadcrumbs/
+
+------------------------------------------------------------------------------
+CHEATSHEET                                               *filetree-cheatsheet*
+
+A float listing every active tree-buffer keymap, generated from the same
+binding table BINDINGS/KEYMAPS.md documents — so a forgotten key is one
+press away without leaving the tree or opening a doc file.
+
+Keymaps: ?
+
+Module: lua/filetree/features/ui/cheatsheet/
+
+------------------------------------------------------------------------------
+CONTEXT MENU                                           *filetree-context-menu*
+
+Right-click (`<RightMouse>`) opens a context menu through
+`lib.nvim.contextmenu`, which draws with nvzone/menu if it is installed, or
+its own themed `lib.nvim.ui.kit.menu` (no third-party plugin needed) otherwise
+— either way, right-click works out of the box. With the kit renderer, the
+clicked node's line is highlighted for as long as the menu stays open, and
+with the tree docked left/right the menu opens beside it rather than on top of
+it. See docs/menu.md for the entries offered and the full detail on both.
+
+Keymaps: <RightMouse>
+
+Module: lua/filetree/features/ui/context_menu/
+
+------------------------------------------------------------------------------
+CURSOR HIDE                                             *filetree-cursor-hide*
+
+Hides the block cursor inside the tree window, resolved adapter-agnostic via
+each adapter's own `filetypes` list rather than a single hardcoded filetype
+check.
+
+Module: lua/filetree/features/ui/cursor_hide/
+
+------------------------------------------------------------------------------
+NODE INFO                                                 *filetree-node-info*
+
+A float (`I`) reporting path, type, size, permission mode, and mtime for the
+node under the cursor. For a file: line count. For a directory: recursive item
+count plus aggregate size — computed on demand, not kept live, so it
+reflects the tree at the moment you press the key.
+
+Keymaps: I
+
+Module: lua/filetree/features/ui/node_info/
+
+------------------------------------------------------------------------------
+OPENED SYNC                                             *filetree-opened-sync*
+
+Re-renders the tree whenever a buffer opens or closes, so the tree plugin's
+own "this file is open" highlight stays in sync with reality instead of only
+updating on the tree's own redraw triggers.
+
+Module: lua/filetree/features/ui/opened_sync/
+
+------------------------------------------------------------------------------
+PREVIEW                                                     *filetree-preview*
+
+Toggles a live preview of the node under the cursor in the adjacent editor
+window, or a floating window — updates as the cursor moves, no separate open
+action needed. `<Tab>`/`<CR>` dispatch images/PDFs to their own viewer instead
+of rendering raw bytes as text; `<PageUp>`/`<PageDown>` page a long preview
+without leaving the tree.
+
+(scroll) — see BINDINGS/KEYMAPS.md
+
+Keymaps: <Tab> <CR> <C-b> <C-f> <PageUp> <PageDown>
+
+Module: lua/filetree/features/ui/preview/
+
+------------------------------------------------------------------------------
+SIZE INFO                                                 *filetree-size-info*
+
+Shows file/directory sizes inline in the tree listing.
+
+Module: lua/filetree/features/ui/size_info/
+
+------------------------------------------------------------------------------
+TREE RESET                                               *filetree-tree-reset*
+
+`<Esc>` in one keystroke clears the active preview, any live filter, and an
+in-progress live search — the "get back to a plain tree" key.
+
+Keymaps: <Esc>
+
+Module: lua/filetree/features/ui/tree_reset/
+
+------------------------------------------------------------------------------
+WINDOW SIZE CYCLER                               *filetree-window-size-cycler*
+
+Cycles the tree window's width through a configured set of presets (`w`) — a
+fixed, deliberate step instead of manual `<C-w>` resizing.
+
+Keymaps: w
+
+Module: lua/filetree/features/ui/window_size_cycler/
+
+------------------------------------------------------------------------------
+WINDOW STYLE                                           *filetree-window-style*
+
+A blank statusline for the tree window (adapter-agnostic, on by default) plus
+optional isolated tree highlight groups (opt-in), so the tree reads as a
+distinct UI region rather than another ordinary buffer.
+
+configuration.md
+
+Config: isolated highlights are opt-in — see
+
+Module: lua/filetree/features/ui/window_style/
 
 ==============================================================================
 6. ADAPTERS                                               *filetree-adapters*

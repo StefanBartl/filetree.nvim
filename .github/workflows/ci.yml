@@ -74,3 +74,13 @@ jobs:
           nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
           nvim --clean --headless -u NONE -l TESTS/sidebar_guard.lua
           nvim --clean --headless -u NONE -l TESTS/refs/run.lua
+
+      # The FEATURE REFERENCE section of doc/filetree.txt is generated from
+      # docs/FEATURES/*.md and the binding catalog. Without this gate it would
+      # go stale the same way it did before it existed -- a new feature ships,
+      # `:help filetree-<it>` resolves to nothing, and nobody notices until
+      # somebody goes looking. Lives here rather than in the lint job because
+      # it loads the plugin, so it needs the lib.nvim checkout.
+      - name: doc/filetree.txt is in step with docs/FEATURES
+        working-directory: filetree.nvim
+        run: nvim --clean --headless -u NONE -l scripts/gen_vimdoc_reference.lua --check

@@ -120,8 +120,35 @@ every backend/mode pdfport knows about, plus "system application", which is
 always offered even without pdfport.nvim installed (falls back to the
 system reader directly, no empty prompt).
 
-- **Module:** `lua/filetree/features/system/pdf_open/`,
-  `lua/filetree/features/system/pdf_create/` (dispatch/creation sites,
+- **Module:** `lua/filetree/features/system/pdf_open/` (dispatch site,
   wired into `preview` — [UI.md](UI.md)); see
   [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) for the
   render side
+
+## PDF Create
+
+The write direction of the same bridge: `gP` turns the image, markdown,
+text, HTML or office file(s) under the cursor into PDF(s). It always
+confirms first — unlike PDF open, which only reads, this writes new files
+to disk.
+
+Targets are gathered in the same order as Trash and Copy / Move: marked
+nodes if any are marked, where a marked directory expands to its own
+creatable direct children; otherwise the node under the cursor — a file
+means that one file, a directory means every direct child file pdfport
+can convert. Non-recursive on purpose: "all files in the folder" is this
+folder's own files, not a project-wide sweep.
+
+One PDF is produced per input file, next to its source (`on_conflict =
+"suffix"` by default) — a multi-file selection does not merge into one
+document. Files pdfport has no producer for are skipped and reported in
+the summary rather than treated as an error.
+
+Off by default, and pdfport.nvim is a soft dependency: without it the
+keymap warns and does nothing, rather than filetree requiring pdfport
+just to load.
+
+- **Module:** `lua/filetree/features/system/pdf_create/`
+- **Keymaps:** `gP`
+- **Config:** `features.pdf_create.enabled` (default `false`),
+  `on_conflict` (default `"suffix"`), `confirm` (default `true`)
