@@ -1,6 +1,6 @@
 ---@module 'filetree.features.fileops.link_create'
 --- Create a symlink or hardlink inside the current tree directory, pointing
---- at a path entered via prompt.
+--- at a path entered via prompt, or via a two-step mark/paste usercmd pair.
 ---
 --- `:Filetree link` (no default keymap — usercmd-first, like path_copy's
 --- format picker) asks for a target path, then creates the link named after
@@ -9,10 +9,20 @@
 --- A directory target only ever gets a symlink (neither Windows nor POSIX
 --- allows an unprivileged hard link to a directory); a file target is offered
 --- a Symlink/Hardlink choice via kit.confirm.
+---
+--- `:Filetree link mark [path]` / `:Filetree link paste` are the fast-path
+--- pair: mark a source once (the node under the cursor, the focused editor
+--- buffer's file, or an explicit path), then paste it as a link into any
+--- number of nodes without retyping the source or being asked to choose a
+--- link kind each time — that choice is picked automatically instead (see
+--- `M.paste`). Marking again replaces the previous source; pasting does not
+--- clear it, so the same source can be linked into several places in a row
+--- (mirrors copy_move's copy-stays-staged behaviour).
 
 local confirm_choice = require("filetree.util.confirm_choice")
 local path = require("filetree.util.path")
 local platform = require("filetree.util.platform")
+local buffer = require("filetree.util.buffer")
 local mutate = require("lib.nvim.cross.fs.mutate")
 
 local M = {}
@@ -21,9 +31,19 @@ local M = {}
 local _cfg = {
   enabled = true,
   keymap = nil, -- off by default; set e.g. keymap = "gl" to bind one
+  keymap_mark = nil,
+  keymap_paste = nil,
 }
 ---@type FiletreeAdapter?
 local _adapter = nil
+
+---@class FiletreeLinkMarkedSource
+---@field path   string   Absolute path.
+---@field name   string   Basename, used both to notify and to name the link.
+---@field is_dir boolean
+
+---@type FiletreeLinkMarkedSource?
+local _marked = nil
 
 local notify = require("filetree.util.notify").create("[filetree.link_create]")
 local bind = require("filetree.util.bind")
@@ -38,6 +58,20 @@ local function resolve_parent_dir()
   if not node then return path.slashify(vim.fn.getcwd()) end
   if node.type == "directory" then return path.slashify(node.path) end
   return path.parent(node.path)
+end
+
+---@internal
+---Absolute-ize a raw, possibly relative, possibly trailing-slashed path.
+---`to_absolute`'s `fnamemodify(":p")` appends a trailing OS-native separator
+---for a path that is currently an existing directory; strip it again, or
+---`path.basename()` below returns "" and the link would be misnamed (e.g.
+---its own parent directory).
+---@param raw string
+---@return string
+local function to_target(raw)
+  local target = path.slashify(path.to_absolute(path.slashify(raw)))
+  if #target > 1 and target:sub(-1) == "/" then target = target:sub(1, -2) end
+  return target
 end
 
 ---@internal
@@ -95,13 +129,7 @@ function M.create()
     on_submit = function(input)
       if not input or input == "" then return end
 
-      -- fnamemodify(":p") (inside to_absolute) appends a trailing OS-native
-      -- separator for a path that is currently an existing directory, and
-      -- does not itself normalize separators — slashify again afterwards,
-      -- then strip it, or path.basename() below returns "" and the link
-      -- would be misnamed (e.g. its own parent directory).
-      local target = path.slashify(path.to_absolute(path.slashify(input)))
-      if #target > 1 and target:sub(-1) == "/" then target = target:sub(1, -2) end
+      local target = to_target(input)
       local stat = vim.uv.fs_stat(target)
       if not stat then
         notify.error("Target does not exist: " .. path.relative(target))
@@ -131,6 +159,79 @@ function M.create()
   })
 end
 
+-- ── Mark / paste ──────────────────────────────────────────────────────────────
+
+---@internal
+---Resolve what "the current source" means with no explicit path given: the
+---node under the cursor when the tree is the focused buffer, else the
+---focused editor buffer's file. Returns nil when neither applies (e.g. the
+---focused buffer is a terminal or an unnamed scratch buffer).
+---@return string?
+local function resolve_implicit_source()
+  if buffer.is_tree_buffer() and _adapter then
+    local node = _adapter.get_current_node()
+    if node then return path.slashify(node.path) end
+  end
+
+  local ctx = buffer.context()
+  return ctx and path.slashify(ctx.file) or nil
+end
+
+---Mark a link source: an explicit path, else the node under the cursor (run
+---from the tree), else the focused editor buffer's file. Replaces whatever
+---was marked before; use `M.paste()` to insert it as a link.
+---@param raw_path string?
+function M.mark(raw_path)
+  local target = (raw_path and raw_path ~= "") and to_target(raw_path) or resolve_implicit_source()
+
+  if not target then
+    notify.warn("Nothing to mark: not on a tree node, no file buffer focused, and no path given")
+    return
+  end
+
+  local stat = vim.uv.fs_stat(target)
+  if not stat then
+    notify.error("Path does not exist: " .. path.relative(target))
+    return
+  end
+
+  _marked = { path = target, name = path.basename(target), is_dir = stat.type == "directory" }
+  notify.info("Marked link source: " .. path.relative(target))
+end
+
+---Paste the marked source as a link into the node under the cursor (its own
+---directory if it's a directory, else its parent — same resolution as
+---`M.create`). The link kind is picked automatically rather than prompted,
+---since this pair is the fast path; `:Filetree link` still offers the
+---Symlink/Hardlink choice for anyone who wants to override it.
+---
+---Directories only ever get a symlink (neither OS allows an unprivileged hard
+---link to one). Files get a hardlink on Windows — needs no elevation or
+---Developer Mode, unlike a Windows symlink — and a symlink elsewhere, the
+---POSIX idiom.
+function M.paste()
+  if not _marked then
+    notify.warn("No link source marked — use `:Filetree link mark` first")
+    return
+  end
+  if not vim.uv.fs_stat(_marked.path) then
+    notify.error("Marked source no longer exists: " .. path.relative(_marked.path))
+    _marked = nil
+    return
+  end
+
+  local parent = resolve_parent_dir()
+  local link_path = parent .. "/" .. _marked.name
+
+  if vim.uv.fs_stat(link_path) then
+    notify.error("Already exists, not overwriting: " .. path.relative(link_path))
+    return
+  end
+
+  local kind = _marked.is_dir and "Symlink" or (platform.is_windows() and "Hardlink" or "Symlink")
+  do_create(_marked.path, link_path, kind, _marked.is_dir)
+end
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---@param cfg FiletreeLinkCreateConfig
@@ -148,11 +249,28 @@ function M.setup(cfg, adapter)
       end,
       desc = "create link",
     },
+    {
+      name = "mark",
+      field = "keymap_mark",
+      rhs = function()
+        M.mark()
+      end,
+      desc = "mark link source",
+    },
+    {
+      name = "paste",
+      field = "keymap_paste",
+      rhs = function()
+        M.paste()
+      end,
+      desc = "paste marked source as link",
+    },
   })
 end
 
 function M.teardown()
   _adapter = nil
+  _marked = nil
 end
 
 return M
