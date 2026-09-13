@@ -777,9 +777,13 @@
 -- ── open_replace ──────────────────────────────────────────────────────────────
 
 ---@class FiletreeOpenReplaceConfig
----@field enabled?    boolean
----@field keymap      string?   Key in tree buffer (default "O").
----@field close_tree? boolean   Close the tree after opening the file (default true).
+---@field enabled?         boolean
+---@field keymap           string?   Replace key in tree buffer (default "O"): opens over the editor window, the previous buffer stays listed.
+---@field keymap_swap      string?   Swap key (default "<M-CR>"): also closes the focused buffer and takes its bufferline slot.
+---@field keymap_swap_alt  string?   Second swap key (default "<C-CR>"), for terminals that deliver it distinctly from <CR>.
+---@field close_tree?      boolean   Close the tree after the replace key (default true).
+---@field swap_close_tree? boolean   Close the tree after a swap (default false).
+---@field keep_position?   boolean   Give the new buffer the replaced one's slot in `vim.t.bufs`, when a tabline plugin keeps that list (default true).
 
 -- ── open_variants ─────────────────────────────────────────────────────────────
 
