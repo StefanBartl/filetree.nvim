@@ -449,3 +449,22 @@ buffer if it's open elsewhere (`<M-s>`), without leaving the tree window.
 
 - **Module:** `lua/filetree/features/fileops/buffer_save/`
 - **Keymaps:** `<C-s>`, `<M-s>`
+
+## Link Create
+
+`:Filetree link` creates a symlink or hardlink inside the current tree
+directory, pointing at a path you type into a prompt. The link is named
+after the target's basename, and lands in the node under the cursor — its
+own directory if it is one, otherwise its parent, the same resolution
+Smart Create uses.
+
+A directory target only ever gets a symlink: neither Windows nor POSIX
+lets an unprivileged process hard-link a directory. A file target is
+offered the Symlink / Hardlink choice.
+
+Usercmd-first, like Path Copy's format picker: no key is bound by
+default, so set `features.link_create.keymap` if you want one.
+
+- **Module:** `lua/filetree/features/fileops/link_create/`
+- **Commands:** `:Filetree link`
+- **Config:** `features.link_create.keymap` (unset by default)
