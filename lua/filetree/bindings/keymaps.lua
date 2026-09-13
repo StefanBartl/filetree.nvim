@@ -133,6 +133,18 @@ return {
       scope = "tree",
     },
     { lhs = "O", desc = "Open (replace buffer)", feature = "open_replace", scope = "tree" },
+    {
+      lhs = "<M-CR>",
+      desc = "Open (swap: close focused buffer, keep its slot)",
+      feature = "open_replace",
+      scope = "tree",
+    },
+    {
+      lhs = "<C-CR>",
+      desc = "Open (swap) — only in terminals that send <C-CR>",
+      feature = "open_replace",
+      scope = "tree",
+    },
     { lhs = "sg", desc = "Open in vertical split", feature = "open_variants", scope = "tree" },
     { lhs = "sv", desc = "Open in horizontal split", feature = "open_variants", scope = "tree" },
     { lhs = "st", desc = "Open in new tab", feature = "open_variants", scope = "tree" },

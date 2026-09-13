@@ -385,12 +385,53 @@ See `lua/filetree/@types/refs.lua` for the full contract and
 
 ## Open Replace
 
-`O` opens the node under the cursor, replacing the current editor buffer
-rather than adding a new one — for when you don't want the previous
-buffer kept around in the window.
+Opens the node under the cursor into an existing editor window — never
+into the tree's own — in two shapes that differ in what becomes of the
+buffer already sitting there.
+
+`O` **replaces**: `:edit` over the editor window. The previous buffer
+stays in the buffer list, it just isn't on screen any more.
+
+`<M-CR>` (and `<C-CR>`) **swaps**: the previous buffer is closed as well,
+and the new file takes over the slot it held in the bufferline. Reach for
+it when the buffer list is a working set rather than a history — opening
+five files to find the one you wanted otherwise leaves four behind to
+close by hand.
+
+A swap refuses to run when the focused buffer has unsaved changes: it
+says so and does nothing at all, rather than opening the file and quietly
+leaving the old buffer behind (which would just be `O`). Write it first,
+or use `O`.
+
+**Keeping the slot** needs a buffer list that has slots. Neovim's own
+order is the buffer numbers, and those only ever increase — a file opened
+now can never sort ahead of one opened earlier, and no API moves it,
+because there is nothing to move: the order isn't stored, it's derived.
+Tabline plugins in the NvChad lineage keep `vim.t.bufs`, a per-tabpage
+list they order themselves, and that one *can* be rewritten — so the new
+buffer is put back at the index the replaced one held. Without such a
+list the swap still swaps; the new file simply lands where its buffer
+number puts it, which is last. Nothing errors, and there is nothing to
+configure for it — the list is either there or it isn't.
+
+Two keys for one action because which of them the terminal delivers
+isn't ours to decide: many terminals send plain `<CR>` for Ctrl+Enter, in
+which case `<C-CR>` never fires and the tree's own `<CR>` behaves as
+always. Alt+Enter travels further, so it's the primary.
+
+```lua
+open_replace = {
+  keymap          = "O",        -- replace; previous buffer stays listed
+  keymap_swap     = "<M-CR>",   -- swap; previous buffer closed
+  keymap_swap_alt = "<C-CR>",   -- same, where the terminal distinguishes it
+  close_tree      = true,       -- close the tree after `keymap`
+  swap_close_tree = false,      -- ... and after a swap
+  keep_position   = true,       -- new buffer takes the replaced one's slot
+},
+```
 
 - **Module:** `lua/filetree/features/fileops/open_replace/`
-- **Keymaps:** `O`
+- **Keymaps:** `O`, `<M-CR>`, `<C-CR>`
 
 ## Open Variants
 
