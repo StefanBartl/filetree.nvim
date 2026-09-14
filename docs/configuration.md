@@ -134,7 +134,7 @@ require("filetree").setup({
       keymap  = "<RightMouse>",  -- false disables the trigger without disabling the
                                   -- feature (e.g. to wire your own via
                                   -- filetree.integrations.menu.items() instead)
-      -- Opens the menu at the mouse via lib.nvim.contextmenu, which draws
+      -- Opens the menu at the mouse via ui.contextmenu, which draws
       -- with nvzone/menu if installed or its own kit renderer otherwise --
       -- no third-party plugin required either way. WHICH entries appear is
       -- controlled by the top-level `menu` config below, not here.

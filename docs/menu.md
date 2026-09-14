@@ -1,9 +1,9 @@
 # Menu
 
 filetree.nvim ships a context menu, drawn through
-[`lib.nvim.contextmenu`](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/contextmenu/README.md) —
+[`ui.contextmenu`](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/contextmenu/README.md) —
 [nvzone/menu](https://github.com/nvzone/menu) if it's installed, or
-`lib.nvim.ui.kit.menu` (no third-party plugin, themed by whatever colorscheme
+`ui.kit.menu` (no third-party plugin, themed by whatever colorscheme
 kit is already using) otherwise. Either way filetree.nvim itself does **not**
 depend on nvzone/menu directly — the plugin *owns* its entries (create,
 rename, copy/cut/paste, trash, open variants, path/markdown-link copy,
@@ -42,14 +42,14 @@ require("filetree").setup({
 Right-click a node — that's the whole setup, with or without
 [nvzone/menu](https://github.com/nvzone/menu) installed. `context_menu`
 degrades to a single notify (not repeated, and not an error) only if
-`lib.nvim` itself predates `lib.nvim.contextmenu`.
+`ui.nvim` itself predates `ui.contextmenu`.
 
 Every entry carries an icon (via `lib.nvim.ui.nerd_font`; a one-cell ASCII
 fallback when `vim.g.have_nerd_font` isn't set), so the icon column lines up
-whether or not a given entry has a glyph the same way `lib.nvim.contextmenu`
+whether or not a given entry has a glyph the same way `ui.contextmenu`
 already draws it for every other consumer.
 
-Two more things happen only with the kit renderer (`lib.nvim.contextmenu`'s
+Two more things happen only with the kit renderer (`ui.contextmenu`'s
 own fallback -- nvzone/menu exposes neither hook this needs):
 
 - **The clicked node's line stays highlighted for as long as the menu is
@@ -80,7 +80,7 @@ local items = ft.items()            -- { { name, cmd, rtxt }, … }
 local sub = ft.submenu()            -- { name = "  Filetree", items = {…} } | nil
 
 -- e.g. your own trigger for the tree window:
---   require("lib.nvim.contextmenu").open(ft.items(), { mouse = true })
+--   require("ui.contextmenu").open(ft.items(), { mouse = true })
 ```
 
 Entries are self-gating: an action whose feature is disabled is omitted, and

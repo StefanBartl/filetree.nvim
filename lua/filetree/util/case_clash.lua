@@ -97,7 +97,7 @@ function M.resolve(src, dst, cb)
     if choice == "Append a number" then
       cb(dir .. "/" .. conflict.unique_name(dir, base, {}, is_dir))
     elseif choice == "Enter a new name" then
-      require("lib.nvim.ui.kit").input({
+      require("ui.kit").input({
         title = "New name: ",
         default = base,
         on_submit = function(new_name)

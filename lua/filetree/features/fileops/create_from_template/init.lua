@@ -72,7 +72,7 @@ local ui_confirm = require("filetree.util.confirm")
 -- `picker` component is present (it exposes the results window/cursor the
 -- move keymaps need — the simple `filetree.util.select` shim does not).
 -- Falls back to the plain ui_select flow (no reordering) otherwise.
-local _ok_kit, kit = pcall(require, "lib.nvim.ui.kit")
+local _ok_kit, kit = pcall(require, "ui.kit")
 local has_kit_picker = _ok_kit and type(kit) == "table" and type(kit.picker) == "function"
 
 -- Optional: real fuzzy search + native content preview via pickers.nvim's
@@ -563,7 +563,7 @@ end
 ---substitution see the real destination path.
 ---@param dest_dir string  Absolute destination directory.
 function M.open(dest_dir)
-  require("lib.nvim.ui.kit").input({
+  require("ui.kit").input({
     title = "New file (in " .. vim.fn.fnamemodify(dest_dir, ":t") .. "): ",
     on_submit = function(name)
       if not name or name == "" then return end

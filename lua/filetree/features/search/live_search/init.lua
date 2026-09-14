@@ -24,7 +24,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.live_search]")
 
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
 local M = {}
 

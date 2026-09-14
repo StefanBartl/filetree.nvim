@@ -13,7 +13,7 @@
 ---     ▸ Show diff     → unified diff, then back to this chooser
 ---     ▸ Leave as-is
 
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 local notify = require("filetree.util.notify").create("[filetree.refs]")
 local apply = require("filetree.refs.apply")
 

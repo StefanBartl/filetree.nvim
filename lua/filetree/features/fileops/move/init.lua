@@ -41,7 +41,7 @@ local confirm_choice = require("filetree.util.confirm_choice")
 local progress = require("filetree.util.progress")
 local refs = require("filetree.refs")
 
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
 
 local M = {}

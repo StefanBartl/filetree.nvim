@@ -160,7 +160,7 @@ function M.create()
     display = display .. "/"
   end
 
-  require("lib.nvim.ui.kit").input({
+  require("ui.kit").input({
     title = "Create in " .. display .. "  (append / for a directory): ",
     on_submit = function(input)
       if not input or input == "" then return end

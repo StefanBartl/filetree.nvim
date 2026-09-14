@@ -141,7 +141,7 @@ function M.create()
     display = display .. "/"
   end
 
-  require("lib.nvim.ui.kit").input({
+  require("ui.kit").input({
     title = "Link target (path to link to), created in " .. display .. ": ",
     on_submit = function(input)
       if not input or input == "" then return end

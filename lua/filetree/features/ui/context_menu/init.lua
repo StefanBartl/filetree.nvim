@@ -1,22 +1,22 @@
 ---@module 'filetree.features.context_menu'
----@brief Right-click context menu in the tree, via lib.nvim.contextmenu.
+---@brief Right-click context menu in the tree, via ui.contextmenu.
 ---@description
 --- Binds a mouse trigger (default `<RightMouse>`) inside the tree buffer.
 --- On click: moves the cursor to the clicked node first (so the menu acts on
 --- what was actually clicked, not wherever the cursor happened to be), then
---- opens the menu through `lib.nvim.contextmenu`, populated with
+--- opens the menu through `ui.contextmenu`, populated with
 --- `filetree.integrations.menu.items()` — the SAME curated, self-gating entry
 --- list a host config could already wire up by hand. This feature only adds
 --- the trigger; which entries appear is still controlled entirely by the
 --- top-level `menu` config (group-level opt-out — see @types/config.lua).
 ---
---- `lib.nvim.contextmenu` resolves its own renderer -- nvzone/menu when it is
---- installed, `lib.nvim.ui.kit.menu` (no third-party dependency) otherwise --
+--- `ui.contextmenu` resolves its own renderer -- nvzone/menu when it is
+--- installed, `ui.kit.menu` (no third-party dependency) otherwise --
 --- so this feature needs neither directly. It is never require()d until the
 --- first click. On by default (opt-out); degrades to a single notify, not an
---- error, only if lib.nvim itself predates `lib.nvim.contextmenu`.
+--- error, only if ui.nvim itself predates `ui.contextmenu`.
 ---
---- Two extras, both kit-renderer only (lib.nvim.contextmenu has no
+--- Two extras, both kit-renderer only (ui.contextmenu has no
 --- equivalent hook for nvzone/menu, so they no-op there):
 ---  * the clicked node's line is highlighted for as long as the menu stays
 ---    open, so it is never ambiguous which node an entry would act on;
@@ -185,7 +185,7 @@ end
 -- ── Positioning beside the tree, when it is docked left/right ───────────────
 
 ---@internal
---- Extra `lib.nvim.contextmenu.open` opts that anchor the menu just outside
+--- Extra `ui.contextmenu.open` opts that anchor the menu just outside
 --- the tree window (`relative = "win"`, offset from ITS top-left corner) so
 --- it never overlaps the tree itself -- and so never the highlighted row
 --- from `highlight_current_node` either. `{}` (fall back to the default
@@ -232,12 +232,12 @@ local function open_menu()
     return -- nothing enabled/available to show
   end
 
-  local ok_cm, contextmenu = pcall(require, "lib.nvim.contextmenu")
+  local ok_cm, contextmenu = pcall(require, "ui.contextmenu")
   if not ok_cm or type(contextmenu.open) ~= "function" then
     clear_node_highlight()
     if not _warned_missing then
       notify.info(
-        "lib.nvim.contextmenu unavailable — context_menu has nothing to open (update lib.nvim, or set features.context_menu.enabled = false)"
+        "ui.contextmenu unavailable — context_menu has nothing to open (update ui.nvim, or set features.context_menu.enabled = false)"
       )
       _warned_missing = true
     end

@@ -3,7 +3,7 @@
 ---@description
 --- The write-direction counterpart to pdf_open: turns image/markdown/text/
 --- html/office file(s) under the cursor into PDF(s). Always asks first via
---- filetree.util.confirm (lib.nvim.ui.kit) — unlike pdf_open (which only
+--- filetree.util.confirm (ui.kit) — unlike pdf_open (which only
 --- reads), this writes new files to disk.
 ---
 --- Targets, same gather order as trash/copy_move:

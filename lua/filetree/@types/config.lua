@@ -651,7 +651,7 @@
 ---@field enabled     boolean
 ---@field keymap      string?   Create a PDF from the current node/marks/folder (default "gP").
 ---@field on_conflict "overwrite"|"suffix"|"error"?  Passed to pdfport.create() (default "suffix").
----@field confirm     boolean?  Ask via lib.nvim.ui.kit before creating (default true).
+---@field confirm     boolean?  Ask via ui.kit before creating (default true).
 
 -- ── smart_rename ─────────────────────────────────────────────────────────────
 
