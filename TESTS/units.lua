@@ -56,6 +56,25 @@ for _, candidate in ipairs(lib_candidates) do
   end
 end
 
+-- ui.nvim is a declared dependency too, same reasoning as lib.nvim above:
+-- context_menu's require("ui.contextmenu")/require("ui.kit.menu") moved out
+-- of lib.nvim.ui.kit/lib.nvim.contextmenu in the 2026-09 migration, so this
+-- suite needs ui.nvim findable to exercise the real (non-degraded) path
+-- rather than silently falling back to the "unavailable" branch instead.
+local ui_candidates = {}
+for _, env in ipairs({ "FILETREE_UI_NVIM", "UI_NVIM_PATH" }) do
+  local v = vim.env[env]
+  if v and v ~= "" then ui_candidates[#ui_candidates + 1] = v end
+end
+ui_candidates[#ui_candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/ui.nvim"
+ui_candidates[#ui_candidates + 1] = vim.fn.stdpath("data") .. "/lazy/ui.nvim"
+for _, candidate in ipairs(ui_candidates) do
+  if vim.fn.isdirectory(candidate .. "/lua/ui") == 1 then
+    vim.opt.rtp:prepend(candidate)
+    break
+  end
+end
+
 -- Cross-platform scratch-dir root for the many `tmp = TMP_ROOT .. "/units-*"`
 -- fixtures below. $TEMP is Windows-only; POSIX runners (incl. CI) don't set
 -- it, which previously hard-errored ("attempt to concatenate a nil value").
@@ -365,7 +384,7 @@ end
 -- ── util.select (adapter) ─────────────────────────────────────────────────────
 do
   package.loaded["filetree.util.select"] = nil
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     select = function(o)
       o.on_select(o.items[2], 2)
     end,
@@ -376,7 +395,7 @@ do
     chosen = { item, idx }
   end)
   check("select passes original item + index", chosen and chosen[1] == "b" and chosen[2] == 2)
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.select"] = nil
 end
 
@@ -892,7 +911,7 @@ do
   il.setup({ enabled = true }, { name = "stub" })
 
   local shown
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     select = function(o)
       shown = o.items
     end,
@@ -915,7 +934,7 @@ do
 
   il.teardown()
   package.loaded["filetree.features.infra.ignore_list"] = nil
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.select"] = nil
   package.loaded["filetree.features.search.find_files"] = nil
 end
@@ -2313,7 +2332,7 @@ do
   vim.fn.writefile({ "See [old](old.md) here." }, linker)
 
   -- Auto-drive the "Rename to:" prompt and the resulting chooser.
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     input = function(opts)
       opts.on_submit("renamed.md")
     end,
@@ -2369,7 +2388,7 @@ do
     linker_lines[1]
   )
 
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.fileops.smart_rename"] = nil
 end
@@ -2464,7 +2483,7 @@ do
   vim.fn.writefile({ "old" }, old_path)
   vim.fn.writefile({ "existing" }, existing_path)
 
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     input = function(opts)
       opts.on_submit("existing.txt")
     end,
@@ -2528,7 +2547,7 @@ do
     "old file should still exist"
   )
 
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.fileops.smart_rename"] = nil
 end
@@ -2574,7 +2593,7 @@ if require("filetree.util.case_clash").case_insensitive_fs() then
   vim.fn.mkdir(tmp .. "/Telemetry", "p")
   vim.fn.writefile({ "payload" }, tmp .. "/Telemetry/a.txt")
 
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     input = function(opts)
       opts.on_submit("TELEMETRY")
     end,
@@ -2632,7 +2651,7 @@ if require("filetree.util.case_clash").case_insensitive_fs() then
   )
   check("smart_rename case-only: exactly one entry — not a copy", #vim.fn.readdir(tmp) == 1)
 
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.fileops.smart_rename"] = nil
 end
@@ -2736,7 +2755,7 @@ if HAS_CLIPBOARD then
   vim.fn.chdir(tmp)
   vim.fn.setreg("+", "clip content")
 
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     input = function(opts)
       opts.on_submit("new.txt")
     end,
@@ -2800,7 +2819,7 @@ if HAS_CLIPBOARD then
         ~= nil
   )
 
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.fileops.smart_create"] = nil
 end
@@ -2817,7 +2836,7 @@ do
   local target = tmp .. "/src/target.txt"
   vim.fn.writefile({ "hello link" }, target)
 
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     input = function(opts)
       opts.on_submit(target)
     end,
@@ -2880,7 +2899,7 @@ do
       and table.concat(vim.fn.readfile(tmp .. "/dest/target.txt"), "\n") == "hello link"
   )
 
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.fileops.link_create"] = nil
 end
@@ -2897,7 +2916,7 @@ do
   vim.fn.mkdir(tmp .. "/dest", "p")
   local target = tmp .. "/src/target_dir"
 
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     input = function(opts)
       opts.on_submit(target)
     end,
@@ -2955,7 +2974,7 @@ do
     check("link_create dir target: symlink created", link_stat.type == "link")
   end
 
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.confirm_choice"] = nil
   package.loaded["filetree.features.fileops.link_create"] = nil
 end
@@ -3452,7 +3471,7 @@ do
   vim.fn.mkdir(dest_dir, "p")
   vim.fn.writefile({ "existing" }, dest_dir .. "/new.lua")
 
-  package.loaded["lib.nvim.ui.kit"] = {
+  package.loaded["ui.kit"] = {
     select = function(o)
       o.on_select(o.items[1], 1)
     end, -- pick template 1
@@ -3509,7 +3528,7 @@ do
     vim.fn.readfile(dest_dir .. "/new.lua")[1] == "existing"
   )
 
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.confirm"] = nil
   package.loaded["filetree.util.select"] = nil
   package.loaded["filetree.features.fileops.create_from_template"] = nil
@@ -3561,7 +3580,7 @@ do
         }
       end,
     }
-    package.loaded["lib.nvim.ui.kit"] = {
+    package.loaded["ui.kit"] = {
       input = function(opts)
         opts.on_submit("new.lua")
       end,
@@ -3609,7 +3628,7 @@ do
         return nil
       end,
     }
-    package.loaded["lib.nvim.ui.kit"] = {
+    package.loaded["ui.kit"] = {
       select = function(o)
         o.on_select(o.items[1], 1)
       end,
@@ -3640,14 +3659,14 @@ do
     )
   end
 
-  -- Both sub-blocks above stub lib.nvim.ui.kit with an incomplete table (only
+  -- Both sub-blocks above stub ui.kit with an incomplete table (only
   -- `.input`/`.select`, no `.confirm`). create_from_template's own module-level
   -- `require("filetree.util.confirm")` captures whatever `kit` is live THE
   -- MOMENT it is first (re)loaded, and caches it — so unless that cache is
   -- invalidated too, any later feature calling confirm.lua (e.g. trash) would
   -- permanently get our incomplete stub and crash on `kit.confirm(...)`.
   package.loaded["pickers.engines"] = nil
-  package.loaded["lib.nvim.ui.kit"] = nil
+  package.loaded["ui.kit"] = nil
   package.loaded["filetree.util.select"] = nil
   package.loaded["filetree.util.confirm"] = nil
   package.loaded["filetree.features.fileops.create_from_template"] = nil
@@ -4435,7 +4454,7 @@ do
   check("breadcrumbs float: teardown closes it", #floats() == before)
 end
 
--- ── context_menu: right-click binding, opt-out default, via lib.nvim.contextmenu ──
+-- ── context_menu: right-click binding, opt-out default, via ui.contextmenu ──
 do
   local stub = setmetatable({
     name = "units-stub-context-menu",
@@ -4473,7 +4492,7 @@ do
   end
   check("context_menu: default keymap '<RightMouse>' bound", km["<RightMouse>"] ~= nil)
 
-  -- Without nvzone/menu on rtp: lib.nvim.contextmenu falls back to its own
+  -- Without nvzone/menu on rtp: ui.contextmenu falls back to its own
   -- kit renderer (no third-party dependency), so a click must not just avoid
   -- erroring -- it must actually open something. This is the regression
   -- this block exists for: the feature used to require("menu") directly and
@@ -4481,14 +4500,14 @@ do
   -- meant right-click opened NOTHING at all on a setup that (deliberately)
   -- doesn't have nvzone/menu.
   package.loaded["menu"] = nil
-  local kit_menu = require("lib.nvim.ui.kit.menu")
+  local kit_menu = require("ui.kit.menu")
   kit_menu.close() -- in case an earlier test left one open
   local ok_no_menu = pcall(km["<RightMouse>"].callback)
   check("context_menu: click without nvzone/menu installed does not error", ok_no_menu)
   check("context_menu: falls back to the kit renderer and actually opens it", kit_menu.is_open())
   kit_menu.close()
 
-  -- With a stubbed nvzone/menu: lib.nvim.contextmenu must prefer it (its
+  -- With a stubbed nvzone/menu: ui.contextmenu must prefer it (its
   -- documented "auto" default) and call menu.open(items, {mouse=true}) with
   -- the SAME entries filetree.integrations.menu.items() builds (that
   -- module's own content is covered by TESTS/menu.lua; this only checks the
@@ -4508,17 +4527,17 @@ do
   end
   package.loaded["menu"] = nil
 
-  -- lib.nvim.contextmenu itself missing (an old lib.nvim): degrades to a
+  -- ui.contextmenu itself missing (an old ui.nvim): degrades to a
   -- notify, same as the "nothing to open" case always did.
-  package.preload["lib.nvim.contextmenu"] = function()
-    error("simulated: lib.nvim too old to have contextmenu")
+  package.preload["ui.contextmenu"] = function()
+    error("simulated: ui.nvim too old to have contextmenu")
   end
-  package.loaded["lib.nvim.contextmenu"] = nil
+  package.loaded["ui.contextmenu"] = nil
   local ok_no_lib = pcall(km["<RightMouse>"].callback)
-  package.preload["lib.nvim.contextmenu"] = nil
-  package.loaded["lib.nvim.contextmenu"] = nil
-  require("lib.nvim.contextmenu") -- restore the real module for later tests
-  check("context_menu: missing lib.nvim.contextmenu does not error either", ok_no_lib)
+  package.preload["ui.contextmenu"] = nil
+  package.loaded["ui.contextmenu"] = nil
+  require("ui.contextmenu") -- restore the real module for later tests
+  check("context_menu: missing ui.contextmenu does not error either", ok_no_lib)
 
   -- keymap = false disables the binding without disabling the feature.
   local stub2 = setmetatable({
@@ -4630,7 +4649,7 @@ do
     #hl_calls == 1 and hl_calls[1].hl == "FiletreeContextMenuNode"
   )
 
-  local kit_menu = require("lib.nvim.ui.kit.menu")
+  local kit_menu = require("ui.kit.menu")
   check("context_menu extras: kit menu is open after the click", kit_menu.is_open())
 
   -- The highlight must still be up right here, before the menu is closed --

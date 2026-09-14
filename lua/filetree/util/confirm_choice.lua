@@ -10,7 +10,7 @@
 ---     function(choice) ... end   -- choice is one of the strings above, or nil
 ---   )                            -- if the dialog was dismissed (Esc/q)
 
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 
 ---@param question string
 ---@param choices string[]

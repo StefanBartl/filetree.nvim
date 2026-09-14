@@ -14,7 +14,7 @@
 ---   :FiletreeFilter [query]
 ---   :FiletreeFilterClear
 
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
 local M = {}
 
@@ -121,7 +121,7 @@ end
 
 -- ── Floating input ────────────────────────────────────────────────────────────
 
----@type Lib.UI.Kit.Surface|nil
+---@type Ui.Kit.Surface|nil
 local _surf = nil
 
 ---Open the floating filter-query input, focusing it if already open.

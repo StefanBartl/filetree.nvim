@@ -68,7 +68,36 @@ local function add_lib_nvim()
   return nil
 end
 
+-- ui.nvim resolution, same candidate order as add_lib_nvim() above:
+-- ui.kit (kit.input/kit.confirm, stubbed below) moved out of
+-- lib.nvim.ui.kit in the 2026-09 migration, so this suite needs ui.nvim
+-- findable too -- unlike lib.nvim above, require("ui.kit") below is not
+-- pcall'd, so a missing ui.nvim would crash this suite outright rather
+-- than degrade.
+local function add_ui_nvim()
+  local candidates = {}
+  if vim.env.FILETREE_UI_NVIM then candidates[#candidates + 1] = vim.env.FILETREE_UI_NVIM end
+  if vim.env.UI_NVIM_PATH then candidates[#candidates + 1] = vim.env.UI_NVIM_PATH end
+  candidates[#candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/ui.nvim"
+  candidates[#candidates + 1] = vim.fn.stdpath("data") .. "/lazy/ui.nvim"
+
+  for _, path in ipairs(candidates) do
+    local norm = vim.fs.normalize(path)
+    if vim.fn.isdirectory(norm .. "/lua/ui") == 1 then
+      vim.opt.rtp:prepend(norm)
+      package.path = table.concat({
+        norm .. "/lua/?.lua",
+        norm .. "/lua/?/init.lua",
+        package.path,
+      }, ";")
+      return norm
+    end
+  end
+  return nil
+end
+
 add_lib_nvim()
+add_ui_nvim()
 
 local fixtures_root = vim.fn.fnamemodify(this, ":p:h") .. "/fixtures"
 local scratch_root = (vim.fn.has("win32") == 1 and vim.env.TEMP or "/tmp") .. "/filetree-refs-test"
@@ -132,7 +161,7 @@ end
 -- ── UI stubs ─────────────────────────────────────────────────────────────────
 -- kit.input opens a real floating prompt in insert mode, which headless Neovim
 -- cannot drive; kit.confirm likewise. Both are replaced by scripted answers.
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 local next_input, next_choice = nil, nil
 ---@diagnostic disable-next-line: duplicate-set-field
 kit.input = function(opts)

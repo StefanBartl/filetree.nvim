@@ -22,7 +22,7 @@
 --- Skips neo-tree, whose native help is already complete.
 
 local map = require("filetree.util.map")
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
 
 local M = {}
@@ -33,7 +33,7 @@ local _cfg = {
   keymap = "?",
 }
 
----@type Lib.UI.Kit.Surface|nil
+---@type Ui.Kit.Surface|nil
 local _surf = nil
 
 local function close_win()

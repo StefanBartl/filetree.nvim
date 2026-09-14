@@ -45,6 +45,23 @@ for _, candidate in ipairs(lib_candidates) do
   end
 end
 
+-- ui.nvim is a declared dependency too: filetree.refs.ui requires("ui.kit")
+-- unconditionally (not lazy, not pcall'd), and setup() below loads refs
+-- eagerly -- same candidate order as lib.nvim above.
+local ui_candidates = {}
+for _, env in ipairs({ "FILETREE_UI_NVIM", "UI_NVIM_PATH" }) do
+  local v = vim.env[env]
+  if v and v ~= "" then ui_candidates[#ui_candidates + 1] = v end
+end
+ui_candidates[#ui_candidates + 1] = vim.fn.fnamemodify(root, ":h") .. "/ui.nvim"
+ui_candidates[#ui_candidates + 1] = vim.fn.stdpath("data") .. "/lazy/ui.nvim"
+for _, candidate in ipairs(ui_candidates) do
+  if vim.fn.isdirectory(candidate .. "/lua/ui") == 1 then
+    vim.opt.rtp:prepend(candidate)
+    break
+  end
+end
+
 local passed, failed = 0, 0
 local function check(name, ok, detail)
   if ok then

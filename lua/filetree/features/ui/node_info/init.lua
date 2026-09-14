@@ -4,7 +4,7 @@
 local line_count = require("filetree.util.line_count")
 
 local notify = require("filetree.util.notify").create("[filetree]")
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
 local M = {}
 
@@ -13,7 +13,7 @@ local _cfg = {}
 ---@type FiletreeAdapter?
 local _adapter = nil
 
----@type Lib.UI.Kit.Surface|nil
+---@type Ui.Kit.Surface|nil
 local _surf = nil
 local _last_path = nil
 

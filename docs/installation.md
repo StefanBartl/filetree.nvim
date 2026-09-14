@@ -6,6 +6,7 @@
 | --- | --- |
 | Neovim | **0.10+** — `vim.system()` and `vim.uv` are used unguarded, and lib.nvim itself requires 0.10 |
 | [lib.nvim](https://github.com/StefanBartl/lib.nvim) | required — the `:Filetree`/`:Ft` command layer is built on `usercmd.composer`. Most other uses (notify, `find_root`) have local fallbacks, but the commands do not register without it |
+| [ui.nvim](https://github.com/StefanBartl/ui.nvim) | required — the right-click context menu (`ui.contextmenu`, `ui.kit.menu`) is on by default; degrades to a single notify, not an error, if missing — see [Integrations](integrations.md) |
 | One of [neo-tree.nvim](https://github.com/nvim-neo-tree/neo-tree.nvim) or [nvim-tree.lua](https://github.com/nvim-tree/nvim-tree.lua) | required — netrw, oil.nvim and mini.files are supported as additional adapters, not as the primary one |
 
 Optional, each detected at runtime and degrading to nothing when absent:
@@ -16,7 +17,7 @@ Optional, each detected at runtime and degrading to nothing when absent:
 | `rg` (ripgrep) | Grep-in-dir and the reference scan |
 | [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | `.pdf` nodes rendered into a buffer |
 | [which-key.nvim](https://github.com/folke/which-key.nvim) | Labels for the keymap set |
-| [nvzone/menu](https://github.com/nvzone/menu) | Renders the context menu if installed; `lib.nvim.ui.kit.menu` draws it otherwise, so right-click works either way — see [Integrations](integrations.md) |
+| [nvzone/menu](https://github.com/nvzone/menu) | Renders the context menu if installed; `ui.kit.menu` draws it otherwise, so right-click works either way — see [Integrations](integrations.md) |
 
 The CLI tools above are declared in [install.json](install.json) and read by
 lib.nvim's
@@ -31,8 +32,8 @@ spec with `deps_popup = false`, or globally with
 
 filetree.nvim must load **after** your tree plugin's own config runs, so pick a
 load point like `event = "VeryLazy"` (lazy.nvim) or place the `setup()` call after
-the tree plugin is configured. Only **one** tree plugin is needed; `lib.nvim` is a
-declared dependency.
+the tree plugin is configured. Only **one** tree plugin is needed; `lib.nvim`
+and `ui.nvim` are both declared dependencies.
 
 ### lazy.nvim
 
@@ -42,6 +43,7 @@ declared dependency.
   event = "VeryLazy",   -- load AFTER the tree plugin's config function runs
   dependencies = {
     "StefanBartl/lib.nvim",        -- shared helpers
+    "StefanBartl/ui.nvim",         -- right-click context menu (ui.contextmenu)
     "nvim-neo-tree/neo-tree.nvim", -- or: "nvim-tree/nvim-tree.lua"
   },
   config = function()
@@ -58,6 +60,7 @@ use {
   after    = "neo-tree.nvim",   -- ensure the tree plugin is configured first
   requires = {
     "StefanBartl/lib.nvim",
+    "StefanBartl/ui.nvim",
     "nvim-neo-tree/neo-tree.nvim", -- or: "nvim-tree/nvim-tree.lua"
   },
   config = function()
@@ -70,6 +73,7 @@ use {
 
 ```vim
 Plug 'StefanBartl/lib.nvim'
+Plug 'StefanBartl/ui.nvim'
 Plug 'nvim-neo-tree/neo-tree.nvim'   " or: Plug 'nvim-tree/nvim-tree.lua'
 Plug 'StefanBartl/filetree.nvim'
 ```
@@ -86,7 +90,7 @@ require("filetree").setup({ adapter = "neotree" })
 local add, now = MiniDeps.add, MiniDeps.now
 add({
   source  = "StefanBartl/filetree.nvim",
-  depends = { "StefanBartl/lib.nvim", "nvim-neo-tree/neo-tree.nvim" },
+  depends = { "StefanBartl/lib.nvim", "StefanBartl/ui.nvim", "nvim-neo-tree/neo-tree.nvim" },
 })
 now(function()
   require("filetree").setup({ adapter = "neotree" })

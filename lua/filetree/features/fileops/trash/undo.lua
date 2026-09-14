@@ -4,7 +4,7 @@
 local notify = require("filetree.util.notify").create("[filetree.trash.undo]")
 local platform = require("filetree.util.platform")
 
-local kit = require("lib.nvim.ui.kit")
+local kit = require("ui.kit")
 local M = {}
 
 ---How many trash operations stay undoable.

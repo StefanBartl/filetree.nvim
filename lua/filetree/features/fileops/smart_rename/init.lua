@@ -209,7 +209,7 @@ function M.rename_current()
   -- are switched off, so the flow below stays the same either way.)
   local refs_handle = refs.prefetch({ old_path }, { op = "rename" })
 
-  require("lib.nvim.ui.kit").input({
+  require("ui.kit").input({
     title = "Rename to: ",
     default = old_name,
     on_submit = function(new_name)

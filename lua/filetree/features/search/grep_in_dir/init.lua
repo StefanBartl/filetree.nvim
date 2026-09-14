@@ -209,7 +209,7 @@ end
 ---@return boolean
 local function via_builtin(dir, pattern)
   if not pattern or pattern == "" then
-    require("lib.nvim.ui.kit").input({
+    require("ui.kit").input({
       title = "Grep pattern: ",
       on_submit = function(input)
         if input == "" then return end
