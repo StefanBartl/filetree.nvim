@@ -61,6 +61,7 @@
 ---@field get_expanded_paths? fun(): string[]|nil  Absolute paths of the currently expanded directories. Implemented by no backend yet.
 ---@field expand_paths? fun(paths: string[]): boolean  Re-expand the given directories. Implemented by no backend yet.
 ---@field install_reveal_guard? fun(): nil  Backend-specific guard against a reveal fighting the user's cursor; only the neo-tree adapter has one.
+---@field on_render? fun(callback: fun()): fun()  Subscribe `callback` to fire whenever the backend (re)renders its tree on its OWN schedule (not just filetree's BufEnter/BufWritePost dispatch) -- e.g. an async git-status fetch or a filesystem-watcher event. Returns an unsubscribe function. Needed by decorations drawn as extmarks (marks' checkmarks), which a backend-initiated redraw wipes silently. Only the neo-tree adapter implements it; others degrade to redrawing on the buffer-lifecycle events only.
 
 ---@alias FiletreeAdapterName "neotree"|"nvimtree"|string
 

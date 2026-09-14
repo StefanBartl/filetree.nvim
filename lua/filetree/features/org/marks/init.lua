@@ -36,6 +36,10 @@ local _cfg = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
+---Unsubscribe handle for `_adapter.on_render`, when the adapter supports it.
+---@type fun()?
+local _unsubscribe_render = nil
+
 ---@type table<string, boolean>  absolute path → marked
 local _marks = {}
 
@@ -325,6 +329,14 @@ function M.setup(config, adapter)
     end,
   })
 
+  -- ...and whenever the adapter re-renders the tree on ITS OWN schedule (a
+  -- git-status fetch landing, a filesystem-watcher event, ...). Without this,
+  -- a checkmark placed as an extmark on the previous render gets wiped by the
+  -- next such redraw and only reappears on the next BufEnter/BufWritePost --
+  -- which reads as "the checkmark vanishes after a second". Optional: only
+  -- adapters that expose `on_render` (currently neo-tree) get this.
+  if type(adapter.on_render) == "function" then _unsubscribe_render = adapter.on_render(redraw) end
+
   -- Keymaps inside tree buffer
   bind.bind("marks", _cfg, {
     -- `keymap` is one action with two modes: on a line it toggles that node,
@@ -423,6 +435,10 @@ end
 
 function M.teardown()
   bufevents.unregister("marks")
+  if _unsubscribe_render then
+    _unsubscribe_render()
+    _unsubscribe_render = nil
+  end
   _marks = {}
   if _adapter then
     local _, bufnr = _adapter.is_open()

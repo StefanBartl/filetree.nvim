@@ -151,6 +151,7 @@ Exercises: `nvim_buf_set_extmark`, end-of-line virtual text.
 | C.2 | Press `m` again on the same file | The `✓` disappears (toggle) |
 | C.3 | Mark several files | All of them show `✓` at once |
 | C.4 | Close and reopen the tree | The marks are gone — no persistence is expected here, and that is correct |
+| C.4b | Mark a file, then trigger a neo-tree-initiated redraw that filetree didn't ask for (`:Neotree refresh`, or just wait out an async git-status refresh) | The `✓` is still there — it must survive any render, not just filetree's own BufEnter/BufWritePost, and not just until "a second or so" passes |
 
 **git_status** (automatic, no keymap needed):
 
