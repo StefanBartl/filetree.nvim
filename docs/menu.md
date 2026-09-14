@@ -1,7 +1,7 @@
 # Menu
 
 filetree.nvim ships a context menu, drawn through
-[`ui.contextmenu`](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/contextmenu/README.md) —
+[`ui.contextmenu`](https://github.com/StefanBartl/ui.nvim/blob/main/lua/ui/contextmenu/README.md) —
 [nvzone/menu](https://github.com/nvzone/menu) if it's installed, or
 `ui.kit.menu` (no third-party plugin, themed by whatever colorscheme
 kit is already using) otherwise. Either way filetree.nvim itself does **not**

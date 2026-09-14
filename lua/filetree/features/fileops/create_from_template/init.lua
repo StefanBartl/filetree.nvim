@@ -53,7 +53,7 @@
 --- <M-j>/<M-k> reorder keymaps above only work through the built-in picker —
 --- set `prefer = "builtin"` to keep reordering instead of fuzzy search +
 --- preview. pickers.nvim is a soft dependency (pcall-required, like
---- lib.nvim's ui kit): absent, or `prefer = "builtin"`, and this falls back
+--- ui.nvim's ui kit): absent, or `prefer = "builtin"`, and this falls back
 --- to the original kit.picker/vim.ui.select flow unchanged.
 ---
 --- Keymap (default): "A" in tree buffer.
@@ -68,7 +68,7 @@ local map = require("filetree.util.map")
 local ui_select = require("filetree.util.select")
 local ui_confirm = require("filetree.util.confirm")
 
--- Reorderable picker: only available when lib.nvim's ui kit's lower-level
+-- Reorderable picker: only available when ui.nvim's ui kit's lower-level
 -- `picker` component is present (it exposes the results window/cursor the
 -- move keymaps need — the simple `filetree.util.select` shim does not).
 -- Falls back to the plain ui_select flow (no reordering) otherwise.
