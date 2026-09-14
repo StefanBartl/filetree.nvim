@@ -591,6 +591,74 @@ function M.unsign_node(path)
   return ok
 end
 
+-- ── Render-event bridge ───────────────────────────────────────────────────────
+
+-- Neo-tree redraws its buffer on its own schedule, not just when filetree asks
+-- it to: a git-status fetch landing, a filesystem-watcher event, a background
+-- diagnostics update, `follow_current_file`, all rewrite the tree buffer from
+-- scratch. Any decoration drawn as an extmark on the previous render (marks'
+-- checkmarks, most visibly -- see the bug this fixes: a checkmark surviving
+-- only until the next such redraw, which reads as "vanishes after a second")
+-- gets wiped along with it. Callers that need to redraw a decoration in sync
+-- with neo-tree's OWN render cycle -- not just filetree's BufEnter/BufWritePost
+-- dispatch -- subscribe here instead of guessing at a poll interval.
+---@type table<fun(), true>
+local _render_listeners = {}
+---@type boolean
+local _render_hook_installed = false
+
+---@internal
+---@return boolean installed
+local function install_render_hook()
+  if _render_hook_installed then return true end
+  local ok, events = pcall(require, "neo-tree.events")
+  if not ok then return false end
+  local handler = {
+    event = events.AFTER_RENDER,
+    id = "filetree_neotree_after_render",
+    handler = function()
+      for callback in pairs(_render_listeners) do
+        pcall(callback)
+      end
+    end,
+  }
+  -- Unsubscribe first: neo-tree's event queue does not dedupe by id, so a
+  -- second subscribe (e.g. filetree.setup() re-running) would otherwise fire
+  -- the same handler twice per render.
+  pcall(events.unsubscribe, handler)
+  pcall(events.subscribe, handler)
+  _render_hook_installed = true
+  return true
+end
+
+---Subscribe `callback` to fire every time neo-tree finishes (re)rendering the
+---filesystem tree. Neo-tree may not be loaded yet (cmd-lazy), so installation
+---is retried a few times, mirroring sidebar_guard's deferred install.
+---@param callback fun()
+---@return fun() unsubscribe
+function M.on_render(callback)
+  local cancelled = false
+  if install_render_hook() then
+    _render_listeners[callback] = true
+  else
+    local tries = 0
+    local function retry()
+      if cancelled then return end
+      tries = tries + 1
+      if install_render_hook() then
+        if not cancelled then _render_listeners[callback] = true end
+        return
+      end
+      if tries < 20 then vim.defer_fn(retry, 150) end
+    end
+    vim.defer_fn(retry, 150)
+  end
+  return function()
+    cancelled = true
+    _render_listeners[callback] = nil
+  end
+end
+
 -- ── Reveal-prompt guard ───────────────────────────────────────────────────────
 
 ---@type boolean
