@@ -158,6 +158,42 @@ local function old_fully_replaced(content, old, new)
   return content:find(old, 1, true) == nil
 end
 
+---Assert every spec's `old` string really is in its fixture, BEFORE the
+---mutation runs.
+---
+---This exists because of one specific failure: a spec expected
+---`require "proj.util.shared"` in the deepest lua fixture while the fixture
+---used `require("proj.util.shared")`. The "updated" check then looked for a
+---string that could never appear, and its "old reference gone" partner passed
+---*vacuously* -- the unparenthesised old string was absent too. What that
+---looks like from the outside is "the engine updated b.lua but skipped
+---c.lua one level deeper", which is how it got filed as an apply-layer defect
+---and stayed on the roadmap for three weeks after the fixture was fixed
+---(41395fc).
+---
+---Checking up front turns spec/fixture drift into one honest failure that
+---names the real cause, instead of a half-signal that looks like a scanner
+---bug.
+---@param label string
+---@param work string   Scratch copy of the fixture tree.
+---@param checks {file: string, old: string, new: string}[]
+local function check_fixtures_match_spec(label, work, checks)
+  local missing = {}
+  for _, c in ipairs(checks) do
+    local content = read(work .. "/" .. c.file)
+    if content == nil then
+      missing[#missing + 1] = string.format("%s is not in the fixture at all", c.file)
+    elseif content:find(c.old, 1, true) == nil then
+      missing[#missing + 1] = string.format("%s does not contain %q", c.file, c.old)
+    end
+  end
+  check(
+    label .. ": every fixture holds what its spec expects to be rewritten",
+    #missing == 0,
+    table.concat(missing, "; ")
+  )
+end
+
 -- ── UI stubs ─────────────────────────────────────────────────────────────────
 -- kit.input opens a real floating prompt in insert mode, which headless Neovim
 -- cannot drive; kit.confirm likewise. Both are replaced by scripted answers.
@@ -377,6 +413,8 @@ local function run_lang(lang)
   vim.fn.delete(work, "rf")
   copy_dir(fixtures_root .. "/" .. lang.name, work)
 
+  check_fixtures_match_spec(lang.name, work, lang.checks)
+
   local hub_old = work .. "/" .. lang.hub
   local hub_dir = vim.fn.fnamemodify(hub_old, ":h")
   local hub_new = hub_dir .. "/" .. lang.new_name
@@ -487,27 +525,6 @@ local function run_lua_directory_cascade_check()
   local old_dir = work .. "/lua/proj/util"
   local new_dir = work .. "/lua/proj/utilities"
 
-  local done = false
-  local smart_rename = require("filetree.features.fileops.smart_rename")
-  smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, {
-    get_current_node = function()
-      return { path = old_dir, type = "directory" }
-    end,
-    refresh = function()
-      done = true
-      return true
-    end,
-  })
-
-  next_input = "utilities"
-  smart_rename.rename_current()
-  vim.wait(5000, function()
-    return done
-  end, 20)
-
-  check("lua dir cascade: directory renamed on disk", vim.fn.isdirectory(new_dir) == 1)
-  check("lua dir cascade: old directory gone", vim.fn.isdirectory(old_dir) == 0)
-
   local cascade_checks = {
     {
       file = "lua/proj/a.lua",
@@ -534,6 +551,29 @@ local function run_lua_directory_cascade_check()
       new = 'require("proj.utilities.shared_other")',
     },
   }
+  check_fixtures_match_spec("lua dir cascade", work, cascade_checks)
+
+  local done = false
+  local smart_rename = require("filetree.features.fileops.smart_rename")
+  smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, {
+    get_current_node = function()
+      return { path = old_dir, type = "directory" }
+    end,
+    refresh = function()
+      done = true
+      return true
+    end,
+  })
+
+  next_input = "utilities"
+  smart_rename.rename_current()
+  vim.wait(5000, function()
+    return done
+  end, 20)
+
+  check("lua dir cascade: directory renamed on disk", vim.fn.isdirectory(new_dir) == 1)
+  check("lua dir cascade: old directory gone", vim.fn.isdirectory(old_dir) == 0)
+
   for _, c in ipairs(cascade_checks) do
     local content = read(work .. "/" .. c.file)
     check(
