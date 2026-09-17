@@ -81,24 +81,36 @@ end
 ---Prefers the canonical `node.path`, falls back to the node id (which for the
 ---filesystem source is the path). Returns nil for nodes without a real path
 ---(message / loading / virtual nodes), so callers can skip them.
+---
+---`lib.nvim`'s `get_path` is the shared helper for this, and it returns
+---`path, is_dir` — computing that second value with a `vim.fn.isdirectory()`,
+---i.e. a filesystem stat, which this function then throws away. Measured at
+---~19us per call on Windows, against ~0us for reading `node.path` directly.
+---That was invisible while this ran once per cursor move; `get_node_at_line`
+---calls it once per rendered line per decorating feature, where it is ~100ms
+---per render on a 1000-line tree.
+---
+---So the plain field goes first and the helper stays as the fallback. Nothing
+---is lost by the order: `get_path`'s own path resolution is `node.path`, then
+---`node:get_id()` — exactly the two steps below it.
 ---@internal
 ---@param node table?
 ---@return string? path
 local function node_path(node)
   if not node then return nil end
-  -- Prefer the shared lib.nvim helper when available.
-  if libnode then
-    local p = libnode.get_path(node)
-    return p ~= "" and p or nil
-  end
-  -- Fallback: canonical node.path, then the node id.
+
   local p = node.path
   if (type(p) ~= "string" or p == "") and node.get_id then
     local ok, id = pcall(node.get_id, node)
     if ok then p = id end
   end
-  if type(p) ~= "string" or p == "" then return nil end
-  return p
+  if type(p) == "string" and p ~= "" then return p end
+
+  if libnode then
+    local lp = libnode.get_path(node)
+    return lp ~= "" and lp or nil
+  end
+  return nil
 end
 
 ---Determine whether a node is a directory (uses node.type, falls back to a
@@ -122,14 +134,21 @@ end
 ---
 ---`line_number` is the contract's 1-based line, and is the caller's to supply
 ---— it is the one field that does not come from the node itself.
+---
+---Neo-tree's `type = "message"` nodes — the `(N hidden items)` /
+---`(empty folder)` lines — are not nodes in the contract's sense and come back
+---nil. They carry a synthetic id (`…/.git_hidden_message`) that `node_path`
+---happily reports as a path, which then makes every caller treat a notice as a
+---file: a stat of something that does not exist per render, and, on
+---`get_current_node`, a `d`/rename aimed at it.
 ---@internal
 ---@param node table?
 ---@param line_number integer
 ---@return FiletreeNode?
 local function to_filetree_node(node, line_number)
-  if not node then return nil end
+  if not node or node.type == "message" then return nil end
   local path = node_path(node)
-  if not path then return nil end -- skip message / virtual nodes without a path
+  if not path then return nil end -- other virtual nodes without a real path
 
   local is_dir = node_is_dir(node, path)
   return {
@@ -202,24 +221,28 @@ end
 ---line numbers are 1-based buffer lines, hence the `+ 1` here and nowhere else.
 ---
 ---The lookup is nui's own line→node mapping rather than a reconstruction from
----`get_visible_nodes`: nui knows which lines it actually drew, so a line that
----renders no node (the root label, a `(empty folder)` message) resolves to nil
----instead of silently shifting every node below it by one. It also memoizes
----that mapping after the second lookup, which is what keeps the callers'
----per-line loop linear rather than quadratic.
+---`get_visible_nodes`: nui knows which lines it actually drew, so a line it
+---drew for something that is not a node resolves to nil instead of silently
+---shifting every node below it by one. It also memoizes that mapping after the
+---second lookup, which is what keeps the callers' per-line loop linear rather
+---than quadratic. Neo-tree's root IS a node and resolves like any other; its
+---`(N hidden items)`/`(empty folder)` notices are the lines that come back
+---nil.
 ---
 ---`bufnr` is checked against the live tree buffer instead of being ignored: a
 ---caller holding a stale bufnr (its tree closed and reopened between render
 ---and callback) would otherwise get nodes decorated onto the wrong buffer.
+---The check reads `state.winid` directly rather than calling `M.is_open()`,
+---which would resolve the source state a second time for the same answer —
+---cheap once, not free once per rendered line per feature.
 ---@param bufnr integer
 ---@param linenr integer  0-based buffer line
 ---@return FiletreeNode?
 function M.get_node_at_line(bufnr, linenr)
-  local _, tree_bufnr = M.is_open()
-  if not tree_bufnr or tree_bufnr ~= bufnr then return nil end
-
   local state = get_state()
   if not state or not state.tree then return nil end
+  if not state.winid or not vim.api.nvim_win_is_valid(state.winid) then return nil end
+  if vim.api.nvim_win_get_buf(state.winid) ~= bufnr then return nil end
 
   local ok, node = pcall(function()
     return state.tree:get_node(linenr + 1)

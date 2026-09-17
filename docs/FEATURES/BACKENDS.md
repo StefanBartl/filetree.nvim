@@ -90,6 +90,21 @@ resolve a line clears its namespace and returns, rather than guessing at an
 offset. A wrong guess would put another file's git status next to your file,
 which is worse than an absent decoration and much harder to notice.
 
+A line the backend drew for something that is *not* a node resolves to nil for
+the same reason — neo-tree's `(N hidden items)` / `(empty folder)` notices,
+nvim-tree's root-folder label and live-filter prompt. Those lines simply carry
+no decoration. (neo-tree's root directory, by contrast, is a real node and is
+decorated like any other.)
+
+**Cost.** Each of the four features asks once per rendered line, so a lookup
+that costs a filesystem stat costs a stat per node per feature per render —
+tens of milliseconds on a large tree, every redraw. Both adapters therefore
+answer purely from the node data the backend already holds: no `stat`, no
+`isdirectory`, and the line→node map itself comes from the backend (neo-tree)
+or is cached on the buffer's changedtick (nvim-tree). `TESTS/adapter_lines.lua`
+asserts the per-call cost stays far below a stat, so a refactor that
+reintroduces one fails instead of quietly costing a redraw.
+
 Both implementations defer to the backend's own mapping rather than
 reconstructing one by counting rendered nodes. neo-tree's nui tree knows which
 lines it drew, and nvim-tree's `core.get_nodes_starting_line()` knows how many

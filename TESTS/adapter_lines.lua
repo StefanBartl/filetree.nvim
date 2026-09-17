@@ -240,7 +240,26 @@ for i = 0, #lines - 1 do
     )
   )
 end
-check("it resolved nodes for the rendered lines", resolved >= 5, "resolved=" .. resolved)
+check("it resolved nodes for the rendered lines", resolved >= 4, "resolved=" .. resolved)
+
+-- A `(N hidden items)` / `(empty folder)` notice is a line neo-tree drew that
+-- is not a node, and must resolve to nil. It carries a synthetic id that looks
+-- enough like a path to fool a caller into statting it once per render, and —
+-- through the same conversion — into aiming a delete at it.
+local notice_line, notice_resolved
+for i = 0, #lines - 1 do
+  local text = lines[i + 1] or ""
+  if text:find("hidden item", 1, true) or text:find("empty folder", 1, true) then
+    notice_line, notice_resolved = i, by_line[i]
+    break
+  end
+end
+check(
+  "a `(N hidden items)` notice line resolves to nil, not to a pseudo-node",
+  notice_line ~= nil and notice_resolved == nil,
+  notice_line == nil and "no notice line was rendered"
+    or ("line " .. notice_line .. " -> " .. tostring(notice_resolved and notice_resolved.path))
+)
 
 -- The mapping must be RIGHT, not merely non-nil. Neo-tree truncates the root
 -- label to the window width, so that one line is compared by prefix.
@@ -267,6 +286,22 @@ check(
   "a bufnr that is not the tree buffer resolves to nil",
   adapter.get_node_at_line(vim.api.nvim_create_buf(false, true), 0) == nil
 )
+
+-- Every decorating feature calls this once per rendered line, so a per-call
+-- cost in the tens of microseconds is tens of milliseconds per render on a
+-- large tree. It was exactly that until the conversion stopped routing through
+-- a helper that stats the filesystem for an is-directory flag it discards.
+-- The bound is loose on purpose -- this guards against a regression of that
+-- shape, not against machine-to-machine variance.
+local reps = 2000
+adapter.get_node_at_line(bufnr, 0)
+local t0 = vim.uv.hrtime()
+for _ = 1, reps do
+  adapter.get_node_at_line(bufnr, 2)
+end
+local us = (vim.uv.hrtime() - t0) / reps / 1000
+print(string.format("    cost: %.2f us/call (~%.1f ms per 1000 lines x 5 features)", us, us * 5))
+check("one lookup stays well under a filesystem stat (~20us here)", us < 5, us .. " us/call")
 check("a line past the end resolves to nil", adapter.get_node_at_line(bufnr, #lines + 50) == nil)
 
 local features = require("filetree.features")
