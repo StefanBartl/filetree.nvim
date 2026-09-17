@@ -105,8 +105,14 @@ local function editor_dir()
   -- No editor window in this tab (tree opened alone): the alternate file is
   -- the last thing that was edited, which is what the user still means by
   -- "the open buffer".
-  local alt = vim.fn.expand("#:p")
-  if alt ~= "" then return vim.fn.fnamemodify(alt, ":h") end
+  --
+  -- pcall'd because `expand("#:p")` THROWS E194 when there is no alternate
+  -- file rather than returning "" -- which made the cwd fallback below
+  -- unreachable in exactly the situation it was written for, and turned `]b`
+  -- into an error for anyone who opens Neovim on a directory and copies
+  -- before editing anything.
+  local ok_alt, alt = pcall(vim.fn.expand, "#:p")
+  if ok_alt and type(alt) == "string" and alt ~= "" then return vim.fn.fnamemodify(alt, ":h") end
 
   return vim.fn.getcwd()
 end
