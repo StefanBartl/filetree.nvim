@@ -1650,6 +1650,13 @@ Copies the node's absolute path or its parent directory's path (`[a`/`]a`), or
 the path relative to the project root (`[R`/`]R`) — keys covering the "I
 need this path somewhere else" cases without a prompt.
 
+Every format copies with forward slashes, on every OS — `sub/b.lua`, never
+`sub\b.lua`. That is the separator the tree, its prompts and its notifications
+use, and the one this feature's own examples have always shown; `fnamemodify`
+was quietly handing back native ones on Windows for `absolute`, `relative`,
+`dirname`, `line` and `project_root`. Forward slashes work in Neovim, in libuv
+and in every shell the clipboard is likely to land in.
+
 Mark-aware: with nodes marked (see Marks), every `path_copy` keymap —
 including `pick` — copies one line per marked node instead of just the node
 under the cursor. Same rule as `copy_move`/`trash`: marks win when any are

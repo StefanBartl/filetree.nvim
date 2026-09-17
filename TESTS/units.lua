@@ -4938,6 +4938,94 @@ do
   vim.env.FILETREE_UNITS_ROOT = saved
 end
 
+-- ── path_copy: every format copies in the canonical separator ──────────────
+-- `fnamemodify`'s ":." and ":h" hand back NATIVE separators on Windows the
+-- moment they touch a path, so `relative` used to put `sub\b.lua` on the
+-- clipboard while this module's own documented examples -- and `uri`, which
+-- always slashified -- show `sub/b.lua`. The clipboard is not an OS-shell
+-- invocation, the one case util.path exempts, so it follows the same rule.
+--
+-- The node handed in is deliberately BACKSLASHED: that is what an adapter
+-- reports on Windows, and a check fed a forward-slash path would pass without
+-- the formats doing anything.
+do
+  local tmp = (TMP_ROOT .. "/units-pathcopy"):gsub("\\", "/")
+  vim.fn.mkdir(tmp .. "/sub", "p")
+  vim.fn.writefile({ "x" }, tmp .. "/sub/b.lua")
+  vim.fn.chdir(tmp)
+
+  local native = (tmp .. "/sub/b.lua"):gsub("/", "\\")
+  local cur_node = { path = native, type = "file" }
+  local stub = setmetatable({
+    name = "units-stub-pathcopy",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-pathcopy",
+    features = { path_copy = { enabled = true, notify = false } },
+  })
+
+  local pc = ft.feature("path_copy")
+  check("path_copy: the feature resolves", type(pc) == "table")
+
+  if HAS_CLIPBOARD and type(pc) == "table" then
+    -- Each format that can carry a separator at all. `name`/`stem` have none,
+    -- so they would pass no matter what and are left out.
+    local separator_formats = {
+      "absolute",
+      "relative",
+      "dirname",
+      "uri",
+      "line",
+      "project_root",
+      "project_relative",
+      "buffer_relative",
+      "env_rooted",
+    }
+    local bad = {}
+    for _, fmt in ipairs(separator_formats) do
+      local fn = pc["copy_" .. fmt]
+      if type(fn) == "function" then
+        pcall(fn)
+        local got = vim.fn.getreg("+")
+        if type(got) == "string" and got:find("\\", 1, true) then
+          bad[#bad + 1] = fmt .. "=" .. got
+        end
+      end
+    end
+    check("path_copy: no format copies a native separator", #bad == 0, table.concat(bad, "; "))
+
+    -- And the relative form really is relative -- proof the check above was in
+    -- a position to fail, since ":." only rewrites a path under the cwd.
+    pcall(pc.copy_relative)
+    check(
+      "path_copy: `relative` is cwd-relative, so that check could have failed",
+      vim.fn.getreg("+") == "sub/b.lua",
+      vim.fn.getreg("+")
+    )
+  end
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
