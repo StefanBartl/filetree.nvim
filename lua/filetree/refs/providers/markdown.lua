@@ -243,12 +243,7 @@ function M.plan(old_path, ctx)
           resolved = resolved,
           kind = kind,
           omitted_ext = omitted_ext,
-          display = string.format(
-            "%s:%d: %s",
-            vim.fn.fnamemodify(file, ":."),
-            lineno,
-            vim.trim(text)
-          ),
+          display = string.format("%s:%d: %s", ftpath.relative(file), lineno, vim.trim(text)),
         }
       end)
       return refs

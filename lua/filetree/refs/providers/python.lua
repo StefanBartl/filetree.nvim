@@ -162,12 +162,7 @@ function M.plan(old_path, ctx)
           relative = relative,
           anchor = base,
           resolved = resolved,
-          display = string.format(
-            "%s:%d: %s",
-            vim.fn.fnamemodify(file, ":."),
-            lineno,
-            vim.trim(text)
-          ),
+          display = string.format("%s:%d: %s", ftpath.relative(file), lineno, vim.trim(text)),
         }
       end)
       return refs

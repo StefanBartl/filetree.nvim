@@ -45,15 +45,16 @@ local M = {}
 function M.unique_files(refs)
   local seen, files = {}, {}
   for _, r in ipairs(refs) do
-    -- Slashified on both sides: `fnamemodify(":.")` returns native separators,
-    -- so this listed `lua\proj\a.lua` in prompts and notifications although
-    -- `util.path` makes `/` the one separator anything user-facing shows. And
-    -- deduping on the raw path would list a file twice if two spellings of it
-    -- ever met here.
+    -- `ftpath.relative` is this repo's display form: cwd-relative, home
+    -- tildified, forward slashes on every OS. Hand-rolling it as
+    -- `fnamemodify(":.")` -- which is what stood here -- returns native
+    -- separators, so prompts and notifications listed `lua\proj\a.lua`. The
+    -- dedup key is slashified for the same reason: two spellings of one file
+    -- must not list it twice.
     local key = ftpath.slashify(r.file)
     if not seen[key] then
       seen[key] = true
-      files[#files + 1] = ftpath.slashify(vim.fn.fnamemodify(r.file, ":."))
+      files[#files + 1] = ftpath.relative(r.file)
     end
   end
   return files
@@ -103,7 +104,7 @@ function M.show_diff(refs, on_close)
   for _, row in ipairs(rows) do
     if row.file ~= current then
       current = row.file
-      local rel = vim.fn.fnamemodify(row.file, ":.")
+      local rel = ftpath.relative(row.file)
       if #lines > 0 then lines[#lines + 1] = "" end
       lines[#lines + 1] = "--- a/" .. rel
       lines[#lines + 1] = "+++ b/" .. rel
