@@ -38,6 +38,9 @@ local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 
 local ui_select = require("filetree.util.select")
 local bind = require("filetree.util.bind")
+-- Copied paths follow the plugin's canonical separator, like everything else
+-- the user sees -- see `build()` below.
+local ftpath = require("filetree.util.path")
 local M = {}
 
 ---@type FiletreePathCopyConfig
@@ -160,12 +163,12 @@ local FORMATS = {
   -- Relative to the directory of the buffer open in the editor (]b), in the
   -- `./x` / `../x` form a Markdown link target needs. See `editor_dir`.
   buffer_relative = function(path)
-    return require("filetree.util.path").dot_relative(path, editor_dir())
+    return ftpath.dot_relative(path, editor_dir())
   end,
   -- Absolute, but with a configured env var folded back into the root ([e):
   -- `$REPOS_DIR/foo.nvim/x.lua` instead of `E:/repos/foo.nvim/x.lua`.
   env_rooted = function(path)
-    return (require("filetree.util.path").env_rooted(path, _cfg.env_roots or {}))
+    return (ftpath.env_rooted(path, _cfg.env_roots or {}))
   end,
   -- Path relative to the project root (]R), independent of the current cwd.
   project_relative = function(path)
@@ -207,9 +210,29 @@ local function get_targets()
   return path and { path } or {}
 end
 
+---@internal
+---One format's output for one path, in this plugin's canonical separator.
+---
+---Every format goes through here rather than each one having to remember.
+---`fnamemodify`'s `:.` and `:h` hand back NATIVE separators on Windows the
+---moment they touch a path, so `relative` put `src\foo.lua` on the clipboard
+---while this module's own documented examples -- and `uri`, which always
+---slashified -- show `src/foo.lua`. What lands in the clipboard is not an
+---OS-shell invocation, the one case `util.path` exempts from the rule, so it
+---follows the same convention as everything else the user sees.
+---
+---Applied at the exit rather than inside each builder: there are eleven of
+---them, `pick()` renders its preview from the same strings, and a twelfth
+---would otherwise start out wrong.
+---@param fmt string
+---@param path string
+---@return string
+local function build(fmt, path)
+  return ftpath.slashify(FORMATS[fmt](path))
+end
+
 local function do_copy(fmt)
-  local builder = FORMATS[fmt]
-  if not builder then
+  if not FORMATS[fmt] then
     notify.warn("Unknown format: " .. fmt)
     return
   end
@@ -222,7 +245,7 @@ local function do_copy(fmt)
 
   local lines = {}
   for _, path in ipairs(targets) do
-    lines[#lines + 1] = builder(path)
+    lines[#lines + 1] = build(fmt, path)
   end
   local text = table.concat(lines, "\n")
   vim.fn.setreg("+", text)
@@ -256,7 +279,7 @@ function M.pick()
   for _, fmt in ipairs(FORMAT_ORDER) do
     local lines = {}
     for _, path in ipairs(targets) do
-      lines[#lines + 1] = FORMATS[fmt](path)
+      lines[#lines + 1] = build(fmt, path)
     end
     built[#built + 1] = { fmt = fmt, text = table.concat(lines, "\n") }
   end
