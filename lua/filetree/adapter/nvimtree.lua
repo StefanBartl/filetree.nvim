@@ -105,80 +105,6 @@ function M.get_root_path()
   return vim.fn.getcwd()
 end
 
----@param filter? FiletreeFilterMode
----@return FiletreeNode[]
-function M.get_visible_nodes(filter)
-  local a = api()
-  if not a then return {} end
-  local ok, all = pcall(function()
-    local nodes = {}
-    ---@internal
-    local function walk(node, depth)
-      if not node then return end
-      -- `node.nodes ~= nil`, not `type == "directory"`: a symlink pointing at a
-      -- directory is a DirectoryLinkNode whose type is "link". See
-      -- to_filetree_node.
-      local ntype = node.nodes ~= nil and "directory" or "file"
-      local include = filter == nil
-        or filter == "all"
-        or (filter == "files" and ntype == "file")
-        or (filter == "folders" and ntype == "directory")
-      if include then
-        nodes[#nodes + 1] = {
-          id = node.absolute_path or "",
-          name = node.name or "",
-          path = node.absolute_path or "",
-          type = ntype,
-          depth = depth,
-          line_number = #nodes + 1,
-          is_expanded = ntype == "directory" and (node.open or false) or nil,
-        }
-      end
-      if ntype == "directory" and node.open and node.nodes then
-        for _, child in ipairs(node.nodes) do
-          walk(child, depth + 1)
-        end
-      end
-      -- NOTE: this walk numbers lines by counting nodes, which is wrong under
-      -- `renderer.group_empty` -- a grouped chain ("a/b/c") renders as ONE
-      -- line there. `get_node_line`, the only consumer of these numbers, is
-      -- therefore off by one per grouped chain on such a tree. Reported, not
-      -- fixed here: that is reveal/scroll_to_line's problem, and
-      -- `get_node_at_line` deliberately takes nvim-tree's own map instead of
-      -- this one.
-    end
-    local tree = require("nvim-tree.core").get_explorer()
-    if tree and tree.nodes then
-      for _, node in ipairs(tree.nodes) do
-        walk(node, 1)
-      end
-    end
-    return nodes
-  end)
-  if not ok then
-    notify.warn("get_visible_nodes failed: " .. tostring(all))
-    return {}
-  end
-  return all
-end
-
--- nvim-tree's node.absolute_path is native-separator (backslash on Windows),
--- while callers (cwd_sync/auto_reveal/current_hl) query with paths sourced from
--- vim.api.nvim_buf_get_name()/expand("%:p"), which return forward-slash paths on
--- this platform's Neovim build. Normalize both sides before comparing, or the
--- lookup silently misses on Windows. See adapter/neotree.lua's key_of() for the
--- same fix in that adapter.
----@param node_path string
----@return integer? line_number
-function M.get_node_line(node_path)
-  local query = pathutil.slashify(node_path)
-  local nodes = M.get_visible_nodes()
-  for _, n in ipairs(nodes) do
-    if n.path and pathutil.slashify(n.path) == query then return n.line_number end
-  end
-  return nil
-end
-
 -- ── Line → node ───────────────────────────────────────────────────────────────
 
 ---@internal
@@ -322,6 +248,9 @@ local function lines_map(bufnr)
   end)
 
   if not ok or type(map) ~= "table" then
+    -- Debug rather than warn: this is called once per rendered line, so a
+    -- visible notification would arrive hundreds of times for one bad render.
+    if not ok then notify.debug("lines_map failed: " .. tostring(map)) end
     _lines, _lines_buf, _lines_tick = nil, -1, -1
     return nil
   end
@@ -339,6 +268,65 @@ end
 ---
 ---A line that renders no node — the live-filter prompt — is absent from the map
 ---and resolves to nil, rather than shifting every node below it by one.
+---Every node the tree is currently showing, in render order.
+---
+---`line_number` comes from the same map `get_node_at_line` uses, not from
+---counting nodes. Counting was wrong three ways on this backend: it ignored
+---the root-folder label (so EVERY line was off by one under the default
+---config), it gave a grouped `renderer.group_empty` chain one line per node
+---when the chain renders as one line, and it advanced only for nodes the
+---`filter` argument kept, so asking for `"files"` renumbered them 1..n. Marks
+---and live_search place extmarks with these numbers, and `get_node_line` feeds
+---reveal/`scroll_to_line`, so each of those put its decoration on a neighbour.
+---@param filter? FiletreeFilterMode
+---@return FiletreeNode[]
+function M.get_visible_nodes(filter)
+  local _, bufnr = M.is_open()
+  local map = bufnr and lines_map(bufnr) or nil
+  if not map then return {} end -- nothing is rendered, so nothing is visible
+
+  local out = {}
+  for line, raw in pairs(map) do
+    local node = to_filetree_node(raw, line)
+    if node then
+      local include = filter == nil
+        or filter == "all"
+        or (filter == "files" and node.type == "file")
+        or (filter == "folders" and node.type == "directory")
+      if include then out[#out + 1] = node end
+    end
+  end
+  table.sort(out, function(a, b)
+    return a.line_number < b.line_number
+  end)
+  return out
+end
+
+-- nvim-tree's node.absolute_path is native-separator (backslash on Windows),
+-- while callers (cwd_sync/auto_reveal/current_hl) query with paths sourced from
+-- vim.api.nvim_buf_get_name()/expand("%:p"), which return forward-slash paths on
+-- this platform's Neovim build. Normalize both sides before comparing, or the
+-- lookup silently misses on Windows. See adapter/neotree.lua's key_of() for the
+-- same fix in that adapter.
+---The line `path` is rendered on — the exact inverse of `get_node_at_line`,
+---and read through the same map, so revealing a file cannot land the cursor on
+---its neighbour.
+---@param node_path string
+---@return integer? line_number
+function M.get_node_line(node_path)
+  local _, bufnr = M.is_open()
+  if not bufnr then return nil end
+  local map = lines_map(bufnr)
+  if not map then return nil end
+
+  local query = pathutil.slashify(node_path)
+  for line, raw in pairs(map) do
+    local p = raw and raw.absolute_path
+    if type(p) == "string" and pathutil.slashify(p) == query then return line end
+  end
+  return nil
+end
+
 ---@return FiletreeNode?
 function M.get_current_node()
   local a = api()

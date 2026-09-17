@@ -2,8 +2,13 @@
 --- Live filter/search within the tree using a floating input.
 ---
 --- Two strategies, tried in order:
----   1. Adapter native filter API (neo-tree: manager.filter_all, nvim-tree: api.tree.search_node)
+---   1. The backend's own filter, so the listing really narrows
+---      (neo-tree: `state.search_pattern` + a refresh; nvim-tree: its
+---      `Explorer.live_filter`).
 ---   2. Extmark-based dimming fallback: non-matching lines are greyed out.
+---      Used when the backend has no filter of its own, or its API changed
+---      under us -- `try_native_filter` reports failure rather than swallowing
+---      it, so a broken native path degrades to dimming instead of to nothing.
 ---
 --- Keymaps:
 ---   "/" inside tree buffer    → enter filter mode
@@ -40,41 +45,83 @@ local _query = ""
 -- ── Adapter-native filter ─────────────────────────────────────────────────────
 
 ---@internal
----Try the adapter's native filter API (neo-tree/nvim-tree). Returns false when
----no native filter is available, so the caller can fall back to dimming.
+---Drive neo-tree's own filter: it is `state.search_pattern` plus a refresh,
+---which is exactly what its filter prompt does on submit. The pre-search
+---expansion is recorded first so `reset_search` can put the tree back the way
+---it was rather than leaving every folder the search opened hanging open.
+---@param query string?
+---@return boolean handled
+local function neotree_filter(query)
+  local ok_mgr, mgr = pcall(require, "neo-tree.sources.manager")
+  local ok_fs, fs = pcall(require, "neo-tree.sources.filesystem")
+  if not ok_mgr or not ok_fs then return false end
+
+  local ok, done = pcall(function()
+    local state = mgr.get_state("filesystem")
+    if not state then return false end
+
+    if not query or query == "" then
+      fs.reset_search(state, true)
+      return true
+    end
+
+    if not state.open_folders_before_search then
+      local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
+      if ok_r and state.tree and renderer.get_expanded_nodes then
+        state.open_folders_before_search = renderer.get_expanded_nodes(state.tree)
+      end
+    end
+    state.search_pattern = query
+    mgr.refresh("filesystem")
+    return true
+  end)
+  return ok and done == true
+end
+
+---@internal
+---Drive nvim-tree's live filter directly.
+---
+---NOT `api.tree.search_node`, which this used to call: that function takes no
+---argument at all. It opens its own "Search:" prompt and then REVEALS a single
+---matching file -- so the query the user already typed was discarded, a second
+---prompt appeared, and the tree jumped instead of filtering. The live filter is
+---the feature that narrows the listing, and setting its `filter` field plus
+---`apply_filter`/`draw` is what its own prompt does per keystroke, minus the
+---overlay window.
+---@param query string?
+---@return boolean handled
+local function nvimtree_filter(query)
+  local ok_core, core = pcall(require, "nvim-tree.core")
+  if not ok_core then return false end
+
+  local ok, done = pcall(function()
+    local explorer = core.get_explorer()
+    local live = explorer and explorer.live_filter
+    if not live or type(live.apply_filter) ~= "function" then return false end
+
+    live.filter = (query ~= "" and query) or nil
+    live:apply_filter()
+    if explorer.renderer and explorer.renderer.draw then explorer.renderer:draw() end
+    return true
+  end)
+  return ok and done == true
+end
+
+---@internal
+---Try the adapter's native filter. Returns false when the backend has none, or
+---when driving it failed -- the caller then falls back to dimming.
+---
+---Reporting failure honestly is the point. Both branches used to wrap the call
+---in a bare `pcall(...)` and `return true` regardless, so when
+---`manager.filter_all` disappeared from neo-tree, `/` silently did nothing at
+---all: the native call raised, the error was swallowed, and the fallback was
+---never reached because the branch claimed success.
 ---@param query string?
 ---@return boolean handled
 local function try_native_filter(query)
   if not _adapter then return false end
-
-  local name = _adapter.name
-  if name == "neotree" then
-    local ok, mgr = pcall(require, "neo-tree.sources.manager")
-    if ok and mgr then
-      -- neo-tree uses filter_all on the filesystem source
-      pcall(function()
-        if query and query ~= "" then
-          mgr.filter_all("filesystem", query)
-        else
-          mgr.filter_all("filesystem", nil)
-        end
-      end)
-      return true
-    end
-  end
-
-  if name == "nvimtree" then
-    local ok, api = pcall(require, "nvim-tree.api")
-    if ok and api and api.tree then
-      if query and query ~= "" then
-        pcall(api.tree.search_node, query)
-      else
-        pcall(api.tree.reload)
-      end
-      return true
-    end
-  end
-
+  if _adapter.name == "neotree" then return neotree_filter(query) end
+  if _adapter.name == "nvimtree" then return nvimtree_filter(query) end
   return false
 end
 

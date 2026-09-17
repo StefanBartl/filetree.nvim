@@ -44,6 +44,14 @@ of single-child directories (`a/b/c`) renders as one line owned by the tail of
 the chain. The older `utils.get_nodes_by_line` spelling is still accepted, and
 a local walk is the last resort.
 
+`get_node_line` and `get_visible_nodes` read that same map, so the line a
+node is *on* and the node *on* a line cannot disagree. They used to count
+nodes instead, which was wrong three ways here: it ignored the root-folder
+label (so every line was off by one under the default config), it gave a
+grouped chain one line per node, and it advanced only for nodes the caller's
+filter kept. Marks and live-search place their extmarks with those numbers and
+reveal steers the cursor with them, so each landed one row off.
+
 Two node-shape details this backend needs and neo-tree does not: a symlink
 pointing at a directory is a `DirectoryLinkNode` whose `type` is `"link"`, so
 directory-ness is `node.nodes ~= nil` rather than a type-string comparison;
@@ -128,11 +136,12 @@ prompt). Counting instead would go wrong exactly when one of those is on, and
 go wrong by shifting every node by one — the failure mode above.
 
 A fifth feature, `filter`, has a dim-fallback that reads the same method, but
-it is only reached when the backend has no native search. neo-tree and
-nvim-tree both do, so their filtering never takes that path; the three
-backends that would take it are the three without `get_node_at_line`. That
-fallback is therefore still inert everywhere — see
-[Search & paths](SEARCH_AND_PATHS.md).
+it is only reached when the backend has no filter of its own. neo-tree and
+nvim-tree both do, so their filtering narrows the listing for real and never
+takes that path; the three backends that would take it are the three without
+`get_node_at_line`, so the fallback stays inert there. See
+[Search & paths](SEARCH_AND_PATHS.md) — including what it took to find that
+both native branches had been silently failing.
 
 ## Auto-resolution
 

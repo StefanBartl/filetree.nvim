@@ -10,24 +10,25 @@ Live-filters the tree listing as you type (`/`) — narrows what's shown
 without leaving the tree, unlike find/grep below which open a separate
 picker.
 
-**Backend support.** neo-tree is filtered through its own native search, so
-the listing really narrows. The other four do not work, each for its own
-reason.
-
-On netrw, oil and mini.files there is no native search, and the intended
-fallback — dimming the non-matching lines instead of hiding them — needs the
-adapter to resolve a line to a node (`get_node_at_line`, see
+**Backend support.** neo-tree and nvim-tree narrow the listing for real,
+each through its own filter: neo-tree's `state.search_pattern` plus a refresh,
+nvim-tree's `Explorer.live_filter`. netrw, oil and mini.files have no filter of
+their own, and the intended fallback — dimming the non-matching lines instead
+of hiding them — needs the adapter to resolve a line to a node
+(`get_node_at_line`, see
 [Backends](BACKENDS.md#line-resolved-decorations)), which none of the three
-implements. So `/` does nothing at all there. Implementing `get_node_at_line`
+implements. So `/` still does nothing there; implementing `get_node_at_line`
 for them is what would fix it.
 
-**On nvim-tree `/` is wired to the wrong API** (known defect, not yet fixed).
-The native branch calls `api.tree.search_node(query)`, but that function takes
-no argument: it opens its *own* `Search:` prompt and then reveals a single
-matching file. So the query you typed is discarded, a second prompt appears,
-and the tree jumps instead of filtering — and because the branch reports
-success, the dim fallback never runs either. Filtering the listing there means
-driving nvim-tree's live filter (`Explorer.live_filter`) instead.
+Both native branches were broken until 2026-09-17, and broken in a way worth
+remembering: each wrapped its call in a bare `pcall` and reported success
+regardless. neo-tree's `manager.filter_all` had been removed upstream, and
+nvim-tree's `api.tree.search_node` takes no argument at all (it opens its own
+`Search:` prompt and reveals a single file). So `/` raised, the error was
+swallowed, the branch claimed to have handled it, and the dim fallback was
+never reached — `/` silently did nothing on the two backends that had a filter.
+`try_native_filter` now reports failure honestly, so a native path that breaks
+again degrades to dimming instead of to nothing.
 
 - **Module:** `lua/filetree/features/search/filter/`
 - **Keymaps:** `/`
