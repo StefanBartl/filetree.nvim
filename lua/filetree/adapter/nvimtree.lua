@@ -192,6 +192,11 @@ end
 -- ── Line → node ───────────────────────────────────────────────────────────────
 
 ---Convert one nvim-tree node into the adapter contract's node shape.
+---
+---Every field comes off the node table, so this never touches the filesystem —
+---worth stating, because the neo-tree side had to be fixed for doing exactly
+---that (a stat per node per render, via a path helper that computes an
+---is-directory flag its caller discards).
 ---@internal
 ---@param node table?
 ---@param line_number integer
@@ -300,9 +305,17 @@ end
 ---@param linenr integer  0-based buffer line
 ---@return FiletreeNode?
 function M.get_node_at_line(bufnr, linenr)
+  -- is_open() has already validated the buffer it reports, so there is no
+  -- second nvim_buf_is_valid here.
   local _, tree_bufnr = M.is_open()
-  if not tree_bufnr or tree_bufnr ~= bufnr then return nil end
-  if not vim.api.nvim_buf_is_valid(bufnr) then return nil end
+  if not tree_bufnr then
+    -- The map holds nvim-tree's node objects by reference, i.e. the whole
+    -- rendered graph. Nothing else drops it, so a closed tree would keep that
+    -- alive for the rest of the session.
+    _lines, _lines_buf, _lines_tick = nil, -1, -1
+    return nil
+  end
+  if tree_bufnr ~= bufnr then return nil end
 
   local map = lines_map(bufnr)
   if not map then return nil end
