@@ -56,27 +56,24 @@ function M.setup(config, adapter)
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_cursor_hide", true)
 
+  -- `lib.nvim.ui.winhighlight` rather than string concatenation and a
+  -- gsub. It is the same merge-and-strip this used to do by hand, minus
+  -- two rough edges: appending did not dedupe, so applying twice left
+  -- `Cursor:X,Cursor:X`, and the strip was a Lua pattern over a value
+  -- other plugins also write.
+  local wh = require("lib.nvim.ui.winhighlight")
+
   local function apply_hide(win, buf)
     if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then return end
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
-    local ok, cur = pcall(vim.api.nvim_get_option_value, "winhighlight", { win = win })
-    local base = (ok and cur ~= "") and (cur .. ",") or ""
-    pcall(
-      vim.api.nvim_set_option_value,
-      "winhighlight",
-      base .. "Cursor:FiletreeCursorHidden",
-      { win = win }
-    )
+    wh.update(win, { Cursor = "FiletreeCursorHidden" })
   end
 
   local function apply_show(win, buf)
     if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then return end
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
-    local ok, cur = pcall(vim.api.nvim_get_option_value, "winhighlight", { win = win })
-    if not ok then return end
-    -- Strip our override; leave any other winhighlight entries intact.
-    local cleaned = cur:gsub(",?Cursor:FiletreeCursorHidden,?", ""):gsub("^,", ""):gsub(",$", "")
-    pcall(vim.api.nvim_set_option_value, "winhighlight", cleaned, { win = win })
+    -- Strips our override only; every other entry on the window stays.
+    wh.remove(win, "Cursor")
   end
 
   -- Deferred via vim.schedule: the tree plugin's own window/renderer setup
