@@ -113,6 +113,36 @@ local function node_is_dir(node, path)
   return vim.fn.isdirectory(path) == 1
 end
 
+---Convert one neo-tree (nui) node into the adapter contract's node shape.
+---
+---Shared by `get_current_node` and `get_node_at_line`: the two differ only in
+---how they FIND the node, and a second hand-rolled copy of this mapping is how
+---the two drift apart (a `depth` of 0 here and `node.level` there, say) for no
+---reason the caller can see.
+---
+---`line_number` is the contract's 1-based line, and is the caller's to supply
+---— it is the one field that does not come from the node itself.
+---@internal
+---@param node table?
+---@param line_number integer
+---@return FiletreeNode?
+local function to_filetree_node(node, line_number)
+  if not node then return nil end
+  local path = node_path(node)
+  if not path then return nil end -- skip message / virtual nodes without a path
+
+  local is_dir = node_is_dir(node, path)
+  return {
+    id = (node.get_id and node:get_id()) or node.id or path,
+    name = node.name or vim.fn.fnamemodify(path, ":t"),
+    path = path,
+    type = is_dir and "directory" or "file",
+    depth = (node.get_depth and node:get_depth()) or 0,
+    line_number = line_number,
+    is_expanded = is_dir and ((node.is_expanded and node:is_expanded()) or false) or nil,
+  }
+end
+
 -- ── Interface ─────────────────────────────────────────────────────────────────
 
 ---@return boolean
@@ -159,22 +189,43 @@ function M.get_current_node()
   local ok, node = pcall(function()
     return state.tree:get_node()
   end)
-  if not ok or not node then return nil end
+  if not ok then return nil end
+  return to_filetree_node(node, vim.fn.line("."))
+end
 
-  local path = node_path(node)
-  if not path then return nil end -- skip message / virtual nodes without a path
+---Node rendered on one line of the tree buffer.
+---
+---`linenr` is **0-based** — the contract states it, and it is what every
+---caller has: all five (git_status, lsp_diagnostics, size_info, copy_move's
+---clipboard marker, filter's dim fallback) walk `0 .. line_count - 1` to place
+---extmarks, which are 0-based too. Neo-tree renders through a nui tree, whose
+---line numbers are 1-based buffer lines, hence the `+ 1` here and nowhere else.
+---
+---The lookup is nui's own line→node mapping rather than a reconstruction from
+---`get_visible_nodes`: nui knows which lines it actually drew, so a line that
+---renders no node (the root label, a `(empty folder)` message) resolves to nil
+---instead of silently shifting every node below it by one. It also memoizes
+---that mapping after the second lookup, which is what keeps the callers'
+---per-line loop linear rather than quadratic.
+---
+---`bufnr` is checked against the live tree buffer instead of being ignored: a
+---caller holding a stale bufnr (its tree closed and reopened between render
+---and callback) would otherwise get nodes decorated onto the wrong buffer.
+---@param bufnr integer
+---@param linenr integer  0-based buffer line
+---@return FiletreeNode?
+function M.get_node_at_line(bufnr, linenr)
+  local _, tree_bufnr = M.is_open()
+  if not tree_bufnr or tree_bufnr ~= bufnr then return nil end
 
-  local is_dir = node_is_dir(node, path)
-  local ntype = is_dir and "directory" or "file"
-  return {
-    id = (node.get_id and node:get_id()) or node.id or path,
-    name = node.name or vim.fn.fnamemodify(path, ":t"),
-    path = path,
-    type = ntype,
-    depth = (node.get_depth and node:get_depth()) or 0,
-    line_number = vim.fn.line("."),
-    is_expanded = is_dir and ((node.is_expanded and node:is_expanded()) or false) or nil,
-  }
+  local state = get_state()
+  if not state or not state.tree then return nil end
+
+  local ok, node = pcall(function()
+    return state.tree:get_node(linenr + 1)
+  end)
+  if not ok then return nil end
+  return to_filetree_node(node, linenr + 1)
 end
 
 ---Extract filesystem paths (and display names) from a list of neo-tree nodes.

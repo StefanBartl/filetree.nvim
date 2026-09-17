@@ -26,6 +26,17 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   tree-window badge in both drawing strategies, and the `:Filetree cwd …`
   command wiring incl. enum completion. Uses a stub adapter and a temp tree.
 
+- **[adapter_lines.lua](adapter_lines.lua)** — integration: the adapter's
+  `get_node_at_line(bufnr, linenr)` and the four features that decorate a node
+  line through it (git_status, lsp_diagnostics, size_info, copy_move's
+  clipboard marker), plus `filter`'s dim fallback with the native filter
+  forced off. The only suite that drives a real backend: it opens a real
+  neo-tree over a real git repo, and every check resolves the line an extmark
+  actually landed on and compares it against the node that mark is about — an
+  off-by-one resolves every line too, just to its neighbour, which is exactly
+  the bug worth catching. Skips (exit 0, with a note) when neo-tree or nui is
+  not installed; `$FILETREE_NEOTREE` points it at a checkout.
+
 - **[sidebar_guard.lua](sidebar_guard.lua)** — unit: the `nav/sidebar_guard`
   feature. A window carrying a `neo-tree` filetype buffer plus a stub adapter
   and a stubbed `neo-tree.events` exercise the `winfixbuf` pin, the
@@ -39,7 +50,7 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   live-buffer patch, `M` move and `refs undo`. Runs on either candidate-search
   path — ripgrep when present, the capped fallback walk when not.
 
-These are the five suites CI gates on, in this order:
+These are the suites CI gates on, in this order:
 
 ```
 cd /path/to/filetree.nvim
@@ -47,10 +58,12 @@ nvim --clean --headless -u NONE -l TESTS/smoke.lua
 nvim --clean --headless -u NONE -l TESTS/units.lua
 nvim --clean --headless -u NONE -l TESTS/menu.lua
 nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
+nvim --clean --headless -u NONE -l TESTS/sidebar_guard.lua
+nvim --clean --headless -u NONE -l TESTS/adapter_lines.lua
 nvim --clean --headless -u NONE -l TESTS/refs/run.lua
 ```
 
-**lib.nvim resolution:** every suite here — the four `.lua` files and
+**lib.nvim resolution:** every suite here — the `.lua` files and
 `refs/run.lua` — resolves lib.nvim the same way, taking the first of:
 
 1. `$FILETREE_LIB_NVIM`
@@ -59,6 +72,10 @@ nvim --clean --headless -u NONE -l TESTS/refs/run.lua
 4. lazy.nvim's managed copy under `stdpath("data")/lazy/lib.nvim`
 
 Both names are accepted by every suite, so one export runs the whole directory.
+`adapter_lines.lua` resolves neo-tree, nui, plenary and nvim-web-devicons by
+the same rules (`$FILETREE_NEOTREE` for neo-tree), and skips rather than fails
+when it cannot find them. A worktree checkout has no sibling `../lib.nvim`, so
+export one of the variables above when running from one.
 Set either to point somewhere else — e.g. a lib.nvim worktree carrying modules a
 new feature depends on that are not merged yet:
 

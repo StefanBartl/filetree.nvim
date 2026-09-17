@@ -1288,6 +1288,11 @@ Decorates tree nodes with git status (modified/staged/untracked/…), resolved
 per adapter — each backend surfaces this through its own native mechanism
 rather than filetree.nvim reimplementing git status parsing.
 
+Backend support: drawn as an extmark on the node's own line, which needs the
+adapter to resolve a line to a node (`get_node_at_line`). Implemented by the
+neo-tree and nvim-tree adapters; on netrw, oil and mini.files this renders
+nothing rather than guessing at an offset.
+
 Module: lua/filetree/features/git/git_status/
 
 ------------------------------------------------------------------------------
@@ -1445,6 +1450,11 @@ LSP DIAGNOSTICS                                     *filetree-lsp-diagnostics*
 Decorates tree nodes with LSP diagnostic severity (error/warn/…) rolled up
 from the files under them, so a directory with a broken file inside it is
 visible without expanding into it first.
+
+Backend support: drawn as an extmark on the node's own line, which needs the
+adapter to resolve a line to a node (`get_node_at_line`). Implemented by the
+neo-tree and nvim-tree adapters; on netrw, oil and mini.files this renders
+nothing rather than guessing at an offset.
 
 Module: lua/filetree/features/lsp/lsp_diagnostics/
 
@@ -1680,6 +1690,14 @@ FILTER                                                       *filetree-filter*
 Live-filters the tree listing as you type (`/`) — narrows what's shown
 without leaving the tree, unlike find/grep below which open a separate picker.
 
+Backend support: neo-tree and nvim-tree filter through their own native
+search, so the listing really narrows. The other three have none, and the
+intended fallback — dimming the non-matching lines — needs the adapter's
+`get_node_at_line`, which netrw, oil and mini.files do not implement. So `/`
+currently does nothing at all there. Implementing that method for those three
+is what would fix it; having it on neo-tree/nvim-tree does not, since their
+native search returns before the fallback is reached.
+
 Keymaps: / <C-c>
 
 Module: lua/filetree/features/search/filter/
@@ -1874,6 +1892,11 @@ Module: lua/filetree/features/ui/preview/
 SIZE INFO                                                 *filetree-size-info*
 
 Shows file/directory sizes inline in the tree listing.
+
+Backend support: drawn as an extmark on the node's own line, which needs the
+adapter to resolve a line to a node (`get_node_at_line`). Implemented by the
+neo-tree and nvim-tree adapters; on netrw, oil and mini.files this renders
+nothing rather than guessing at an offset.
 
 Module: lua/filetree/features/ui/size_info/
 

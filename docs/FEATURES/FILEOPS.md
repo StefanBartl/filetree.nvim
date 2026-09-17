@@ -39,6 +39,12 @@ too — the scan starts when you press `x`, and overlaps with you navigating
 to the paste target. A copy never breaks a reference (the original stays
 put), so copies are not scanned.
 
+Staged nodes are marked in the tree with a ` C`/` X` overlay. That marker
+is drawn on the node's own line, so it needs the adapter to resolve a line to
+a node (see [Backends](BACKENDS.md#line-resolved-decorations)): it shows on
+neo-tree and nvim-tree, and is absent on netrw, oil and mini.files. The
+staging and the paste itself work on all five either way.
+
 - **Module:** `lua/filetree/features/fileops/copy_move/`
 - **Keymaps:** `c` (copy), `x` (cut), `p` (paste)
 - **See also:** [Move](#move) (`M`) for the one-prompt variant

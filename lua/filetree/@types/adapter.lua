@@ -39,14 +39,18 @@
 --- Optional UI capabilities. Features degrade gracefully when an adapter omits
 --- these, so backends can adopt them incrementally.
 ---
---- **Four of them are declared here and implemented by no backend yet**, which
---- means the guarded branches that call them never run: `get_node_at_line`
---- (git_status, lsp_diagnostics, copy_move, search.filter and ui.size_info all
---- return from their `_render` right after clearing their namespace),
---- `get_expanded_paths`/`expand_paths` (org.session saves and restores no
---- expansion state). They are declared rather than removed because the calling
---- code is written and waiting for them -- see the roadmap entry for the
---- decision that is still open.
+--- `get_node_at_line` is implemented by the neo-tree and nvim-tree adapters --
+--- the two that already had the other line-mapping methods -- which is what
+--- lets git_status, lsp_diagnostics, copy_move's clipboard marker,
+--- search.filter's dim fallback and ui.size_info actually decorate a tree.
+--- netrw, oil and mini_files still omit it, and those five still return from
+--- their `_render` right after clearing their namespace there.
+---
+--- **`get_expanded_paths`/`expand_paths` are declared here and implemented by
+--- no backend yet**, so org.session saves and restores no expansion state.
+--- They are declared rather than removed because the calling code is written
+--- and waiting for them -- see the roadmap entry for the decision that is
+--- still open.
 ---@field filetypes? string[]                    Buffer filetypes this backend's tree uses (e.g. {"neo-tree"}).
 ---@field hl_groups? table<string, string>       Tree HL group → editor group, for `window_style.highlights_isolate`.
 ---@field toggle_at? fun(position: FiletreeTreePosition, opts?: FiletreeToggleOpts): boolean  Position-aware toggle; return false if unsupported.
@@ -57,7 +61,7 @@
 ---@field redraw? fun(): boolean                 Re-render the current tree from existing state (no filesystem rescan); used by opened_sync.
 ---@field sign_node? fun(path: string, text: string, hl_group: string): boolean  Place a sign-column marker on a node's line (used by current_hl's icon).
 ---@field unsign_node? fun(path: string): boolean  Remove a previously placed sign marker.
----@field get_node_at_line? fun(bufnr: integer, linenr: integer): FiletreeNode?  Node rendered on a 0-based buffer line. Implemented by no backend yet.
+---@field get_node_at_line? fun(bufnr: integer, linenr: integer): FiletreeNode?  Node rendered on a 0-based buffer line (nil for a line that renders no node, e.g. a root label or a message). `bufnr` must be the adapter's own tree buffer; a mismatch returns nil. Implemented by the neotree and nvimtree adapters.
 ---@field get_expanded_paths? fun(): string[]|nil  Absolute paths of the currently expanded directories. Implemented by no backend yet.
 ---@field expand_paths? fun(paths: string[]): boolean  Re-expand the given directories. Implemented by no backend yet.
 ---@field install_reveal_guard? fun(): nil  Backend-specific guard against a reveal fighting the user's cursor; only the neo-tree adapter has one.
