@@ -64,6 +64,11 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   skipping a file one level deeper — and was filed and carried as an
   apply-layer defect for three weeks.
 
+Run them one at a time. Every suite works in fixed scratch directories under
+$TEMP, so two instances of the same suite (or two suites sharing a fixture
+root) race each other over the same files -- concurrent runs fail with
+buffer/path mismatches that look like feature bugs and are not.
+
 These are the suites CI gates on, in this order:
 
 ```
