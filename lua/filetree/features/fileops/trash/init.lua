@@ -176,7 +176,11 @@ local function do_trash(path, cb)
     notify.info(
       "[dry-run] would " .. (is_permanent() and "permanently delete: " or "trash: ") .. path
     )
-    if not is_permanent() then undo.record(path) end
+    -- No history entry: nothing was trashed, so there is nothing to restore.
+    -- Recording one made `<leader>th` list deletes that never happened, and
+    -- `U` on such an entry went looking for a file the Recycle Bin had never
+    -- seen and failed with "Item not found" -- a dry-run leaving state behind
+    -- for the rest of the session, which is the one thing it must not do.
     cb(true)
     return
   end

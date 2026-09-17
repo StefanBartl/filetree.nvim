@@ -1426,12 +1426,19 @@ local function run_trash_dry_run_check()
     apply.last_label()
   )
 
+  -- Nor any trash history: nothing was trashed, so `U`/`<leader>th` must not
+  -- offer to restore it. (Any entry here would be this run's -- every other
+  -- block in this suite records through the undo module directly, and the one
+  -- that does runs after this.)
   local trash_undo = require("filetree.features.fileops.trash.undo")
-  local hist = trash_undo.history()
+  local said_nothing_trashed = true
+  for _, e in ipairs(trash_undo.history()) do
+    if e.original_path == victim then said_nothing_trashed = false end
+  end
   check(
-    "trash dry-run: the history entry carries no refs token to revert",
-    hist[1] ~= nil and hist[1].original_path == victim and hist[1].refs_undo_id == nil,
-    hist[1] and vim.inspect(hist[1]) or "nil"
+    "trash dry-run: no trash history entry was recorded",
+    said_nothing_trashed,
+    vim.inspect(trash_undo.history())
   )
 
   check(
