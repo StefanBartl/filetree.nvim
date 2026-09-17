@@ -32,7 +32,7 @@ jobs:
       - name: luacheck
         run: luacheck lua docs/BINDINGS.lua TESTS
 
-  # Real gate: the headless test suite (smoke, units, menu, cwd_mode, refs).
+  # Real gate: the headless test suite (smoke, units, menu, cwd_mode, gaps, refs).
   # lib.nvim is checked out as a sibling so the suites' own sibling-checkout
   # lookup (../lib.nvim) finds it -- filetree.nvim's command layer and several
   # features depend on it at runtime.
@@ -90,6 +90,7 @@ jobs:
           nvim --clean --headless -u NONE -l TESTS/menu.lua
           nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
           nvim --clean --headless -u NONE -l TESTS/sidebar_guard.lua
+          nvim --clean --headless -u NONE -l TESTS/gaps.lua
           nvim --clean --headless -u NONE -l TESTS/refs/run.lua
 
       # The FEATURE REFERENCE section of doc/filetree.txt is generated from
