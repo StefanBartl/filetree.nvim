@@ -173,6 +173,13 @@ chooser — **Delete + remove refs** (blanks the dangling links to `REF!`),
 Undoing such a delete with `U` restores the `REF!` markers along with the
 file. See [References](#references).
 
+`:Filetree trash dry-run` covers that reference rewrite too, not just the
+delete: it reports what *would* be marked and writes nothing. It is the one
+part of a delete that touches files the user did not select, so a dry-run
+has even less business making it than the delete itself — and every line of
+a dry-run, down to the closing summary, reports in the conditional, so
+nothing in the output reads as though it had happened.
+
 - **Module:** `lua/filetree/features/fileops/trash/`
 - **Keymaps:** `d`, `U`, `<leader>th`
 - **Config:** `features.trash.mode` (`"trash"` | `"permanent"`, default `"trash"`)
