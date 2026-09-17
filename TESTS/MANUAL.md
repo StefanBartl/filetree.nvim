@@ -30,12 +30,18 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   `get_node_at_line(bufnr, linenr)` and the four features that decorate a node
   line through it (git_status, lsp_diagnostics, size_info, copy_move's
   clipboard marker), plus `filter`'s dim fallback with the native filter
-  forced off. The only suite that drives a real backend: it opens a real
-  neo-tree over a real git repo, and every check resolves the line an extmark
+  forced off. The only suite that drives real backends: it opens a real
+  neo-tree and a real nvim-tree over a real git repo, running the same
+  assertions against each, and every check resolves the line an extmark
   actually landed on and compares it against the node that mark is about — an
   off-by-one resolves every line too, just to its neighbour, which is exactly
-  the bug worth catching. Skips (exit 0, with a note) when neo-tree or nui is
-  not installed; `$FILETREE_NEOTREE` points it at a checkout.
+  the bug worth catching. It also pins the per-call cost, which is how a
+  filesystem stat per node per render got caught.
+
+  Each backend is skipped (exit 0, with a note) when it is not installed, so
+  the suite is useful with either one alone. `$FILETREE_NEOTREE` and
+  `$FILETREE_NVIMTREE` point at checkouts; `$FILETREE_ADAPTER_LINES=nvimtree`
+  limits a run to one backend.
 
 - **[sidebar_guard.lua](sidebar_guard.lua)** — unit: the `nav/sidebar_guard`
   feature. A window carrying a `neo-tree` filetype buffer plus a stub adapter

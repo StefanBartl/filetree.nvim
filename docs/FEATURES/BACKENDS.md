@@ -35,9 +35,20 @@ git-root-anchored cwd on every switch regardless of `cwd_sync.reveal`. Leave
 `update_root` at its default `false` if `root_markers` should win.
 
 Implements `get_node_at_line` through nvim-tree's own
-`utils.get_nodes_by_line`, offset by `core.get_nodes_starting_line()` so the
-root-folder label and the live-filter prompt don't shift every node by one —
-see [Line-resolved decorations](#line-resolved-decorations).
+`Explorer:get_nodes_by_line`, offset by `core.get_nodes_starting_line()` so
+the root-folder label and the live-filter prompt don't shift every node by one
+— see [Line-resolved decorations](#line-resolved-decorations). That is the
+same call nvim-tree resolves its own cursor through, so it stays exactly as
+correct as nvim-tree is, including under `renderer.group_empty`, where a chain
+of single-child directories (`a/b/c`) renders as one line owned by the tail of
+the chain. The older `utils.get_nodes_by_line` spelling is still accepted, and
+a local walk is the last resort.
+
+Two node-shape details this backend needs and neo-tree does not: a symlink
+pointing at a directory is a `DirectoryLinkNode` whose `type` is `"link"`, so
+directory-ness is `node.nodes ~= nil` rather than a type-string comparison;
+and nvim-tree's nodes carry no depth field, so `depth` is counted through the
+parent chain.
 
 - **Module:** [`adapter/nvimtree.lua`](../../lua/filetree/adapter/nvimtree.lua) — `filetypes = {"NvimTree"}`
 - **Config:** `opts.adapter = "nvimtree"`
@@ -101,9 +112,13 @@ that costs a filesystem stat costs a stat per node per feature per render —
 tens of milliseconds on a large tree, every redraw. Both adapters therefore
 answer purely from the node data the backend already holds: no `stat`, no
 `isdirectory`, and the line→node map itself comes from the backend (neo-tree)
-or is cached on the buffer's changedtick (nvim-tree). `TESTS/adapter_lines.lua`
-asserts the per-call cost stays far below a stat, so a refactor that
-reintroduces one fails instead of quietly costing a redraw.
+or is cached on the buffer's changedtick (nvim-tree). Measured at ~0.7 µs
+(neo-tree) and ~1.3 µs (nvim-tree) per lookup.
+
+`TESTS/adapter_lines.lua` drives both backends for real — a git repo, actual
+renders — and checks every decoration against the node the adapter reports for
+the line it landed on, plus that per-call cost, so a refactor that reintroduces
+a stat fails instead of quietly costing a redraw.
 
 Both implementations defer to the backend's own mapping rather than
 reconstructing one by counting rendered nodes. neo-tree's nui tree knows which
