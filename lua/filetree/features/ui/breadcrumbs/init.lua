@@ -104,6 +104,30 @@ end
 
 -- ── Display modes ─────────────────────────────────────────────────────────────
 
+--- Write one window's winbar, through `ui.winbar` when ui.nvim is present.
+---
+--- `vim.wo.winbar` is a surface with no notion of an owner, and this plugin
+--- is not the only thing writing it: `my.nvim`'s breadcrumbs put a symbol
+--- trail in the same place. ui.nvim introduced `ui.winbar.set()` to arbitrate
+--- exactly that (its own doc comment has the full rationale, modelled on the
+--- `vim.diagnostic.config()` ownership split), and my.nvim already
+--- contributes through it. This plugin did not, so a `CursorMoved` in the
+--- tree overwrote my.nvim's line in every editor window.
+---
+--- Soft, like every other ui.nvim touchpoint here: without ui.nvim the
+--- direct write is still correct, and this plugin keeps working standalone.
+---@param win integer
+---@param line string
+---@return nil
+local function set_winbar(win, line)
+  local ok, ui_winbar = pcall(require, "ui.winbar")
+  if ok and type(ui_winbar.set) == "function" then
+    ui_winbar.set(line, win)
+    return
+  end
+  pcall(vim.api.nvim_set_option_value, "winbar", line, { win = win })
+end
+
 local function update_winbar(highlighted, target_win)
   if not target_win or not vim.api.nvim_win_is_valid(target_win) then return end
   -- Set winbar on all non-tree, non-floating windows
@@ -112,9 +136,7 @@ local function update_winbar(highlighted, target_win)
       local cfg = vim.api.nvim_win_get_config(win)
       if cfg.relative == "" then -- not floating
         local ft = vim.bo[vim.api.nvim_win_get_buf(win)].filetype
-        if ft ~= "neo-tree" and ft ~= "NvimTree" then
-          pcall(vim.api.nvim_set_option_value, "winbar", " " .. highlighted, { win = win })
-        end
+        if ft ~= "neo-tree" and ft ~= "NvimTree" then set_winbar(win, " " .. highlighted) end
       end
     end
   end
