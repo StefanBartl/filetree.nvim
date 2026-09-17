@@ -34,6 +34,15 @@ Shows the path from the tree root down to the current node, so a deeply
 nested file's location is legible without scrolling up through every
 parent directory.
 
+**Sharing the winbar.** In `"winbar"` mode (the default) the trail is
+written to every non-tree, non-floating window — and `vim.wo.winbar` is a
+surface with no notion of an owner. `my.nvim`'s breadcrumbs put a symbol
+trail in the same place, and ui.nvim's `ui.winbar.set()` exists to arbitrate
+exactly that. This feature goes through it when ui.nvim is installed and
+writes the option directly when it is not, so the two no longer overwrite
+each other and the plugin still works standalone. Use `mode = "float"` or
+`mode = "statusline"` to stay off the surface entirely.
+
 - **Module:** `lua/filetree/features/ui/breadcrumbs/`
 
 ## Size Info
