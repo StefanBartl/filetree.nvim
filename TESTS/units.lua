@@ -794,9 +794,18 @@ do
   check("ignore_list: '.agents' hidden (from lib.nvim's list)", fi.hide_by_name[".agents"] == true)
   check("ignore_list: '.claude' hidden (from lib.nvim's list)", fi.hide_by_name[".claude"] == true)
   check("ignore_list: not array-shaped (no numeric key 1)", fi.hide_by_name[1] == nil)
-  vim.wait(150, function()
+  -- setup() fires the refresh through `vim.defer_fn(…, 100)`, and `vim.wait`
+  -- polls every 200ms unless told otherwise -- so a 150ms timeout with the
+  -- default interval evaluated the condition at t=0, then gave up before its
+  -- next poll, leaving only 50ms of slack for a 100ms timer. On an idle
+  -- machine that passed; under load (several headless runs at once) the timer
+  -- slipped past the timeout and this failed intermittently, with nothing in
+  -- the output to suggest the test was at fault rather than the feature.
+  -- An explicit small interval and a timeout an order of magnitude over the
+  -- timer make it wait for the event, not for the clock.
+  vim.wait(2000, function()
     return refreshed
-  end)
+  end, 10)
   check("ignore_list: adapter.refresh() called", refreshed)
 
   package.loaded["neo-tree"] = nil
@@ -5002,18 +5011,62 @@ do
       "buffer_relative",
       "env_rooted",
     }
-    local bad = {}
+    -- The register is reset to a sentinel before each format. Without that, a
+    -- format that THROWS leaves the previous format's text in place -- which
+    -- has no backslash either, so the separator check would pass for a format
+    -- that never ran. That is how `buffer_relative` hid an E194 crash:
+    -- `expand("#:p")` raises when there is no alternate file instead of
+    -- returning "".
+    local bad, broken, silent = {}, {}, {}
     for _, fmt in ipairs(separator_formats) do
       local fn = pc["copy_" .. fmt]
       if type(fn) == "function" then
-        pcall(fn)
+        vim.fn.setreg("+", "<<sentinel>>")
+        local ok_fmt, err = pcall(fn)
         local got = vim.fn.getreg("+")
-        if type(got) == "string" and got:find("\\", 1, true) then
+        if not ok_fmt then
+          broken[#broken + 1] = fmt .. ": " .. (tostring(err):gsub("\n.*", ""))
+        elseif got == "<<sentinel>>" then
+          silent[#silent + 1] = fmt
+        elseif type(got) == "string" and got:find("\\", 1, true) then
           bad[#bad + 1] = fmt .. "=" .. got
         end
       end
     end
+    check("path_copy: every format runs without erroring", #broken == 0, table.concat(broken, "; "))
+    check(
+      "path_copy: every format actually writes the register",
+      #silent == 0,
+      table.concat(silent, "; ")
+    )
     check("path_copy: no format copies a native separator", #bad == 0, table.concat(bad, "; "))
+
+    -- `buffer_relative` with no alternate file. `expand("#:p")` THROWS E194
+    -- in that case rather than returning "", which made the cwd fallback
+    -- below it unreachable in exactly the situation it was written for --
+    -- someone who opens Neovim on a directory and copies before editing.
+    --
+    -- Driven by making `expand` raise rather than by arranging a window
+    -- without an alternate: earlier blocks in this suite leave one behind,
+    -- and even a fresh tab inherits it, so the branch would simply not run
+    -- and the check would pass without testing anything. The guard is what
+    -- matters here, so the guard is what is exercised.
+    local real_expand = vim.fn.expand
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.expand = function(arg, ...)
+      if arg == "#:p" then error("Vim:E194: No alternate file name to substitute for '#'") end
+      return real_expand(arg, ...)
+    end
+    vim.fn.setreg("+", "<<sentinel>>")
+    local ok_ba, err_ba = pcall(pc.copy_buffer_relative)
+    local got_ba = vim.fn.getreg("+")
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.expand = real_expand
+    check(
+      "path_copy: `]b` survives a window with no alternate file (E194)",
+      ok_ba and got_ba ~= "<<sentinel>>",
+      ok_ba and "register untouched" or (tostring(err_ba):gsub("\n.*", ""))
+    )
 
     -- And the relative form really is relative -- proof the check above was in
     -- a position to fail, since ":." only rewrites a path under the cwd.
