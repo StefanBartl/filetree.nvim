@@ -308,12 +308,7 @@ function M.plan(old_path, ctx)
                 style = style,
                 resolved = resolved,
                 encoded = tok:find("%%%x%x") ~= nil,
-                display = string.format(
-                  "%s:%d: %s",
-                  vim.fn.fnamemodify(file, ":."),
-                  lineno,
-                  vim.trim(text)
-                ),
+                display = string.format("%s:%d: %s", ftpath.relative(file), lineno, vim.trim(text)),
               }
             end
           end

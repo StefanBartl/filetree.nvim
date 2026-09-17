@@ -314,12 +314,7 @@ function M.plan(old_path, ctx)
           source = old_path,
           kind = kind,
           resolved = matched,
-          display = string.format(
-            "%s:%d: %s",
-            vim.fn.fnamemodify(file, ":."),
-            lineno,
-            vim.trim(text)
-          ),
+          display = string.format("%s:%d: %s", ftpath.relative(file), lineno, vim.trim(text)),
         }
       end)
       return refs

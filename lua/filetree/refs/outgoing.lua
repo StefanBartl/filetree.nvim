@@ -154,12 +154,7 @@ function M.scan(path, opts, cb)
             exists = exists,
             provider = provider.name,
             kind = kind,
-            display = string.format(
-              "%s:%d: %s",
-              vim.fn.fnamemodify(resolved, ":."),
-              lineno,
-              vim.trim(text)
-            ),
+            display = string.format("%s:%d: %s", ftpath.relative(resolved), lineno, vim.trim(text)),
           }
         end
       )

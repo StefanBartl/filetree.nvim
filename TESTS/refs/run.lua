@@ -1604,6 +1604,101 @@ local function run_scan_path_canonical_check()
   )
 end
 
+-- Extends the canonical-path block: what the user READS must follow the same
+-- rule as what the engine stores. Each provider builds a `display` row for the
+-- picker ("path:line: text"), and the chooser's diff view builds an
+-- "--- a/<path>" header; both hand-rolled `fnamemodify(":.")`, which returns
+-- native separators, so every row read `lua\proj\a.lua` on Windows while
+-- util.path makes `/` the one separator anything user-facing shows.
+local function run_display_path_check()
+  print("\n== refs: every path the user reads uses `/` ==")
+
+  local work = scratch_root .. "/display_paths"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/lua/proj/nested/deep", "p")
+  vim.fn.mkdir(work .. "/lua/proj/util", "p")
+  vim.fn.mkdir(work .. "/docs", "p")
+  vim.fn.writefile({ "{}" }, work .. "/.luarc.json")
+  vim.fn.writefile({ "return {}" }, work .. "/lua/proj/util/shared.lua")
+  vim.fn.writefile({ 'require("proj.util.shared")' }, work .. "/lua/proj/nested/deep/c.lua")
+  vim.fn.writefile({ "See [x](../lua/proj/util/shared.lua)." }, work .. "/docs/guide.md")
+
+  -- The cwd has to be INSIDE the fixture, and this is not a detail: `:.` only
+  -- rewrites a path it can strip the cwd from, and stripping is exactly when
+  -- it hands back native separators. Run from anywhere else it returns the
+  -- path untouched -- so an earlier version of this block, which skipped the
+  -- `cd`, passed against the unfixed code. A check that cannot fail is the
+  -- same trap `check_fixtures_match_spec` above exists to catch.
+  local prev_cwd = vim.fn.getcwd()
+  vim.cmd("cd " .. vim.fn.fnameescape(work))
+
+  local done, result = false, nil
+  refs.scan({ work .. "/lua/proj/util/shared.lua" }, { root = work, op = "rename" }, function(r)
+    result = r
+    done = true
+  end)
+  vim.wait(5000, function()
+    return done
+  end, 20)
+
+  local found = (result or {}).refs or {}
+  check("display paths: the scan found refs to inspect", #found > 0, tostring(#found))
+
+  -- The per-ref row every picker backend renders (telescope, fzf-lua and the
+  -- quickfix list all build from `r.display`).
+  local bad_rows = {}
+  local providers_seen = {}
+  for _, ref in ipairs(found) do
+    providers_seen[ref.provider] = true
+    if type(ref.display) ~= "string" or ref.display:find("\\", 1, true) then
+      bad_rows[#bad_rows + 1] = tostring(ref.display)
+    end
+  end
+  check(
+    "display paths: no picker row carries a native separator",
+    #bad_rows == 0,
+    table.concat(bad_rows, "; ")
+  )
+  -- More than one provider, so this is not a single code path passing by luck.
+  local n_providers = 0
+  for _ in pairs(providers_seen) do
+    n_providers = n_providers + 1
+  end
+  check("display paths: more than one provider contributed a row", n_providers >= 2, n_providers)
+
+  -- And the chooser's "Show diff" header.
+  local rows = require("filetree.refs.apply").preview(vim.tbl_map(function(r)
+    local copy = vim.deepcopy(r)
+    copy.new_target = "REPLACED"
+    return copy
+  end, found))
+  local diff_bad = {}
+  for _, row in ipairs(rows) do
+    if row.file:find("\\", 1, true) then diff_bad[#diff_bad + 1] = row.file end
+  end
+  check(
+    "display paths: the diff preview's file paths are canonical too",
+    #diff_bad == 0,
+    table.concat(diff_bad, "; ")
+  )
+
+  -- The rows are relative, not absolute: proof that `:.` really did strip the
+  -- cwd here, i.e. that the assertions above were in a position to fail.
+  local absolute = {}
+  for _, ref in ipairs(found) do
+    if ref.display:find("^%a:") or ref.display:find("^/") then
+      absolute[#absolute + 1] = ref.display
+    end
+  end
+  check(
+    "display paths: the rows are cwd-relative, so the check could have failed",
+    #found > 0 and #absolute == 0,
+    table.concat(absolute, "; ")
+  )
+
+  vim.cmd("cd " .. vim.fn.fnameescape(prev_cwd))
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -1622,6 +1717,7 @@ run_move_undo_check()
 run_undo_content_verification_check()
 run_trash_dry_run_check()
 run_scan_path_canonical_check()
+run_display_path_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))

@@ -15,6 +15,9 @@
 --- provider a Lua project silently loses every require() on every move.
 
 local pathutil = require("filetree.refs.pathutil")
+-- `relative()` is the display form this repo shows paths in: cwd-relative,
+-- home tildified, and always forward-slashed on every OS.
+local ftpath = require("filetree.util.path")
 
 local M = {}
 
@@ -114,12 +117,7 @@ function M.plan(old_path, ctx)
           provider = M.name,
           source = old_path,
           suffix = is_child and mod:sub(#old_mod + 1) or "",
-          display = string.format(
-            "%s:%d: %s",
-            vim.fn.fnamemodify(file, ":."),
-            lineno,
-            vim.trim(text)
-          ),
+          display = string.format("%s:%d: %s", ftpath.relative(file), lineno, vim.trim(text)),
         }
       end)
       return refs
