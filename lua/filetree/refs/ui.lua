@@ -16,6 +16,9 @@
 local kit = require("ui.kit")
 local notify = require("filetree.util.notify").create("[filetree.refs]")
 local apply = require("filetree.refs.apply")
+-- Every path this module shows the user goes through ftpath.slashify: `/` is
+-- the one separator anything user-facing displays, on every OS.
+local ftpath = require("filetree.util.path")
 
 -- The two interactive pieces are resolved per call rather than at load time:
 -- this module is pulled in by every fileops feature (through filetree.refs),
@@ -42,9 +45,15 @@ local M = {}
 function M.unique_files(refs)
   local seen, files = {}, {}
   for _, r in ipairs(refs) do
-    if not seen[r.file] then
-      seen[r.file] = true
-      files[#files + 1] = vim.fn.fnamemodify(r.file, ":.")
+    -- Slashified on both sides: `fnamemodify(":.")` returns native separators,
+    -- so this listed `lua\proj\a.lua` in prompts and notifications although
+    -- `util.path` makes `/` the one separator anything user-facing shows. And
+    -- deduping on the raw path would list a file twice if two spellings of it
+    -- ever met here.
+    local key = ftpath.slashify(r.file)
+    if not seen[key] then
+      seen[key] = true
+      files[#files + 1] = ftpath.slashify(vim.fn.fnamemodify(r.file, ":."))
     end
   end
   return files

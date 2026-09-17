@@ -1499,6 +1499,111 @@ local function run_trash_dry_run_check()
   apply.reset()
 end
 
+-- ── One spelling per path, whichever scan backend found it ─────────────────
+-- `ref.file` is what `apply` groups by, what the undo stack keys on, and what
+-- the chooser shows. The two candidate backends used to disagree about it:
+-- ripgrep is handed a forward-slash root and prints `<root>\rel\path.lua`, so
+-- on Windows its hits came back with mixed separators, while the libuv walk
+-- returned clean forward slashes. Same file, two names, decided by whether the
+-- machine happens to have ripgrep.
+--
+-- Nothing was visibly broken by it, which is exactly why it wants a test: the
+-- next thing to dedup or compare on that string would have broken quietly, and
+-- only on one of the two setups.
+local function run_scan_path_canonical_check()
+  print("\n== scan: both backends spell a path the same way ==")
+
+  local work = scratch_root .. "/scan_paths"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/lua/proj/nested/deep", "p")
+  vim.fn.mkdir(work .. "/lua/proj/util", "p")
+  vim.fn.writefile({ "{}" }, work .. "/.luarc.json")
+  vim.fn.writefile({ "return {}" }, work .. "/lua/proj/util/shared.lua")
+  vim.fn.writefile({ 'require("proj.util.shared")' }, work .. "/lua/proj/a.lua")
+  vim.fn.writefile({ 'require("proj.util.shared")' }, work .. "/lua/proj/nested/deep/c.lua")
+
+  ---@return string[] sorted ref.file values
+  local function scan_files()
+    local done, result = false, nil
+    refs.scan({ work .. "/lua/proj/util/shared.lua" }, { root = work, op = "rename" }, function(r)
+      result = r
+      done = true
+    end)
+    vim.wait(5000, function()
+      return done
+    end, 20)
+    local seen, out = {}, {}
+    for _, ref in ipairs((result or {}).refs or {}) do
+      if not seen[ref.file] then
+        seen[ref.file] = true
+        out[#out + 1] = ref.file
+      end
+    end
+    table.sort(out)
+    return out
+  end
+
+  local with_rg = scan_files()
+  check(
+    "scan paths: the ripgrep backend found both referencing files",
+    #with_rg == 2,
+    vim.inspect(with_rg)
+  )
+
+  -- candidates_rg gives up when the spawn itself fails, which is the same door
+  -- a machine without ripgrep comes through.
+  local real_system = vim.system
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function()
+    error("forced: no ripgrep")
+  end
+  local with_walk = scan_files()
+  vim.system = real_system
+
+  check(
+    "scan paths: the libuv fallback found the same two files",
+    #with_walk == 2,
+    vim.inspect(with_walk)
+  )
+  check(
+    "scan paths: both backends return byte-identical paths",
+    table.concat(with_rg, "|") == table.concat(with_walk, "|"),
+    ("rg=%s walk=%s"):format(vim.inspect(with_rg), vim.inspect(with_walk))
+  )
+
+  local backslashed = {}
+  for _, f in ipairs(with_rg) do
+    if f:find("\\", 1, true) then backslashed[#backslashed + 1] = f end
+  end
+  check(
+    "scan paths: no candidate keeps a native separator",
+    #backslashed == 0,
+    table.concat(backslashed, "; ")
+  )
+
+  -- And what the chooser puts in front of the user follows the same rule:
+  -- util.path makes `/` the one separator anything user-facing shows, but
+  -- fnamemodify(":.") hands back native ones.
+  local done, result = false, nil
+  refs.scan({ work .. "/lua/proj/util/shared.lua" }, { root = work, op = "rename" }, function(r)
+    result = r
+    done = true
+  end)
+  vim.wait(5000, function()
+    return done
+  end, 20)
+  local shown = require("filetree.refs.ui").unique_files((result or {}).refs or {})
+  local shown_bad = {}
+  for _, f in ipairs(shown) do
+    if f:find("\\", 1, true) then shown_bad[#shown_bad + 1] = f end
+  end
+  check(
+    "scan paths: the file list shown to the user uses `/` too",
+    #shown > 0 and #shown_bad == 0,
+    table.concat(shown, ", ")
+  )
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -1516,6 +1621,7 @@ run_cut_paste_undo_check()
 run_move_undo_check()
 run_undo_content_verification_check()
 run_trash_dry_run_check()
+run_scan_path_canonical_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))

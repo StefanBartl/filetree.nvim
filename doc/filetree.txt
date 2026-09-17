@@ -881,6 +881,11 @@ line that changed in the meantime is skipped rather than corrupted. A file
 open in a buffer is patched in that buffer (and written back only when it had
 no unsaved changes). `:Filetree refs undo` reverts the last batch.
 
+Every path the engine carries is normalized to forward slashes the moment the
+candidate list is built, so a file is spelled the same way whether ripgrep or
+the built-in walk found it, and the file list above reads `lua/proj/a.lua` on
+every OS.
+
 Providers (opt out per language):
   markdown  [text](./path), images, [id]: definitions, HTML src=/href=,
             optionally [[wiki]] links                            (default on)
