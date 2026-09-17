@@ -120,10 +120,20 @@ end
 
 ---@internal
 ---"Moved N/M to trash" vs "Permanently deleted N/M" — see `confirm_question`.
+---
+---A dry-run reports in the conditional too. Every individual step of it
+---already says "[dry-run] would …", so a closing "Moved 1/1 to trash" was the
+---one line of the whole run claiming something had actually happened.
 ---@param ok_count integer
 ---@param total integer
 ---@return string
 local function summary_line(ok_count, total)
+  if _cfg.dry_run then
+    if is_permanent() then
+      return string.format("[dry-run] would permanently delete %d/%d", ok_count, total)
+    end
+    return string.format("[dry-run] would move %d/%d to trash", ok_count, total)
+  end
   if is_permanent() then return string.format("Permanently deleted %d/%d", ok_count, total) end
   return string.format("Moved %d/%d to trash", ok_count, total)
 end

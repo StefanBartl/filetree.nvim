@@ -1255,6 +1255,11 @@ When something links to the file being deleted, the plain yes/no becomes a
 chooser — Delete + remove refs (blanks the dangling links to `REF!`),
 Inspect first (pick which ones), Delete, keep refs, Cancel. See References.
 
+`:Filetree trash dry-run` covers that reference rewrite too, not just the
+delete: it reports what WOULD be marked and writes nothing — that rewrite is
+the one part of a delete touching files the user did not select. Every line
+of a dry-run reports in the conditional, closing summary included.
+
 A delete is two mutations — the file goes to the trash, and the references
 pointing at it become `REF!` — so undoing it undoes both: `U` (or `:Filetree
 trash undo`) restores the file AND reverts exactly that rewrite, rather than

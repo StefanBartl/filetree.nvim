@@ -1324,6 +1324,134 @@ local function run_undo_content_verification_check()
   apply.reset()
 end
 
+-- ── A dry-run delete plans everything and changes nothing ─────────────────
+-- `dry_run` logs the trash instead of performing it, and does the same for
+-- each cascaded asset — but the incoming-reference rewrite used to fall
+-- straight through and really write REF! into every referencing file. That is
+-- the half of a delete that touches files the user did not select, so a
+-- dry-run has even less business making it than the delete itself.
+--
+-- The whole point rests on the delete genuinely HAVING references to rewrite:
+-- a victim nothing points at would take the plain yes/no branch and pass this
+-- vacuously, so the scan is asserted first.
+local function run_trash_dry_run_check()
+  print("\n== trash dry-run: plans the delete, rewrites nothing ==")
+
+  local work = scratch_root .. "/trash_dry_run"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "[tool.x]" }, work .. "/pyproject.toml") -- project marker
+  vim.fn.writefile({ "# Notes" }, work .. "/notes.md")
+  vim.fn.writefile({ "See [notes](./notes.md)." }, work .. "/index.md")
+
+  apply.reset()
+  local victim = work .. "/notes.md"
+
+  -- Same scan the delete itself runs, so "nothing was rewritten" below means
+  -- "the guard held", not "there was nothing to rewrite".
+  local found, scanned = nil, false
+  refs.for_delete({ victim }, { root = work }, function(r)
+    found = r
+    scanned = true
+  end)
+  vim.wait(2000, function()
+    return scanned
+  end, 10)
+  check(
+    "trash dry-run: the delete really does have a reference to rewrite",
+    found ~= nil and #found == 1,
+    found and #found or "nil"
+  )
+
+  local trash = require("filetree.features.fileops.trash")
+  local refreshed = false
+  trash.setup({
+    enabled = true,
+    dry_run = true,
+    confirm = true,
+    mode = "trash",
+    use_safety = false,
+  }, {
+    get_current_node = function()
+      return { path = victim, type = "file" }
+    end,
+    refresh = function()
+      refreshed = true
+      return true
+    end,
+  })
+
+  -- What a dry-run SAYS is the whole feature -- it changes nothing, so the
+  -- messages are its only output. Captured for the two assertions below.
+  ---@type string[]
+  local said = {}
+  local real_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg, level, opts)
+    said[#said + 1] = tostring(msg)
+    return real_notify(msg, level, opts)
+  end
+
+  next_choice = true -- "yes" to the trash confirmation
+  trash.delete_current()
+  vim.wait(5000, function()
+    return refreshed
+  end, 20)
+  vim.notify = real_notify
+
+  ---@param needle string
+  ---@return boolean
+  local function said_something_like(needle)
+    for _, msg in ipairs(said) do
+      if msg:lower():find(needle:lower(), 1, true) then return true end
+    end
+    return false
+  end
+
+  check("trash dry-run: the delete was reported as done", refreshed)
+  check("trash dry-run: the file is still there", vim.fn.filereadable(victim) == 1)
+  check(
+    "trash dry-run: the reference was NOT rewritten",
+    (read(work .. "/index.md") or ""):find("[notes](./notes.md)", 1, true) ~= nil,
+    read(work .. "/index.md")
+  )
+  check(
+    "trash dry-run: no REF! marker was written anywhere",
+    (read(work .. "/index.md") or ""):find("REF!", 1, true) == nil,
+    read(work .. "/index.md")
+  )
+  check(
+    "trash dry-run: nothing landed on the refs undo stack either",
+    apply.can_undo() == false,
+    apply.last_label()
+  )
+
+  local trash_undo = require("filetree.features.fileops.trash.undo")
+  local hist = trash_undo.history()
+  check(
+    "trash dry-run: the history entry carries no refs token to revert",
+    hist[1] ~= nil and hist[1].original_path == victim and hist[1].refs_undo_id == nil,
+    hist[1] and vim.inspect(hist[1]) or "nil"
+  )
+
+  check(
+    "trash dry-run: it said it WOULD mark the reference",
+    said_something_like("[dry-run] would mark 1 reference"),
+    table.concat(said, " | ")
+  )
+  -- Every step of a dry-run reports in the conditional, so the closing summary
+  -- must too: "Moved 1/1 to trash" was the one line claiming it had happened.
+  check(
+    "trash dry-run: the closing summary does not claim the file was moved",
+    said_something_like("[dry-run] would move 1/1 to trash")
+      and not said_something_like("Moved 1/1 to trash"),
+    table.concat(said, " | ")
+  )
+
+  trash.teardown()
+  apply.reset()
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -1340,6 +1468,7 @@ run_delete_undo_refs_check()
 run_cut_paste_undo_check()
 run_move_undo_check()
 run_undo_content_verification_check()
+run_trash_dry_run_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))
