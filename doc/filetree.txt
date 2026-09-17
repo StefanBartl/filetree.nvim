@@ -1097,6 +1097,12 @@ when you press `x`, and overlaps with you navigating to the paste target. A
 copy never breaks a reference (the original stays put), so copies are not
 scanned.
 
+Staged nodes are marked in the tree with a ` C`/` X` overlay. That marker is
+drawn on the node's own line, so it needs the adapter to resolve a line to a
+node (see Backends): it shows on neo-tree and nvim-tree, and is absent on
+netrw, oil and mini.files. The staging and the paste itself work on all five
+either way.
+
 Keymaps: c x p P <C-c>
 
 Module: lua/filetree/features/fileops/copy_move/
@@ -1258,27 +1264,16 @@ confirm dialog's wording changes to make that explicit ("Permanently delete
 
 When something links to the file being deleted, the plain yes/no becomes a
 chooser — Delete + remove refs (blanks the dangling links to `REF!`),
-Inspect first (pick which ones), Delete, keep refs, Cancel. See References.
+Inspect first (pick which ones), Delete, keep refs, Cancel. Undoing such a
+delete with `U` restores the `REF!` markers along with the file. See
+References.
 
 `:Filetree trash dry-run` covers that reference rewrite too, not just the
-delete: it reports what WOULD be marked and writes nothing — that rewrite is
-the one part of a delete touching files the user did not select. Every line
-of a dry-run reports in the conditional, closing summary included.
-
-A delete is two mutations — the file goes to the trash, and the references
-pointing at it become `REF!` — so undoing it undoes both: `U` (or `:Filetree
-trash undo`) restores the file AND reverts exactly that rewrite, rather than
-handing back a file every link still calls broken. Like every other write
-here it is content-verified: a line edited since the delete (by hand, or by a
-later operation that rewrote the same line) is left alone and reported,
-never silently replaced with its pre-delete version. Each history entry keeps
-the undo token of its own rewrite, so this stays correct when unrelated
-renames pushed newer reference updates on top, and when the cascade trashed
-orphaned assets right after the file. The refs go back only once the file
-itself is back; a failed restore leaves the markers alone. References that
-can no longer be restored (already reverted via `:Filetree refs undo`, or
-dropped off the bottom of the `refs.undo_depth` stack) are reported rather
-than silently skipped.
+delete: it reports what *would* be marked and writes nothing. It is the one
+part of a delete that touches files the user did not select, so a dry-run has
+even less business making it than the delete itself — and every line of a
+dry-run, down to the closing summary, reports in the conditional, so nothing
+in the output reads as though it had happened.
 
 Keymaps: d U <leader>th
 
@@ -1293,10 +1288,10 @@ Decorates tree nodes with git status (modified/staged/untracked/…), resolved
 per adapter — each backend surfaces this through its own native mechanism
 rather than filetree.nvim reimplementing git status parsing.
 
-Backend support: drawn as an extmark on the node's own line, which needs the
-adapter to resolve a line to a node (`get_node_at_line`). Implemented by the
-neo-tree and nvim-tree adapters; on netrw, oil and mini.files this renders
-nothing rather than guessing at an offset.
+Backend support. Drawn as extmarks on the node's own line, which needs the
+adapter to say which node a given line holds (`get_node_at_line`). The
+neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
+not, so this renders nothing there rather than misplacing anything.
 
 Module: lua/filetree/features/git/git_status/
 
@@ -1456,10 +1451,10 @@ Decorates tree nodes with LSP diagnostic severity (error/warn/…) rolled up
 from the files under them, so a directory with a broken file inside it is
 visible without expanding into it first.
 
-Backend support: drawn as an extmark on the node's own line, which needs the
-adapter to resolve a line to a node (`get_node_at_line`). Implemented by the
-neo-tree and nvim-tree adapters; on netrw, oil and mini.files this renders
-nothing rather than guessing at an offset.
+Backend support. Drawn as extmarks on the node's own line, which needs the
+adapter to say which node a given line holds (`get_node_at_line`). The
+neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
+not, so this renders nothing there rather than misplacing anything.
 
 Module: lua/filetree/features/lsp/lsp_diagnostics/
 
@@ -1651,11 +1646,13 @@ the path relative to the project root (`[R`/`]R`) — keys covering the "I
 need this path somewhere else" cases without a prompt.
 
 Every format copies with forward slashes, on every OS — `sub/b.lua`, never
-`sub\b.lua`. That is the separator the tree, its prompts and its notifications
-use, and the one this feature's own examples have always shown; `fnamemodify`
-was quietly handing back native ones on Windows for `absolute`, `relative`,
-`dirname`, `line` and `project_root`. Forward slashes work in Neovim, in libuv
-and in every shell the clipboard is likely to land in.
+`sub\b.lua`. That is the same separator the tree, its prompts and its
+notifications use, and the one this feature's own examples have always shown;
+`fnamemodify` was quietly handing back native ones on Windows for `absolute`,
+`relative`, `dirname`, `line` and `project_root`. Forward slashes work in
+Neovim, in libuv and in every shell the clipboard is likely to land in —
+only a literal `explorer.exe`/`cmd /c` invocation needs native ones, and those
+are converted where they are invoked, not here.
 
 Mark-aware: with nodes marked (see Marks), every `path_copy` keymap —
 including `pick` — copies one line per marked node instead of just the node
@@ -1702,18 +1699,24 @@ FILTER                                                       *filetree-filter*
 Live-filters the tree listing as you type (`/`) — narrows what's shown
 without leaving the tree, unlike find/grep below which open a separate picker.
 
-Backend support: neo-tree and nvim-tree narrow the listing for real, each
-through its own filter (neo-tree's `state.search_pattern` plus a refresh,
-nvim-tree's `Explorer.live_filter`). netrw, oil and mini.files have none, and
-the intended fallback — dimming the non-matching lines — needs the adapter's
-`get_node_at_line`, which none of them implements, so `/` still does nothing
-there.
+Backend support. neo-tree and nvim-tree narrow the listing for real, each
+through its own filter: neo-tree's `state.search_pattern` plus a refresh,
+nvim-tree's `Explorer.live_filter`. netrw, oil and mini.files have no filter
+of their own, and the intended fallback — dimming the non-matching lines
+instead of hiding them — needs the adapter to resolve a line to a node
+(`get_node_at_line`, see Backends), which none of the three implements. So `/`
+still does nothing there; implementing `get_node_at_line` for them is what
+would fix it.
 
-Both native branches were broken until 2026-09-17: each wrapped its call in a
-bare `pcall` and reported success regardless, while `manager.filter_all` had
-been removed from neo-tree and `api.tree.search_node` takes no argument. So
-`/` raised, the error was swallowed, and the fallback was never reached.
-`try_native_filter` now reports failure honestly.
+Both native branches were broken until 2026-09-17, and broken in a way worth
+remembering: each wrapped its call in a bare `pcall` and reported success
+regardless. neo-tree's `manager.filter_all` had been removed upstream, and
+nvim-tree's `api.tree.search_node` takes no argument at all (it opens its own
+`Search:` prompt and reveals a single file). So `/` raised, the error was
+swallowed, the branch claimed to have handled it, and the dim fallback was
+never reached — `/` silently did nothing on the two backends that had a
+filter. `try_native_filter` now reports failure honestly, so a native path
+that breaks again degrades to dimming instead of to nothing.
 
 Keymaps: / <C-c>
 
@@ -1832,6 +1835,15 @@ Shows the path from the tree root down to the current node, so a deeply nested
 file's location is legible without scrolling up through every parent
 directory.
 
+Sharing the winbar. In `"winbar"` mode (the default) the trail is written to
+every non-tree, non-floating window — and `vim.wo.winbar` is a surface with
+no notion of an owner. `my.nvim`'s breadcrumbs put a symbol trail in the same
+place, and ui.nvim's `ui.winbar.set()` exists to arbitrate exactly that. This
+feature goes through it when ui.nvim is installed and writes the option
+directly when it is not, so the two no longer overwrite each other and the
+plugin still works standalone. Use `mode = "float"` or `mode = "statusline"`
+to stay off the surface entirely.
+
 Module: lua/filetree/features/ui/breadcrumbs/
 
 ------------------------------------------------------------------------------
@@ -1848,13 +1860,13 @@ Module: lua/filetree/features/ui/cheatsheet/
 ------------------------------------------------------------------------------
 CONTEXT MENU                                           *filetree-context-menu*
 
-Right-click (`<RightMouse>`) opens a context menu through
-`ui.contextmenu`, which draws with nvzone/menu if it is installed, or
-its own themed `ui.kit.menu` (no third-party plugin needed) otherwise
-— either way, right-click works out of the box. With the kit renderer, the
-clicked node's line is highlighted for as long as the menu stays open, and
-with the tree docked left/right the menu opens beside it rather than on top of
-it. See docs/menu.md for the entries offered and the full detail on both.
+Right-click (`<RightMouse>`) opens a context menu through `ui.contextmenu`,
+which draws with nvzone/menu if it is installed, or its own themed
+`ui.kit.menu` (no third-party plugin needed) otherwise — either way,
+right-click works out of the box. With the kit renderer, the clicked node's
+line is highlighted for as long as the menu stays open, and with the tree
+docked left/right the menu opens beside it rather than on top of it. See
+docs/menu.md for the entries offered and the full detail on both.
 
 Keymaps: <RightMouse>
 
@@ -1910,10 +1922,10 @@ SIZE INFO                                                 *filetree-size-info*
 
 Shows file/directory sizes inline in the tree listing.
 
-Backend support: drawn as an extmark on the node's own line, which needs the
-adapter to resolve a line to a node (`get_node_at_line`). Implemented by the
-neo-tree and nvim-tree adapters; on netrw, oil and mini.files this renders
-nothing rather than guessing at an offset.
+Backend support. Drawn as extmarks on the node's own line, which needs the
+adapter to say which node a given line holds (`get_node_at_line`). The
+neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
+not, so this renders nothing there rather than misplacing anything.
 
 Module: lua/filetree/features/ui/size_info/
 
