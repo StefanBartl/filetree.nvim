@@ -40,6 +40,11 @@ parent directory.
 
 Shows file/directory sizes inline in the tree listing.
 
+**Backend support.** Drawn as extmarks on the node's own line, which needs
+the adapter to say which node a given line holds (`get_node_at_line`). The
+neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
+not, so this renders nothing there rather than misplacing anything.
+
 - **Module:** `lua/filetree/features/ui/size_info/`
 
 ## Window Size Cycler

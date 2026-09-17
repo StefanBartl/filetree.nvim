@@ -189,6 +189,126 @@ function M.get_node_line(node_path)
   return nil
 end
 
+-- ── Line → node ───────────────────────────────────────────────────────────────
+
+---Convert one nvim-tree node into the adapter contract's node shape.
+---@internal
+---@param node table?
+---@param line_number integer
+---@return FiletreeNode?
+local function to_filetree_node(node, line_number)
+  if not node then return nil end
+  local path = node.absolute_path
+  if type(path) ~= "string" or path == "" then return nil end
+  local ntype = node.type == "directory" and "directory" or "file"
+  return {
+    id = path,
+    name = node.name or vim.fn.fnamemodify(path, ":t"),
+    path = path,
+    type = ntype,
+    depth = node.level or 0,
+    line_number = line_number,
+    is_expanded = ntype == "directory" and (node.open or false) or nil,
+  }
+end
+
+---@internal
+---Fallback line→node walk, for an nvim-tree without `utils.get_nodes_by_line`.
+---Mirrors what that function does: one node per rendered line, descending only
+---into OPEN directories, starting at `line`.
+---@param nodes table[]
+---@param line integer  1-based line the first node is drawn on
+---@return table<integer, table>
+local function walk_lines(nodes, line)
+  local by_line = {}
+  local function iter(list)
+    for _, node in ipairs(list or {}) do
+      by_line[line] = node
+      line = line + 1
+      if node.open and node.nodes then iter(node.nodes) end
+    end
+  end
+  iter(nodes)
+  return by_line
+end
+
+-- The five features that call `get_node_at_line` each walk EVERY line of the
+-- tree buffer per render, so rebuilding the map per lookup would make each
+-- render quadratic in the rendered line count -- and there are five of them.
+-- Cached on the buffer's changedtick, the same invalidation the neo-tree
+-- adapter's line_map() uses: nvim-tree bumps it whenever what it drew changes
+-- (expand/collapse/refresh/live-filter), which is exactly when the map is stale.
+---@type table<integer, table>?
+local _lines = nil
+local _lines_buf = -1
+local _lines_tick = -1
+
+---@internal
+---Build (or reuse) the line→node map for the currently rendered tree.
+---@param bufnr integer
+---@return table<integer, table>?
+local function lines_map(bufnr)
+  local tick = vim.api.nvim_buf_get_changedtick(bufnr)
+  if _lines and _lines_buf == bufnr and _lines_tick == tick then return _lines end
+
+  local ok, map = pcall(function()
+    local core = require("nvim-tree.core")
+    local explorer = core.get_explorer()
+    if not explorer or not explorer.nodes then return nil end
+
+    -- How many lines nvim-tree draws BEFORE the first node: the root-folder
+    -- label and the live-filter prompt are both optional and both shift every
+    -- node down by one. nvim-tree computes that offset itself -- reproducing
+    -- the conditions here would mean re-deriving two of its display options
+    -- and getting them wrong whenever it gains a third.
+    local start = 1
+    if type(core.get_nodes_starting_line) == "function" then
+      local n = core.get_nodes_starting_line()
+      if type(n) == "number" and n >= 1 then start = n end
+    end
+
+    -- nvim-tree's own mapping when it exposes one (it is what
+    -- `lib.get_node_at_cursor` resolves the cursor through), our equivalent
+    -- walk otherwise.
+    local ok_utils, utils = pcall(require, "nvim-tree.utils")
+    if ok_utils and type(utils.get_nodes_by_line) == "function" then
+      return utils.get_nodes_by_line(explorer.nodes, start)
+    end
+    return walk_lines(explorer.nodes, start)
+  end)
+
+  if not ok or type(map) ~= "table" then
+    _lines, _lines_buf, _lines_tick = nil, -1, -1
+    return nil
+  end
+  _lines, _lines_buf, _lines_tick = map, bufnr, tick
+  return map
+end
+
+---Node rendered on one line of the tree buffer.
+---
+---`linenr` is **0-based** — the contract states it, and it is what every caller
+---has: all five (git_status, lsp_diagnostics, size_info, copy_move's clipboard
+---marker, filter's dim fallback) walk `0 .. line_count - 1` to place extmarks,
+---which are 0-based too. nvim-tree numbers its lines 1-based, hence the `+ 1`
+---here and nowhere else.
+---
+---A line that renders no node (the root-folder label, the live-filter prompt)
+---is absent from the map and resolves to nil, rather than shifting every node
+---below it by one.
+---@param bufnr integer
+---@param linenr integer  0-based buffer line
+---@return FiletreeNode?
+function M.get_node_at_line(bufnr, linenr)
+  local _, tree_bufnr = M.is_open()
+  if not tree_bufnr or tree_bufnr ~= bufnr then return nil end
+  if not vim.api.nvim_buf_is_valid(bufnr) then return nil end
+
+  local map = lines_map(bufnr)
+  if not map then return nil end
+  return to_filetree_node(map[linenr + 1], linenr + 1)
+end
+
 ---@param node FiletreeNode
 ---@return boolean
 function M.expand_node(node)

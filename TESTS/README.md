@@ -8,12 +8,17 @@ Everything CI runs, plus the manual pass it cannot.
 | [`units.lua`](units.lua) | unit: util layer, neo-tree adapter helpers, the reference engine's apply/undo layer and the chooser |
 | [`menu.lua`](menu.lua) | unit: `integrations/menu.lua`, against a stubbed `filetree` module |
 | [`cwd_mode.lua`](cwd_mode.lua) | unit: the cwd/root policy feature, against a stub adapter and a temp tree |
+| [`adapter_lines.lua`](adapter_lines.lua) | integration: the adapter's line→node mapping, against a **real neo-tree** — the only suite that needs a tree plugin |
 | [`refs/`](refs/) | fixture-based: real on-disk multi-file projects, described below |
 | [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
 
-All five suites are headless and need no tree plugin (stub adapter); exit 0 is
-a pass, and CI gates on every one of them. `MANUAL.md` describes each in more
-detail and carries the lib.nvim resolution notes.
+All of them are headless and exit 0 on a pass, and CI gates on every one.
+All but `adapter_lines.lua` run against a stub adapter and need no tree
+plugin; that one needs neo-tree (plus nui/plenary/devicons) and prints a skip
+instead of failing when they are absent, because what it tests — the mapping
+between the lines a backend DREW and the nodes it reports for them — is
+precisely what a stub cannot have. `MANUAL.md` describes each in more detail
+and carries the lib.nvim resolution notes.
 
 ## refs/
 

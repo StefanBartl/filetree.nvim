@@ -15,6 +15,11 @@ defer to, and libuv directory watchers that motivate `handle_guard`/
 `watcher_quarantine` below. Resolves the current node via `lib.nvim.neotree.node`
 when `lib.nvim` is present, with a local fallback otherwise.
 
+Resolves a buffer line back to the node drawn on it (`get_node_at_line`)
+through the nui tree's own line mapping, which is what lets git status, LSP
+diagnostics, file sizes and the cut/copy clipboard marker decorate this
+backend — see [Line-resolved decorations](#line-resolved-decorations).
+
 - **Module:** [`adapter/neotree.lua`](../../lua/filetree/adapter/neotree.lua) — `filetypes = {"neo-tree"}`
 - **Config:** `opts.adapter = "neotree"`
 
@@ -28,6 +33,11 @@ itself and falls back to the file's own directory (not a project root) when
 nothing else matches, so with it enabled nvim-tree overwrites cwd_sync's
 git-root-anchored cwd on every switch regardless of `cwd_sync.reveal`. Leave
 `update_root` at its default `false` if `root_markers` should win.
+
+Implements `get_node_at_line` through nvim-tree's own
+`utils.get_nodes_by_line`, offset by `core.get_nodes_starting_line()` so the
+root-folder label and the live-filter prompt don't shift every node by one —
+see [Line-resolved decorations](#line-resolved-decorations).
 
 - **Module:** [`adapter/nvimtree.lua`](../../lua/filetree/adapter/nvimtree.lua) — `filetypes = {"NvimTree"}`
 - **Config:** `opts.adapter = "nvimtree"`
@@ -56,6 +66,43 @@ newly-focused file's project.
 
 - **Module:** [`adapter/mini_files.lua`](../../lua/filetree/adapter/mini_files.lua) — `filetypes = {"minifiles"}`
 - **Config:** `opts.adapter = "mini_files"`
+
+## Line-resolved decorations
+
+Four features draw their annotations as extmarks on a node's own line: git
+status, LSP diagnostics, file sizes, and copy/move's staged `C`/`X` clipboard
+marker. Each walks the tree buffer line by line and asks the adapter which
+node is on a given line — `get_node_at_line(bufnr, linenr)`, with `linenr`
+0-based, matching the extmark API they place through.
+
+Only the two adapters with a real line↔node mapping implement it:
+
+| Backend | `get_node_at_line` | The four decorations |
+|---|:-:|---|
+| neo-tree | ✓ | render |
+| nvim-tree | ✓ | render |
+| netrw | ✗ | silently skipped |
+| oil.nvim | ✗ | silently skipped |
+| mini.files | ✗ | silently skipped |
+
+"Silently skipped" is literal and deliberate: a feature whose adapter cannot
+resolve a line clears its namespace and returns, rather than guessing at an
+offset. A wrong guess would put another file's git status next to your file,
+which is worse than an absent decoration and much harder to notice.
+
+Both implementations defer to the backend's own mapping rather than
+reconstructing one by counting rendered nodes. neo-tree's nui tree knows which
+lines it drew, and nvim-tree's `core.get_nodes_starting_line()` knows how many
+lines it drew *before* the first node (a root-folder label, a live-filter
+prompt). Counting instead would go wrong exactly when one of those is on, and
+go wrong by shifting every node by one — the failure mode above.
+
+A fifth feature, `filter`, has a dim-fallback that reads the same method, but
+it is only reached when the backend has no native search. neo-tree and
+nvim-tree both do, so their filtering never takes that path; the three
+backends that would take it are the three without `get_node_at_line`. That
+fallback is therefore still inert everywhere — see
+[Search & paths](SEARCH_AND_PATHS.md).
 
 ## Auto-resolution
 

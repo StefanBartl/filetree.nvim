@@ -10,6 +10,11 @@ Decorates tree nodes with git status (modified/staged/untracked/…),
 resolved per adapter — each backend surfaces this through its own native
 mechanism rather than filetree.nvim reimplementing git status parsing.
 
+**Backend support.** Drawn as extmarks on the node's own line, which needs
+the adapter to say which node a given line holds (`get_node_at_line`). The
+neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
+not, so this renders nothing there rather than misplacing anything.
+
 - **Module:** `lua/filetree/features/git/git_status/`
 
 ## Marks
@@ -92,6 +97,11 @@ cursor happens to be in the tree, no manual `cd` first.
 Decorates tree nodes with LSP diagnostic severity (error/warn/…) rolled
 up from the files under them, so a directory with a broken file inside
 it is visible without expanding into it first.
+
+**Backend support.** Drawn as extmarks on the node's own line, which needs
+the adapter to say which node a given line holds (`get_node_at_line`). The
+neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
+not, so this renders nothing there rather than misplacing anything.
 
 - **Module:** `lua/filetree/features/lsp/lsp_diagnostics/`
 

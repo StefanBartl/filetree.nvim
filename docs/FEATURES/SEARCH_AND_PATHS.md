@@ -10,6 +10,16 @@ Live-filters the tree listing as you type (`/`) — narrows what's shown
 without leaving the tree, unlike find/grep below which open a separate
 picker.
 
+**Backend support.** neo-tree and nvim-tree are filtered through their own
+native search, so the listing really narrows. The other three backends have
+none, and the intended fallback — dimming the non-matching lines instead of
+hiding them — needs the adapter to resolve a line to a node
+(`get_node_at_line`, see [Backends](BACKENDS.md#line-resolved-decorations)),
+which netrw, oil and mini.files do not implement. So `/` currently does
+nothing at all on those three. Implementing `get_node_at_line` for them is
+what would fix it; doing so for neo-tree and nvim-tree does not, since their
+native search returns before the fallback is ever reached.
+
 - **Module:** `lua/filetree/features/search/filter/`
 - **Keymaps:** `/`
 
