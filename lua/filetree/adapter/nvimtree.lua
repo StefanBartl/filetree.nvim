@@ -105,26 +105,6 @@ function M.get_root_path()
   return vim.fn.getcwd()
 end
 
----@return FiletreeNode?
-function M.get_current_node()
-  local a = api()
-  if not a then return nil end
-  local ok, node = pcall(function()
-    return a.tree.get_node_under_cursor()
-  end)
-  if not ok or not node then return nil end
-  local ntype = node.type == "directory" and "directory" or "file"
-  return {
-    id = node.absolute_path or "",
-    name = node.name or "",
-    path = node.absolute_path or "",
-    type = ntype,
-    depth = node.level or 0,
-    line_number = vim.fn.line("."),
-    is_expanded = ntype == "directory" and (node.open or false) or nil,
-  }
-end
-
 ---@param filter? FiletreeFilterMode
 ---@return FiletreeNode[]
 function M.get_visible_nodes(filter)
@@ -135,7 +115,10 @@ function M.get_visible_nodes(filter)
     ---@internal
     local function walk(node, depth)
       if not node then return end
-      local ntype = node.type == "directory" and "directory" or "file"
+      -- `node.nodes ~= nil`, not `type == "directory"`: a symlink pointing at a
+      -- directory is a DirectoryLinkNode whose type is "link". See
+      -- to_filetree_node.
+      local ntype = node.nodes ~= nil and "directory" or "file"
       local include = filter == nil
         or filter == "all"
         or (filter == "files" and ntype == "file")
@@ -156,6 +139,13 @@ function M.get_visible_nodes(filter)
           walk(child, depth + 1)
         end
       end
+      -- NOTE: this walk numbers lines by counting nodes, which is wrong under
+      -- `renderer.group_empty` -- a grouped chain ("a/b/c") renders as ONE
+      -- line there. `get_node_line`, the only consumer of these numbers, is
+      -- therefore off by one per grouped chain on such a tree. Reported, not
+      -- fixed here: that is reveal/scroll_to_line's problem, and
+      -- `get_node_at_line` deliberately takes nvim-tree's own map instead of
+      -- this one.
     end
     local tree = require("nvim-tree.core").get_explorer()
     if tree and tree.nodes then
@@ -191,12 +181,35 @@ end
 
 -- ── Line → node ───────────────────────────────────────────────────────────────
 
+---@internal
+---Depth of a node, counted through its parent chain.
+---
+---nvim-tree's nodes carry no depth/level field of their own (see
+---`node/init.lua`'s class definition), so the previous `node.level or 0` was
+---always 0 — a contract field reporting a constant lie. The chain is short and
+---this is only walked for lines a caller actually asks about.
+---@param node table
+---@return integer
+local function depth_of(node)
+  local depth, cur = 0, node.parent
+  while cur do
+    depth = depth + 1
+    cur = cur.parent
+  end
+  return depth
+end
+
 ---Convert one nvim-tree node into the adapter contract's node shape.
 ---
 ---Every field comes off the node table, so this never touches the filesystem —
 ---worth stating, because the neo-tree side had to be fixed for doing exactly
 ---that (a stat per node per render, via a path helper that computes an
 ---is-directory flag its caller discards).
+---
+---Directory-ness is `node.nodes ~= nil`, not `node.type == "directory"`:
+---nvim-tree's `type` is `"file"|"directory"|"link"`, and a symlink pointing at
+---a directory is a `DirectoryLinkNode` with `type == "link"`. Testing the type
+---string called every such symlink a file.
 ---@internal
 ---@param node table?
 ---@param line_number integer
@@ -205,22 +218,26 @@ local function to_filetree_node(node, line_number)
   if not node then return nil end
   local path = node.absolute_path
   if type(path) ~= "string" or path == "" then return nil end
-  local ntype = node.type == "directory" and "directory" or "file"
+  local is_dir = node.nodes ~= nil
   return {
     id = path,
     name = node.name or vim.fn.fnamemodify(path, ":t"),
     path = path,
-    type = ntype,
-    depth = node.level or 0,
+    type = is_dir and "directory" or "file",
+    depth = depth_of(node),
     line_number = line_number,
-    is_expanded = ntype == "directory" and (node.open or false) or nil,
+    is_expanded = is_dir and (node.open or false) or nil,
   }
 end
 
 ---@internal
----Fallback line→node walk, for an nvim-tree without `utils.get_nodes_by_line`.
----Mirrors what that function does: one node per rendered line, descending only
----into OPEN directories, starting at `line`.
+---Fallback line→node walk, for an nvim-tree without `Explorer:get_nodes_by_line`
+---and without the older `utils.get_nodes_by_line`. Mirrors what those do.
+---
+---`group_next` is the part that is easy to get wrong: with `renderer.group_empty`
+---on, a chain of single-child directories (`a/b/c`) renders as ONE line, and
+---nvim-tree gives that line to the LAST node of the chain. Assigning a line to
+---each node of the chain instead shifts everything below it by one per chain.
 ---@param nodes table[]
 ---@param line integer  1-based line the first node is drawn on
 ---@return table<integer, table>
@@ -228,18 +245,22 @@ local function walk_lines(nodes, line)
   local by_line = {}
   local function iter(list)
     for _, node in ipairs(list or {}) do
-      by_line[line] = node
-      line = line + 1
-      if node.open and node.nodes then iter(node.nodes) end
+      if node.group_next then
+        iter({ node.group_next }) -- the chain shares one line; the tail owns it
+      else
+        by_line[line] = node
+        line = line + 1
+        if node.open and node.nodes and #node.nodes > 0 then iter(node.nodes) end
+      end
     end
   end
   iter(nodes)
   return by_line
 end
 
--- The five features that call `get_node_at_line` each walk EVERY line of the
+-- The four features that call `get_node_at_line` each walk EVERY line of the
 -- tree buffer per render, so rebuilding the map per lookup would make each
--- render quadratic in the rendered line count -- and there are five of them.
+-- render quadratic in the rendered line count -- and there are four of them.
 -- Cached on the buffer's changedtick, the same invalidation the neo-tree
 -- adapter's line_map() uses: nvim-tree bumps it whenever what it drew changes
 -- (expand/collapse/refresh/live-filter), which is exactly when the map is stale.
@@ -259,7 +280,7 @@ local function lines_map(bufnr)
   local ok, map = pcall(function()
     local core = require("nvim-tree.core")
     local explorer = core.get_explorer()
-    if not explorer or not explorer.nodes then return nil end
+    if not explorer then return nil end
 
     -- How many lines nvim-tree draws BEFORE the first node: the root-folder
     -- label and the live-filter prompt are both optional and both shift every
@@ -272,14 +293,32 @@ local function lines_map(bufnr)
       if type(n) == "number" and n >= 1 then start = n end
     end
 
-    -- nvim-tree's own mapping when it exposes one (it is what
-    -- `lib.get_node_at_cursor` resolves the cursor through), our equivalent
-    -- walk otherwise.
-    local ok_utils, utils = pcall(require, "nvim-tree.utils")
-    if ok_utils and type(utils.get_nodes_by_line) == "function" then
-      return utils.get_nodes_by_line(explorer.nodes, start)
+    -- nvim-tree's own mapping -- it is what `Explorer:get_node_at_cursor`
+    -- resolves the cursor through, so this stays exactly as correct as
+    -- nvim-tree's own cursor handling. The method moved off `utils` onto the
+    -- Explorer class, so both spellings are tried before the local walk.
+    local result
+    if type(explorer.get_nodes_by_line) == "function" then
+      result = explorer:get_nodes_by_line(start)
+    else
+      local ok_utils, utils = pcall(require, "nvim-tree.utils")
+      if ok_utils and type(utils.get_nodes_by_line) == "function" then
+        result = utils.get_nodes_by_line(explorer.nodes, start)
+      else
+        result = walk_lines(explorer.nodes, start)
+      end
     end
-    return walk_lines(explorer.nodes, start)
+    if type(result) ~= "table" then return nil end
+
+    -- The root-folder label, when shown, is line 1 and is absent from that map
+    -- -- nvim-tree's own cursor handler special-cases it back to the explorer,
+    -- which IS a node (RootNode: DirectoryNode). Decorating the root the same
+    -- way neo-tree does is the consistent behaviour; leaving it nil would make
+    -- "the tree's own root" the one undecoratable line on one backend only.
+    if result[1] == nil and start > 1 and type(explorer.absolute_path) == "string" then
+      result[1] = explorer
+    end
+    return result
   end)
 
   if not ok or type(map) ~= "table" then
@@ -298,9 +337,19 @@ end
 ---which are 0-based too. nvim-tree numbers its lines 1-based, hence the `+ 1`
 ---here and nowhere else.
 ---
----A line that renders no node (the root-folder label, the live-filter prompt)
----is absent from the map and resolves to nil, rather than shifting every node
----below it by one.
+---A line that renders no node — the live-filter prompt — is absent from the map
+---and resolves to nil, rather than shifting every node below it by one.
+---@return FiletreeNode?
+function M.get_current_node()
+  local a = api()
+  if not a then return nil end
+  local ok, node = pcall(function()
+    return a.tree.get_node_under_cursor()
+  end)
+  if not ok then return nil end
+  return to_filetree_node(node, vim.fn.line("."))
+end
+
 ---@param bufnr integer
 ---@param linenr integer  0-based buffer line
 ---@return FiletreeNode?
