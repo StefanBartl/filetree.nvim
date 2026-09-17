@@ -252,6 +252,12 @@ skipped, rather than silently replaced with a version from before the
 edit. That matters most for the `U` path below, which can revert an apply
 made long ago on files the user has been editing since.
 
+Every path the engine carries is normalized to forward slashes the moment
+the candidate list is built, so the file it reports is spelled the same way
+whether ripgrep or the built-in walk found it — and the file list in the
+chooser and its notifications reads `lua/proj/a.lua` on every OS, never
+`lua\proj\a.lua`.
+
 When the change spans more than eight files, the rewrites (and an undo of
 them) run in chunks across event-loop ticks with the same optional
 `lib.nvim.progress` indicator the paste and trash flows use

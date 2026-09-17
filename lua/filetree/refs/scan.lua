@@ -247,9 +247,33 @@ end
 ---@param cb fun(files: string[])
 function M.candidates(root, needles, exts, cfg, cb)
   if #needles == 0 or #exts == 0 then return cb({}) end
+
+  -- Both backends funnel through here, and they did NOT agree on how to spell
+  -- a path. ripgrep is handed a root with forward slashes and prints its hits
+  -- as `<root>\rel\path.lua`, so on Windows every candidate came back with
+  -- mixed separators; the libuv walk returns clean forward slashes. Same file,
+  -- two spellings, decided by whether the user happens to have ripgrep
+  -- installed -- and `ref.file` is what `apply` groups by, what the undo stack
+  -- keys on, and what the chooser shows.
+  --
+  -- Nothing was visibly broken (`buffer_for` compares slashified, and one scan
+  -- never mixes the two backends), but "the same file has two names depending
+  -- on the machine" is the kind of thing that stays harmless only until
+  -- something dedups on it. `slashify` is this repo's canonical separator, so
+  -- candidates get it once, here, rather than at each of the places that
+  -- would otherwise have to remember.
+  local function normalized(files, next_cb)
+    for i = 1, #files do
+      files[i] = ftpath.slashify(files[i])
+    end
+    return next_cb(files)
+  end
+
   candidates_rg(root, needles, exts, cfg, function(files)
-    if files then return cb(files) end
-    candidates_walk(root, needles, exts, cfg, cb)
+    if files then return normalized(files, cb) end
+    candidates_walk(root, needles, exts, cfg, function(walked)
+      return normalized(walked, cb)
+    end)
   end)
 end
 

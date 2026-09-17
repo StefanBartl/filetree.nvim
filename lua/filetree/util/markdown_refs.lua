@@ -13,6 +13,10 @@
 --- single `update()` call can cover a batch of renames where different refs
 --- point at different old paths that moved to different new paths.
 
+-- Path separator normalization: `/` is the one separator anything user-facing
+-- displays, and the form buffer-name comparisons key on.
+local ftpath = require("filetree.util.path")
+
 local M = {}
 
 ---Whether markdown.nvim (with the reference API) is installed. Call sites use
@@ -187,7 +191,6 @@ end
 ---@param file string
 ---@return integer|nil bufnr
 local function open_buffer_for(file)
-  local ftpath = require("filetree.util.path")
   local key = ftpath.slashify(file)
   for _, b in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(b) and vim.api.nvim_buf_is_loaded(b) then
@@ -207,9 +210,15 @@ end
 function M.unique_files(refs)
   local seen, files = {}, {}
   for _, r in ipairs(refs) do
-    if not seen[r.file] then
-      seen[r.file] = true
-      files[#files + 1] = vim.fn.fnamemodify(r.file, ":.")
+    -- Slashified on both sides: `fnamemodify(":.")` returns native separators,
+    -- so this listed `lua\proj\a.lua` in prompts and notifications although
+    -- `util.path` makes `/` the one separator anything user-facing shows. And
+    -- deduping on the raw path would list a file twice if two spellings of it
+    -- ever met here.
+    local key = ftpath.slashify(r.file)
+    if not seen[key] then
+      seen[key] = true
+      files[#files + 1] = ftpath.slashify(vim.fn.fnamemodify(r.file, ":."))
     end
   end
   return files
