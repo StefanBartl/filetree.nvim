@@ -107,6 +107,14 @@ blank now-dangling markdown links to `REF!` so the break is visible; code
 references are left alone, because a `require("REF!")` is worse than an
 obviously stale one.
 
+**And undoing that delete undoes both halves.** A delete mutates two things,
+so `U` restores two things: the file comes back out of the trash, and the
+`REF!` markers that delete wrote go back to the links they replaced. Each
+trash history entry remembers the undo token of its *own* rewrite, so this
+picks the right one even when later renames pushed newer reference updates on
+top. A restore that failed leaves the markers alone — links only stop being
+broken once the file they point at is actually back.
+
 The markdown provider runs for *every* move regardless of the moved file's
 type — a markdown file can link to anything — so renaming `foo.lua` fixes the
 docs that point at it, not only the modules that require it.

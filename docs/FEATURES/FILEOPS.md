@@ -170,7 +170,8 @@ the "Send to trash?" phrasing.
 When something links to the file being deleted, the plain yes/no becomes a
 chooser — **Delete + remove refs** (blanks the dangling links to `REF!`),
 **Inspect first** (pick which ones), **Delete, keep refs**, **Cancel**.
-See [References](#references).
+Undoing such a delete with `U` restores the `REF!` markers along with the
+file. See [References](#references).
 
 - **Module:** `lua/filetree/features/fileops/trash/`
 - **Keymaps:** `d`, `U`, `<leader>th`
@@ -240,6 +241,19 @@ Deleting is the mirror image: trash offers to blank the now-dangling
 markdown links to `REF!` before the file goes, so the break is visible
 instead of silent. Code references are deliberately left alone there —
 a `require("REF!")` is worse than an obviously stale one.
+
+Undoing that delete undoes both halves. A delete is two mutations — the
+file goes to the trash, and the references pointing at it become `REF!` —
+so restoring the file with `U` (or `:Filetree trash undo`) also reverts
+exactly that rewrite, rather than handing back a file every link still
+calls broken. The trash history entry keeps the undo token of its own
+rewrite, so this stays correct even when unrelated renames pushed newer
+reference updates on top in the meantime, and when the cascade trashed
+orphaned assets right after the file. The refs go back only once the file
+itself is actually back; a restore that failed leaves the markers alone.
+References that can no longer be restored — already reverted by hand with
+`:Filetree refs undo`, or dropped off the bottom of the `refs.undo_depth`
+stack — are reported instead of silently skipped, since those stay broken.
 
 ### Cascade-delete-assets
 

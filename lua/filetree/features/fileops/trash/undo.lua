@@ -1,5 +1,11 @@
 ---@module 'filetree.features.trash.undo'
 ---@brief In-session trash history and restore support.
+---
+--- A delete is not only the file: when it had incoming references, `trash`
+--- rewrites those to the provider's broken-link marker (`REF!`) right after
+--- the file is gone. Undoing the delete therefore has to undo both halves, so
+--- each history entry can carry the refs undo token of its own rewrite
+--- (`M.attach_refs`), which `M.restore` reverts once the file is back.
 
 local notify = require("filetree.util.notify").create("[filetree.trash.undo]")
 local platform = require("filetree.util.platform")
@@ -27,6 +33,8 @@ end
 ---@field name          string   Filename only.
 ---@field trashed_at    string   Timestamp string.
 ---@field platform      string   "windows"|"wsl"|"mac"|"linux"
+---@field refs_undo_id  integer? Undo token of the `REF!` rewrite this delete triggered (see `M.attach_refs`).
+---@field refs_count    integer? How many references that rewrite touched.
 
 ---@type TrashEntry[]
 local _history = {}
@@ -43,6 +51,32 @@ function M.record(original_path)
   table.insert(_history, 1, entry)
   local cap = max_history()
   if cap > 0 and #_history > cap then table.remove(_history, cap + 1) end
+end
+
+---Link the reference rewrite a delete triggered to that delete's history
+---entry, so restoring the file also puts the `REF!` markers back.
+---
+---A separate call rather than an argument to `M.record`, because of the order
+---the two happen in: the file is trashed first and only *then* are the now
+---dangling references rewritten (a cleanup that must not run ahead of a trash
+---that might still fail), so the token does not exist yet when the entry is
+---recorded.
+---
+---Matches the newest entry for `original_path` rather than blindly taking
+---`_history[1]`: the cascade may trash orphaned assets right after, and a
+---mis-attached token would revert one delete's refs while restoring another's
+---file. No matching entry (permanent delete, history trimmed) is a no-op.
+---@param original_path string
+---@param refs_undo_id integer
+---@param refs_count integer
+function M.attach_refs(original_path, refs_undo_id, refs_count)
+  for _, entry in ipairs(_history) do
+    if entry.original_path == original_path then
+      entry.refs_undo_id = refs_undo_id
+      entry.refs_count = refs_count
+      return
+    end
+  end
 end
 
 ---Return the full trash history (newest first).
@@ -193,7 +227,46 @@ function M.restore_last()
   return ok, err
 end
 
----Restore a specific history entry.
+---@internal
+---Put back the `REF!` markers this delete's cleanup wrote — the mirror of the
+---rewrite `trash` ran once the file was gone. Undoing the delete without this
+---leaves every referencing file pointing at `REF!` for a file that is back.
+---
+---Strictly after the file itself is restored, mirroring the delete's own
+---order (trash first, refs after), and only for a token that is still on the
+---refs undo stack: an already-reverted or trimmed-off token is reported, not
+---silently treated as done, since those references stay broken and the user
+---has to fix them by hand.
+---@param entry TrashEntry
+local function restore_refs(entry)
+  local id = entry.refs_undo_id
+  if not id then return end
+
+  local ok_refs, apply = pcall(require, "filetree.refs.apply")
+  if not ok_refs then return end
+
+  if not apply.has_token(id) then
+    notify.warn(
+      string.format(
+        "%d reference(s) marked REF! for this delete could not be restored "
+          .. "(already reverted, or dropped from the refs undo history)",
+        entry.refs_count or 0
+      )
+    )
+    return
+  end
+
+  apply.undo_by_id(id, function(restored, files)
+    if restored > 0 then
+      notify.info(string.format("Restored %d reference(s) in %d file(s)", restored, files))
+    else
+      notify.warn("References were not restored (files changed since the delete?)")
+    end
+  end)
+end
+
+---Restore a specific history entry, together with the references that
+---delete marked `REF!` (see `M.attach_refs`).
 ---@param entry TrashEntry
 ---@return boolean ok
 ---@return string? err
@@ -207,6 +280,10 @@ function M.restore(entry)
   end
   if ok then
     notify.info("Restored: " .. entry.original_path)
+    -- Only once the file is actually back: reference cleanup follows the file,
+    -- never the other way round (a failed restore must not un-break links to
+    -- something that is still deleted).
+    restore_refs(entry)
   else
     notify.error("Restore failed: " .. (err or "unknown error"))
   end
@@ -224,6 +301,9 @@ function M.show_history()
   for i, e in ipairs(_history) do
     lines[#lines + 1] = string.format("[%02d] %s  (%s)", i, e.name, e.trashed_at)
     lines[#lines + 1] = "      " .. e.original_path
+    if (e.refs_count or 0) > 0 then
+      lines[#lines + 1] = string.format("      + %d reference(s) marked REF!", e.refs_count)
+    end
   end
 
   local width = math.min(80, vim.o.columns - 4)
