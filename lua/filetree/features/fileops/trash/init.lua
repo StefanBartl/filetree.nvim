@@ -29,9 +29,15 @@
 --- docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md). Neither exists for a
 --- multi-item "delete all at once" batch, same as before this feature.
 ---
+--- That makes a delete two mutations, so `U` undoes two: the incoming-ref
+--- rewrite's undo token is handed to the trash history entry this delete
+--- created (`undo.attach_refs`), and restoring the file reverts exactly that
+--- rewrite — not merely "the last reference update", which a rename in the
+--- meantime would have made someone else's.
+---
 --- Keymaps (in tree buffer, default):
 ---   d            Trash current node (or all marked nodes)
----   U            Undo last trash operation
+---   U            Undo last trash operation (file + its REF! markers)
 ---   <leader>th   Show trash history
 
 local trash_platform = require("filetree.features.fileops.trash.platform")
@@ -358,7 +364,18 @@ local function confirm_popup(path, cb)
           end
         end
         if #refs_to_apply > 0 then
-          refs.apply.run(refs_to_apply, { label = "delete: " .. name }, after_refs)
+          -- Hand the rewrite's undo token to the trash history entry this
+          -- delete just created, so `U` puts the `REF!` markers back together
+          -- with the file instead of restoring a file every link still calls
+          -- broken.
+          refs.apply.run(
+            refs_to_apply,
+            { label = "delete: " .. name },
+            function(applied, _, undo_id)
+              if undo_id then undo.attach_refs(path, undo_id, applied) end
+              after_refs()
+            end
+          )
         else
           after_refs()
         end

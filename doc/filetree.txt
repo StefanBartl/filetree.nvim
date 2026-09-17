@@ -1255,6 +1255,18 @@ When something links to the file being deleted, the plain yes/no becomes a
 chooser — Delete + remove refs (blanks the dangling links to `REF!`),
 Inspect first (pick which ones), Delete, keep refs, Cancel. See References.
 
+A delete is two mutations — the file goes to the trash, and the references
+pointing at it become `REF!` — so undoing it undoes both: `U` (or `:Filetree
+trash undo`) restores the file AND reverts exactly that rewrite, rather than
+handing back a file every link still calls broken. Each history entry keeps
+the undo token of its own rewrite, so this stays correct when unrelated
+renames pushed newer reference updates on top, and when the cascade trashed
+orphaned assets right after the file. The refs go back only once the file
+itself is back; a failed restore leaves the markers alone. References that
+can no longer be restored (already reverted via `:Filetree refs undo`, or
+dropped off the bottom of the `refs.undo_depth` stack) are reported rather
+than silently skipped.
+
 Keymaps: d U <leader>th
 
 Config: `features.trash.mode` (`"trash"` | `"permanent"`, default `"trash"`)

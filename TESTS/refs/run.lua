@@ -987,6 +987,102 @@ local function run_outgoing_assets_independent_switch_check()
   refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
 end
 
+-- ── Deleting a file and undoing it puts its REF! markers back ──────────────
+-- The delete flow is two mutations, not one: the file goes to the trash, and
+-- the references that pointed at it are rewritten to the provider's broken
+-- marker. Restoring the file (`U`) therefore has to revert exactly THAT
+-- rewrite — which is what the undo token handed to the trash history entry is
+-- for. The OS-level restore itself (Recycle Bin / gio) is not driven here; the
+-- two halves this covers are the token plumbing and the id-scoped undo, i.e.
+-- everything that can silently revert the wrong thing.
+local function run_delete_undo_refs_check()
+  print("\n== delete + undo: REF! markers restored ==")
+
+  local work = scratch_root .. "/delete_undo"
+  vim.fn.delete(work, "rf")
+  copy_dir(fixtures_root .. "/markdown", work)
+
+  local apply = require("filetree.refs.apply")
+  local trash_undo = require("filetree.features.fileops.trash.undo")
+  apply.reset()
+
+  local victim = work .. "/docs/notes.md"
+  local asset = work .. "/img/diagram.png"
+  vim.fn.writefile({ "Notes live at [notes](./docs/notes.md)." }, work .. "/index.md")
+  vim.fn.writefile({ "Guide: [guide](./docs/guide.md)." }, work .. "/other.md")
+
+  -- 1. what the delete's own cleanup does: mark every incoming ref REF!
+  local found, done = nil, false
+  refs.for_delete({ victim }, { root = work }, function(r)
+    found = r
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+  check("delete undo: incoming refs found", found ~= nil and #found > 0)
+
+  local applied, _, undo_id = apply.run(found or {}, { label = "delete: notes.md" })
+  check("delete undo: rewrite applied", applied > 0)
+  check("delete undo: the apply reports an undo token", type(undo_id) == "number")
+  local marked = read(work .. "/index.md")
+  check(
+    "delete undo: reference marked REF!",
+    marked ~= nil and marked:find("REF!", 1, true) ~= nil,
+    marked
+  )
+
+  -- 2. the history entry the token is attached to. The cascade trashes
+  --    orphaned assets AFTER the file, so a newer entry sits on top by the
+  --    time attach_refs runs — the token must still land on the file's entry.
+  trash_undo.record(victim)
+  trash_undo.record(asset)
+  trash_undo.attach_refs(victim, undo_id, applied)
+  local hist = trash_undo.history()
+  check("delete undo: the asset is the newest history entry", hist[1].original_path == asset)
+  check(
+    "delete undo: the token landed on the file's entry, not the asset's",
+    hist[2].original_path == victim
+      and hist[2].refs_undo_id == undo_id
+      and hist[2].refs_count == applied,
+    vim.inspect(hist[2])
+  )
+  check("delete undo: the asset entry carries no token", hist[1].refs_undo_id == nil)
+
+  -- 3. an unrelated, NEWER rewrite on top of the stack. `U` on the older
+  --    delete must not revert this one (which plain `refs.undo` would).
+  local other_found, other_done = nil, false
+  refs.for_delete({ work .. "/docs/guide.md" }, { root = work }, function(r)
+    other_found = r
+    other_done = true
+  end)
+  vim.wait(2000, function()
+    return other_done
+  end, 10)
+  local other_applied = apply.run(other_found or {}, { label = "delete: guide.md" })
+  check("delete undo: a newer, unrelated rewrite was applied", other_applied > 0)
+
+  check("delete undo: the token is still live", apply.has_token(undo_id) == true)
+  local restored = apply.undo_by_id(undo_id)
+  check("delete undo: undo_by_id restored every line of its own apply", restored == applied)
+
+  local reverted = read(work .. "/index.md")
+  check(
+    "delete undo: the reference is back, byte for byte",
+    reverted ~= nil and reverted:find("[notes](./docs/notes.md)", 1, true) ~= nil,
+    reverted
+  )
+  check(
+    "delete undo: the newer, unrelated rewrite stayed applied",
+    (read(work .. "/other.md") or ""):find("REF!", 1, true) ~= nil,
+    read(work .. "/other.md")
+  )
+  check("delete undo: the token is consumed", apply.has_token(undo_id) == false)
+  check("delete undo: undoing a consumed token is a no-op", apply.undo_by_id(undo_id) == 0)
+
+  apply.reset()
+end
+
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
   run_lang(lang)
@@ -999,6 +1095,7 @@ run_outgoing_scan_check()
 run_outgoing_assets_check()
 run_outgoing_assets_gate_check()
 run_outgoing_assets_independent_switch_check()
+run_delete_undo_refs_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))

@@ -33,6 +33,7 @@ local M = {}
 local APPLY_CHUNK_SIZE = 8
 
 ---@class FiletreeRefsUndoToken
+---@field id      integer  Stable handle, valid until the token is undone or trimmed off the stack.
 ---@field entries FiletreeRefsUndoEntry[]
 ---@field count   integer  refs applied
 ---@field files   integer  files changed
@@ -40,6 +41,14 @@ local APPLY_CHUNK_SIZE = 8
 
 ---@type FiletreeRefsUndoToken[]
 local _undo_stack = {}
+
+--- Monotonic id source for undo tokens.
+---
+--- A caller that wants to undo *its own* apply later (trash's `U`, which has
+--- to revert the `REF!` markers belonging to exactly the delete it restores)
+--- cannot use stack positions: another apply pushed in the meantime moves
+--- them, and `M.undo` always takes the top. An id survives both.
+local _next_id = 0
 
 ---How many reference rewrites stay undoable via `:Filetree refs undo`.
 ---
@@ -185,8 +194,11 @@ end
 ---@param applied integer
 ---@param files_changed integer
 ---@param label string
+---@return integer id  Handle for `M.undo_by_id`.
 local function push_undo(undo_entries, applied, files_changed, label)
+  _next_id = _next_id + 1
   _undo_stack[#_undo_stack + 1] = {
+    id = _next_id,
     entries = undo_entries,
     count = applied,
     files = files_changed,
@@ -195,6 +207,7 @@ local function push_undo(undo_entries, applied, files_changed, label)
   while #_undo_stack > undo_depth() do
     table.remove(_undo_stack, 1)
   end
+  return _next_id
 end
 
 ---Apply `refs` (each with `new_target` set).
@@ -206,10 +219,15 @@ end
 ---referencing file — one synchronous loop freezes the editor for the whole
 ---run). A smaller change, and every caller that passes no `on_done`, keep the
 ---fully synchronous path and its return values unchanged.
+---
+---The undo token pushed by this apply is reported as a third value (and third
+---`on_done` argument) so a caller can revert *its own* apply later — trash's
+---`U` reverts the `REF!` markers belonging to exactly the delete it restores.
+---It is `nil` when nothing was applied or `opts.undo == false`.
 ---@param refs FiletreeRef[]
 ---@param opts? { label?: string, undo?: boolean }
----@param on_done? fun(applied: integer, files_changed: integer)
----@return integer applied, integer files_changed
+---@param on_done? fun(applied: integer, files_changed: integer, undo_id: integer?)
+---@return integer applied, integer files_changed, integer? undo_id
 function M.run(refs, opts, on_done)
   opts = opts or {}
   local by_file = group(refs)
@@ -221,6 +239,8 @@ function M.run(refs, opts, on_done)
   table.sort(files) -- deterministic order
 
   local applied, files_changed = 0, 0
+  ---@type integer?
+  local undo_id
   ---@type FiletreeRefsUndoEntry[]
   local undo_entries = {}
 
@@ -234,7 +254,7 @@ function M.run(refs, opts, on_done)
 
   local function finalize()
     if applied > 0 and opts.undo ~= false then
-      push_undo(undo_entries, applied, files_changed, opts.label or "reference update")
+      undo_id = push_undo(undo_entries, applied, files_changed, opts.label or "reference update")
     end
   end
 
@@ -243,8 +263,8 @@ function M.run(refs, opts, on_done)
       tally(file, apply_file(file, by_file[file]))
     end
     finalize()
-    if on_done then on_done(applied, files_changed) end
-    return applied, files_changed
+    if on_done then on_done(applied, files_changed, undo_id) end
+    return applied, files_changed, undo_id
   end
 
   local h = progress.create({ title = "[filetree.refs]" })
@@ -255,7 +275,7 @@ function M.run(refs, opts, on_done)
     if h and h.cancelled then
       -- Already-written files stay written; report what landed so far.
       finalize()
-      on_done(applied, files_changed)
+      on_done(applied, files_changed, undo_id)
       return
     end
 
@@ -274,11 +294,11 @@ function M.run(refs, opts, on_done)
 
     if h then h:finish(string.format("%d reference(s) in %d file(s)", applied, files_changed)) end
     finalize()
-    on_done(applied, files_changed)
+    on_done(applied, files_changed, undo_id)
   end
 
   step()
-  return applied, files_changed -- best-effort snapshot; async callers use on_done
+  return applied, files_changed, undo_id -- best-effort snapshot; async callers use on_done
 end
 
 ---Whether there is anything to undo.
@@ -330,20 +350,15 @@ local function undo_file(entry)
   return file_restored
 end
 
----Undo the most recent apply. Lines are restored only where the current
----content is still what this module wrote — an edit made since then wins.
+---@internal
+---Restore every entry of one already-popped token.
 ---
----Chunked with a progress indicator when `on_done` is given and the entry
+---Chunked with a progress indicator when `on_done` is given and the token
 ---spans more than `APPLY_CHUNK_SIZE` files, mirroring `M.run`.
+---@param token FiletreeRefsUndoToken
 ---@param on_done? fun(restored: integer, files_changed: integer, label: string?)
 ---@return integer restored, integer files_changed, string? label
-function M.undo(on_done)
-  local token = table.remove(_undo_stack)
-  if not token then
-    if on_done then on_done(0, 0, nil) end
-    return 0, 0, nil
-  end
-
+local function restore_token(token, on_done)
   local restored, files_changed = 0, 0
 
   local function tally(file_restored)
@@ -390,6 +405,53 @@ function M.undo(on_done)
 
   step()
   return restored, files_changed, token.label
+end
+
+---Undo the most recent apply. Lines are restored only where the current
+---content is still what this module wrote — an edit made since then wins.
+---@param on_done? fun(restored: integer, files_changed: integer, label: string?)
+---@return integer restored, integer files_changed, string? label
+function M.undo(on_done)
+  local token = table.remove(_undo_stack)
+  if not token then
+    if on_done then on_done(0, 0, nil) end
+    return 0, 0, nil
+  end
+  return restore_token(token, on_done)
+end
+
+---Whether `id` (from `M.run`) is still on the stack — it is gone once undone,
+---or once `undo_depth` trimmed it off the bottom.
+---@param id integer?
+---@return boolean
+function M.has_token(id)
+  if not id then return false end
+  for _, token in ipairs(_undo_stack) do
+    if token.id == id then return true end
+  end
+  return false
+end
+
+---Undo one specific apply, identified by the id `M.run` reported — regardless
+---of where it now sits on the stack.
+---
+---This is what lets an undo that is *not* "the last reference update" stay
+---correct: restoring a trashed file has to revert the `REF!` markers of that
+---delete, even when unrelated renames pushed applies on top since. An id that
+---is no longer on the stack (already undone, or trimmed by `undo_depth`)
+---reports 0 rather than reverting something else.
+---@param id integer
+---@param on_done? fun(restored: integer, files_changed: integer, label: string?)
+---@return integer restored, integer files_changed, string? label
+function M.undo_by_id(id, on_done)
+  for i, token in ipairs(_undo_stack) do
+    if token.id == id then
+      table.remove(_undo_stack, i)
+      return restore_token(token, on_done)
+    end
+  end
+  if on_done then on_done(0, 0, nil) end
+  return 0, 0, nil
 end
 
 ---Drop the undo history (used by teardown/tests).
