@@ -276,6 +276,26 @@ local function run_backend(spec)
     skipped = skipped + 1
   end
 
+  -- `get_node_line` is the inverse: it answers "which line is this path on",
+  -- and reveal/scroll_to_line steer the cursor with it. The two must agree, or
+  -- revealing a file parks the cursor on its neighbour.
+  local gl_bad = {}
+  for i = 0, #lines - 1 do
+    local n = by_line[i]
+    if n then
+      local got = adapter.get_node_line(n.path)
+      if got ~= i + 1 then
+        gl_bad[#gl_bad + 1] =
+          string.format("%s is on line %d, get_node_line says %s", n.name, i + 1, tostring(got))
+      end
+    end
+  end
+  check(
+    "get_node_line is the exact inverse of get_node_at_line",
+    #gl_bad == 0,
+    table.concat(gl_bad, "; ")
+  )
+
   check(
     "a bufnr that is not the tree buffer resolves to nil",
     adapter.get_node_at_line(vim.api.nvim_create_buf(false, true), 0) == nil
@@ -464,20 +484,54 @@ local function run_backend(spec)
   )
   copy_move.clear()
 
-  -- ── filter's dim fallback ──────────────────────────────────────────────────
-  print("\n  -- filter (dim fallback) --")
+  -- ── filter ─────────────────────────────────────────────────────────────────
+  print("\n  -- filter (native) --")
   local _, filter = features.load("filter")
 
+  local function rendered()
+    return table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
+  end
+
+  -- The native path has to actually narrow the listing. Both branches used to
+  -- call an API that no longer exists (neo-tree) or that takes no argument and
+  -- prompts (nvim-tree), and reported success either way -- so `/` did nothing
+  -- at all and the dim fallback was never reached. "Nothing was dimmed" alone
+  -- would still pass for that; the listing itself has to change.
+  check(
+    "the unfiltered listing shows untracked.txt",
+    rendered():find("untracked.txt", 1, true) ~= nil
+  )
+
+  filter.apply("a.lua")
+  vim.wait(2000, function()
+    return rendered():find("untracked.txt", 1, true) == nil
+  end, 50)
+  check(
+    "the backend's own filter really narrowed the listing",
+    rendered():find("untracked.txt", 1, true) == nil,
+    rendered()
+  )
+  check(
+    "the native filter handled it, so nothing was dimmed",
+    #marks("filetree_filter") == 0,
+    "dimmed " .. #marks("filetree_filter") .. " line(s)"
+  )
+
+  filter.clear()
+  vim.wait(2000, function()
+    return rendered():find("untracked.txt", 1, true) ~= nil
+  end, 50)
+  check(
+    "clearing the filter restores the listing",
+    rendered():find("untracked.txt", 1, true) ~= nil,
+    rendered()
+  )
+
+  print("\n  -- filter (dim fallback) --")
   -- Force the fallback to exercise the branch that uses get_node_at_line at
   -- all. try_native_filter dispatches on _adapter.name, so renaming the
-  -- adapter for one call is exactly the "backend with no native filter" case.
-  --
-  -- The native path is NOT driven here. On neo-tree it filters for real and
-  -- simply never reaches get_node_at_line; on nvim-tree it calls
-  -- `api.tree.search_node`, which takes no argument, opens its own
-  -- `vim.ui.input` prompt and reveals a single file -- a different operation
-  -- that would hang a headless run. See the note in docs/FEATURES/
-  -- SEARCH_AND_PATHS.md; that is filter's bug to fix, not this mapping's.
+  -- adapter for one call is exactly the "backend with no native filter" case,
+  -- which is what netrw/oil/mini.files are.
   local real_name = adapter.name
   adapter.name = "no-native-filter"
   filter.apply("a.lua")

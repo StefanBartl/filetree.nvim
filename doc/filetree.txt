@@ -1690,17 +1690,18 @@ FILTER                                                       *filetree-filter*
 Live-filters the tree listing as you type (`/`) — narrows what's shown
 without leaving the tree, unlike find/grep below which open a separate picker.
 
-Backend support: neo-tree filters through its own native search, so the
-listing really narrows. The other four do not work. On netrw, oil and
-mini.files there is no native search, and the intended fallback — dimming the
-non-matching lines — needs the adapter's `get_node_at_line`, which none of
-them implements, so `/` does nothing at all there.
+Backend support: neo-tree and nvim-tree narrow the listing for real, each
+through its own filter (neo-tree's `state.search_pattern` plus a refresh,
+nvim-tree's `Explorer.live_filter`). netrw, oil and mini.files have none, and
+the intended fallback — dimming the non-matching lines — needs the adapter's
+`get_node_at_line`, which none of them implements, so `/` still does nothing
+there.
 
-On nvim-tree `/` is wired to the wrong API (known defect): the native branch
-calls `api.tree.search_node(query)`, but that function takes no argument — it
-opens its OWN "Search:" prompt and reveals a single file. The typed query is
-discarded, a second prompt appears, and the tree jumps instead of filtering;
-and because the branch reports success, the dim fallback never runs either.
+Both native branches were broken until 2026-09-17: each wrapped its call in a
+bare `pcall` and reported success regardless, while `manager.filter_all` had
+been removed from neo-tree and `api.tree.search_node` takes no argument. So
+`/` raised, the error was swallowed, and the fallback was never reached.
+`try_native_filter` now reports failure honestly.
 
 Keymaps: / <C-c>
 
