@@ -337,7 +337,12 @@ function M.check()
   end
 
   -- ── Composer route pre-flight ─────────────────────────────────────────────
-  require("lib.nvim.bindings.usercmd.composer").checkhealth("Filetree")
+  -- Same soft-dependency as the very first check above (lib.nvim may be
+  -- absent) -- an unguarded require here used to turn a machine without
+  -- lib.nvim into a :checkhealth that itself throws, right after this
+  -- function already reported that condition gracefully via vim.health.error.
+  local ok_composer, composer = pcall(require, "lib.nvim.bindings.usercmd.composer")
+  if ok_composer then composer.checkhealth("Filetree") end
 end
 
 return M
