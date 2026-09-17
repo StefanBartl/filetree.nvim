@@ -58,6 +58,23 @@ jobs:
           path: lib.nvim
           ref: ci-verified
 
+      # ui.nvim: filetree.refs.ui does `require("ui.kit")` unconditionally
+      # at module load time (not lazy, not pcall'd -- see that file's own
+      # header), and filetree.refs is itself required eagerly from
+      # filetree.setup(). So the very first setup() call in ANY of the six
+      # suites below needs ui.nvim resolvable, and TESTS/*.lua's own
+      # candidate search already expects a sibling checkout here -- this
+      # step was simply missing, which is why every suite that calls
+      # setup() failed on a real `ui.kit` load error, and every later
+      # setup() call in the same nvim process then hit Lua's cached
+      # "loop or previous error loading module" instead of that real one.
+      # No `ref:` pin: ui.nvim does not publish a ci-verified branch.
+      - name: Checkout ui.nvim
+        uses: actions/checkout@v5
+        with:
+          repository: StefanBartl/ui.nvim
+          path: ui.nvim
+
       - name: Install Neovim (stable)
         uses: rhysd/action-setup-vim@v1
         with:
