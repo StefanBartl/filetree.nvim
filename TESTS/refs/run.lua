@@ -177,6 +177,8 @@ end
 -- Auto mode: apply every found reference without asking, so the assertions
 -- below are about what the providers found, not about the chooser.
 local refs = require("filetree.refs")
+-- The undo stack itself: several blocks below assert on tokens directly.
+local apply = require("filetree.refs.apply")
 
 -- The config every block below starts from. `run_plaintext_comment_check`
 -- re-applies a variant of it and this restores the baseline afterwards.
@@ -1002,7 +1004,6 @@ local function run_delete_undo_refs_check()
   vim.fn.delete(work, "rf")
   copy_dir(fixtures_root .. "/markdown", work)
 
-  local apply = require("filetree.refs.apply")
   local trash_undo = require("filetree.features.fileops.trash.undo")
   apply.reset()
 
@@ -1063,14 +1064,36 @@ local function run_delete_undo_refs_check()
   check("delete undo: a newer, unrelated rewrite was applied", other_applied > 0)
 
   check("delete undo: the token is still live", apply.has_token(undo_id) == true)
-  local restored = apply.undo_by_id(undo_id)
-  check("delete undo: undo_by_id restored every line of its own apply", restored == applied)
+  local restored, _, _, skipped = apply.undo_by_id(undo_id)
 
   local reverted = read(work .. "/index.md")
   check(
     "delete undo: the reference is back, byte for byte",
     reverted ~= nil and reverted:find("[notes](./docs/notes.md)", 1, true) ~= nil,
     reverted
+  )
+
+  -- README.md's first paragraph links to notes.md AND guide.md on ONE line, so
+  -- the second delete rewrote a line the first had already rewritten. Putting
+  -- the first delete's version back would carry the guide link back with it,
+  -- silently undoing the second delete. The line is therefore left exactly as
+  -- the newer rewrite left it -- both markers intact -- and counted as skipped
+  -- rather than quietly dropped, since it does still read REF!.
+  local readme = read(work .. "/README.md")
+  check(
+    "delete undo: a line a NEWER rewrite also touched keeps that newer rewrite",
+    readme ~= nil and readme:find("[the guide](REF!)", 1, true) ~= nil,
+    readme
+  )
+  check(
+    "delete undo: ...so the older delete's marker on that shared line stays too",
+    readme ~= nil and readme:find("[shared notes](REF!)", 1, true) ~= nil,
+    readme
+  )
+  check(
+    "delete undo: the skipped line is reported, not silently dropped",
+    restored == 1 and skipped == 1,
+    ("restored=%d skipped=%d applied=%d"):format(restored, skipped, applied)
   )
   check(
     "delete undo: the newer, unrelated rewrite stayed applied",
@@ -1079,6 +1102,224 @@ local function run_delete_undo_refs_check()
   )
   check("delete undo: the token is consumed", apply.has_token(undo_id) == false)
   check("delete undo: undoing a consumed token is a no-op", apply.undo_by_id(undo_id) == 0)
+
+  apply.reset()
+end
+
+-- ── Cut/paste and move: reverting one op's rewrite, not "the last one" ─────
+-- `U` is trash's, but the id-scoped undo underneath it is not delete-specific:
+-- any feature that rewrites references can revert its own apply later. These
+-- two drive the real features (cut+paste through the clipboard, `M` through
+-- move.move), then push an UNRELATED newer apply on top and revert the older
+-- one by id -- the case a plain "undo the top of the stack" gets wrong.
+--
+-- Files are deliberately kept one-link-per-line here; the delete block above
+-- covers what happens when two applies share a line.
+
+---@param work string
+---@param label string  Prefix for the check names.
+---@return integer  Undo id of the newer, unrelated apply.
+local function mark_unrelated_delete(work, label)
+  local victim = work .. "/decoy.md"
+  vim.fn.writefile({ "# Decoy" }, victim)
+  vim.fn.writefile({ "Decoy: [decoy](./decoy.md)." }, work .. "/decoy_ref.md")
+
+  local found, done = nil, false
+  refs.for_delete({ victim }, { root = work }, function(r)
+    found = r
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+  local _, _, id = apply.run(found or {}, { label = "delete: decoy.md" })
+  check(
+    label .. ": the newer, unrelated rewrite landed",
+    (read(work .. "/decoy_ref.md") or ""):find("REF!", 1, true) ~= nil
+  )
+  return id
+end
+
+local function run_cut_paste_undo_check()
+  print("\n== cut/paste (x/p) + id-scoped refs undo ==")
+
+  local work = scratch_root .. "/cut_paste_undo"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/docs", "p")
+  vim.fn.writefile({ "[tool.x]" }, work .. "/pyproject.toml") -- project marker
+  vim.fn.writefile({ "# Notes" }, work .. "/docs/notes.md")
+  vim.fn.writefile({ "See [notes](./docs/notes.md)." }, work .. "/index.md")
+
+  local src = work .. "/docs/notes.md"
+  local dst = work .. "/notes.md"
+
+  local copy_move = require("filetree.features.fileops.copy_move")
+  local current, done = src, false
+  copy_move.setup({ enabled = true, use_safety = false, dry_run = false }, {
+    get_current_node = function()
+      return { path = current, type = current == work and "directory" or "file" }
+    end,
+    refresh = function()
+      done = true
+      return true
+    end,
+  })
+
+  -- x on the file, then p on the destination directory.
+  copy_move.stage_cut()
+  current = work
+  copy_move.paste()
+  vim.wait(5000, function()
+    return done
+  end, 20)
+
+  check(
+    "cut/paste: the file moved",
+    vim.fn.filereadable(dst) == 1 and vim.fn.filereadable(src) == 0
+  )
+  local moved = read(work .. "/index.md")
+  check(
+    "cut/paste: the reference followed the move",
+    moved ~= nil and moved:find("[notes](./notes.md)", 1, true) ~= nil,
+    moved
+  )
+
+  local paste_id = apply.last_token_id()
+  check("cut/paste: the paste's apply is on the undo stack", type(paste_id) == "number")
+
+  local decoy_id = mark_unrelated_delete(work, "cut/paste")
+  check("cut/paste: the paste's token survived a newer apply", apply.has_token(paste_id) == true)
+
+  local restored = apply.undo_by_id(paste_id)
+  check("cut/paste: undo_by_id reverted the paste's own rewrite", restored == 1)
+  local reverted = read(work .. "/index.md")
+  check(
+    "cut/paste: the reference is back to the pre-paste text",
+    reverted ~= nil and reverted:find("[notes](./docs/notes.md)", 1, true) ~= nil,
+    reverted
+  )
+  check(
+    "cut/paste: the newer, unrelated rewrite was left alone",
+    (read(work .. "/decoy_ref.md") or ""):find("REF!", 1, true) ~= nil
+      and apply.has_token(decoy_id) == true
+  )
+
+  copy_move.teardown()
+  apply.reset()
+end
+
+local function run_move_undo_check()
+  print("\n== move (M) + id-scoped refs undo ==")
+
+  local work = scratch_root .. "/move_undo"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/docs", "p")
+  vim.fn.writefile({ "[tool.x]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "# Notes" }, work .. "/docs/notes.md")
+  vim.fn.writefile({ "See [notes](./docs/notes.md)." }, work .. "/index.md")
+
+  local src = work .. "/docs/notes.md"
+  local dst = work .. "/notes.md"
+
+  local move = require("filetree.features.fileops.move")
+  local done = false
+  move.setup({ enabled = true, use_safety = false, dry_run = false }, {
+    get_current_node = function()
+      return { path = src, type = "file" }
+    end,
+    refresh = function()
+      done = true
+      return true
+    end,
+  })
+  move.move(work)
+  vim.wait(5000, function()
+    return done
+  end, 20)
+
+  check("move: the file moved", vim.fn.filereadable(dst) == 1 and vim.fn.filereadable(src) == 0)
+  local moved = read(work .. "/index.md")
+  check(
+    "move: the reference followed the move",
+    moved ~= nil and moved:find("[notes](./notes.md)", 1, true) ~= nil,
+    moved
+  )
+
+  local move_id = apply.last_token_id()
+  local decoy_id = mark_unrelated_delete(work, "move")
+  check("move: the move's token survived a newer apply", apply.has_token(move_id) == true)
+
+  -- Revert the OLDER apply to prove the id actually selects: a plain
+  -- `refs.undo` here would pop the decoy instead.
+  local restored = apply.undo_by_id(move_id)
+  check("move: undo_by_id reverted the move's own rewrite", restored == 1)
+  check(
+    "move: the reference is back to the pre-move text",
+    (read(work .. "/index.md") or ""):find("[notes](./docs/notes.md)", 1, true) ~= nil,
+    read(work .. "/index.md")
+  )
+  check(
+    "move: the newer, unrelated rewrite was left alone",
+    (read(work .. "/decoy_ref.md") or ""):find("REF!", 1, true) ~= nil
+  )
+
+  -- …and the decoy is still undoable the ordinary way afterwards.
+  refs.undo()
+  check(
+    "move: `:Filetree refs undo` still reverts the remaining apply",
+    (read(work .. "/decoy_ref.md") or ""):find("[decoy](./decoy.md)", 1, true) ~= nil
+      and apply.has_token(decoy_id) == false,
+    read(work .. "/decoy_ref.md")
+  )
+
+  apply.reset()
+end
+
+-- ── Undo is content-verified, exactly like the apply ───────────────────────
+-- The apply half never writes over a line that drifted since the scan. The
+-- undo half used to restore blind, which threw away whatever had been typed on
+-- those lines in the meantime -- reachable now from `U`, which reverts an
+-- apply the user may not remember, on files they have been editing since.
+local function run_undo_content_verification_check()
+  print("\n== refs undo: an edit made since the apply wins ==")
+
+  local work = scratch_root .. "/undo_verify"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "[tool.x]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "# Notes" }, work .. "/notes.md")
+  vim.fn.writefile({ "Kept: [notes](./notes.md)." }, work .. "/kept.md")
+  vim.fn.writefile({ "Edited: [notes](./notes.md)." }, work .. "/edited.md")
+
+  local found, done = nil, false
+  refs.for_delete({ work .. "/notes.md" }, { root = work }, function(r)
+    found = r
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+  local applied, _, id = apply.run(found or {}, { label = "delete: notes.md" })
+  check("undo verify: both references were marked", applied == 2, "applied=" .. applied)
+
+  -- Someone rewrites that line by hand after the delete — the undo must not
+  -- silently replace their line with the pre-delete one.
+  local hand_edit = "Edited: [notes](./somewhere/else.md)."
+  vim.fn.writefile({ hand_edit }, work .. "/edited.md")
+
+  local restored, files, _, skipped = apply.undo_by_id(id)
+  check("undo verify: the untouched line was restored", restored == 1 and files == 1)
+  check("undo verify: the edited line is reported as skipped", skipped == 1, "skipped=" .. skipped)
+  check(
+    "undo verify: the hand edit survived",
+    read(work .. "/edited.md") == hand_edit,
+    read(work .. "/edited.md")
+  )
+  check(
+    "undo verify: the untouched file went back to its original text",
+    (read(work .. "/kept.md") or ""):find("[notes](./notes.md)", 1, true) ~= nil,
+    read(work .. "/kept.md")
+  )
 
   apply.reset()
 end
@@ -1096,6 +1337,9 @@ run_outgoing_assets_check()
 run_outgoing_assets_gate_check()
 run_outgoing_assets_independent_switch_check()
 run_delete_undo_refs_check()
+run_cut_paste_undo_check()
+run_move_undo_check()
+run_undo_content_verification_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nrefs: %d passed, %d failed"):format(passed, failed))

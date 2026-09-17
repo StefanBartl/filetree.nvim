@@ -147,11 +147,14 @@
 ---@field experimental?    FiletreeRefsExperimentalConfig  In-development reference features, each opt-in.
 ---@field scan?            FiletreeRefsScanConfig
 ---@field undo?            boolean   Keep an undo token per apply (default true).
----@field undo_depth       integer?  How many applies stay undoable (default 10). The stack holds only the replaced line content, so raising this is cheap.
+---@field undo_depth       integer?  How many applies stay undoable (default 10). The stack holds each touched line twice (before and after), nothing more, so raising this is cheap.
 
----One entry of the undo stack: the lines an apply replaced, per file.
+---One entry of the undo stack: the lines an apply replaced, per file, plus
+---what it wrote there — the undo restores a line only while it still holds
+---that, so an edit made in between wins.
 ---@class FiletreeRefsUndoEntry
----@field file  string
----@field lines table<integer, string>  line number → content before the apply
+---@field file    string
+---@field lines   table<integer, string>  line number → content before the apply
+---@field written table<integer, string>  line number → content the apply wrote
 
 return {}

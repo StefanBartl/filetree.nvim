@@ -1258,7 +1258,10 @@ Inspect first (pick which ones), Delete, keep refs, Cancel. See References.
 A delete is two mutations — the file goes to the trash, and the references
 pointing at it become `REF!` — so undoing it undoes both: `U` (or `:Filetree
 trash undo`) restores the file AND reverts exactly that rewrite, rather than
-handing back a file every link still calls broken. Each history entry keeps
+handing back a file every link still calls broken. Like every other write
+here it is content-verified: a line edited since the delete (by hand, or by a
+later operation that rewrote the same line) is left alone and reported,
+never silently replaced with its pre-delete version. Each history entry keeps
 the undo token of its own rewrite, so this stays correct when unrelated
 renames pushed newer reference updates on top, and when the cascade trashed
 orphaned assets right after the file. The refs go back only once the file

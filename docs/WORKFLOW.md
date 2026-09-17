@@ -94,7 +94,9 @@ file and not one per provider. *Update all* / *Select…* / *Show diff* /
 after that *Update all* is the honest default, because every rewrite is
 content-verified at the byte range the scan recorded and a line that changed
 in the meantime is skipped rather than corrupted. `:Filetree refs undo`
-reverts the last batch.
+reverts the last batch — and verifies the same way round, restoring a line
+only while it still holds what the rewrite wrote, so an edit made in between
+wins instead of being silently thrown away.
 
 **`ts_js` is off by default and that is not an oversight.** `tsserver`
 implements `willRenameFiles` and does the job better while it is running; the
