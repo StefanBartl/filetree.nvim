@@ -231,6 +231,14 @@ corrupted; a file that is open in a buffer is patched **in that buffer**
 (and written back only if it had no unsaved changes). `:Filetree refs
 undo` reverts the last batch of rewrites.
 
+The undo is verified the same way: each entry keeps both the line's
+pre-rewrite content and what the rewrite wrote, and restores only while
+the line still holds the latter. A line edited since — by hand, or by a
+later rewrite that touched the same line — is left alone and reported as
+skipped, rather than silently replaced with a version from before the
+edit. That matters most for the `U` path below, which can revert an apply
+made long ago on files the user has been editing since.
+
 When the change spans more than eight files, the rewrites (and an undo of
 them) run in chunks across event-loop ticks with the same optional
 `lib.nvim.progress` indicator the paste and trash flows use

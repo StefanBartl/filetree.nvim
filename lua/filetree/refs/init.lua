@@ -422,16 +422,22 @@ function M.undo()
     return
   end
   local label = apply.last_label()
-  apply.undo(function(restored, files)
+  apply.undo(function(restored, files, _, skipped)
     if restored > 0 then
-      notify.info(
-        string.format(
-          "Reverted %d reference(s) in %d file(s) (%s)",
-          restored,
-          files,
-          label or "reference update"
-        )
+      local msg = string.format(
+        "Reverted %d line(s) in %d file(s) (%s)",
+        restored,
+        files,
+        label or "reference update"
       )
+      -- A line that changed since the rewrite is left alone on purpose, but
+      -- saying nothing about it would present a partial revert as a complete
+      -- one -- and those lines still hold the rewritten target.
+      if skipped > 0 then
+        notify.warn(msg .. string.format("; %d line(s) changed since, left alone", skipped))
+      else
+        notify.info(msg)
+      end
     else
       notify.warn("Nothing was reverted (files changed since the update?)")
     end

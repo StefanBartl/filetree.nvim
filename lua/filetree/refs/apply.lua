@@ -15,7 +15,10 @@
 --- and disk is untouched — the user's own edits win.
 ---
 --- Each apply pushes one entry onto an undo stack (`:Filetree refs undo`),
---- holding the pre-change content of every line it touched.
+--- holding both the pre-change content of every line it touched and the
+--- content it wrote there — so the undo is content-verified in exactly the
+--- same way the apply is: a line that no longer holds what this module wrote
+--- has been edited since, and that edit wins over the restore.
 
 local scan = require("filetree.refs.scan")
 
@@ -52,8 +55,9 @@ local _next_id = 0
 
 ---How many reference rewrites stay undoable via `:Filetree refs undo`.
 ---
----Same class of preference as trash's history: the stack holds the previous
----content of rewritten lines, which is small. `refs.undo_depth`.
+---Same class of preference as trash's history: the stack holds the content of
+---each rewritten line before and after the rewrite, which is small.
+---`refs.undo_depth`.
 ---@return integer
 local function undo_depth()
   local ok, refs = pcall(require, "filetree.refs")
@@ -139,12 +143,17 @@ end
 ---Rewrite every ref belonging to one file — in its buffer if it is open,
 ---otherwise straight on disk. Returns how many refs landed and the pre-change
 ---content of every line it touched (for the undo stack).
+---
+---`after` is what landed on each rewritten line. Undo compares against it
+---rather than restoring blind, so an edit made between apply and undo is not
+---silently clobbered.
 ---@param file string
 ---@param by_line table<integer, FiletreeRef[]>
----@return integer file_applied, table<integer, string> before
+---@return integer file_applied, table<integer, string> before, table<integer, string> after
 local function apply_file(file, by_line)
   local bufnr = scan.buffer_for(file)
   local before = {} ---@type table<integer, string>
+  local after = {} ---@type table<integer, string>
   local file_applied = 0
 
   if bufnr then
@@ -155,6 +164,7 @@ local function apply_file(file, by_line)
         local new_line, n = rewrite_line(line, line_refs)
         if n > 0 then
           before[lineno] = line
+          after[lineno] = new_line
           vim.api.nvim_buf_set_lines(bufnr, lineno - 1, lineno, false, { new_line })
           file_applied = file_applied + n
         end
@@ -176,6 +186,7 @@ local function apply_file(file, by_line)
           local new_line, n = rewrite_line(line, line_refs)
           if n > 0 then
             before[lineno] = line
+            after[lineno] = new_line
             lines[lineno] = new_line
             file_applied = file_applied + n
           end
@@ -185,7 +196,7 @@ local function apply_file(file, by_line)
     end
   end
 
-  return file_applied, before
+  return file_applied, before, after
 end
 
 ---@internal
@@ -244,11 +255,11 @@ function M.run(refs, opts, on_done)
   ---@type FiletreeRefsUndoEntry[]
   local undo_entries = {}
 
-  local function tally(file, file_applied, before)
+  local function tally(file, file_applied, before, after)
     if file_applied > 0 then
       applied = applied + file_applied
       files_changed = files_changed + 1
-      undo_entries[#undo_entries + 1] = { file = file, lines = before }
+      undo_entries[#undo_entries + 1] = { file = file, lines = before, written = after }
     end
   end
 
@@ -314,20 +325,45 @@ function M.last_label()
   return top and top.label or nil
 end
 
+---Undo id of the most recent apply (nil when the stack is empty) — the
+---counterpart of `last_label` for callers that reached `M.run` through
+---`refs.handle_result`/`ui.confirm_and_apply` and so never saw the id it
+---returned, but still want to revert their own apply later via `M.undo_by_id`.
+---@return integer?
+function M.last_token_id()
+  local top = _undo_stack[#_undo_stack]
+  return top and top.id or nil
+end
+
 ---@internal
 ---Restore one undo entry's lines, but only where the current content is still
 ---exactly what this module wrote — an edit made since then wins.
+---
+---The apply half has always been content-verified (byte range must still hold
+---`target`); the undo half used to restore blind, which quietly threw away
+---whatever had been typed on those lines in between. Verification matters more
+---here than there, not less: an apply is something the user just triggered and
+---is watching, while an undo can come much later — and via trash's `U`, which
+---reverts an apply the user may not even remember, on files they have been
+---editing since.
+---
+---A line with no recorded post-change content cannot be verified, so it is
+---skipped rather than restored on faith.
 ---@param entry FiletreeRefsUndoEntry
 ---@return integer file_restored
 local function undo_file(entry)
   local bufnr = scan.buffer_for(entry.file)
+  local written = entry.written or {}
   local file_restored = 0
 
   if bufnr then
     local was_modified = vim.bo[bufnr].modified
     for lineno, old_line in pairs(entry.lines) do
-      vim.api.nvim_buf_set_lines(bufnr, lineno - 1, lineno, false, { old_line })
-      file_restored = file_restored + 1
+      local current = vim.api.nvim_buf_get_lines(bufnr, lineno - 1, lineno, false)[1]
+      if current ~= nil and current == written[lineno] then
+        vim.api.nvim_buf_set_lines(bufnr, lineno - 1, lineno, false, { old_line })
+        file_restored = file_restored + 1
+      end
     end
     if file_restored > 0 and not was_modified then
       pcall(vim.api.nvim_buf_call, bufnr, function()
@@ -338,7 +374,7 @@ local function undo_file(entry)
     local ok, lines = pcall(vim.fn.readfile, entry.file)
     if ok and type(lines) == "table" then
       for lineno, old_line in pairs(entry.lines) do
-        if lines[lineno] then
+        if lines[lineno] ~= nil and lines[lineno] == written[lineno] then
           lines[lineno] = old_line
           file_restored = file_restored + 1
         end
@@ -355,11 +391,23 @@ end
 ---
 ---Chunked with a progress indicator when `on_done` is given and the token
 ---spans more than `APPLY_CHUNK_SIZE` files, mirroring `M.run`.
+---
+---`restored`/`skipped` count LINES, not refs — two refs on one line are one
+---line to restore. `skipped` is how many of this token's lines no longer held
+---what the apply wrote and were therefore left alone; a caller that reports
+---only `restored` would present a partial restore as a complete one.
 ---@param token FiletreeRefsUndoToken
----@param on_done? fun(restored: integer, files_changed: integer, label: string?)
----@return integer restored, integer files_changed, string? label
+---@param on_done? fun(restored: integer, files_changed: integer, label: string?, skipped: integer)
+---@return integer restored, integer files_changed, string? label, integer skipped
 local function restore_token(token, on_done)
   local restored, files_changed = 0, 0
+
+  local total_lines = 0
+  for _, entry in ipairs(token.entries) do
+    for _ in pairs(entry.lines) do
+      total_lines = total_lines + 1
+    end
+  end
 
   local function tally(file_restored)
     if file_restored > 0 then
@@ -372,8 +420,8 @@ local function restore_token(token, on_done)
     for _, entry in ipairs(token.entries) do
       tally(undo_file(entry))
     end
-    if on_done then on_done(restored, files_changed, token.label) end
-    return restored, files_changed, token.label
+    if on_done then on_done(restored, files_changed, token.label, total_lines - restored) end
+    return restored, files_changed, token.label, total_lines - restored
   end
 
   local h = progress.create({ title = "[filetree.refs]" })
@@ -382,7 +430,7 @@ local function restore_token(token, on_done)
 
   local function step()
     if h and h.cancelled then
-      on_done(restored, files_changed, token.label)
+      on_done(restored, files_changed, token.label, total_lines - restored)
       return
     end
 
@@ -399,23 +447,24 @@ local function restore_token(token, on_done)
       return
     end
 
-    if h then h:finish(string.format("%d reference(s) in %d file(s)", restored, files_changed)) end
-    on_done(restored, files_changed, token.label)
+    if h then h:finish(string.format("%d line(s) in %d file(s)", restored, files_changed)) end
+    on_done(restored, files_changed, token.label, total_lines - restored)
   end
 
   step()
-  return restored, files_changed, token.label
+  return restored, files_changed, token.label, total_lines - restored
 end
 
 ---Undo the most recent apply. Lines are restored only where the current
----content is still what this module wrote — an edit made since then wins.
----@param on_done? fun(restored: integer, files_changed: integer, label: string?)
----@return integer restored, integer files_changed, string? label
+---content is still what this module wrote — an edit made since then wins,
+---and is counted in `skipped` rather than silently dropped.
+---@param on_done? fun(restored: integer, files_changed: integer, label: string?, skipped: integer)
+---@return integer restored, integer files_changed, string? label, integer skipped
 function M.undo(on_done)
   local token = table.remove(_undo_stack)
   if not token then
-    if on_done then on_done(0, 0, nil) end
-    return 0, 0, nil
+    if on_done then on_done(0, 0, nil, 0) end
+    return 0, 0, nil, 0
   end
   return restore_token(token, on_done)
 end
@@ -441,8 +490,8 @@ end
 ---is no longer on the stack (already undone, or trimmed by `undo_depth`)
 ---reports 0 rather than reverting something else.
 ---@param id integer
----@param on_done? fun(restored: integer, files_changed: integer, label: string?)
----@return integer restored, integer files_changed, string? label
+---@param on_done? fun(restored: integer, files_changed: integer, label: string?, skipped: integer)
+---@return integer restored, integer files_changed, string? label, integer skipped
 function M.undo_by_id(id, on_done)
   for i, token in ipairs(_undo_stack) do
     if token.id == id then
@@ -450,11 +499,15 @@ function M.undo_by_id(id, on_done)
       return restore_token(token, on_done)
     end
   end
-  if on_done then on_done(0, 0, nil) end
-  return 0, 0, nil
+  if on_done then on_done(0, 0, nil, 0) end
+  return 0, 0, nil, 0
 end
 
 ---Drop the undo history (used by teardown/tests).
+---
+---Deliberately does NOT rewind `_next_id`: a trash history entry can outlive
+---the refs undo stack, and an id handed out again after a reset would make
+---that stale entry match a completely unrelated apply.
 function M.reset()
   _undo_stack = {}
 end

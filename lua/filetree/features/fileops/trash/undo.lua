@@ -256,9 +256,18 @@ local function restore_refs(entry)
     return
   end
 
-  apply.undo_by_id(id, function(restored, files)
+  apply.undo_by_id(id, function(restored, files, _, skipped)
     if restored > 0 then
-      notify.info(string.format("Restored %d reference(s) in %d file(s)", restored, files))
+      local msg = string.format("Restored %d reference line(s) in %d file(s)", restored, files)
+      -- Partial restores are the normal outcome once a line was rewritten
+      -- again by a LATER operation (one line can hold links to several files):
+      -- putting the old target back would undo that newer change too, so the
+      -- line is left as it is -- and said so, because it still reads REF!.
+      if skipped > 0 then
+        notify.warn(msg .. string.format("; %d line(s) changed since, left as-is", skipped))
+      else
+        notify.info(msg)
+      end
     else
       notify.warn("References were not restored (files changed since the delete?)")
     end

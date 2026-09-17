@@ -363,7 +363,16 @@ local function confirm_popup(path, cb)
             done(true)
           end
         end
-        if #refs_to_apply > 0 then
+        -- dry-run means "log the plan, change nothing" -- and a reference
+        -- rewrite is a change to OTHER people's files, which a dry-run of a
+        -- delete has even less business making than the delete itself. Both
+        -- other halves (the trash, each cascaded asset) already route through
+        -- do_trash and log instead of acting; this one used to fall straight
+        -- through and really write REF! into every referencing file.
+        if _cfg.dry_run and #refs_to_apply > 0 then
+          notify.info(string.format("[dry-run] would mark %d reference(s) REF!", #refs_to_apply))
+          after_refs()
+        elseif #refs_to_apply > 0 then
           -- Hand the rewrite's undo token to the trash history entry this
           -- delete just created, so `U` puts the `REF!` markers back together
           -- with the file instead of restoring a file every link still calls

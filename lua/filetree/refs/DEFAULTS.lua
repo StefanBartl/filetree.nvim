@@ -111,9 +111,11 @@ return {
   },
 
   -- Keep the previous content of every rewritten line so `:Filetree refs undo`
-  -- can put it back.
+  -- (and trash's `U`, which reverts the delete's own rewrite) can put it back.
   undo = true,
-  -- How many rewrites stay undoable. The stack holds only the previous line
-  -- content, so raising this is cheap.
+  -- How many rewrites stay undoable. The stack holds each touched line twice
+  -- -- the content before the rewrite, to restore, and the content after it,
+  -- to verify nothing has edited that line since -- and nothing else, so
+  -- raising this is cheap.
   undo_depth = 10,
 }
