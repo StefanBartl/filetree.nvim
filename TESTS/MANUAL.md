@@ -56,6 +56,14 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   live-buffer patch, `M` move and `refs undo`. Runs on either candidate-search
   path — ripgrep when present, the capped fallback walk when not.
 
+  Before each mutation it also asserts that every fixture really contains the
+  string its spec expects to be rewritten. That guard exists because a spec and
+  its fixture once disagreed about `require "m"` vs `require("m")`: the
+  "updated" check then looked for a string that could never appear while its
+  "old reference gone" partner passed vacuously, which reads like the engine
+  skipping a file one level deeper — and was filed and carried as an
+  apply-layer defect for three weeks.
+
 These are the suites CI gates on, in this order:
 
 ```
