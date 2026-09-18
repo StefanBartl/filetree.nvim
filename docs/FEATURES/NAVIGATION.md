@@ -159,4 +159,4 @@ neo-tree only. The redirect works on any Neovim; `winfixbuf = true`
 additionally needs 0.10+ (`&winfixbuf`) and is a no-op below it.
 
 - **Module:** [`features/nav/sidebar_guard/init.lua`](../../lua/filetree/features/nav/sidebar_guard/init.lua)
-- **Config:** `opts.features.sidebar_guard.enabled` (default `true`), `opts.features.sidebar_guard.winfixbuf` (default `true` — set `false` to keep the feature registered but leave `winfixbuf` untouched)
+- **Config:** `opts.features.sidebar_guard.enabled` (default `true`), `opts.features.sidebar_guard.winfixbuf` (default **`false`** — the redirect; set `true` to pin with `winfixbuf` and refuse the switch instead)

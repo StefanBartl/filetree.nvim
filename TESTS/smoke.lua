@@ -103,12 +103,22 @@ do
 end
 
 -- 2) setup is clean and opt-out resolves (default-on minus the opt-in few)
+--
+-- Kept as a literal list rather than reading `init.lua`'s own DEFAULT_DISABLED
+-- table: the point of this check is that the shipped default actually matches
+-- what the docs/CHANGELOG promise, so it has to compare against an
+-- independent expectation, not against the same table it would be verifying.
+-- (This list drifted out of sync with init.lua's once before -- `size_info`
+-- was missing from both, so the count-based check below matched by
+-- coincidence while size_info rendered on every tree by default. Update both
+-- lists together.)
 local DEFAULT_OFF = {
   "cwd_sync",
   "current_hl",
   "safety",
   "auto_resize",
   "handle_guard",
+  "size_info",
 }
 do
   local warnings = 0

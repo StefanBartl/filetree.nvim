@@ -49,12 +49,17 @@ each other and the plugin still works standalone. Use `mode = "float"` or
 
 Shows file/directory sizes inline in the tree listing.
 
+**Off by default, opt-in** — purely cosmetic, and `dir_async` runs
+`du`/`Get-ChildItem` per directory node once it renders, which is not
+something to spring on someone who just wanted a tree.
+
 **Backend support.** Drawn as extmarks on the node's own line, which needs
 the adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
 not, so this renders nothing there rather than misplacing anything.
 
 - **Module:** `lua/filetree/features/ui/size_info/`
+- **Config:** `opts.features.size_info` — `enabled` (default **false**, opt-in), `show_files` (true), `show_dirs` (true), `dir_async` (true — async `du -sb`/`Get-ChildItem` for directories; `false` skips directory sizes entirely rather than blocking), `hl_group` (`"Comment"`)
 
 ## Window Size Cycler
 
