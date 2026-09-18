@@ -1535,9 +1535,9 @@ additionally needs 0.10+ (`&winfixbuf`). A no-op for every other adapter
 and on older Neovim.
 
 Config: `opts.features.sidebar_guard.enabled` (default `true`),
-        `opts.features.sidebar_guard.winfixbuf` (default `true` — set
-        `false` to keep the feature registered but leave `winfixbuf`
-        untouched)
+        `opts.features.sidebar_guard.winfixbuf` (default `false` — the
+        redirect; set `true` to pin with `winfixbuf` and refuse the switch
+        instead)
 
 Module: lua/filetree/features/nav/sidebar_guard/
 
@@ -1933,10 +1933,19 @@ SIZE INFO                                                 *filetree-size-info*
 
 Shows file/directory sizes inline in the tree listing.
 
+Off by default, opt-in — purely cosmetic, and `dir_async` runs
+`du`/`Get-ChildItem` per directory node once it renders, which is not
+something to spring on someone who just wanted a tree.
+
 Backend support. Drawn as extmarks on the node's own line, which needs the
 adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
 not, so this renders nothing there rather than misplacing anything.
+
+Config: `opts.features.size_info` — `enabled` (default false, opt-in),
+        `show_files` (true), `show_dirs` (true), `dir_async` (true — async
+        `du -sb`/`Get-ChildItem` for directories; `false` skips directory
+        sizes entirely rather than blocking), `hl_group` ("Comment")
 
 Module: lua/filetree/features/ui/size_info/
 

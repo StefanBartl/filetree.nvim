@@ -42,6 +42,10 @@ local FEATURES = registry.FEATURES
 --   handle_guard          Patches a neo-tree internal and closes libuv handles
 --                         to fix a Windows watcher-lock; opt-in until the user
 --                         wants that behaviour.
+--   size_info             Purely cosmetic — an eol extmark next to every node —
+--                         and `dir_async = true` runs `du`/`Get-ChildItem` per
+--                         directory node by default; better opted into than
+--                         sprung on someone who just wanted a tree.
 --
 ---@type table<string, boolean>
 local DEFAULT_DISABLED = {
@@ -50,6 +54,7 @@ local DEFAULT_DISABLED = {
   safety = true,
   auto_resize = true,
   handle_guard = true, -- patches a neo-tree internal + closes uv handles; opt-in.
+  size_info = true, -- cosmetic clutter + per-node `du`/`Get-ChildItem` by default; opt-in.
 }
 
 ---@type table<string, table>  name → loaded feature module
