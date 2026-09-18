@@ -252,6 +252,113 @@ do
   vim.cmd("tabclose")
 end
 
+-- ── The tree is the only window ────────────────────────────────────────────
+-- There is nothing to redirect *into*, so the redirect has to make a window.
+-- Getting the order wrong here loses the file outright: restore the sidebar
+-- first, then fail to find or make a target, and the buffer is loaded and
+-- displayed nowhere -- an `:edit` that looks like it worked and shows the
+-- user their tree. The target is therefore acquired before anything moves.
+do
+  guard.teardown()
+
+  vim.cmd("tabnew")
+  local lone_tree = vim.api.nvim_get_current_win()
+  local lone_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[lone_buf].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(lone_tree, lone_buf)
+  vim.cmd("only")
+
+  guard.setup({ enabled = true }, adapter)
+  vim.wait(50, function()
+    return false
+  end)
+  local alone_tab = vim.api.nvim_get_current_tabpage()
+  check(
+    "alone: the lone tree window is the only one in this tab",
+    #vim.api.nvim_tabpage_list_wins(0) == 1
+  )
+
+  local file_buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(file_buf, "alone-redirect.lua")
+  vim.api.nvim_set_current_win(lone_tree)
+  local ok_switch = pcall(vim.api.nvim_set_current_buf, file_buf)
+  vim.wait(100, function()
+    return false
+  end)
+
+  check("alone: the switch is allowed", ok_switch)
+  check(
+    "alone: a window was made for the file",
+    #vim.api.nvim_tabpage_list_wins(0) == 2,
+    "windows: " .. #vim.api.nvim_tabpage_list_wins(0)
+  )
+  check(
+    "alone: the tree kept its window",
+    vim.api.nvim_win_is_valid(lone_tree) and vim.api.nvim_win_get_buf(lone_tree) == lone_buf
+  )
+
+  local shown = false
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_win_get_buf(w) == file_buf then shown = true end
+  end
+  check("alone: the file is visible somewhere — not loaded into nowhere", shown)
+  -- Editor windows exist in OTHER tabs here. Picking one of those would open
+  -- the file out of sight and drag the cursor into another tab; a sidebar is a
+  -- per-tab thing and so is where its files belong.
+  check(
+    "alone: the redirect stayed in this tabpage",
+    vim.api.nvim_get_current_tabpage() == alone_tab
+  )
+
+  guard.teardown()
+  vim.cmd("tabclose")
+end
+
+-- ── A record that no longer points at a tree must not fire the redirect ────
+-- A closed tree leaves its window in `_sidebars`. Neovim does not reuse window
+-- ids, so that entry cannot currently address a different window -- but the
+-- redirect validates what the record points at anyway, rather than depending
+-- on an undocumented property of the handle allocator.
+do
+  guard.teardown()
+
+  vim.cmd("tabnew")
+  local w_editor = vim.api.nvim_get_current_win()
+  vim.cmd("vsplit")
+  local w_tree = vim.api.nvim_get_current_win()
+  local b_tree = vim.api.nvim_create_buf(false, true)
+  vim.bo[b_tree].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(w_tree, b_tree)
+  vim.api.nvim_set_current_win(w_editor)
+
+  guard.setup({ enabled = true }, adapter)
+  vim.wait(50, function()
+    return false
+  end)
+
+  -- The recorded buffer stops being a tree, with no window churn to confuse
+  -- the issue: exactly the state the validation is there for.
+  vim.bo[b_tree].filetype = "lua"
+
+  local later = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(later, "not-a-hijack.lua")
+  vim.api.nvim_set_current_win(w_tree)
+  local ok_switch = pcall(vim.api.nvim_set_current_buf, later)
+  vim.wait(100, function()
+    return false
+  end)
+
+  check("stale: the switch is allowed", ok_switch)
+  check(
+    "stale: the buffer stays where it was put, no phantom redirect",
+    vim.api.nvim_win_is_valid(w_tree) and vim.api.nvim_win_get_buf(w_tree) == later,
+    "window holds buf " .. tostring(vim.api.nvim_win_get_buf(w_tree))
+  )
+
+  guard.teardown()
+  vim.cmd("tabclose")
+end
+
 -- ── no-op for a non-neotree adapter ────────────────────────────────────────
 do
   vim.wo[tree_win].winfixbuf = false
