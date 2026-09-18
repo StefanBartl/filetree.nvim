@@ -143,11 +143,14 @@
 -- ── sidebar_guard ─────────────────────────────────────────────────────────────
 
 ---@class FiletreeSidebarGuardConfig
----@field enabled    boolean  Pin the tree window with `winfixbuf` so a stray `:buffer`/
----                           tabline-click can't hijack it and make it reopen on the wrong
----                           side (default true; neo-tree + Neovim 0.10+ only, else a no-op).
----@field winfixbuf? boolean  Set false to keep the feature registered but not touch
----                           `winfixbuf` (default true).
+---@field enabled    boolean  Keep the tree in its sidebar: a foreign buffer that lands there
+---                           is moved to an editor window and the tree is put back, instead of
+---                           neo-tree reopening the sidebar on the wrong side (default true;
+---                           neo-tree only, else a no-op).
+---@field winfixbuf? boolean  Refuse the switch with `winfixbuf` instead of redirecting it
+---                           (default false, Neovim 0.10+). The refusal also hits plugins that
+---                           open a file without checking the flag — they get `E1513` and the
+---                           file does not open — so the redirect is the default.
 
 -- ── no_name_guard ─────────────────────────────────────────────────────────────
 
