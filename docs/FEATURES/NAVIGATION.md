@@ -120,27 +120,43 @@ bookkeeping during open/close.
 
 ## Sidebar Guard
 
-Pins the tree window with `winfixbuf` so a stray `:buffer N` — most often a
-mouse click on a buffer in a tabline (NvChad's tabufline, bufferline, …)
-while the cursor is *inside* the tree — cannot swap the tree's buffer out
-of its window.
+Keeps the tree in its sidebar. A buffer that lands in the tree window — a
+stray `:buffer N`, a mouse click on a tabline buffer (NvChad's tabufline,
+bufferline, …) while the cursor is *inside* the tree, or another plugin's
+`:edit` — is moved to a real editor window, and the tree is put back where
+it was.
 
-Without the pin, that swap displaces the tree, and neo-tree's own recovery
-(`buffer_enter_event`) then reopens the sidebar through a bare `:vsplit`:
-with the default `splitright = false` the new file window lands to the
-*left* of the tree and shoves the sidebar to the right. The repro is
-exactly "tree open on the left, click a tabline buffer, tree jumps to the
-right".
+Without that, the swap displaces the tree, and neo-tree's own recovery
+(`buffer_enter_event`) reopens the sidebar through a bare `:vsplit`: with
+the default `splitright = false` the new file window lands to the *left* of
+the tree and shoves the sidebar to the right. The repro is exactly "tree
+open on the left, click a tabline buffer, tree jumps to the right".
 
-Callers that respect `winfixbuf` (NvChad's `goto_buf`, neo-tree's own
-`open_file`) put the file in a real editor window instead; callers that
-don't get a harmless error rather than a reparented tree. The flag is
-lifted only for the one legitimate in-window buffer swap — switching
-source via the `source_selector` winbar — which neo-tree brackets with its
-`NEO_TREE_WINDOW_BEFORE_OPEN` / `_AFTER_OPEN` events.
+The redirect serves both cases at once, because they are the same thing at
+the API level: the only difference is what the caller meant, and nobody ever
+means "put this file in the sidebar".
 
-neo-tree + Neovim 0.10+ only (`&winfixbuf`); a no-op for every other
-adapter and on older Neovim.
+**`winfixbuf = true`** (off by default) swaps the redirect for the older
+strategy: pin the window so the switch is *refused*. Callers that check the
+flag (NvChad's `goto_buf`, neo-tree's own `open_file`) then route around it
+by themselves, with no window shuffling at all. Callers that do not get
+
+```
+E1513: Cannot switch buffer. 'winfixbuf' is enabled
+```
+
+— and the file does not open. A plugin opening a README from its own picker
+has no way to know a tree is focused, so that refusal broke reposcope,
+lazygit and anything else driving `:edit` from a callback. It is kept as an
+option for anyone who prefers a refusal to a redirect; the two do not
+combine, since a refused switch never reaches the redirect.
+
+Both strategies stand down for the one legitimate in-window buffer swap —
+switching source via the `source_selector` winbar — which neo-tree brackets
+with its `NEO_TREE_WINDOW_BEFORE_OPEN` / `_AFTER_OPEN` events.
+
+neo-tree only. The redirect works on any Neovim; `winfixbuf = true`
+additionally needs 0.10+ (`&winfixbuf`) and is a no-op below it.
 
 - **Module:** [`features/nav/sidebar_guard/init.lua`](../../lua/filetree/features/nav/sidebar_guard/init.lua)
 - **Config:** `opts.features.sidebar_guard.enabled` (default `true`), `opts.features.sidebar_guard.winfixbuf` (default `true` — set `false` to keep the feature registered but leave `winfixbuf` untouched)

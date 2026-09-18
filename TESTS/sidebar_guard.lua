@@ -173,6 +173,85 @@ do
   )
 end
 
+-- ── The default strategy: redirect, not refuse ──────────────────────────────
+-- `winfixbuf` (the block above) makes a foreign buffer switch FAIL. That is
+-- fine for callers who check the flag and route around it, and an
+-- `E1513: Cannot switch buffer` for callers who do not -- with the file then
+-- not opening at all. Reposcope opening a README from its own picker, lazygit,
+-- anything driving `:edit` from a callback: none of them know a tree is
+-- focused, and none of them should have to.
+--
+-- The default therefore lets the switch happen and puts things right: the
+-- intruder goes to an editor window, the tree goes back to its sidebar. Both
+-- the hijack and an ordinary "open this file" want exactly that.
+do
+  guard.teardown()
+
+  -- A tab of its own: the blocks after this one still use the windows created
+  -- at the top of the file, so this must not close them.
+  vim.cmd("tabnew")
+  local rd_editor = vim.api.nvim_get_current_win()
+  vim.cmd("vsplit")
+  local rd_tree = vim.api.nvim_get_current_win()
+  local rd_tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[rd_tree_buf].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(rd_tree, rd_tree_buf)
+  vim.api.nvim_set_current_win(rd_editor)
+
+  -- No `winfixbuf` key at all: the default.
+  guard.setup({ enabled = true }, adapter)
+  vim.wait(50, function()
+    return false
+  end)
+
+  check("default: the tree window is NOT hard-pinned", vim.wo[rd_tree].winfixbuf == false)
+
+  -- The intruder, put in the tree window exactly as `:edit`/`:buffer` would.
+  local file_buf = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(file_buf, "redirect-me.lua")
+  vim.api.nvim_set_current_win(rd_tree)
+  local ok_switch = pcall(vim.api.nvim_set_current_buf, file_buf)
+  vim.wait(100, function()
+    return false
+  end)
+
+  check("default: the switch is allowed, not refused", ok_switch)
+  check(
+    "default: the tree is back in its own window",
+    vim.api.nvim_win_is_valid(rd_tree) and vim.api.nvim_win_get_buf(rd_tree) == rd_tree_buf,
+    "sidebar holds buf " .. tostring(vim.api.nvim_win_get_buf(rd_tree))
+  )
+  check(
+    "default: the intruder landed in the editor window",
+    vim.api.nvim_win_is_valid(rd_editor) and vim.api.nvim_win_get_buf(rd_editor) == file_buf,
+    "editor holds buf " .. tostring(vim.api.nvim_win_get_buf(rd_editor))
+  )
+  check(
+    "default: focus followed the file out of the sidebar",
+    vim.api.nvim_get_current_win() == rd_editor
+  )
+
+  -- A source switch swaps the buffer IN the sidebar on purpose, so the
+  -- redirect has to stand down for it -- otherwise `filesystem -> git_status`
+  -- would get thrown into an editor window.
+  captured["neo_tree_window_before_open"].handler()
+  local other_source = vim.api.nvim_create_buf(false, true)
+  vim.bo[other_source].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(rd_tree, other_source)
+  vim.api.nvim_exec_autocmds("BufWinEnter", { buffer = other_source })
+  vim.wait(100, function()
+    return false
+  end)
+  check(
+    "default: a source switch is left alone during the lift",
+    vim.api.nvim_win_get_buf(rd_tree) == other_source,
+    "sidebar holds buf " .. tostring(vim.api.nvim_win_get_buf(rd_tree))
+  )
+
+  guard.teardown()
+  vim.cmd("tabclose")
+end
+
 -- ── no-op for a non-neotree adapter ────────────────────────────────────────
 do
   vim.wo[tree_win].winfixbuf = false

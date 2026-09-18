@@ -216,15 +216,29 @@ function M.check()
     end
   end
 
-  -- sidebar_guard: whether `&winfixbuf` exists at all, and whether an open
-  -- tree window is actually pinned right now.
+  -- sidebar_guard: which strategy is in force, and -- for the opt-in pin only
+  -- -- whether the open tree windows actually carry it. The default redirect
+  -- has no per-window state to inspect: it is an autocmd, and reporting
+  -- "unpinned" for it would read as a fault when it is the normal case.
   if is_enabled("sidebar_guard") then
     local ok_ad, adapter_mod2 = pcall(require, "filetree.adapter")
     local active_adapter = ok_ad and adapter_mod2.get() or nil
-    if vim.fn.exists("&winfixbuf") ~= 1 then
-      vim.health.info("sidebar_guard: no-op — this Neovim build has no &winfixbuf (< 0.10)")
-    elseif active_adapter and active_adapter.name ~= "neotree" then
+    local ok_gcfg, ft_cfg = pcall(require, "filetree.config")
+    local guard_cfg = ok_gcfg and ((ft_cfg.get().features or {}).sidebar_guard or {}) or {}
+    local hard_pin = guard_cfg.winfixbuf == true
+
+    if active_adapter and active_adapter.name ~= "neotree" then
       vim.health.info("sidebar_guard: no-op — only the neo-tree adapter is affected")
+    elseif not hard_pin then
+      vim.health.ok(
+        "sidebar_guard active (redirect: a foreign buffer in the sidebar is moved "
+          .. "to an editor window and the tree put back)"
+      )
+    elseif vim.fn.exists("&winfixbuf") ~= 1 then
+      vim.health.warn(
+        "sidebar_guard: winfixbuf = true was asked for, but this Neovim build has "
+          .. "no &winfixbuf (< 0.10) — unset it to get the redirect instead"
+      )
     else
       local pinned, total = 0, 0
       for _, w in ipairs(vim.api.nvim_list_wins()) do
@@ -240,7 +254,7 @@ function M.check()
         end
       end
       if total == 0 then
-        vim.health.ok("sidebar_guard active (no tree window open to check)")
+        vim.health.ok("sidebar_guard active (winfixbuf pin; no tree window open to check)")
       elseif pinned == total then
         vim.health.ok(("sidebar_guard active (%d tree window(s) pinned)"):format(total))
       else
