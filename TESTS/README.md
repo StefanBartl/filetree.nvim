@@ -87,16 +87,100 @@ they are exempt from the "raise coverage" goal):
   `units.lua`); low risk, cheap to add, just not reached this round.
 - `util/bind.lua` — already exercised indirectly by every feature's own
   keymap-binding tests; a dedicated suite would mostly repeat that coverage.
-- Confirmed genuinely untested beyond a load-time `require()` (checked by
-  grepping every existing suite for each name, not assumed): `features/infra/file_watcher.lua`,
-  `features/nav/{auto_reveal,buffer_cycle,reveal_alt,tree_traverse}.lua`,
-  `features/paths/lua_require_copy.lua`, `features/search/{filter,live_search}.lua`,
-  `features/ui/{window_style,window_size_cycler,cursor_hide,tree_reset,size_info,preview}.lua`.
-  Not reached this round; a later round should pick these up next.
-  (`features/infra/handle_guard`, `features/infra/tree_integrity`,
-  `features/nav/{auto_resize,no_name_guard}` looked similar at a glance but
-  already have real suites in `units.lua` — verified before writing this
-  list, not assumed either way.)
+
+Round 26 also flagged `features/infra/file_watcher.lua`,
+`features/nav/{auto_reveal,buffer_cycle,reveal_alt,tree_traverse}.lua`,
+`features/paths/lua_require_copy.lua`, `features/search/{filter,live_search}.lua`,
+and `features/ui/{window_style,window_size_cycler,cursor_hide,tree_reset,size_info,preview}.lua`
+as confirmed genuinely untested beyond a load-time `require()`, for a later
+round to pick up next. Round 27 (below) is that round, and closes all of
+them.
+
+### Round 27 (follow-up to round 26; still `gaps.lua`)
+
+Closed every file round 26's list above deferred. Also re-audited round 26's
+other skip reasons for rot before adding anything new: `features/system/shell_run.lua`,
+`open_with.lua`, `pdf_create.lua`/`pdf_open.lua`, `org/session.lua`,
+`util/usercmd.lua`, `util/progress.lua`, and `util/bind.lua` are all still
+accurately described above — none gained a stub seam or a sibling-checkout
+dependency since. neo-tree.nvim/nui.nvim/plenary.nvim/nvim-web-devicons are
+real installs on a dev machine under `$LOCALAPPDATA/nvim-data/lazy`, and
+`adapter_lines.lua`'s own candidate search already finds them there (that
+suite is simply not one of the seven CI runs — it needs a real tree plugin
+and prints a skip without one, which is what CI would get); nothing to close
+there.
+
+Covers, with real assertions, in risk order:
+
+- **Windows path/separator + navigation** (highest risk: this is a file-tree
+  UI with cursor/line navigation): `nav/auto_reveal.lua`'s `under_root()`
+  exercised with a backslash-spelled adapter root against a forward-slash
+  buffer path (both readings must agree it is inside), the `cursor_in_tree`
+  guard (a forced `reveal_current()` while the cursor sits IN the tree must
+  never fire `open_reveal`), and the `only_if_open` guard; `paths/lua_require_copy.lua`'s
+  `copy_require_relative()` against the REAL `getcwd()` on this platform
+  (Windows hands back backslashes regardless of how `:cd` was spelled);
+  `nav/tree_traverse.lua`'s filesystem-root guard (walks to the real OS root
+  via `fnamemodify(...,":h")`'s own fixed point, not a guessed drive-letter
+  string) and its `cwd_mode.notify_manual_root` cross-feature notification.
+- **keymap-bound features with no exported entry point**, driven through a
+  real `filetree.setup()` plus a real `FileType`-fired tree buffer (the same
+  mechanism `units.lua`'s own keymap-override tests use): `nav/reveal_alt.lua`
+  (`B`, incl. the alternate-buffer-vanished guard), `ui/tree_reset.lua` (`<Esc>`
+  fanning out to preview/filter/watcher_quarantine, real state checked before
+  and after), `ui/window_style.lua` (statusline blanking + highlight
+  isolation, incl. the WinEnter re-assert and an adapter-declared
+  `filetypes`/`hl_groups` table replacing the default superset), `ui/cursor_hide.lua`
+  (real `lib.nvim.ui.winhighlight` merge-in/strip-out on enter/leave),
+  `ui/window_size_cycler.lua` (real window-width changes via
+  `nvim_win_set_width`, incl. `2w` jumping straight to preset #2 instead of
+  looping two steps, and an out-of-range count clamped to the last preset).
+- **exported functions, called directly**: `nav/buffer_cycle.lua` (`<C-n>`/`<C-p>`
+  cycling a REAL adjacent editor window while focus stays in the tree),
+  `search/filter.lua` (extmark dimming, the native-backend-selected-but-not-installed
+  fallback path this campaign's own regression note describes, and `enter()`
+  via a stubbed `ui.kit.live_input`), `search/live_search.lua` (match="name"
+  vs. match="path", and `commit_to_filter` handing the query to the real
+  `filter` feature), `ui/size_info.lua` (real file sizes via `uv.fs_stat`,
+  async directory sizes via a stubbed `vim.system` exercising the real
+  POSIX/Windows command branch and its output parsing — the same seam this
+  campaign already uses for `git_status.lua`), `ui/preview.lua` (float-mode
+  text/hex/directory rendering in a real floating window, buffer-mode
+  showing/restoring the adjacent editor window's buffer, and the image/pdf
+  dispatch guard with `backend = false`).
+- **libuv, for real, no stub**: `infra/file_watcher.lua` — a real
+  `vim.uv.new_fs_event()` watching a real temp directory, a real file written
+  into it, the debounced `adapter.refresh()` actually firing, and re-`setup()`
+  not doubling its own `DirChanged` autocmd.
+
+One genuine bug found and fixed directly, in test infrastructure rather than
+shipped code: the `filetree.health` regression test above (pinned in round
+26) simulates `lib.nvim.bindings.usercmd.composer` being unavailable and
+calls `health.check()`, which itself does `pcall(require, "filetree")`. If
+nothing in the process had required the bare `filetree` module before that
+point, this was the first attempt — and `filetree.commands` requires
+`composer` unconditionally (no pcall; see its own file header), so loading
+`filetree` for the first time while composer is sabotaged throws for real.
+`health.check()`'s own pcall swallows that fine, but Lua's module loader then
+permanently caches `filetree` (and `filetree.commands`) as failed, so every
+LATER `require("filetree")` in the same process fails with "loop or previous
+error loading module" even after composer is restored right after — exactly
+what broke this round's own `reveal_alt`/`window_style`/etc. sections the
+first time *they* called the real `require("filetree")`. Fixed by clearing
+those two cache entries once the health test finishes restoring its own
+state, right where composer itself is restored.
+
+Two more bugs, also in this test file rather than the plugin: `nav.reveal_alt`'s
+test used `:edit` to bring a real alternate-file buffer into the SAME window
+an about-to-be-current empty scratch tree buffer already occupied — Vim's own
+`:edit` recycles the CURRENT buffer's number when it is empty/unnamed/unmodified,
+which silently wiped the tree buffer's just-bound keymaps; fixed by editing
+the other file *before* the tree buffer becomes current, and by switching a
+second stand-in buffer in via `bufadd()` + `:buffer` (existing buffer
+numbers, so no new-buffer-reuse) rather than a second `:edit`. `ui.window_size_cycler`'s
+test resized a window that was the ONLY window in its tabpage — with no
+sibling column to redistribute space from or to, `nvim_win_set_width` on it
+is a no-op — fixed by adding a real sibling split first.
 
 ## refs/
 

@@ -1282,6 +1282,1287 @@ do
   package.loaded[modname] = prev_loaded
 
   check("health.check(): does not throw when lib.nvim's composer module is unavailable", ok_call)
+
+  -- BUG (test isolation, found while adding round 27's coverage below): if
+  -- "filetree" (the top-level module) had never been `require()`d before this
+  -- point in the process, `health.check()`'s own `pcall(require, "filetree")`
+  -- -- reached while composer is deliberately broken above -- is the FIRST
+  -- load attempt. That pcall swallows the failure fine, but Lua's module
+  -- loader permanently caches "filetree" (and "filetree.commands", which
+  -- requires composer unconditionally -- see commands.lua's own header) as
+  -- `false`, so every LATER `require("filetree")` in this same process fails
+  -- with "loop or previous error loading module" even once composer is
+  -- restored above. Clearing the cache entries for the two modules this
+  -- specifically poisons lets a later section load them fresh.
+  package.loaded["filetree"] = nil
+  package.loaded["filetree.commands"] = nil
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Round 27 (follow-up to round 26's gap pass): the files round 26 explicitly
+-- deferred rather than reached -- see TESTS/README.md's "gaps.lua" section for
+-- the up-to-date list. Same framework, same rtp/TMP_ROOT setup as above.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+---@internal
+---Replace special keys with their real codes, for nvim_feedkeys.
+---@param s string
+---@return string
+local function keys(s)
+  return vim.api.nvim_replace_termcodes(s, true, false, true)
+end
+
+---@internal
+---Register `stub` as the active adapter and run a real, top-level
+---`filetree.setup()` with exactly the given feature config, then create a
+---real scratch buffer, make it current, and give it a tree filetype -- which
+---fires a real `FileType` autocmd and drives `tree_attach`'s dispatch. Used by
+---every feature below whose actual behaviour lives behind a keymap or an
+---autocmd registered through `tree_attach`/`bufevents`, rather than an
+---exported `M.xxx` function.
+---@param stub table
+---@param features table
+---@return integer buf, integer win
+local function setup_tree_buffer(stub, features)
+  vim.cmd("silent! only")
+  features.no_name_guard = features.no_name_guard or { enabled = false }
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = stub.name, features = features })
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(buf)
+  local win = vim.api.nvim_get_current_win()
+  vim.bo[buf].filetype = "neo-tree"
+  vim.wait(300, function()
+    return false
+  end)
+  return buf, win
+end
+
+-- ── infra.file_watcher ── libuv fs_event watch + debounced adapter.refresh ──
+do
+  local fw = require("filetree.features.infra.file_watcher")
+  local watch_dir = (TMP_ROOT .. "/gaps27-filewatcher"):gsub("\\", "/")
+  vim.fn.delete(watch_dir, "rf")
+  vim.fn.mkdir(watch_dir, "p")
+
+  local refresh_count = 0
+  local stub = {
+    name = "gaps27-filewatcher-stub",
+    refresh = function()
+      refresh_count = refresh_count + 1
+    end,
+  }
+
+  fw.setup({ enabled = true, debounce_ms = 20, watch_recursive = true }, stub)
+
+  fw.enter(watch_dir)
+  check("file_watcher.enter(): is_active() true after watching a real directory", fw.is_active())
+  eq("file_watcher.watched_path(): records the watched directory", fw.watched_path(), watch_dir)
+
+  -- A real filesystem change inside the watched directory fires the
+  -- debounced refresh -- real libuv fs_event, no stub.
+  vim.fn.writefile({ "x" }, watch_dir .. "/new.txt")
+  local ok_wait = vim.wait(2000, function()
+    return refresh_count > 0
+  end, 20)
+  check("file_watcher: a real fs change triggers a debounced adapter.refresh()", ok_wait)
+
+  fw.exit()
+  check("file_watcher.exit(): is_active() false after exit", not fw.is_active())
+  eq("file_watcher.exit(): watched_path() cleared", fw.watched_path(), nil)
+
+  -- A non-existent path is a silent no-op (isdirectory guard), not a crash.
+  fw.enter(watch_dir .. "/does-not-exist")
+  check("file_watcher.enter(): a non-existent path leaves the watcher inactive", not fw.is_active())
+
+  -- setup() manages its own augroup (del_group then group(name, true)) --
+  -- calling it again must not double the DirChanged autocmd. The pattern this
+  -- campaign keeps finding is a wrapper reusing a group WITHOUT clearing it.
+  fw.setup({ enabled = true, debounce_ms = 20, watch_recursive = true }, stub)
+  fw.setup({ enabled = true, debounce_ms = 20, watch_recursive = true }, stub)
+  local acmds = vim.api.nvim_get_autocmds({ group = "filetree_file_watcher", event = "DirChanged" })
+  eq("file_watcher.setup(): re-setup does not double the DirChanged autocmd", #acmds, 1)
+
+  fw.teardown()
+  check("file_watcher.teardown(): is_active() false", not fw.is_active())
+end
+
+-- ── nav.auto_reveal ── follow the current buffer in the tree, root-scoped ──
+do
+  local ar = require("filetree.features.nav.auto_reveal")
+  local root_dir = (TMP_ROOT .. "/gaps27-autoreveal"):gsub("\\", "/")
+  vim.fn.delete(root_dir, "rf")
+  vim.fn.mkdir(root_dir .. "/inside", "p")
+  local inside_file = root_dir .. "/inside/a.lua"
+  vim.fn.writefile({ "x" }, inside_file)
+  local outside_dir = vim.fn.fnamemodify(root_dir, ":h") .. "/gaps27-autoreveal-outside"
+  vim.fn.mkdir(outside_dir, "p")
+  local outside_file = outside_dir .. "/b.lua"
+  vim.fn.writefile({ "x" }, outside_file)
+
+  local open_reveal_calls = {}
+  local tree_win_valid = true
+  local tree_win
+  local stub = setmetatable({
+    name = "gaps27-autoreveal-stub",
+    get_winid = function()
+      return tree_win_valid and tree_win or -1
+    end,
+    get_node_line = function()
+      return nil
+    end, -- force the "slow path" every time
+    get_root_path = function()
+      return root_dir
+    end,
+    open_reveal = function(path)
+      open_reveal_calls[#open_reveal_calls + 1] = path
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  vim.cmd("silent! only")
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.cmd("botright vsplit")
+  vim.api.nvim_set_current_buf(tree_buf)
+  tree_win = vim.api.nvim_get_current_win()
+  vim.cmd("wincmd p")
+  local editor_win = vim.api.nvim_get_current_win()
+
+  ar.setup({ enabled = true, debounce_ms = 10, only_if_open = true }, stub)
+
+  eq("auto_reveal: not paused right after setup", ar.is_paused(), false)
+  ar.pause(50)
+  check("auto_reveal.pause(): is_paused() true immediately after pause()", ar.is_paused())
+  vim.wait(500, function()
+    return not ar.is_paused()
+  end, 10)
+  check("auto_reveal.pause(): is_paused() false again once the window elapses", not ar.is_paused())
+
+  vim.cmd("edit " .. vim.fn.fnameescape(inside_file))
+  ar.reveal_current()
+  eq(
+    "auto_reveal.reveal_current(): a file under the tree's current root triggers open_reveal()",
+    open_reveal_calls[1],
+    inside_file
+  )
+
+  open_reveal_calls = {}
+  vim.cmd("edit " .. vim.fn.fnameescape(outside_file))
+  ar.reveal_current()
+  eq(
+    "auto_reveal.reveal_current(): a file OUTSIDE the tree's current root is silently skipped",
+    #open_reveal_calls,
+    0
+  )
+
+  -- Windows-separator robustness of under_root(): the adapter's root comes
+  -- back with native backslashes (as a real Windows adapter might report),
+  -- while the buffer path (from nvim_buf_get_name) uses forward slashes.
+  open_reveal_calls = {}
+  stub.get_root_path = function()
+    return root_dir:gsub("/", "\\")
+  end
+  vim.cmd("edit " .. vim.fn.fnameescape(inside_file))
+  ar.reveal_current()
+  eq(
+    "auto_reveal.under_root(): a backslash-spelled root still recognizes a forward-slash file path as inside it",
+    open_reveal_calls[1],
+    inside_file
+  )
+  stub.get_root_path = function()
+    return root_dir
+  end
+
+  -- cursor_in_tree guard: the tree window itself shows the file (loaded into
+  -- it directly) and is the current window -- even a forced reveal_current()
+  -- must not call open_reveal, or leaving the tree would immediately drag the
+  -- cursor away from wherever the user just navigated to (see the module's
+  -- own header on why this guard exists at all).
+  open_reveal_calls = {}
+  local inside_buf = vim.fn.bufadd(inside_file)
+  vim.fn.bufload(inside_buf)
+  vim.api.nvim_win_set_buf(tree_win, inside_buf)
+  vim.api.nvim_set_current_win(tree_win)
+  ar.reveal_current()
+  eq(
+    "auto_reveal.reveal_current(): refuses when the cursor is in the tree window itself",
+    #open_reveal_calls,
+    0
+  )
+  vim.api.nvim_set_current_win(editor_win)
+
+  -- only_if_open=true: the adapter reporting the tree as closed refuses too.
+  open_reveal_calls = {}
+  tree_win_valid = false
+  vim.cmd("edit " .. vim.fn.fnameescape(inside_file))
+  ar.reveal_current()
+  eq(
+    "auto_reveal: only_if_open=true refuses when the adapter reports the tree as closed",
+    #open_reveal_calls,
+    0
+  )
+  tree_win_valid = true
+
+  ar.teardown()
+  vim.cmd("silent! only")
+end
+
+-- ── nav.buffer_cycle ── <C-n>/<C-p> cycle the ADJACENT editor window ────────
+do
+  local bc = require("filetree.features.nav.buffer_cycle")
+  vim.cmd("silent! only")
+
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(tree_buf)
+  local tree_win = vim.api.nvim_get_current_win()
+
+  vim.cmd("botright vsplit")
+  local editor_win = vim.api.nvim_get_current_win()
+  local tmp = (TMP_ROOT .. "/gaps27-buffercycle"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  vim.fn.writefile({ "a" }, tmp .. "/a.txt")
+  vim.fn.writefile({ "b" }, tmp .. "/b.txt")
+  vim.cmd("edit " .. vim.fn.fnameescape(tmp .. "/a.txt"))
+  vim.cmd("edit " .. vim.fn.fnameescape(tmp .. "/b.txt"))
+  -- editor_win's buffer list is now a.txt, b.txt (current = b.txt).
+
+  vim.api.nvim_set_current_win(tree_win)
+  bc.setup({ enabled = true }, nil)
+
+  bc.prev()
+  eq(
+    "buffer_cycle.prev(): the ADJACENT editor window cycled back to a.txt",
+    vim.fn.fnamemodify(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(editor_win)), ":t"),
+    "a.txt"
+  )
+  eq(
+    "buffer_cycle.prev(): focus stayed in the tree window",
+    vim.api.nvim_get_current_win(),
+    tree_win
+  )
+
+  bc.next()
+  eq(
+    "buffer_cycle.next(): cycles the adjacent window forward again to b.txt",
+    vim.fn.fnamemodify(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(editor_win)), ":t"),
+    "b.txt"
+  )
+  eq(
+    "buffer_cycle.next(): focus stayed in the tree window",
+    vim.api.nvim_get_current_win(),
+    tree_win
+  )
+
+  vim.cmd("only")
+  vim.api.nvim_set_current_buf(tree_buf)
+  local warned = false
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg)
+    if tostring(msg):find("No editor window", 1, true) then warned = true end
+  end
+  bc.next()
+  vim.notify = orig_notify
+  check("buffer_cycle: with no adjacent editor window, warns instead of erroring", warned)
+
+  bc.teardown()
+  vim.cmd("silent! only")
+end
+
+-- ── nav.reveal_alt ── `B` reveals the alternate buffer (`#`) in the tree ────
+do
+  local tmp = (TMP_ROOT .. "/gaps27-revealalt"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local alt_file = tmp .. "/alt.txt"
+  vim.fn.writefile({ "alt" }, alt_file)
+
+  local reveal_calls = {}
+  local stub = setmetatable({
+    name = "gaps27-revealalt-stub",
+    is_available = function()
+      return true
+    end,
+    open_reveal = function(path)
+      reveal_calls[#reveal_calls + 1] = path
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  -- Real alternate-file ('#') bookkeeping needs a genuine buffer switch in
+  -- the SAME window -- edited BEFORE the tree buffer becomes current, since
+  -- `:edit {file}` silently RECYCLES the current buffer's number when it is
+  -- empty/unnamed/unmodified (exactly what a fresh scratch tree buffer is);
+  -- doing it the other way round would wipe the tree buffer's own just-bound
+  -- keymaps the moment a second file is edited in the same window.
+  vim.cmd("edit " .. vim.fn.fnameescape(alt_file))
+
+  local tree_buf, _ = setup_tree_buffer(stub, {
+    reveal_alt = { enabled = true, keymap = "B" },
+  })
+  -- setup_tree_buffer() switched into tree_buf via the low-level API (not
+  -- :edit, so no reuse-trap), leaving alt_file's buffer as '#' for this window.
+
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(tree_buf, "n")) do
+    km[m.lhs] = m
+  end
+  check("reveal_alt: 'B' bound on the tree buffer", km["B"] ~= nil and km["B"].callback ~= nil)
+  km["B"].callback()
+  eq(
+    "reveal_alt: open_reveal() called with the alternate buffer's real path",
+    reveal_calls[1],
+    alt_file
+  )
+
+  -- The alternate resolves to a real path, but the file vanished meanwhile --
+  -- filereadable() must catch it before open_reveal is ever called. Switched
+  -- in via bufadd()+:buffer (existing buffer numbers, no new-buffer-reuse
+  -- heuristic) rather than :edit, for the same reason as above -- tree_buf is
+  -- current and still empty/unnamed/unmodified at this point.
+  local gone_file = tmp .. "/gone.txt"
+  vim.fn.writefile({ "x" }, gone_file)
+  local gone_buf = vim.fn.bufadd(gone_file)
+  vim.fn.bufload(gone_buf)
+  vim.cmd("buffer " .. gone_buf)
+  vim.cmd("buffer " .. tree_buf)
+  vim.fn.delete(gone_file)
+
+  reveal_calls = {}
+  local warned = false
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg)
+    if tostring(msg):find("not a readable file", 1, true) then warned = true end
+  end
+  km["B"].callback()
+  vim.notify = orig_notify
+  check("reveal_alt: an alternate whose file vanished warns instead of calling open_reveal", warned)
+  eq("reveal_alt: open_reveal was NOT called for an unreadable alternate", #reveal_calls, 0)
+
+  require("filetree.features.nav.reveal_alt").teardown()
+  vim.cmd("silent! only")
+end
+
+-- ── nav.tree_traverse ── up/down re-root, filesystem-root guard, cwd_mode ──
+do
+  local tt = require("filetree.features.nav.tree_traverse")
+  local root_dir = (TMP_ROOT .. "/gaps27-treetraverse"):gsub("\\", "/")
+  vim.fn.delete(root_dir, "rf")
+  vim.fn.mkdir(root_dir .. "/child", "p")
+
+  local current_root = root_dir .. "/child"
+  local set_root_calls = {}
+  local cur_node
+  local stub = setmetatable({
+    name = "gaps27-treetraverse-stub",
+    get_root_path = function()
+      return current_root
+    end,
+    set_root = function(p)
+      set_root_calls[#set_root_calls + 1] = p
+      current_root = p
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  tt.setup({ sync_cwd = false }, stub)
+
+  tt.up()
+  eq("tree_traverse.up(): set_root() called with the parent directory", set_root_calls[1], root_dir)
+  eq("tree_traverse.up(): the adapter's root now reports the parent", current_root, root_dir)
+
+  set_root_calls = {}
+  cur_node = { path = root_dir .. "/child", type = "directory" }
+  tt.down()
+  eq(
+    "tree_traverse.down(): set_root() called with the current directory node",
+    set_root_calls[1],
+    root_dir .. "/child"
+  )
+
+  cur_node = { path = root_dir .. "/child/file.txt", type = "file" }
+  set_root_calls = {}
+  tt.down()
+  eq("tree_traverse.down(): a non-directory node is refused (no set_root call)", #set_root_calls, 0)
+
+  -- Filesystem-root guard: fnamemodify(root, ":h") of the OS root returns
+  -- itself, and that must stop the traversal rather than looping forever.
+  local fs_root = vim.fn.fnamemodify(TMP_ROOT, ":h")
+  while vim.fn.fnamemodify(fs_root, ":h") ~= fs_root do
+    fs_root = vim.fn.fnamemodify(fs_root, ":h")
+  end
+  current_root = fs_root
+  set_root_calls = {}
+  tt.up()
+  eq(
+    "tree_traverse.up(): already-at-filesystem-root is a no-op (no set_root call)",
+    #set_root_calls,
+    0
+  )
+
+  -- cwd_mode is notified of every manual re-root, so its own cwd lock does
+  -- not fight the re-root the user just asked for (see go_to()'s own comment).
+  current_root = root_dir .. "/child"
+  local notified_paths = {}
+  package.loaded["filetree.features.nav.cwd_mode"] = {
+    notify_manual_root = function(p)
+      notified_paths[#notified_paths + 1] = p
+    end,
+  }
+  set_root_calls = {}
+  tt.up()
+  eq("tree_traverse.up(): notifies cwd_mode of the new manual root", notified_paths[1], root_dir)
+  package.loaded["filetree.features.nav.cwd_mode"] = nil
+
+  tt.teardown()
+end
+
+-- ── paths.lua_require_copy ── copy node(s) as require('module.path') ───────
+do
+  local lrc = require("filetree.features.paths.lua_require_copy")
+  local lrc_root = (TMP_ROOT .. "/gaps27-luareqcopy"):gsub("\\", "/")
+  vim.fn.delete(lrc_root, "rf")
+  vim.fn.mkdir(lrc_root .. "/plugin/lua/myplug/sub", "p")
+  vim.fn.writefile({ "return {}" }, lrc_root .. "/plugin/lua/myplug/foo.lua")
+  vim.fn.writefile({ "return {}" }, lrc_root .. "/plugin/lua/myplug/sub/bar.lua")
+  vim.fn.writefile({ "return {}" }, lrc_root .. "/plugin/lua/myplug/init.lua")
+  vim.fn.mkdir(lrc_root .. "/outside", "p")
+  vim.fn.writefile({ "x" }, lrc_root .. "/outside/orphan.lua")
+
+  local cur_node
+  local stub = {
+    name = "gaps27-luareqcopy-stub",
+    get_current_node = function()
+      return cur_node
+    end,
+  }
+  lrc.setup({ enabled = true }, stub)
+
+  vim.fn.setreg("+", "")
+  cur_node = { path = lrc_root .. "/plugin/lua/myplug/foo.lua", type = "file" }
+  lrc.copy_require()
+  eq(
+    "copy_require: a single file resolves to its module string",
+    vim.fn.getreg("+"),
+    "require('myplug.foo')"
+  )
+
+  vim.fn.setreg("+", "")
+  cur_node = { path = lrc_root .. "/plugin/lua/myplug/init.lua", type = "file" }
+  lrc.copy_require()
+  eq(
+    "copy_require: an init.lua's module string drops the trailing '.init'",
+    vim.fn.getreg("+"),
+    "require('myplug')"
+  )
+
+  vim.fn.setreg("+", "sentinel")
+  cur_node = { path = lrc_root .. "/outside/orphan.lua", type = "file" }
+  lrc.copy_require()
+  eq(
+    "copy_require: a node outside any lua/ dir copies nothing (no guessed module)",
+    vim.fn.getreg("+"),
+    "sentinel"
+  )
+
+  vim.fn.setreg("+", "")
+  cur_node = { path = lrc_root .. "/plugin/lua/myplug", type = "directory" }
+  lrc.copy_require()
+  local dir_lines = vim.split(vim.fn.getreg("+"), "\n")
+  table.sort(dir_lines)
+  eq("copy_require: a directory gathers every .lua file recursively (3 modules)", #dir_lines, 3)
+  check(
+    "copy_require: directory gather includes the nested sub/bar.lua module",
+    vim.tbl_contains(dir_lines, "require('myplug.sub.bar')")
+  )
+
+  -- copy_require_relative(): resolves against cwd/lua/ instead of the "/lua/"
+  -- substring search -- exercised with the real cwd, whose OWN separator style
+  -- on Windows (getcwd() answers with backslashes no matter how :cd was
+  -- spelled) must not break the prefix strip.
+  local prev_cwd = vim.fn.getcwd()
+  vim.cmd("cd " .. vim.fn.fnameescape(lrc_root .. "/plugin"))
+  vim.fn.setreg("+", "")
+  cur_node = { path = lrc_root .. "/plugin/lua/myplug/foo.lua", type = "file" }
+  lrc.copy_require_relative()
+  eq(
+    "copy_require_relative: resolves relative to cwd/lua/ regardless of cwd's own separator style",
+    vim.fn.getreg("+"),
+    "require('myplug.foo')"
+  )
+  vim.cmd("cd " .. vim.fn.fnameescape(prev_cwd))
+
+  cur_node = nil
+  vim.fn.setreg("+", "sentinel2")
+  lrc.copy_require()
+  eq(
+    "copy_require: no current node is a warned no-op, clipboard untouched",
+    vim.fn.getreg("+"),
+    "sentinel2"
+  )
+
+  lrc.teardown()
+end
+
+-- ── search.filter ── native backend filter, falls back to extmark dimming ──
+do
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "foo.lua", "bar.lua", "readme.md" })
+  local nodes = { { name = "foo.lua" }, { name = "bar.lua" }, { name = "readme.md" } }
+  local stub = setmetatable({
+    -- Neither "neotree" nor "nvimtree": try_native_filter must fall through
+    -- cleanly to dimming with no real tree backend installed.
+    name = "gaps27-filter-stub",
+    get_bufnr = function()
+      return tree_buf
+    end,
+    get_node_at_line = function(_, linenr)
+      return nodes[linenr + 1]
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local filt = require("filetree.features.search.filter")
+  filt.setup({ enabled = true }, stub)
+
+  filt.apply("bar")
+  local ns = vim.api.nvim_get_namespaces()["filetree_filter"]
+  local dimmed = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(tree_buf, ns, 0, -1, {})) do
+    dimmed[m[2]] = true
+  end
+  check("filter.apply(): the matching line ('bar.lua', line 1) is NOT dimmed", not dimmed[1])
+  check("filter.apply(): a non-matching line ('foo.lua', line 0) IS dimmed", dimmed[0])
+  check("filter.apply(): a non-matching line ('readme.md', line 2) IS dimmed", dimmed[2])
+
+  filt.clear()
+  eq(
+    "filter.clear(): every dimming extmark removed",
+    #vim.api.nvim_buf_get_extmarks(tree_buf, ns, 0, -1, {}),
+    0
+  )
+
+  -- adapter.name == "neotree" tries the real backend module first; with
+  -- neo-tree not on this suite's runtimepath, that pcall(require, ...)
+  -- genuinely fails, and the code must fall back to dimming rather than
+  -- silently doing nothing (the exact regression its own header documents).
+  stub.name = "neotree"
+  filt.apply("bar")
+  check(
+    "filter.apply(): adapter.name='neotree' without neo-tree installed still falls back to dimming",
+    #vim.api.nvim_buf_get_extmarks(tree_buf, ns, 0, -1, {}) > 0
+  )
+  stub.name = "gaps27-filter-stub"
+  filt.clear()
+
+  -- enter(): the floating query input, stubbed the same way this campaign
+  -- stubs ui.kit elsewhere (smart_rename's kit.input, etc.) rather than
+  -- driving a real floating window.
+  package.loaded["ui.kit"] = {
+    live_input = function(opts)
+      opts.on_change("foo")
+      return {
+        is_valid = function()
+          return true
+        end,
+        focus = function() end,
+        on_close = function() end,
+        close = function() end,
+      }
+    end,
+  }
+  package.loaded["filetree.features.search.filter"] = nil
+  filt = require("filetree.features.search.filter")
+  filt.setup({ enabled = true }, stub)
+  filt.enter()
+  local dimmed2 = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_extmarks(tree_buf, ns, 0, -1, {})) do
+    dimmed2[m[2]] = true
+  end
+  check(
+    "filter.enter(): on_change('foo') from the live input dims every non-matching line",
+    dimmed2[1] and dimmed2[2]
+  )
+  check("filter.enter(): 'foo.lua' (the match) stays undimmed", not dimmed2[0])
+
+  package.loaded["ui.kit"] = nil
+  package.loaded["filetree.features.search.filter"] = nil
+  filt.teardown()
+  pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+end
+
+-- ── search.live_search ── incremental highlight/dim overlay over visible nodes ─
+do
+  vim.cmd("silent! only")
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "l1", "l2", "l3" })
+  vim.api.nvim_win_set_buf(0, tree_buf)
+  local tree_win = vim.api.nvim_get_current_win()
+
+  local vis_nodes = {
+    { path = "/proj/foo.lua", line_number = 1 },
+    { path = "/proj/bar.lua", line_number = 2 },
+    { path = "/proj/sub/bar.lua", line_number = 3 },
+  }
+  local stub = setmetatable({
+    name = "gaps27-livesearch-stub",
+    get_winid = function()
+      return tree_win
+    end,
+    get_bufnr = function()
+      return tree_buf
+    end,
+    get_visible_nodes = function()
+      return vis_nodes
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  ---@internal Reload live_search after (re-)stubbing ui.kit -- its `kit`
+  ---local is captured at module-load time, same reason the smart_rename
+  ---suite reloads its feature module after stubbing ui.kit.
+  local function reload_live_search(kit_stub)
+    package.loaded["ui.kit"] = kit_stub
+    package.loaded["filetree.features.search.live_search"] = nil
+    return require("filetree.features.search.live_search")
+  end
+
+  local ls = reload_live_search({
+    live_input = function(opts)
+      opts.on_change("bar")
+      return nil
+    end,
+  })
+  ls.setup({ enabled = true, match = "name" }, stub)
+  ls.open()
+
+  local ns = vim.api.nvim_get_namespaces()["filetree_live_search"]
+  local function hl_of(line)
+    for _, m in ipairs(vim.api.nvim_buf_get_extmarks(tree_buf, ns, 0, -1, { details = true })) do
+      if m[2] == line then return m[4].line_hl_group end
+    end
+    return nil
+  end
+  eq("live_search: 'bar.lua' (line 2) highlighted as a match", hl_of(1), "Search")
+  eq(
+    "live_search: 'sub/bar.lua' (line 3) matches by filename too, not full path",
+    hl_of(2),
+    "Search"
+  )
+  eq("live_search: 'foo.lua' (line 1) dimmed as a non-match", hl_of(0), "Comment")
+
+  ls.clear()
+  eq(
+    "live_search.clear(): overlay removed",
+    #vim.api.nvim_buf_get_extmarks(tree_buf, ns, 0, -1, {}),
+    0
+  )
+
+  -- match = "path": now the query must hit the full path, not just the tail.
+  ls = reload_live_search({
+    live_input = function(opts)
+      opts.on_change("sub")
+      return nil
+    end,
+  })
+  ls.setup({ enabled = true, match = "path" }, stub)
+  ls.open()
+  eq(
+    "live_search match='path': only the node whose full PATH contains the query matches",
+    hl_of(2),
+    "Search"
+  )
+  eq(
+    "live_search match='path': a name-only hit elsewhere in the tree does not count for siblings",
+    hl_of(0),
+    "Comment"
+  )
+
+  -- commit_to_filter: <CR> pushes the pattern into the filter feature.
+  package.loaded["filetree.features.search.filter"] = {
+    apply = function(q)
+      _G.__gaps27_committed_filter_query = q
+    end,
+  }
+  ls = reload_live_search({
+    live_input = function(opts)
+      opts.on_submit("committed-query")
+      return nil
+    end,
+  })
+  ls.setup({ enabled = true, commit_to_filter = true }, stub)
+  ls.open()
+  eq(
+    "live_search: <CR> commits the query to the filter feature via commit_to_filter",
+    _G.__gaps27_committed_filter_query,
+    "committed-query"
+  )
+  _G.__gaps27_committed_filter_query = nil
+  package.loaded["filetree.features.search.filter"] = nil
+
+  package.loaded["ui.kit"] = nil
+  package.loaded["filetree.features.search.live_search"] = nil
+  ls.teardown()
+  pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+  vim.cmd("silent! only")
+end
+
+-- ── ui.window_style ── blank statusline + highlight isolation in tree wins ──
+do
+  local stub = setmetatable({
+    name = "gaps27-windowstyle-stub",
+    is_available = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local tree_buf, tree_win = setup_tree_buffer(stub, {
+    window_style = { enabled = true, statusline = true, highlights_isolate = true },
+  })
+
+  eq("window_style: the tree window's statusline is blanked", vim.wo[tree_win].statusline, " ")
+
+  -- Fallback re-application: BufWinEnter/WinEnter re-assert it even after
+  -- another plugin overwrote it.
+  vim.wo[tree_win].statusline = "clobbered"
+  vim.api.nvim_exec_autocmds("WinEnter", {})
+  local ok_wait = vim.wait(500, function()
+    return vim.wo[tree_win].statusline == " "
+  end, 10)
+  check(
+    "window_style: WinEnter re-asserts the blanked statusline after it was overwritten",
+    ok_wait
+  )
+
+  -- highlights_isolate: the default superset links NeoTreeNormal -> Normal.
+  local hl = vim.api.nvim_get_hl(0, { name = "NeoTreeNormal" })
+  eq("window_style: highlights_isolate links NeoTreeNormal -> Normal by default", hl.link, "Normal")
+
+  -- A ColorScheme change re-isolates it.
+  vim.api.nvim_set_hl(0, "NeoTreeNormal", { link = "ErrorMsg" })
+  vim.api.nvim_exec_autocmds("ColorScheme", {})
+  local ok_wait2 = vim.wait(500, function()
+    return vim.api.nvim_get_hl(0, { name = "NeoTreeNormal" }).link == "Normal"
+  end, 10)
+  check("window_style: a ColorScheme change re-isolates the highlight link", ok_wait2)
+
+  -- An adapter-declared filetypes/hl_groups table replaces the DEFAULT superset.
+  stub.filetypes = { "mytree" }
+  stub.hl_groups = { MyTreeNormal = "Normal" }
+  require("filetree").setup({
+    adapter = "gaps27-windowstyle-stub",
+    features = {
+      window_style = { enabled = true, statusline = true, highlights_isolate = true },
+      no_name_guard = { enabled = false },
+    },
+  })
+  vim.wait(300, function()
+    return false
+  end)
+  eq(
+    "window_style: an adapter-declared hl_groups table is used instead of the default superset",
+    vim.api.nvim_get_hl(0, { name = "MyTreeNormal" }).link,
+    "Normal"
+  )
+  vim.bo[tree_buf].filetype = "mytree"
+  vim.wait(300, function()
+    return false
+  end)
+  eq(
+    "window_style: an adapter-declared filetypes list is used for the statusline target too",
+    vim.wo[tree_win].statusline,
+    " "
+  )
+
+  require("filetree.features.ui.window_style").teardown()
+  vim.cmd("silent! only")
+end
+
+-- ── ui.window_size_cycler ── cycle the tree window width through presets ───
+do
+  vim.cmd("silent! only")
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(tree_buf)
+  local tree_win = vim.api.nvim_get_current_win()
+  -- A sole window fills the whole tabpage and CANNOT be resized (there is no
+  -- sibling column to take space from/give it to) -- a real sibling split is
+  -- required for nvim_win_set_width to have any visible effect at all.
+  vim.cmd("botright vsplit")
+  vim.api.nvim_set_current_win(tree_win)
+
+  local stub = setmetatable({
+    name = "gaps27-wsc-stub",
+    is_available = function()
+      return true
+    end,
+    get_winid = function()
+      return tree_win
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "gaps27-wsc-stub",
+    features = {
+      window_size_cycler = { enabled = true, sizes = { 30, 50, 15 }, keymap = "w" },
+      no_name_guard = { enabled = false },
+    },
+  })
+  vim.bo[tree_buf].filetype = "neo-tree"
+  vim.wait(300, function()
+    return false
+  end)
+
+  -- setup() started the cycle at the preset nearest the window's width at
+  -- that moment (a brand-new scratch window, not necessarily one of the
+  -- presets) -- the first press always advances one step from there, so pin
+  -- the state with one throwaway press before asserting the transitions.
+  vim.api.nvim_feedkeys(keys("w"), "x", false)
+  local after_first = vim.api.nvim_win_get_width(tree_win)
+  check(
+    "window_size_cycler: 'w' sets the window to one of the configured presets",
+    after_first == 30 or after_first == 50 or after_first == 15
+  )
+
+  vim.api.nvim_feedkeys(keys("w"), "x", false)
+  local after_second = vim.api.nvim_win_get_width(tree_win)
+  check(
+    "window_size_cycler: a second 'w' advances to a DIFFERENT preset",
+    after_second ~= after_first
+  )
+
+  -- An explicit count jumps directly to preset N (clamped), NOT N steps
+  -- forward -- v:count vs v:count1, deliberately, per the module's own header.
+  vim.api.nvim_feedkeys(keys("2w"), "x", false)
+  eq(
+    "window_size_cycler: '2w' jumps directly to preset #2 (50), regardless of the current step",
+    vim.api.nvim_win_get_width(tree_win),
+    50
+  )
+
+  vim.api.nvim_feedkeys(keys("99w"), "x", false)
+  eq(
+    "window_size_cycler: a count beyond the list clamps to the LAST preset",
+    vim.api.nvim_win_get_width(tree_win),
+    15
+  )
+
+  require("filetree.features.ui.window_size_cycler").teardown()
+  vim.cmd("silent! only")
+end
+
+-- ── ui.cursor_hide ── hide the block cursor while focus is in the tree ─────
+do
+  local stub = setmetatable({
+    name = "gaps27-cursorhide-stub",
+    is_available = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local _, tree_win = setup_tree_buffer(stub, {
+    cursor_hide = { enabled = true },
+  })
+  vim.cmd("botright vsplit")
+  local editor_win = vim.api.nvim_get_current_win()
+
+  -- Entering the tree window hides the cursor there.
+  vim.api.nvim_set_current_win(tree_win)
+  local ok_hide = vim.wait(500, function()
+    return (vim.wo[tree_win].winhighlight or ""):find("Cursor:FiletreeCursorHidden", 1, true) ~= nil
+  end, 10)
+  check("cursor_hide: entering the tree window sets Cursor:FiletreeCursorHidden", ok_hide)
+
+  -- Leaving it strips the override again (merge-and-strip, not a wholesale
+  -- overwrite -- see the module's own header on why that distinction matters).
+  vim.api.nvim_set_current_win(editor_win)
+  local ok_show = vim.wait(500, function()
+    return not (vim.wo[tree_win].winhighlight or ""):find("Cursor:FiletreeCursorHidden", 1, true)
+  end, 10)
+  check("cursor_hide: leaving the tree window strips the Cursor override again", ok_show)
+
+  require("filetree.features.ui.cursor_hide").teardown()
+  vim.cmd("silent! only")
+end
+
+-- ── ui.tree_reset ── one key tears down every transient tree UI state ──────
+do
+  vim.cmd("silent! only")
+  local tree_buf
+  local stub = setmetatable({
+    name = "gaps27-treereset-stub",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return nil
+    end,
+    get_bufnr = function()
+      return tree_buf
+    end,
+    get_node_at_line = function()
+      return nil
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "gaps27-treereset-stub",
+    features = {
+      tree_reset = { enabled = true, keymap = "<Esc>" },
+      preview = { enabled = true, mode = "float" },
+      filter = { enabled = true },
+      live_search = { enabled = true },
+      watcher_quarantine = { enabled = true, patch_neotree_watch = false },
+      no_name_guard = { enabled = false },
+    },
+  })
+
+  tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(tree_buf)
+  vim.bo[tree_buf].filetype = "neo-tree"
+  vim.wait(300, function()
+    return false
+  end)
+
+  require("filetree.features.search.filter").apply("something")
+  require("filetree.features.infra.watcher_quarantine").enter()
+  check(
+    "tree_reset (pre-check): watcher_quarantine is actually active before the reset key",
+    require("filetree.features.infra.watcher_quarantine").is_active()
+  )
+
+  local km = {}
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(tree_buf, "n")) do
+    km[m.lhs] = m
+  end
+  check(
+    "tree_reset: '<Esc>' bound on the tree buffer",
+    km["<Esc>"] ~= nil and km["<Esc>"].callback ~= nil
+  )
+  local ok_call = pcall(km["<Esc>"].callback)
+  check("tree_reset: the reset key runs without erroring across every fanned-out feature", ok_call)
+
+  check(
+    "tree_reset: exits watcher_quarantine",
+    not require("filetree.features.infra.watcher_quarantine").is_active()
+  )
+  local filt_ns = vim.api.nvim_get_namespaces()["filetree_filter"]
+  local filt_marks = filt_ns and vim.api.nvim_buf_get_extmarks(tree_buf, filt_ns, 0, -1, {}) or {}
+  eq("tree_reset: clears the filter's dimming extmarks", #filt_marks, 0)
+  check(
+    "tree_reset: the tree buffer itself is untouched (still valid)",
+    vim.api.nvim_buf_is_valid(tree_buf)
+  )
+
+  require("filetree.features.ui.tree_reset").teardown()
+  vim.cmd("silent! only")
+end
+
+-- ── ui.size_info ── file sizes (sync) + directory sizes (stubbed vim.system) ─
+do
+  local si = require("filetree.features.ui.size_info")
+  local tmp = (TMP_ROOT .. "/gaps27-sizeinfo"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/sub", "p")
+  local file_a = tmp .. "/a.txt"
+  vim.fn.writefile({ string.rep("x", 100) }, file_a)
+
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "a.txt", "sub" })
+  local nodes = {
+    [0] = { path = file_a, type = "file" },
+    [1] = { path = tmp .. "/sub", type = "directory" },
+  }
+  local stub = {
+    name = "gaps27-sizeinfo-stub",
+    get_bufnr = function()
+      return tree_buf
+    end,
+    get_node_at_line = function(_, linenr)
+      return nodes[linenr]
+    end,
+  }
+
+  local fmt = require("lib.lua.strings.format").format_bytes
+  local function virt_of(line)
+    local ns = vim.api.nvim_get_namespaces()["filetree_size_info"]
+    local m = vim.api.nvim_buf_get_extmarks(
+      tree_buf,
+      ns,
+      { line, 0 },
+      { line, -1 },
+      { details = true }
+    )
+    if #m == 0 then return nil end
+    return m[1][4].virt_text[1][1]
+  end
+
+  si.setup({ enabled = true, show_files = true, show_dirs = true, dir_async = false }, stub)
+  local real_size = (vim.uv or vim.loop).fs_stat(file_a).size
+  eq(
+    "size_info: a real file's size renders via lib's format_bytes",
+    virt_of(0),
+    " " .. fmt(real_size)
+  )
+  check(
+    "size_info: dir_async=false renders nothing for a directory (no du/PowerShell run)",
+    virt_of(1) == nil
+  )
+
+  -- Async dir size: stub vim.system exactly like this campaign's git_status
+  -- suite does, so the real POSIX (`du -sk`) / Windows (PowerShell) branch and
+  -- its output parsing run for real, without spawning a process.
+  local orig_system = vim.system
+  local captured_cmd
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function(cmd, _opts, on_done)
+    captured_cmd = cmd
+    local out = (vim.fn.has("win32") == 1) and "4096\r\n" or "4\tsub\n" -- kibibytes, per `du -sk`
+    vim.schedule(function()
+      on_done({ code = 0, stdout = out, stderr = "" })
+    end)
+    return { wait = function() end }
+  end
+
+  si.setup({ enabled = true, show_files = true, show_dirs = true, dir_async = true }, stub)
+  check(
+    "size_info: dir_async=true first shows a pending placeholder while the size query is in flight",
+    virt_of(1) == " …"
+  )
+  local ok_wait = vim.wait(1000, function()
+    return virt_of(1) ~= nil and virt_of(1) ~= " …"
+  end, 10)
+  check("size_info: the async directory size eventually renders", ok_wait)
+  eq(
+    "size_info: 4096 bytes formats via the same lib.lua.strings.format helper",
+    virt_of(1),
+    " " .. fmt(4096)
+  )
+
+  if vim.fn.has("win32") == 1 then
+    check(
+      "size_info: on Windows the async dir-size command is PowerShell",
+      captured_cmd[1] == "powershell"
+    )
+  else
+    check(
+      "size_info: on POSIX the async dir-size command is `du -sk`",
+      captured_cmd[1] == "du" and captured_cmd[2] == "-sk"
+    )
+  end
+
+  si.refresh()
+  check(
+    "size_info.refresh(): clears the cache -- the directory goes back to pending",
+    virt_of(1) == " …"
+  )
+
+  vim.system = orig_system
+  si.teardown()
+  pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+end
+
+-- ── ui.preview ── file/dir preview (float + buffer modes), image/pdf dispatch ─
+do
+  local preview = require("filetree.features.ui.preview")
+  local tmp = (TMP_ROOT .. "/gaps27-preview"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/sub", "p")
+  local text_file = tmp .. "/note.lua"
+  vim.fn.writefile({ "return 1" }, text_file)
+  local image_file = tmp .. "/pic.png"
+  vim.fn.writefile({ "fake-png-bytes" }, image_file)
+  local binary_file = tmp .. "/blob.bin"
+  vim.fn.writefile({ "fake-binary-bytes" }, binary_file)
+
+  local cur_node
+  local stub = setmetatable({
+    name = "gaps27-preview-stub",
+    get_current_node = function()
+      return cur_node
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local function open_float_win()
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(w).relative ~= "" then return w end
+    end
+    return nil
+  end
+
+  -- ── float mode: a real floating window, no backend needed ────────────────
+  preview.setup({
+    enabled = true,
+    mode = "float",
+    max_lines = 10,
+    image = { backend = false },
+    pdf = { backend = false },
+  }, stub)
+
+  cur_node = { path = text_file, type = "file" }
+  preview.toggle()
+  local float_win = open_float_win()
+  check("preview.toggle() [float]: opens a real floating window for a text file", float_win ~= nil)
+  eq(
+    "preview.toggle() [float]: the float shows the file's real content",
+    float_win and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(float_win), 0, -1, false)[1],
+    "return 1"
+  )
+
+  preview.toggle()
+  check("preview.toggle() [float]: a second toggle closes it again", open_float_win() == nil)
+
+  -- Binary content: hex-dumped rather than shown as raw bytes.
+  cur_node = { path = binary_file, type = "file" }
+  preview.toggle()
+  float_win = open_float_win()
+  local first_line = float_win
+      and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(float_win), 0, 1, false)[1]
+    or ""
+  check(
+    "preview.toggle() [float]: a binary file is hex-dumped, not shown as raw bytes",
+    first_line:match("^%x%x") ~= nil
+  )
+  preview.close()
+
+  -- Directory listing.
+  cur_node = { path = tmp, type = "directory" }
+  preview.toggle()
+  float_win = open_float_win()
+  local dir_lines = float_win
+      and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(float_win), 0, -1, false)
+    or {}
+  check(
+    "preview.toggle() [float]: a directory node lists its entries",
+    vim.tbl_contains(dir_lines, "  /sub")
+  )
+  preview.close()
+
+  -- image.backend=false: <Tab> falls through to the ordinary preview instead
+  -- of dispatching to an image viewer.
+  cur_node = { path = image_file, type = "file" }
+  preview.toggle_or_open()
+  check(
+    "preview.toggle_or_open(): image.backend=false falls through to the text/hex preview instead of dispatching",
+    open_float_win() ~= nil
+  )
+  preview.close()
+
+  -- <CR> dispatch: image.backend=false means open_or_fallback calls the
+  -- adapter's own fallback instead of trying to open the image.
+  local fallback_called = false
+  preview.open_or_fallback(function()
+    fallback_called = true
+  end)
+  check(
+    "preview.open_or_fallback(): image.backend=false calls the fallback for an image node",
+    fallback_called
+  )
+
+  preview.teardown()
+  vim.cmd("silent! only")
+
+  -- ── buffer mode: shows the file in the ADJACENT editor window ────────────
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_set_current_buf(tree_buf)
+  local tree_win = vim.api.nvim_get_current_win()
+  vim.cmd("botright vsplit")
+  local editor_win = vim.api.nvim_get_current_win()
+  vim.fn.writefile({ "original" }, tmp .. "/original.txt")
+  vim.cmd("edit " .. vim.fn.fnameescape(tmp .. "/original.txt"))
+  vim.api.nvim_set_current_win(tree_win)
+
+  stub.get_winid = function()
+    return tree_win
+  end
+  preview.setup({ enabled = true, mode = "buffer" }, stub)
+
+  cur_node = { path = text_file, type = "file" }
+  preview.toggle()
+  eq(
+    "preview.toggle() [buffer]: the adjacent editor window now shows the previewed file",
+    vim.fn.fnamemodify(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(editor_win)), ":t"),
+    "note.lua"
+  )
+  eq(
+    "preview.toggle() [buffer]: focus stayed in the tree window",
+    vim.api.nvim_get_current_win(),
+    tree_win
+  )
+
+  preview.toggle()
+  eq(
+    "preview.toggle() [buffer]: toggling off restores the editor window's original buffer",
+    vim.fn.fnamemodify(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(editor_win)), ":t"),
+    "original.txt"
+  )
+
+  preview.teardown()
+  vim.cmd("silent! only")
 end
 
 -- ── Report ────────────────────────────────────────────────────────────────────
