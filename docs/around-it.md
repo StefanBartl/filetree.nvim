@@ -25,8 +25,32 @@ image nodes in the preview pane.
 [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) — clones a
 repository; this is how you read it afterwards without leaving Neovim.
 
+## ui.nvim
+
+[ui.nvim](https://github.com/StefanBartl/ui.nvim) — three contact points,
+each with this plugin as the producer and ui.nvim as the consumer. The
+right-click context menu is drawn by `ui.contextmenu` (see
+[menu.md](menu.md)). Its statusline renders the cwd-mode badge from
+`filetree.feature("cwd_mode").badge()`, the documented external-statusline
+API, and refreshes on `User FiletreeCwdModeChanged`; the capsule and
+history dots around the text are ui.nvim's own. And the breadcrumb trail in
+`"winbar"` mode goes through `ui.winbar.set()` when ui.nvim is installed,
+so it no longer overwrites other winbar producers — see
+[Breadcrumbs](FEATURES/UI.md#breadcrumbs).
+
+## my.nvim
+
+[my.nvim](https://github.com/StefanBartl/my.nvim) — the other winbar
+producer: a symbol trail (LSP or Tree-sitter) for the current buffer, in the
+same `vim.wo.winbar` this plugin's breadcrumbs write to. Both hand their
+line to `ui.winbar` when it is there, so neither overwrites the other;
+without ui.nvim, whichever wrote last wins, and `mode = "float"` or
+`mode = "statusline"` keeps this plugin off the surface.
+
 ## Dependency shape
 
 All of the above are soft: without them everything else works unchanged.
-[lib.nvim](https://github.com/StefanBartl/lib.nvim) and one tree plugin are
-the real dependencies — see [Requirements](installation.md#requirements).
+[lib.nvim](https://github.com/StefanBartl/lib.nvim), one tree plugin and
+[ui.nvim](https://github.com/StefanBartl/ui.nvim) for the context menu
+(which degrades to a notify without it) are the real dependencies — see
+[Requirements](installation.md#requirements).
