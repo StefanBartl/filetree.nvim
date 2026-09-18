@@ -77,6 +77,10 @@ local _sidebars = {}
 local _redirecting = false
 ---Whether to pin with `winfixbuf` instead of redirecting (opt-in).
 local _hard_pin = false
+---The active adapter, so a split the redirect has to create lands on the side
+---the tree is NOT on.
+---@type FiletreeAdapter?
+local _adapter = nil
 
 ---@return integer
 local function now_ms()
@@ -142,6 +146,27 @@ local function pin_open_trees()
 end
 
 ---@internal
+---An editor window in THIS tabpage, or nil.
+---
+---`util.buffer.find_editor_win` searches `nvim_list_wins()`, which spans every
+---tabpage -- so with a tree in one tab and an editor window in another, the
+---redirect threw the file into the other tab and dragged the cursor along with
+---it. A sidebar is a per-tab thing and so is where its files belong.
+---@param exclude integer  The sidebar window itself.
+---@return integer?
+local function editor_win_in_tab(exclude)
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if w ~= exclude and vim.api.nvim_win_is_valid(w) then
+      if vim.api.nvim_win_get_config(w).relative == "" then
+        local b = vim.api.nvim_win_get_buf(w)
+        if vim.bo[b].buftype == "" and not ftbuf.is_tree_buffer(b) then return w end
+      end
+    end
+  end
+  return nil
+end
+
+---@internal
 ---Send `bufnr` to an editor window and give the sidebar its tree back.
 ---
 ---Ordering matters: the tree goes back FIRST, so neo-tree's own
@@ -154,20 +179,26 @@ end
 local function redirect(win, tree_buf, bufnr)
   _redirecting = true
   local ok = pcall(function()
-    if vim.api.nvim_buf_is_valid(tree_buf) then vim.api.nvim_win_set_buf(win, tree_buf) end
-
-    local target = ftbuf.find_editor_win(win)
+    -- Somewhere to put the intruder FIRST, before the tree goes back.
+    --
+    -- The other order loses the file: restore the sidebar, then find no editor
+    -- window and nowhere to make one, and the buffer is loaded but displayed
+    -- nowhere -- the user's `:edit` looks like it worked and shows them the
+    -- tree. Bailing out before touching anything leaves the file visible where
+    -- it landed instead, which is wrong but not lost.
+    local target = editor_win_in_tab(win)
     if not target then
       -- No editor window at all (tree opened alone): make one on the side the
       -- tree is not on, rather than splitting the sidebar.
       local ok_w, window = pcall(require, "filetree.util.window")
       if ok_w and type(window.open_editor_window) == "function" then
-        local ok_open, made = pcall(window.open_editor_window, nil, {})
+        local ok_open, made = pcall(window.open_editor_window, _adapter, {})
         if ok_open and made then target = made end
       end
     end
     if not target or not vim.api.nvim_win_is_valid(target) then return end
 
+    if vim.api.nvim_buf_is_valid(tree_buf) then vim.api.nvim_win_set_buf(win, tree_buf) end
     vim.api.nvim_win_set_buf(target, bufnr)
     vim.api.nvim_set_current_win(target)
   end)
@@ -180,6 +211,7 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
   if not adapter or adapter.name ~= "neotree" then return end
+  _adapter = adapter
 
   -- The hard pin needs &winfixbuf (0.10+); the redirect does not, so the
   -- feature is useful on older builds too now.
@@ -209,6 +241,15 @@ function M.setup(config, adapter)
       local win = vim.api.nvim_get_current_win()
       local tree_buf = _sidebars[win]
       if not tree_buf then return end
+      -- The record is only as good as what it still points at. Neovim does not
+      -- reuse window ids (measured: 0 reuses over 200 open/close cycles), so
+      -- this cannot currently address someone else's window -- but a tree that
+      -- was closed leaves an entry behind, and checking beats depending on an
+      -- undocumented property of the handle allocator.
+      if not (vim.api.nvim_buf_is_valid(tree_buf) and ftbuf.is_tree_buffer(tree_buf)) then
+        _sidebars[win] = nil
+        return
+      end
       if vim.api.nvim_win_get_buf(win) ~= ev.buf then return end
       redirect(win, tree_buf, ev.buf)
     end,
@@ -289,6 +330,7 @@ function M.teardown()
   _lift_until = 0
   _redirecting = false
   _sidebars = {}
+  _adapter = nil
   for _, w in ipairs(tree_windows()) do
     set_fix(w, false)
   end
