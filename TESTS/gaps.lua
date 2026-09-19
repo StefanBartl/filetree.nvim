@@ -2428,6 +2428,33 @@ do
   )
 
   vim.system = orig_system
+
+  -- TTL expiry (PERF-42): a cached size must not be served forever -- grow
+  -- the file, fast-forward the clock past CACHE_TTL with no BufWritePost in
+  -- between, and confirm the next render re-measures instead of repeating
+  -- the value cached before the growth.
+  local uv = vim.uv or vim.loop
+  local orig_now = uv.now
+  local fake_now = uv.now()
+  ---@diagnostic disable-next-line: duplicate-set-field
+  uv.now = function()
+    return fake_now
+  end
+
+  si.setup({ enabled = true, show_files = true, show_dirs = true, dir_async = false }, stub)
+  eq("size_info TTL: fresh render shows the original size", virt_of(0), " " .. fmt(real_size))
+
+  vim.fn.writefile({ string.rep("x", 500) }, file_a) -- grows the file; no write event fired
+  fake_now = fake_now + 5000 -- past CACHE_TTL
+  si.setup({ enabled = true, show_files = true, show_dirs = true, dir_async = false }, stub)
+  local grown_size = uv.fs_stat(file_a).size
+  eq(
+    "size_info TTL: an expired entry is re-measured instead of served stale",
+    virt_of(0),
+    " " .. fmt(grown_size)
+  )
+
+  uv.now = orig_now
   si.teardown()
   pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
 end

@@ -4,14 +4,18 @@
 --- File sizes come from vim.uv.fs_stat() (fast, synchronous per node).
 --- Directory sizes are computed asynchronously via `du -sh` (POSIX) or
 --- PowerShell Get-ChildItem (Windows), since walking a full directory tree
---- is slow. Sizes are cached and refreshed lazily.
+--- is slow. Sizes are cached, each entry expiring after a few seconds
+--- (see CACHE_TTL) so a size measured once does not stay frozen for the
+--- rest of the session.
 ---
 --- Display examples:  4.2 KB   1.3 MB   128 B   (dir: 23 MB)
 ---
 --- Refresh triggers:
----   - Tree BufEnter
----   - CursorHold inside tree buffer (re-renders cached values)
----   - :FiletreeSizeRefresh
+---   - Tree BufEnter and CursorHold inside the tree buffer: re-render;
+---     re-measures whatever a node's cache entry has since expired.
+---   - BufWritePost on any buffer: invalidates that one path's cache entry
+---     immediately, instead of waiting out the TTL.
+---   - :FiletreeSizeRefresh: clears every entry unconditionally.
 
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
@@ -33,8 +37,35 @@ local _adapter = nil
 ---@type integer  extmark namespace
 local _ns = -1
 
----@type table<string, string>  abs_path → formatted size string
+-- A node's size can change from outside this Neovim session entirely (a
+-- build growing the file, `git pull`, another process writing to it) with no
+-- event filetree would ever see, so "cached forever" has no defined point at
+-- which it becomes wrong -- PERF-42. TTL + an explicit invalidation trigger,
+-- same shape as util/buffer.lua's validity cache: a short TTL bounds the
+-- staleness of everything, and BufWritePost below clears the one path that
+-- has a precise "it just changed" signal instead of waiting out the TTL.
+---@type table<string, {value:string, timestamp:number}>  abs_path → cached size + when
 local _cache = {}
+
+local CACHE_TTL = 5000 -- ms
+
+---@param path string
+---@return string?
+local function cache_get(path)
+  local entry = _cache[path]
+  if not entry then return nil end
+  if (vim.uv or vim.loop).now() - entry.timestamp >= CACHE_TTL then
+    _cache[path] = nil
+    return nil
+  end
+  return entry.value
+end
+
+---@param path string
+---@param value string
+local function cache_set(path, value)
+  _cache[path] = { value = value, timestamp = (vim.uv or vim.loop).now() }
+end
 
 -- ── Formatting ────────────────────────────────────────────────────────────────
 
@@ -89,7 +120,7 @@ local function query_dir_size(path, callback)
         bytes = kib and (kib * 1024) or nil
       end
       if bytes then
-        _cache[path] = fmt_bytes(bytes)
+        cache_set(path, fmt_bytes(bytes))
         M._render()
       end
       callback(bytes)
@@ -100,12 +131,13 @@ end
 -- ── File size (sync via uv.fs_stat) ──────────────────────────────────────────
 
 local function get_file_size(path)
-  if _cache[path] then return _cache[path] end
+  local cached = cache_get(path)
+  if cached then return cached end
   local uv = vim.uv or vim.loop
   local stat = uv.fs_stat(path)
   if stat then
     local s = fmt_bytes(stat.size)
-    _cache[path] = s
+    cache_set(path, s)
     return s
   end
   return nil
@@ -130,7 +162,7 @@ function M._render()
       if node.type == "file" and _cfg.show_files then
         size_str = get_file_size(node.path)
       elseif node.type == "directory" and _cfg.show_dirs then
-        size_str = _cache[node.path]
+        size_str = cache_get(node.path)
         if not size_str and _cfg.dir_async then
           -- Kick off async query; render will be called again when done
           query_dir_size(node.path, function() end)
@@ -172,9 +204,13 @@ function M.setup(config, adapter)
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_size_info", true)
 
-  bufevents.register("size_info", "BufEnter:tree", {
-    desc = "[filetree] Re-draw the tree's size column",
-    load = function()
+  bufevents.register("size_info", { "BufEnter:tree", "BufWritePost:*" }, {
+    desc = "[filetree] Re-draw the tree's size column; on a write, invalidate that file's cached size first",
+    load = function(evt)
+      if evt.key:find("BufWritePost", 1, true) == 1 then
+        local path = vim.api.nvim_buf_get_name(evt.buf)
+        if path ~= "" then _cache[path] = nil end
+      end
       M._render()
     end,
   })
