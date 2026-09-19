@@ -1,4 +1,4 @@
----@module 'filetree.features.file_watcher'
+---@module 'filetree.features.infra.file_watcher'
 ---@brief Watch the tree root for filesystem changes and auto-refresh.
 ---@description
 --- Uses vim.uv.fs_event (libuv) to watch the tree root directory.

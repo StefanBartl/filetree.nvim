@@ -1,4 +1,4 @@
----@module 'filetree.features.context_menu'
+---@module 'filetree.features.ui.context_menu'
 ---@brief Right-click context menu in the tree, via ui.contextmenu.
 ---@description
 --- Binds a mouse trigger (default `<RightMouse>`) inside the tree buffer.

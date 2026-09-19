@@ -1,4 +1,4 @@
----@module 'filetree.features.trash'
+---@module 'filetree.features.fileops.trash'
 ---@brief Send files to system trash with in-session undo support.
 ---@description
 --- Moves the node's file/directory to the system trash (platform-specific) and

@@ -1,4 +1,4 @@
----@module 'filetree.features.opened_sync'
+---@module 'filetree.features.ui.opened_sync'
 ---@brief Keep the tree's "opened files" decoration in sync with real buffer state.
 ---@description
 --- Tree plugins that colour the nodes of currently-open files (neo-tree's

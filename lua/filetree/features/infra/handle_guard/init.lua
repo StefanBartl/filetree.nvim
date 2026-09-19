@@ -1,4 +1,4 @@
----@module 'filetree.features.handle_guard'
+---@module 'filetree.features.infra.handle_guard'
 ---@brief Release neo-tree's directory-watcher handles before destructive fileops.
 ---@description
 --- Thin wiring around `lib.nvim.neotree.watch` (a hard dependency). On

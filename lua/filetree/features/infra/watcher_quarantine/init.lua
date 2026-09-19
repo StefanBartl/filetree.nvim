@@ -1,4 +1,4 @@
----@module 'filetree.features.watcher_quarantine'
+---@module 'filetree.features.infra.watcher_quarantine'
 ---@brief Suppress file-watcher EPERM errors on Windows around destructive operations.
 ---@description
 --- On Windows, libuv file watchers sometimes emit EPERM errors when a file

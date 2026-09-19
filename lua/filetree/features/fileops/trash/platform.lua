@@ -1,4 +1,4 @@
----@module 'filetree.features.trash.platform'
+---@module 'filetree.features.fileops.trash.platform'
 ---@brief Platform-specific "send to trash" implementations.
 
 local platform = require("filetree.util.platform")

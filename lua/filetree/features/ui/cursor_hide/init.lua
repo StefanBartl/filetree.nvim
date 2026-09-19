@@ -1,4 +1,4 @@
----@module 'filetree.features.cursor_hide'
+---@module 'filetree.features.ui.cursor_hide'
 ---@brief Hide the block cursor while the tree window is focused.
 ---@description
 --- Creates a window-local highlight override (winhighlight) so the cursor

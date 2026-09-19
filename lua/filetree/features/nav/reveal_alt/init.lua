@@ -1,4 +1,4 @@
----@module 'filetree.features.reveal_alt'
+---@module 'filetree.features.nav.reveal_alt'
 ---@brief Reveal the alternate buffer (#) in the tree.
 ---@description
 --- Binds a key (default `B`) in the tree buffer.  On activation it resolves

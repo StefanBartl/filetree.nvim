@@ -1,4 +1,4 @@
----@module 'filetree.features.project_root'
+---@module 'filetree.features.infra.project_root'
 ---@brief Project root detection from a file path.
 ---@description
 --- Walks up the directory tree from a given path looking for root markers.

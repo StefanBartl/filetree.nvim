@@ -1,4 +1,4 @@
----@module 'filetree.features.git_status'
+---@module 'filetree.features.git.git_status'
 ---@brief Decorate tree nodes with git status indicators via extmarks.
 ---@description
 --- Runs `git status --porcelain` in the nearest project root and maps each

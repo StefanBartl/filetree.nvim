@@ -1,4 +1,4 @@
----@module 'filetree.features.node_info'
+---@module 'filetree.features.ui.node_info'
 ---@brief Toggleable hover window showing filesystem metadata for the current tree node.
 
 local line_count = require("filetree.util.line_count")

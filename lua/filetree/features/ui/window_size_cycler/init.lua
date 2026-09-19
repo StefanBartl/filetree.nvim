@@ -1,4 +1,4 @@
----@module 'filetree.features.window_size_cycler'
+---@module 'filetree.features.ui.window_size_cycler'
 ---@brief Manually cycle the tree sidebar width through preset sizes.
 ---@description
 --- Binds a key (default `w`) in the tree buffer.  Each press advances

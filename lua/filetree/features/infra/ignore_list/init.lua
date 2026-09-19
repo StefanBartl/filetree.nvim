@@ -1,4 +1,4 @@
----@module 'filetree.features.ignore_list'
+---@module 'filetree.features.infra.ignore_list'
 ---@brief Hide common filesystem clutter (.git, node_modules, …) from the tree by default.
 ---@description
 --- Injects a list of basenames into the adapter's native hide mechanism so they

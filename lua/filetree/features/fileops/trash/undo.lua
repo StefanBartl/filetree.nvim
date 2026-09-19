@@ -1,4 +1,4 @@
----@module 'filetree.features.trash.undo'
+---@module 'filetree.features.fileops.trash.undo'
 ---@brief In-session trash history and restore support.
 ---
 --- A delete is not only the file: when it had incoming references, `trash`

@@ -1,4 +1,4 @@
----@module 'filetree.features.cheatsheet'
+---@module 'filetree.features.ui.cheatsheet'
 ---@brief `?` keymap cheatsheet — a floating window listing every currently
 ---active tree-scoped filetree.nvim keymap, grouped by category.
 ---@description
