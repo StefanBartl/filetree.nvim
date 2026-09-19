@@ -674,7 +674,7 @@
 ---@class FiletreePathCopyConfig
 ---@field enabled?            boolean
 ---@field keymap_pick         string?  Opens format picker (default nil, off).
----@field keymap_abs          string?  Copy absolute path (default "[a").
+---@field keymap_abs          string|string[]|false|nil  Copy absolute path (default "[a"); a list binds several keys.
 ---@field keymap_dirname      string?  Copy absolute parent directory (default "]a").
 ---@field keymap_name         string?  Copy filename only (default nil, off).
 ---@field keymap_project_root string?  Copy absolute project root path (default "[R").
@@ -822,23 +822,23 @@
 ---@field length?  "long"|"short"              Name length in `display_name` (default "long").
 
 ---@class FiletreeSourceSwitcherConfig
----@field enabled     boolean
----@field keymap_next string?   Key in tree buffer: next source, wrapping (default `"`).
----@field keymap_prev string?   Key in tree buffer: previous source (default `!`).
----@field keymap_pick string?   Global normal-mode key: pick a source from a list (default nil).
----@field sources     string[]? Override the source list (default: neo-tree's configured `sources`).
----@field icons       FiletreeSourceSwitcherIcons
+---@field enabled?     boolean
+---@field keymap_next? string|string[]|false   Key in tree buffer: next source, wrapping (default `"`).
+---@field keymap_prev? string|string[]|false   Key in tree buffer: previous source (default `!`).
+---@field keymap_pick? string|string[]|false   Global normal-mode key: pick a source from a list (default nil).
+---@field sources?     string[]                Override the source list (default: neo-tree's configured `sources`).
+---@field icons?       FiletreeSourceSwitcherIcons
 
 -- ── tree_toggle (opt-in) ──────────────────────────────────────────────────────
 
 ---@class FiletreeTreeToggleConfig
----@field enabled          boolean  Default false: four global Alt keys are opt-in.
----@field reveal           boolean  Reveal the current file when opening (default true).
----@field reveal_force_cwd boolean  Re-root to the cwd when that file lies outside the tree (default true).
----@field keymap_current   string?  Global key: toggle in the current window (default "<M-c>").
----@field keymap_float     string?  Global key: toggle as a float (default "<M-f>").
----@field keymap_left      string?  Global key: toggle on the left (default "<M-l>").
----@field keymap_right     string?  Global key: toggle on the right (default "<M-r>").
+---@field enabled?          boolean  Default false: four global Alt keys are opt-in.
+---@field reveal?           boolean  Reveal the current file when opening (default true).
+---@field reveal_force_cwd? boolean  Re-root to the cwd when that file lies outside the tree (default true).
+---@field keymap_current?   string|string[]|false  Global key: toggle in the current window (default "<M-c>").
+---@field keymap_float?     string|string[]|false  Global key: toggle as a float (default "<M-f>").
+---@field keymap_left?      string|string[]|false  Global key: toggle on the left (default "<M-l>").
+---@field keymap_right?     string|string[]|false  Global key: toggle on the right (default "<M-r>").
 
 -- ── buffer_save ───────────────────────────────────────────────────────────────
 
