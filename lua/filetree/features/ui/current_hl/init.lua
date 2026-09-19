@@ -1,4 +1,4 @@
----@module 'filetree.features.current_hl'
+---@module 'filetree.features.ui.current_hl'
 ---@brief Highlight the current file and its parent directory in the tree.
 ---@description
 --- On BufEnter/WinEnter events (debounced), the current file's line and its

@@ -1,4 +1,4 @@
----@module 'filetree.features.lua_require_copy'
+---@module 'filetree.features.paths.lua_require_copy'
 ---@brief Copy current node as require('module.path') string(s) to clipboard.
 
 local M = {}

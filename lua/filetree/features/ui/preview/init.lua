@@ -1,4 +1,4 @@
----@module 'filetree.features.preview'
+---@module 'filetree.features.ui.preview'
 ---@brief File content preview + image/PDF dispatch triggered from the tree.
 ---@description
 --- Two preview modes (config `mode`):

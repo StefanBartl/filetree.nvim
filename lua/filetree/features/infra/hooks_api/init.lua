@@ -1,4 +1,4 @@
----@module 'filetree.features.hooks_api'
+---@module 'filetree.features.infra.hooks_api'
 ---@brief Public event hook system for filetree.nvim.
 ---@description
 --- Provides a simple observable event emitter that other features and

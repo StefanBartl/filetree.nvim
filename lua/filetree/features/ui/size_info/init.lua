@@ -1,4 +1,4 @@
----@module 'filetree.features.size_info'
+---@module 'filetree.features.ui.size_info'
 ---@brief Show file and directory sizes as eol extmarks on tree nodes.
 ---@description
 --- File sizes come from vim.uv.fs_stat() (fast, synchronous per node).

@@ -1,4 +1,4 @@
----@module 'filetree.features.tree_reset'
+---@module 'filetree.features.ui.tree_reset'
 ---@brief Single-key reset for all active UI state in the tree.
 ---@description
 --- Binds a key (default <Esc>) in the tree buffer that performs a coordinated

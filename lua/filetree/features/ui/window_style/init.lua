@@ -1,4 +1,4 @@
----@module 'filetree.features.window_style'
+---@module 'filetree.features.ui.window_style'
 ---@brief Cosmetic tweaks for tree windows: blank statusline + isolated highlights.
 ---@description
 --- statusline is ON by default (set `statusline = false` to opt out);

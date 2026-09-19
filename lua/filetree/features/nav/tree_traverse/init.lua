@@ -1,4 +1,4 @@
----@module 'filetree.features.tree_traverse'
+---@module 'filetree.features.nav.tree_traverse'
 ---@brief Navigate up/down the directory tree with optional CWD sync.
 
 local M = {}

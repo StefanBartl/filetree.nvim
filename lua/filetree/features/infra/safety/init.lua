@@ -1,4 +1,4 @@
----@module 'filetree.features.safety'
+---@module 'filetree.features.infra.safety'
 ---@brief File operation safety layer — backup and dry-run support.
 ---@description
 --- Exposes M.before_delete(path) and M.before_move(src, dst) which other code

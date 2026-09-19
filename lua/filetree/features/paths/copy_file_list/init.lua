@@ -1,4 +1,4 @@
----@module 'filetree.features.copy_file_list'
+---@module 'filetree.features.paths.copy_file_list'
 ---@brief Copy recursive file/directory lists of the current node to clipboard.
 
 local M = {}

@@ -1,4 +1,4 @@
----@module 'filetree.features.markdown_links'
+---@module 'filetree.features.paths.markdown_links'
 ---@brief Copy the current node (or a whole tree, or marked nodes) as Markdown links.
 ---@description
 --- Every generated line is `[name](relative/path)`, joined with newlines and

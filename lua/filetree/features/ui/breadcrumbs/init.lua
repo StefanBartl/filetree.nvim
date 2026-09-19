@@ -1,4 +1,4 @@
----@module 'filetree.features.breadcrumbs'
+---@module 'filetree.features.ui.breadcrumbs'
 ---@brief Show the path from project root to the current node as breadcrumbs.
 ---@description
 --- Three display modes (configurable):

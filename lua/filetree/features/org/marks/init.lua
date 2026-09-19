@@ -1,4 +1,4 @@
----@module 'filetree.features.marks'
+---@module 'filetree.features.org.marks'
 ---@brief Node marking system — toggle marks, visual indicators, batch operations.
 ---@description
 --- Marks are stored per-session as a set of absolute paths. Visual indicators

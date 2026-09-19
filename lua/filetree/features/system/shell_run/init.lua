@@ -1,4 +1,4 @@
----@module 'filetree.features.shell_run'
+---@module 'filetree.features.system.shell_run'
 ---@brief Run a shell command in the node's directory from the tree buffer.
 ---@description
 --- Binds a key (default `i`) in the tree buffer.  On activation:

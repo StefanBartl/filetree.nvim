@@ -1,4 +1,4 @@
----@module 'filetree.features.session'
+---@module 'filetree.features.org.session'
 ---@brief Save and restore tree scroll position and adapter root across sessions.
 ---@description
 --- Persists per-project tree state to JSON:

@@ -1,4 +1,4 @@
----@module 'filetree.features.safety.backup'
+---@module 'filetree.features.infra.safety.backup'
 ---@brief File backup engine — copies files to a backup directory before destructive operations.
 
 local notify = require("filetree.util.notify").create("[filetree.safety.backup]")

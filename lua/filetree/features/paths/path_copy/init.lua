@@ -1,4 +1,4 @@
----@module 'filetree.features.path_copy'
+---@module 'filetree.features.paths.path_copy'
 ---@brief Copy the current node's path in various formats to the system clipboard.
 ---@description
 --- Provides quick access to multiple path representations, all written to
