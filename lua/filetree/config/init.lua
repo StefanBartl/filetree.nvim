@@ -6,6 +6,12 @@
 
 local M = {}
 
+-- lib.nvim is a hard dependency here, same regime as the rest of the plugin
+-- (commands.lua:19 bare-requires it too, so require("filetree") cannot
+-- succeed without it regardless) -- a soft pcall'd fallback would only add
+-- one more unreachable path.
+local levenshtein = require("lib.lua.strings.distance").levenshtein
+
 ---@type FiletreeConfig
 local _defaults = require("filetree.config.DEFAULTS")
 
@@ -30,6 +36,108 @@ local function deep_merge(dst, src)
     end
   end
   return dst
+end
+
+-- ── Validation (ERR-50 / ERR-22) ─────────────────────────────────────────────
+-- Runs BEFORE the merge, not after: a typo'd top-level option or feature name
+-- must be caught and reported here, or it silently vanishes into the default
+-- forever with nothing downstream ever able to tell the two apart.
+
+---Top-level `FiletreeOpts` fields `setup()` recognizes. `features` is
+---special-cased in `sanitize()` below: its own sub-keys are checked against
+---the feature registry (`filetree.features`), the single source of truth for
+---feature names, rather than a second fixed list kept here.
+---@type table<string, boolean>
+local KNOWN_TOP = {
+  adapter = true,
+  debug = true,
+  features = true,
+  keymaps = true,
+  adapter_keymaps = true,
+  command = true,
+  autocmds = true,
+  ignore_list = true,
+  menu = true,
+  confirmations = true,
+  deps_popup = true,
+  refs = true,
+  progress_style = true,
+  max_visible_nodes = true,
+}
+
+---What the last `M.setup()` call had to drop, for `:checkhealth`. Reset on
+---every call so issues from an earlier setup() never linger.
+---@type string[]
+local issues = {}
+
+---@internal
+---`key` with the nearest known one as a hint when there is a plausible one
+---(edit distance <= 3).
+---@param key any
+---@param known table<string, any>
+---@param prefix string
+---@return string
+local function describe_unknown(key, known, prefix)
+  local name = tostring(key)
+  local best, best_distance = nil, nil
+  for candidate in pairs(known) do
+    local d = levenshtein(name, candidate)
+    if d <= 3 and (best_distance == nil or d < best_distance) then
+      best, best_distance = candidate, d
+    end
+  end
+  if best then
+    return ("unknown option '%s%s' (did you mean '%s%s'?)"):format(prefix, name, prefix, best)
+  end
+  return ("unknown option '%s%s'"):format(prefix, name)
+end
+
+---Validate `opts` before the merge (ERR-50): an unknown top-level key or
+---feature name is dropped with a did-you-mean hint instead of silently
+---vanishing into the default forever, and a wrongly-typed `adapter`/`features`
+---is dropped so the built-in default applies instead of taking the whole
+---plugin down (ERR-22 — see `filetree/init.lua`'s `M.setup`, which is the
+---other half of that fix: it never aborts on a validation issue). Does not
+---mutate `opts`. Deliberately shallow beyond the `features` name check: each
+---feature module owns and validates its own option shape.
+---@internal
+---@param opts table
+---@return table clean
+---@return string[] found_issues
+local function sanitize(opts)
+  local clean, found_issues = {}, {}
+  local feature_registry = require("filetree.features").FEATURES
+
+  for key, value in pairs(opts) do
+    if not KNOWN_TOP[key] then
+      found_issues[#found_issues + 1] = describe_unknown(key, KNOWN_TOP, "")
+    elseif key == "adapter" and type(value) ~= "string" then
+      found_issues[#found_issues + 1] = ("option 'adapter' must be a string, got %s -- using the default"):format(
+        type(value)
+      )
+    elseif key == "features" then
+      if type(value) ~= "table" then
+        found_issues[#found_issues + 1] = ("option 'features' must be a table, got %s -- using the default"):format(
+          type(value)
+        )
+      else
+        local clean_features = {}
+        for fname, fval in pairs(value) do
+          if feature_registry[fname] then
+            clean_features[fname] = fval
+          else
+            found_issues[#found_issues + 1] = describe_unknown(fname, feature_registry, "features.")
+          end
+        end
+        clean[key] = clean_features
+      end
+    else
+      clean[key] = value
+    end
+  end
+
+  table.sort(found_issues)
+  return clean, found_issues
 end
 
 ---Scan all feature keymap fields and apply the global `keymaps` remap table.
@@ -216,9 +324,12 @@ end
 ---Apply user config on top of defaults.
 ---@param user FiletreeOpts?
 function M.setup(user)
+  local clean, found_issues = sanitize(user or {})
+  issues = found_issues
+
   -- Deep-copy defaults
   _active = vim.deepcopy(_defaults)
-  if user then deep_merge(_active, user) end
+  deep_merge(_active, clean)
   apply_keymap_remap(_active)
   apply_autocmd_overrides(_active)
   apply_confirmations(_active)
@@ -232,7 +343,20 @@ function M.get()
   return _active
 end
 
----Validate the active config and return error messages.
+---What the last `M.setup()` call rejected (unknown option, wrong type),
+---one message per issue -- empty when everything validated. For
+---`:checkhealth filetree`.
+---@return string[]
+function M.issues()
+  return vim.deepcopy(issues)
+end
+
+---Validate the active config and return error messages. A safety net, not
+---the primary guard: `sanitize()` above already drops a wrongly-typed
+---`adapter`/`features` before the merge, so this should not trigger in
+---practice. `filetree/init.lua`'s `M.setup()` treats a `false` here as
+---non-fatal either way (ERR-22) -- it degrades the offending field to its
+---default instead of aborting setup.
 ---@return boolean ok
 ---@return string? err
 function M.validate()

@@ -148,7 +148,11 @@ both native branches had been silently failing.
 `adapter = "auto"` (the default) tries `neotree → nvimtree → netrw → oil →
 mini_files` in that fixed order and picks the first whose `is_available()`
 returns true — so with both neo-tree and nvim-tree installed, neo-tree wins
-unless the adapter is pinned explicitly.
+unless the adapter is pinned explicitly. An explicitly named adapter that
+cannot be resolved (unknown name, or its plugin not installed) falls back to
+`"auto"` with a warning instead of aborting `setup()`; only when `"auto"`
+itself finds nothing does setup abort, since there is then no tree backend
+to attach any feature to.
 
 - **Module:** [`adapter/init.lua`](../../lua/filetree/adapter/init.lua) (`M.resolve`)
 - **Config:** `opts.adapter = "auto"` (default)

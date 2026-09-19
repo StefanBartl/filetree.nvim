@@ -71,18 +71,38 @@ local _adapter_keymaps_augroup = nil
 function M.setup(user_config)
   config_mod.setup(user_config)
 
-  local ok, err = config_mod.validate()
-  if not ok then
-    notify.error("Invalid config: " .. (err or "?"))
-    return
-  end
-
   local cfg = config_mod.get()
 
-  -- Resolve adapter
+  -- A wrongly-typed adapter/features slipping past config.setup()'s own
+  -- sanitize step (see config/init.lua) is not expected, but validate()
+  -- stays a defensive backstop -- and, per ERR-22, an invalid single value
+  -- degrades to its default here rather than aborting the whole plugin.
+  local ok, err = config_mod.validate()
+  if not ok then
+    notify.warn("Invalid config (" .. (err or "?") .. ") -- using the default instead")
+    if type(cfg.adapter) ~= "string" then cfg.adapter = "auto" end
+    if type(cfg.features) ~= "table" then cfg.features = {} end
+  end
+
+  -- Report anything config.setup()'s sanitize step had to drop (unknown
+  -- option, wrong type) -- surfaced, never silently swallowed.
+  for _, issue in ipairs(config_mod.issues()) do
+    notify.warn(issue)
+  end
+
+  -- Resolve adapter. An explicitly requested but unresolvable adapter name
+  -- degrades to "auto" (the documented default) instead of aborting setup;
+  -- only the genuine "no supported tree plugin installed at all" case has no
+  -- sensible default to fall back to.
   local adapter = adapter_mod.resolve(cfg.adapter)
+  if not adapter and cfg.adapter ~= "auto" then
+    notify.warn(
+      "Adapter '" .. tostring(cfg.adapter) .. '\' could not be resolved -- falling back to "auto"'
+    )
+    adapter = adapter_mod.resolve("auto")
+  end
   if not adapter then
-    notify.error("Could not resolve adapter '" .. cfg.adapter .. "'. Aborting setup.")
+    notify.error("No supported filetree plugin found. Aborting setup.")
     return
   end
 
