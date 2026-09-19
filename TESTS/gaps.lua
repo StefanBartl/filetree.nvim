@@ -2501,9 +2501,160 @@ do
     " " .. fmt(grown_size)
   )
 
+  -- DIR_CACHE_TTL: unlike a file, a directory's cached entry must survive
+  -- FILE_CACHE_TTL (5s) elapsing without a fresh du/PowerShell spawn -- it
+  -- only re-measures once the much longer DIR_CACHE_TTL has actually passed
+  -- (the performance regression this pins: reusing the file TTL for
+  -- directories turned ordinary CursorHold-driven browsing into a recurring
+  -- subprocess spawn per visible, stale directory).
+  local dir_system_calls = 0
+  local orig_system2 = vim.system
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function(_cmd, _opts, on_done)
+    dir_system_calls = dir_system_calls + 1
+    local out = (vim.fn.has("win32") == 1) and "4096\r\n" or "4\tsub\n"
+    vim.schedule(function()
+      on_done({ code = 0, stdout = out, stderr = "" })
+    end)
+    return { wait = function() end }
+  end
+
+  si.refresh()
+  si.setup({ enabled = true, show_files = false, show_dirs = true, dir_async = true }, stub)
+  vim.wait(1000, function()
+    return virt_of(1) ~= nil and virt_of(1) ~= " …"
+  end, 10)
+  eq("size_info DIR_CACHE_TTL: one spawn seeds the directory's cache", dir_system_calls, 1)
+
+  fake_now = fake_now + 5000 -- past FILE_CACHE_TTL, well short of DIR_CACHE_TTL
+  si._render()
+  eq(
+    "size_info DIR_CACHE_TTL: 5s past FILE_CACHE_TTL does not re-spawn a directory query",
+    dir_system_calls,
+    1
+  )
+
+  fake_now = fake_now + 60000 -- now past DIR_CACHE_TTL too
+  si._render()
+  vim.wait(1000, function()
+    return dir_system_calls > 1
+  end, 10)
+  eq(
+    "size_info DIR_CACHE_TTL: past DIR_CACHE_TTL re-spawns the directory query",
+    dir_system_calls,
+    2
+  )
+
+  vim.system = orig_system2
   uv.now = orig_now
   si.teardown()
   pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+end
+
+-- ── ui.size_info: BufWritePost invalidation across a native-separator node
+-- path (regression: a node.path spelled with backslashes, the way the real
+-- neo-tree/nvim-tree adapters report on Windows, must still be invalidated by
+-- a write whose buffer name is forward-slash-spelled, as
+-- vim.api.nvim_buf_get_name() reports on that same platform) ────────────────
+do
+  local si = require("filetree.features.ui.size_info")
+  local tmp = (TMP_ROOT .. "/gaps-sizeinfo-bufwrite"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/sub", "p")
+  local dir_fwd = tmp .. "/sub" -- forward-slash spelling, as nvim_buf_get_name() reports
+  local dir_native = dir_fwd:gsub("/", "\\") -- spelled like a Windows adapter's node.path
+
+  -- Directory sizes go through the stubbed vim.system below rather than a
+  -- real fs_stat, so the backslash spelling never has to resolve against the
+  -- real filesystem -- this reproduces the separator mismatch on every CI
+  -- platform (ubuntu/windows/macos), not only a Windows runner.
+  local nodes = { [0] = { path = dir_native, type = "directory" } }
+  local stub = setmetatable({
+    name = "gaps-sizeinfo-bufwrite-stub",
+    is_available = function()
+      return true
+    end,
+    get_node_at_line = function(_, linenr)
+      return nodes[linenr]
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  -- setup_tree_buffer() drives a real filetree.setup(), which wires the real
+  -- bufevents dispatcher (bufevents.install()) -- required so the BufWritePost
+  -- fired below runs the actual production handler, not a direct M._render() call.
+  local tree_buf = setup_tree_buffer(stub, {
+    size_info = { enabled = true, show_files = true, show_dirs = true, dir_async = true },
+  })
+  stub.get_bufnr = function()
+    return tree_buf
+  end
+  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "sub" })
+
+  local fmt = require("lib.lua.strings.format").format_bytes
+  local function virt_of(line)
+    local ns = vim.api.nvim_get_namespaces()["filetree_size_info"]
+    local m = vim.api.nvim_buf_get_extmarks(
+      tree_buf,
+      ns,
+      { line, 0 },
+      { line, -1 },
+      { details = true }
+    )
+    if #m == 0 then return nil end
+    return m[1][4].virt_text[1][1]
+  end
+
+  local orig_system = vim.system
+  local system_calls = 0
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function(_cmd, _opts, on_done)
+    system_calls = system_calls + 1
+    local out = (vim.fn.has("win32") == 1) and "4096\r\n" or "4\tsub\n"
+    vim.schedule(function()
+      on_done({ code = 0, stdout = out, stderr = "" })
+    end)
+    return { wait = function() end }
+  end
+
+  si._render()
+  local ok_wait = vim.wait(1000, function()
+    return virt_of(0) ~= nil and virt_of(0) ~= " …"
+  end, 10)
+  check("size_info BufWritePost: the backslash-keyed directory renders once", ok_wait)
+  eq("size_info BufWritePost: one du/PowerShell spawn for the first render", system_calls, 1)
+  eq("size_info BufWritePost: renders the stubbed size", virt_of(0), " " .. fmt(4096))
+
+  -- Fire a real BufWritePost through the actual dispatcher, on a buffer named
+  -- with FORWARD slashes for the SAME directory -- exactly the spelling
+  -- mismatch that let the stale entry survive before the fix (cache keys were
+  -- compared raw, with no normalization).
+  local write_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(write_buf, dir_fwd)
+  vim.api.nvim_exec_autocmds("BufWritePost", { buffer = write_buf })
+
+  si._render()
+  local ok_wait2 = vim.wait(1000, function()
+    return virt_of(0) ~= nil and virt_of(0) ~= " …"
+  end, 10)
+  check("size_info BufWritePost: still renders after the invalidating write re-measures", ok_wait2)
+  eq(
+    "size_info BufWritePost: the forward-slash write invalidated the backslash-keyed entry, "
+      .. "triggering a SECOND du/PowerShell spawn instead of serving the stale one",
+    system_calls,
+    2
+  )
+
+  vim.system = orig_system
+  pcall(vim.api.nvim_buf_delete, write_buf, { force = true })
+  si.teardown()
+  pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+  vim.cmd("silent! only")
 end
 
 -- ── ui.preview ── file/dir preview (float + buffer modes), image/pdf dispatch ─
