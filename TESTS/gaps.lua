@@ -756,6 +756,53 @@ do
   package.loaded["filetree.adapter.mini_files"] = nil
 end
 
+-- ── adapter.netrw ── M.close() redirects the visible window (UI-55) ────────
+-- netrw is a real Neovim builtin, so this runs against the real thing --
+-- no stub, no external plugin dependency.
+do
+  local tmp = (TMP_ROOT .. "/gaps-netrw-close"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+
+  vim.cmd("silent! only")
+  local editor_win = vim.api.nvim_get_current_win()
+  vim.cmd("belowright split")
+  vim.cmd("Explore " .. vim.fn.fnameescape(tmp))
+  local netrw_win = vim.api.nvim_get_current_win()
+  local netrw_buf = vim.api.nvim_get_current_buf()
+  eq(
+    "netrw.close() setup: the split buffer is a real netrw buffer",
+    vim.bo[netrw_buf].filetype,
+    "netrw"
+  )
+
+  local win_count_before = #vim.api.nvim_list_wins()
+  local netrw = require("filetree.adapter.netrw")
+  local ok = netrw.close()
+
+  check("netrw.close(): reports success", ok)
+  check(
+    "netrw.close(): the netrw window itself is gone, not just its buffer swapped",
+    not vim.api.nvim_win_is_valid(netrw_win)
+  )
+  eq(
+    "netrw.close(): window count dropped by exactly one",
+    #vim.api.nvim_list_wins(),
+    win_count_before - 1
+  )
+  check(
+    "netrw.close(): the netrw buffer is no longer loaded (netrw's own bufhidden=delete, or the explicit bdelete fallback)",
+    not vim.api.nvim_buf_is_loaded(netrw_buf)
+  )
+  eq(
+    "netrw.close(): focus lands back on the remaining editor window",
+    vim.api.nvim_get_current_win(),
+    editor_win
+  )
+
+  vim.cmd("silent! only")
+end
+
 -- ── fileops.buffer_save ── force-save without leaving the tree window ──────
 do
   local bsave = require("filetree.features.fileops.buffer_save")

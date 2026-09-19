@@ -253,8 +253,20 @@ end
 function M.close()
   local buf = find_netrw_buf()
   if not buf then return false end
-  local ok = pcall(function()
-    vim.cmd("bdelete " .. buf)
+
+  -- The netrw buffer is always displayed somewhere when it can be found at
+  -- all (same find_netrw_buf/buf_to_win pair M.refresh below relies on) --
+  -- its window must be closed before the buffer is deleted (UI-55), or
+  -- `:bdelete` leaves the window open with an automatically created empty
+  -- scratch buffer instead of actually closing it. Every other adapter's
+  -- M.close() closes the tree's window via its own native command; closing
+  -- the window here (not just deleting the buffer) matches that contract.
+  local win = buf_to_win(buf)
+  local ok = true
+  if win and vim.api.nvim_win_is_valid(win) then ok = pcall(vim.api.nvim_win_close, win, true) end
+
+  pcall(function()
+    if vim.api.nvim_buf_is_valid(buf) then vim.cmd("bdelete " .. buf) end
   end)
   return ok
 end
