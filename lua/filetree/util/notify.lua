@@ -1,15 +1,16 @@
 ---@module 'filetree.util.notify'
 --- Notification factory — scoped notifier with a fixed prefix.
 ---
---- Delegates to `lib.nvim.notify` (a declared dependency; same `create(prefix)`
---- API) when available, so notifications share the user's lib.nvim configuration.
---- Falls back to a local vim.notify wrapper so filetree still works standalone.
+--- Delegates to `lib.nvim.notify` (a hard dependency; same `create(prefix)`
+--- API), so notifications share the user's lib.nvim configuration.
 
 ---@class FiletreeNotifier
 ---@field info  fun(msg: string): nil
 ---@field warn  fun(msg: string): nil
 ---@field error fun(msg: string): nil
 ---@field debug fun(msg: string): nil
+
+local lib = require("lib.nvim.notify")
 
 local M = {}
 
@@ -21,30 +22,6 @@ local _debug = false
 ---@param on boolean
 function M.set_debug(on)
   _debug = on == true
-end
-
----@internal
----Local fallback notifier (used when lib.nvim is not installed).
----@param prefix string
----@return FiletreeNotifier
-local function local_notifier(prefix)
-  local function emit(level, msg)
-    vim.notify(prefix .. " " .. msg, level)
-  end
-  return {
-    info = function(msg)
-      emit(vim.log.levels.INFO, msg)
-    end,
-    warn = function(msg)
-      emit(vim.log.levels.WARN, msg)
-    end,
-    error = function(msg)
-      emit(vim.log.levels.ERROR, msg)
-    end,
-    debug = function(msg)
-      emit(vim.log.levels.DEBUG, msg)
-    end,
-  }
 end
 
 ---@internal
@@ -67,12 +44,7 @@ end
 ---@param prefix string  Shown before every message, e.g. "[filetree.adapter.neotree]".
 ---@return FiletreeNotifier
 function M.create(prefix)
-  local ok, lib = pcall(require, "lib.nvim.notify")
-  if ok and type(lib) == "table" and type(lib.create) == "function" then
-    local n = lib.create(prefix)
-    if type(n) == "table" and type(n.info) == "function" then return with_debug_gate(n) end
-  end
-  return with_debug_gate(local_notifier(prefix))
+  return with_debug_gate(lib.create(prefix))
 end
 
 return M

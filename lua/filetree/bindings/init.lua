@@ -16,6 +16,8 @@
 --- `catalog()` returns the whole thing (also re-exported by docs/BINDINGS.lua).
 --- `setup_which_key()` registers leader-group labels when which-key is installed.
 
+local lib_keymap = require("lib.nvim.bindings.keymap")
+
 local M = {}
 
 M.keymaps = require("filetree.bindings.keymaps")
@@ -36,13 +38,10 @@ end
 ---which is why the cheatsheet reads this one.
 ---@return { feature: string, name: string, lhs: string, mode: string|string[], desc: string|nil }[]
 function M.live()
-  local ok, keymap = pcall(require, "lib.nvim.bindings.keymap")
-  if not ok then return {} end
-
   ---@type table<string, boolean>
   local seen = {}
   local out = {}
-  for key, entries in pairs(keymap.registered()) do
+  for key, entries in pairs(lib_keymap.registered()) do
     local feature = key:match("^filetree/(.+)$")
     if feature then
       for _, e in ipairs(entries) do

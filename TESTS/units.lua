@@ -158,41 +158,41 @@ do
   )
 end
 
--- ── util.path.to_absolute fallback (SEC-34) ── when lib.nvim's expand_path
--- is unavailable, the fallback must never run the path through vim.fn.expand
--- (backtick span -> &shell command substitution). Forces that branch by
--- making the require fail, independent of whether the real lib.nvim in this
--- test environment actually has the module.
+-- ── util.path.to_absolute (SEC-34) ── must never run the path through
+-- vim.fn.expand (backtick span -> &shell command substitution).
+--
+-- Used to be pinned against a simulated "lib.nvim.cross.fs.expand_path is
+-- unavailable" fallback branch in filetree.util.path. That branch was removed
+-- (LUA-01): lib.nvim is a hard dependency (filetree/commands.lua bare-requires
+-- it, and filetree/init.lua bare-requires commands.lua at module top level),
+-- so require("filetree") cannot succeed without lib.nvim at all -- the
+-- soft-fallback was dead code for the exact case it existed to handle, and
+-- simulating that case by poisoning package.preload no longer models a state
+-- the real plugin can be in; it just makes the module's own top-level
+-- `require` throw, taking the whole test file down with it (as it did here
+-- until this test was updated). The guarantee itself still holds and is
+-- covered directly below, against the real code path: to_absolute() delegates
+-- unconditionally to lib.nvim.cross.fs.expand_path, which is a pure string
+-- expansion with no shellout of its own.
 do
-  local orig_expand_path = package.loaded["lib.nvim.cross.fs.expand_path"]
-  package.loaded["lib.nvim.cross.fs.expand_path"] = nil
-  package.preload["lib.nvim.cross.fs.expand_path"] = function()
-    error("simulated: lib.nvim.cross.fs.expand_path unavailable")
-  end
-  package.loaded["filetree.util.path"] = nil
-  local path_fallback = require("filetree.util.path")
+  local path = require("filetree.util.path")
 
   local probe = (TMP_ROOT .. "/units-sec34-probe.txt"):gsub("\\", "/")
   vim.fn.delete(probe)
-  local abs = path_fallback.to_absolute("~`touch " .. probe .. "`/x")
+  local abs = path.to_absolute("~`touch " .. probe .. "`/x")
   check(
-    "path.to_absolute fallback: a backtick span in the path is never executed",
+    "path.to_absolute: a backtick span in the path is never executed",
     vim.fn.filereadable(probe) == 0,
     abs
   )
   vim.env.FILETREE_SEC34_TEST_VAR = TMP_ROOT
-  local expanded = path_fallback.to_absolute("$FILETREE_SEC34_TEST_VAR/probe-child"):gsub("\\", "/")
+  local expanded = path.to_absolute("$FILETREE_SEC34_TEST_VAR/probe-child"):gsub("\\", "/")
   check(
-    "path.to_absolute fallback: $VAR is still expanded (env, not shell)",
+    "path.to_absolute: $VAR is still expanded (env, not shell)",
     expanded:find(TMP_ROOT, 1, true) == 1 and expanded:match("/probe%-child$") ~= nil,
     expanded
   )
   vim.env.FILETREE_SEC34_TEST_VAR = nil
-
-  package.preload["lib.nvim.cross.fs.expand_path"] = nil
-  package.loaded["lib.nvim.cross.fs.expand_path"] = orig_expand_path
-  package.loaded["filetree.util.path"] = nil
-  require("filetree.util.path") -- restore the normal module for every later test
 end
 
 -- ── util.buffer ───────────────────────────────────────────────────────────────

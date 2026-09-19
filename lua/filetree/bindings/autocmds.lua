@@ -24,6 +24,9 @@
 --- shape, so `dispatchers()` reads the handler list back too and `lines()`
 --- prints it underneath its autocmd.
 
+local au = require("lib.nvim.bindings.autocmd")
+local dispatcher = require("lib.nvim.bindings.autocmd.dispatcher")
+
 local M = {}
 
 ---@internal
@@ -31,8 +34,6 @@ local M = {}
 --- the tree-attach dispatcher.
 ---@return Lib.Autocmd.Record[]
 local function own_records()
-  local ok, au = pcall(require, "lib.nvim.bindings.autocmd")
-  if not ok or type(au.registered) ~= "function" then return {} end
   local out = {}
   for _, r in ipairs(au.registered()) do
     if type(r.group) == "string" and r.group:match("^filetree") then out[#out + 1] = r end
@@ -64,8 +65,6 @@ end
 --- `lib.nvim.bindings.autocmd.dispatcher`, same as the records above.
 ---@return Lib.Autocmd.Dispatcher.Entry[]
 function M.dispatchers()
-  local ok, dispatcher = pcall(require, "lib.nvim.bindings.autocmd.dispatcher")
-  if not ok or type(dispatcher.registry) ~= "function" then return {} end
   local out = {}
   for _, entry in ipairs(dispatcher.registry()) do
     if entry.name:match("^filetree") then out[#out + 1] = entry end

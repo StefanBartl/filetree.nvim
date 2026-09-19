@@ -7,63 +7,28 @@
 
 local platform = require("filetree.util.platform")
 
--- Optional: lib.nvim ships the same pure separator-unify transform under
--- lib.nvim.cross.fs.separators.unify_slashes. Prefer it when present so both
--- plugins share one implementation; fall back to the local gsub otherwise
--- (mirrors the lib.nvim-optional pattern used by features.ignore_list).
-local _ok_cross, _cross_unify = pcall(require, "lib.nvim.cross.fs.separators.unify_slashes")
-local _has_cross_unify = _ok_cross and type(_cross_unify) == "function"
-
--- Optional: lib.nvim.fs.relpath implements the identical "strip base prefix"
--- algorithm used below for the case where `p` lives under `base`. Prefer it
--- when present (same reasoning as unify_slashes above); its behavior for the
--- non-descendant case (return the path unchanged) is intentionally simpler
--- than this module's `:~:.`-tildified fallback, so that fallback stays local.
-local _ok_relpath, _lib_relpath = pcall(require, "lib.nvim.fs.relpath")
-local _has_lib_relpath = _ok_relpath and type(_lib_relpath) == "function"
-
--- Optional: lib.nvim.cross.fs.expand_path resolves ~/$VAR/${VAR}/%VAR% before
--- fnamemodify runs. Prefer it when present (same reasoning as unify_slashes
--- above).
-local _ok_expand, _lib_expand_path = pcall(require, "lib.nvim.cross.fs.expand_path")
-local _has_lib_expand_path = _ok_expand and type(_lib_expand_path) == "function"
-
----@internal
----`~` and `$VAR`/`${VAR}` expansion only, used when lib.nvim's own primitive
----is unavailable -- deliberately NOT vim.fn.expand (SEC-34): `p` here can be
----a raw path typed by the user or read from a config value, and vim.fn.expand
----runs a backtick span through `&shell` and treats `%`/`#`/`<cfile>`/`<cword>`
----as command-line specials, none of which belong on arbitrary path text. No
----`%VAR%` support on Windows -- the same documented limitation this fallback
----already carried before.
----@param p string
----@return string
-local function fallback_expand(p)
-  if p:sub(1, 1) == "~" then
-    local home = vim.env.HOME or vim.env.USERPROFILE
-    if home and home ~= "" then p = home .. p:sub(2) end
-  end
-  return (
-    p:gsub("%$%{([%w_]+)%}", function(name)
-      return vim.env[name] or ""
-    end):gsub("%$([%w_]+)", function(name)
-      return vim.env[name] or ""
-    end)
-  )
-end
+-- lib.nvim is a hard dependency (see filetree/commands.lua, required
+-- unconditionally from filetree/init.lua), so these are plain requires, not
+-- presence probes. They stay separate locals (rather than one `require("lib.nvim")`)
+-- because each is its own lib.nvim submodule.
+local cross_unify = require("lib.nvim.cross.fs.separators.unify_slashes")
+local lib_relpath = require("lib.nvim.fs.relpath")
+local lib_expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local M = {}
 
 ---Expand env references, resolve to absolute path and strip surrounding quotes.
+---
+---Deliberately not `vim.fn.expand` (SEC-34): `p` here can be a raw path typed
+---by the user or read from a config value, and vim.fn.expand runs a backtick
+---span through `&shell` and treats `%`/`#`/`<cfile>`/`<cword>` as command-line
+---specials, none of which belong on arbitrary path text.
+---`lib.nvim.cross.fs.expand_path` is a pure string expansion (no shellout), so
+---this is safe.
 ---@param p string
 ---@return string
 function M.to_absolute(p)
-  if _has_lib_expand_path then
-    local ok, expanded = pcall(_lib_expand_path, p)
-    if ok and type(expanded) == "string" then p = expanded end
-  else
-    p = fallback_expand(p)
-  end
+  p = lib_expand_path(p)
   p = vim.fn.fnamemodify(p, ":p")
   return (p:gsub('^"(.*)"$', "%1"):gsub("^'(.*)'$", "%1"))
 end
@@ -96,11 +61,7 @@ end
 ---@param p string
 ---@return string
 function M.slashify(p)
-  if _has_cross_unify then
-    local ok, result = pcall(_cross_unify, p)
-    if ok and type(result) == "string" then return result end
-  end
-  return (p:gsub("\\", "/"))
+  return cross_unify(p)
 end
 
 ---Convert to a Windows-style absolute path (backslashes).
@@ -150,61 +111,13 @@ function M.relative(p, base)
   -- return value) so this stays correct regardless of what lib.nvim.fs.relpath
   -- does for the non-descendant case — it only gets called for the exact case
   -- both algorithms are known to agree on.
-  if abs_p:sub(1, #abs_base) == abs_base then
-    if _has_lib_relpath then
-      local ok, rel = pcall(_lib_relpath, abs_p, abs_base)
-      if ok and type(rel) == "string" then return rel end
-    end
-    local rel = abs_p:sub(#abs_base + 2)
-    return rel == "" and "." or rel
-  end
+  if abs_p:sub(1, #abs_base) == abs_base then return lib_relpath(abs_p, abs_base) end
 
-  -- Not under base (or lib.nvim absent): fall back to fnamemodify's ":~:.",
-  -- which additionally tildifies the home directory — a UX nicety this
-  -- plugin's display convention wants that lib.nvim.fs.relpath doesn't do.
-  -- slashify keeps the result consistent with the forward-slash convention.
+  -- Not under base: fall back to fnamemodify's ":~:.", which additionally
+  -- tildifies the home directory — a UX nicety this plugin's display
+  -- convention wants that lib.nvim.fs.relpath doesn't do. slashify keeps the
+  -- result consistent with the forward-slash convention.
   return M.slashify(vim.fn.fnamemodify(abs_p, ":~:."))
-end
-
----@internal
----POSIX-style relative path from `base` to `p`, climbing with `..` when `p` is
----not a descendant. Both arguments must already be absolute, forward-slash and
----without a trailing slash. Mirrors `lib.nvim.fs.relpath`; used only when that
----is unavailable, so both paths produce the same string.
----@param abs_p    string
----@param abs_base string
----@return string
-local function relpath_fallback(abs_p, abs_base)
-  if abs_p == abs_base then return "." end
-  if abs_p:sub(1, #abs_base + 1) == abs_base .. "/" then return abs_p:sub(#abs_base + 2) end
-
-  -- Two Windows drive letters share no root, so no relative form exists.
-  local function root_of(s)
-    return s:match("^(%a:)/") or (s:sub(1, 1) == "/" and "/") or ""
-  end
-  if root_of(abs_p) ~= root_of(abs_base) then return abs_p end
-
-  local base_segs, path_segs = {}, {}
-  for seg in abs_base:gmatch("[^/]+") do
-    base_segs[#base_segs + 1] = seg
-  end
-  for seg in abs_p:gmatch("[^/]+") do
-    path_segs[#path_segs + 1] = seg
-  end
-
-  local i = 1
-  while base_segs[i] and path_segs[i] and base_segs[i] == path_segs[i] do
-    i = i + 1
-  end
-
-  local parts = {}
-  for _ = i, #base_segs do
-    parts[#parts + 1] = ".."
-  end
-  for j = i, #path_segs do
-    parts[#parts + 1] = path_segs[j]
-  end
-  return #parts > 0 and table.concat(parts, "/") or "."
 end
 
 ---Return `p` relative to `base` in the form a Markdown link target needs:
@@ -226,12 +139,7 @@ function M.dot_relative(p, base)
   local abs_p = M.to_unix(p):gsub("/+$", "")
   local abs_base = M.to_unix(base):gsub("/+$", "")
 
-  local rel
-  if _has_lib_relpath then
-    local ok, r = pcall(_lib_relpath, abs_p, abs_base)
-    if ok and type(r) == "string" then rel = r end
-  end
-  rel = rel or relpath_fallback(abs_p, abs_base)
+  local rel = lib_relpath(abs_p, abs_base)
 
   -- An absolute result is the "no relative form exists" case; leave it be.
   if rel:match("^%a:/") or rel:sub(1, 1) == "/" then return rel end

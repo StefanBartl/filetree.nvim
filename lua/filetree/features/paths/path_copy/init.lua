@@ -41,6 +41,8 @@ local bind = require("filetree.util.bind")
 -- Copied paths follow the plugin's canonical separator, like everything else
 -- the user sees -- see `build()` below.
 local ftpath = require("filetree.util.path")
+local find_root = require("lib.nvim.fs.find_root")
+local lib_relpath = require("lib.nvim.fs.relpath")
 local M = {}
 
 ---@type FiletreePathCopyConfig
@@ -65,7 +67,7 @@ local _adapter = nil
 ---Cached marker-based root finder. The shape was hand-copied here as
 ---`FiletreeRootFinder` before lib.nvim shipped `Lib.Fs.FindRoot` for it; the
 ---copy is what made every assignment from `find_root()` a type mismatch.
----nil when disabled via root_markers=false, or lib.nvim is unavailable.
+---nil when disabled via root_markers=false.
 ---@type Lib.Fs.FindRoot?
 local _root_finder = nil
 
@@ -179,13 +181,7 @@ local FORMATS = {
   -- Path relative to the project root (]R), independent of the current cwd.
   project_relative = function(path)
     local root = resolve_root(path)
-    local ok, relpath = pcall(require, "lib.nvim.fs.relpath")
-    if ok and type(relpath) == "function" then return relpath(path, root) end
-    -- Fallback: strip the root prefix manually.
-    local nroot = root:gsub("\\", "/"):gsub("/$", "")
-    local npath = path:gsub("\\", "/")
-    if npath:sub(1, #nroot + 1) == nroot .. "/" then return npath:sub(#nroot + 2) end
-    return npath
+    return lib_relpath(path, root)
   end,
 }
 
@@ -316,10 +312,7 @@ function M.setup(config, adapter)
   _root_finder = nil
   local markers = _cfg.root_markers
   if markers == nil then markers = { ".git" } end
-  if markers ~= false then
-    local ok, find_root = pcall(require, "lib.nvim.fs.find_root")
-    if ok and type(find_root) == "function" then _root_finder = find_root({ markers = markers }) end
-  end
+  if markers ~= false then _root_finder = find_root({ markers = markers }) end
 
   bind.bind("path_copy", _cfg, {
     { name = "pick", field = "keymap_pick", rhs = M.pick, desc = "copy path (pick format)" },

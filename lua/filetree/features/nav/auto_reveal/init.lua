@@ -41,6 +41,7 @@
 
 local bufevents = require("filetree.util.bufevents")
 local lib_debounce = require("lib.nvim.debounce")
+local lib_is_subpath = require("lib.nvim.fs.is_subpath")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
@@ -140,26 +141,20 @@ local function should_ignore(bufnr)
 end
 
 ---@internal
----Whether `path` lives under `root` (prefers lib.nvim.fs.is_subpath; falls back
----to a local forward-slash prefix comparison so this still works without it).
+---Whether `path` lives under `root` (lib.nvim.fs.is_subpath, a hard dependency).
 ---
 ---The `{}` third argument makes is_subpath canonicalize both sides through
 ---`lib.nvim.fs.normkey` instead of `vim.fs.normalize`. Neither side is ours:
 ---`path` comes from a buffer name and `root` from whatever resolved the
 ---project, so on Windows they can differ in drive-letter case or in 8.3 short
 ---vs long form and a plain string compare then answers false — auto-reveal
----silently never fires. Older lib versions ignore the extra argument and keep
----the previous behavior. (An `is_subpath` predating the parameter is why the
----fallback below still exists at all.)
+---silently never fires.
 ---@param path string
 ---@param root string
 ---@return boolean
 local function under_root(path, root)
-  local ok, is_subpath = pcall(require, "lib.nvim.fs.is_subpath")
-  if ok and type(is_subpath) == "function" then
-    local ok2, result = pcall(is_subpath, path, root, {})
-    if ok2 then return result end
-  end
+  local ok, result = pcall(lib_is_subpath, path, root, {})
+  if ok then return result end
   local p = path:gsub("\\", "/")
   local r = root:gsub("\\", "/"):gsub("/$", "")
   return p == r or p:sub(1, #r + 1) == r .. "/"
