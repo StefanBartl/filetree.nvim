@@ -646,29 +646,86 @@ local LABEL_SET_BY_STYLE = {
   icon = "icons",
 }
 
+---The tree window's width, or a fixed fallback when the badge is not
+---attached anywhere. Reading it is a single field access on the window
+---struct (cheap), but it is also the one input to `badge_text()` that can
+---change without any mode/root/scope/pin mutation ever running -- the tree
+---window simply gets resized -- so every cache check below re-reads it live
+---instead of trusting whatever was true last time.
+---@return integer
+---@internal
+local function badge_width()
+  if _badge_win and vim.api.nvim_win_is_valid(_badge_win) then
+    return vim.api.nvim_win_get_width(_badge_win)
+  end
+  return 30
+end
+
+---@type string?
+local _cache_text = nil
+---@type string?
+local _cache_hl = nil
+---@type FiletreeCwdModeName?
+local _cache_mode = nil
+---@type string?
+local _cache_pinned = nil
+---@type integer?
+local _cache_width = nil
+---@type boolean
+local _cache_valid = false
+
 ---The badge text for the current mode, e.g. `LOCK  …/Notes`.
+---
+---Memoized against (mode, pinned, tree-window width): those are the only
+---inputs that can change the result, since `indicator` config is fixed for
+---the life of a `setup()` call. `component()`/`badge()` are pulled by
+---external statusline frameworks (lualine, heirline, …) on every redraw --
+---potentially many times a second -- so comparing three cheap values up
+---front lets an unchanged badge skip the label lookup and, more to the
+---point, `path_shorten`'s split/rebuild loop, rather than repeating that work
+---for a result that comes out identical.
+---
+---Deliberately re-derives the key from live state instead of requiring every
+---mutation site to call a separate `invalidate()`: a comparison can never
+---drift out of sync with the state it compares, where a forgotten
+---invalidation call at some future call site could.
 ---@return string text
 ---@return string? hl
 ---@internal
 local function badge_text()
+  local width = badge_width()
+  if
+    _cache_valid
+    and S.mode == _cache_mode
+    and S.pinned == _cache_pinned
+    and width == _cache_width
+  then
+    return _cache_text, _cache_hl
+  end
+
   local cfg = _cfg.indicator
   local label_set = cfg[LABEL_SET_BY_STYLE[cfg.style]] or cfg.labels
   local label = (label_set and label_set[S.mode]) or ""
-  if label == "" then return "", nil end
 
-  local text = label
-  local show = cfg.show_path
-  if S.pinned and (show == "always" or (show == "lock" and S.mode == "lock")) then
-    -- The tree width is the budget: a badge that wraps is worse than one that
-    -- elides, and the trailing segments are the informative ones.
-    local width = 30
-    if _badge_win and vim.api.nvim_win_is_valid(_badge_win) then
-      width = vim.api.nvim_win_get_width(_badge_win)
+  local text, hl
+  if label == "" then
+    text, hl = "", nil
+  else
+    text = label
+    hl = cfg.hl[S.mode]
+    local show = cfg.show_path
+    if S.pinned and (show == "always" or (show == "lock" and S.mode == "lock")) then
+      -- The tree width is the budget: a badge that wraps is worse than one
+      -- that elides, and the trailing segments are the informative ones.
+      local budget = width - #label - 3
+      if budget > 6 then text = label .. "  " .. path_shorten(S.pinned, budget) end
     end
-    local budget = width - #label - 3
-    if budget > 6 then text = label .. "  " .. path_shorten(S.pinned, budget) end
   end
-  return text, cfg.hl[S.mode]
+
+  _cache_mode, _cache_pinned, _cache_width = S.mode, S.pinned, width
+  _cache_text, _cache_hl = text, hl
+  _cache_valid = true
+  return text, hl
 end
 
 ---@internal
@@ -812,6 +869,12 @@ function M.setup(config, adapter)
   S.pinned = nil
   _last_text = nil
   _last_hl = nil
+  _cache_valid = false
+  _cache_mode = nil
+  _cache_pinned = nil
+  _cache_width = nil
+  _cache_text = nil
+  _cache_hl = nil
 
   -- Captured before anything can move the cwd, so the persistence key is the
   -- workspace Neovim was opened in — not wherever a restored lock points.
@@ -873,6 +936,12 @@ function M.teardown()
   S.mode = "follow"
   S.prev_mode = "follow"
   S.pinned = nil
+  _cache_valid = false
+  _cache_mode = nil
+  _cache_pinned = nil
+  _cache_width = nil
+  _cache_text = nil
+  _cache_hl = nil
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil
