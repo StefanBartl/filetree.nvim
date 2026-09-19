@@ -19,6 +19,7 @@ local platform = require("filetree.util.platform")
 local normkey = require("lib.nvim.fs.normkey")
 local is_subpath = require("lib.nvim.fs.is_subpath")
 local relpath = require("lib.nvim.fs.relpath")
+local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 local M = {}
 
@@ -97,7 +98,9 @@ function M.resolve_candidates(target, from_file, root)
   local t = target:gsub("\\", "/")
 
   if t:sub(1, 1) == "~" or t:match("^%a:/") then
-    out[#out + 1] = M.abs(vim.fn.expand(t))
+    -- expand_path, not vim.fn.expand (SEC-34): `target` is a raw reference
+    -- string parsed out of a file the user wrote or edited.
+    out[#out + 1] = M.abs(expand_path(t))
     return out
   end
 
