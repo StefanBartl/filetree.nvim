@@ -40,6 +40,13 @@ local _adapter = nil
 ---@type string  path to session JSON file
 local _store_path = ""
 
+-- Cap on `entry.expanded`'s length when restoring (SEC-33: a persisted
+-- snapshot is untrusted, and a count needs a defined bound same as a type
+-- does). Matches config/DEFAULTS.lua's `max_visible_nodes` default -- a
+-- session cannot plausibly have more expanded directories than the tree
+-- walk itself is willing to collect nodes for.
+local MAX_EXPANDED_DIRS = 5000
+
 -- ── Storage ───────────────────────────────────────────────────────────────────
 
 ---@class FiletreeSessionEntry
@@ -205,27 +212,47 @@ function M.restore()
     -- project it was saved under is stale or foreign data, not something to
     -- act on. Guards entries written before this check existed, and any
     -- future write path that skips M.save() (a hand-edited store, a script).
-    if entry.root and _adapter.set_root then
+    if type(entry.root) == "string" and entry.root ~= "" and _adapter.set_root then
       local nroot = normkey(entry.root)
       if nroot ~= "" and is_subpath(nroot, key) then pcall(_adapter.set_root, entry.root) end
     end
 
-    -- Restore expanded dirs
-    if entry.expanded and #entry.expanded > 0 and _adapter.expand_paths then
-      pcall(_adapter.expand_paths, entry.expanded)
+    -- Restore expanded dirs. A persisted snapshot is untrusted (SEC-33):
+    -- `entry.expanded` is re-validated as a list of strings, capped, before
+    -- reaching the adapter -- `#entry.expanded` on a hand-edited store's
+    -- non-table value would otherwise throw here, uncaught (this whole
+    -- callback runs outside any pcall until the cursor/topline block below).
+    if type(entry.expanded) == "table" and _adapter.expand_paths then
+      local expanded = {}
+      for _, p in ipairs(entry.expanded) do
+        if type(p) == "string" then expanded[#expanded + 1] = p end
+        if #expanded >= MAX_EXPANDED_DIRS then break end
+      end
+      if #expanded > 0 then pcall(_adapter.expand_paths, expanded) end
     end
 
-    -- Restore scroll / cursor
+    -- Restore scroll / cursor. Both fields are untrusted persisted data too:
+    -- `cursor` going into `nvim_win_set_cursor` via the API (not a command
+    -- string) was already safe, pcall'd -- but `topline` is concatenated
+    -- straight into a `:normal!` string, where a string value replays as
+    -- literal keystrokes instead of moving the view, and any non-number
+    -- throws mid-restore: after the window switch but before switching
+    -- back, stranding the cursor in the tree window with nothing to explain
+    -- why. Both are validated to a plain positive integer first.
     local winid = _adapter.get_winid and _adapter.get_winid() or -1
     if winid > 0 and vim.api.nvim_win_is_valid(winid) then
-      pcall(vim.api.nvim_win_set_cursor, winid, { entry.cursor or 1, 0 })
+      local cursor_line = type(entry.cursor) == "number" and entry.cursor or 1
+      pcall(vim.api.nvim_win_set_cursor, winid, { cursor_line, 0 })
+
+      local topline = type(entry.topline) == "number" and math.floor(entry.topline) or 1
+      if topline < 1 then topline = 1 end
+
       -- topline: use normal-mode command as there is no direct API
-      pcall(function()
-        local prev_win = vim.api.nvim_get_current_win()
-        vim.api.nvim_set_current_win(winid)
-        vim.cmd("normal! " .. (entry.topline or 1) .. "zt")
-        vim.api.nvim_set_current_win(prev_win)
-      end)
+      local prev_win = vim.api.nvim_get_current_win()
+      if pcall(vim.api.nvim_set_current_win, winid) then
+        pcall(vim.cmd, "normal! " .. topline .. "zt")
+        pcall(vim.api.nvim_set_current_win, prev_win)
+      end
     end
   end, 100)
 end
