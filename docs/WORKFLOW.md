@@ -1,7 +1,7 @@
 # Workflow — getting real use out of filetree.nvim day to day
 
 Every feature here is documented on its own elsewhere
-(`docs/FEATURES/CORE.md`, `BACKENDS.md`, `CWD_MODES.md`, `NAVIGATION.md`,
+(`docs/FEATURES/CORE.md`, `BACKENDS.md`, `NAVIGATION.md`,
 `docs/BINDINGS/KEYMAPS.md`). This is the different question: once several
 features exist across five backends and a whole cwd-policy stack, *how do
 they actually combine* in daily use, and where do they collide.
