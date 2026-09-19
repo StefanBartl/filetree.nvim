@@ -52,9 +52,10 @@
 --- `pick_item()` has no concept of custom in-picker keymaps, so the
 --- <M-j>/<M-k> reorder keymaps above only work through the built-in picker —
 --- set `prefer = "builtin"` to keep reordering instead of fuzzy search +
---- preview. pickers.nvim is a soft dependency (pcall-required, like
---- ui.nvim's ui kit): absent, or `prefer = "builtin"`, and this falls back
---- to the original kit.picker/vim.ui.select flow unchanged.
+--- preview. pickers.nvim is a genuinely optional third-party plugin
+--- (pcall-required): absent, or `prefer = "builtin"`, and this falls back
+--- to the original kit.picker/vim.ui.select flow unchanged. ui.nvim itself
+--- is not optional — see the `kit`/`has_kit_picker` comment below.
 ---
 --- Keymap (default): "A" in tree buffer.
 
@@ -68,12 +69,16 @@ local map = require("filetree.util.map")
 local ui_select = require("filetree.util.select")
 local ui_confirm = require("filetree.util.confirm")
 
--- Reorderable picker: only available when ui.nvim's ui kit's lower-level
--- `picker` component is present (it exposes the results window/cursor the
--- move keymaps need — the simple `filetree.util.select` shim does not).
--- Falls back to the plain ui_select flow (no reordering) otherwise.
-local _ok_kit, kit = pcall(require, "ui.kit")
-local has_kit_picker = _ok_kit and type(kit) == "table" and type(kit.picker) == "function"
+-- ui.kit is a hard dependency of this plugin (LUA-01): M.open() below
+-- bare-requires it unconditionally too, so a pcall here bought no real
+-- resilience, only an inconsistent read of whether it's optional. What
+-- genuinely varies is whether THIS install's ui.kit is new enough to expose
+-- the lower-level `picker` component (it exposes the results window/cursor
+-- the reorder keymaps need — the simple `filetree.util.select` shim does
+-- not); the reorderable picker falls back to the plain ui_select flow (no
+-- reordering) on an older ui.nvim that predates it.
+local kit = require("ui.kit")
+local has_kit_picker = type(kit.picker) == "function"
 
 -- Optional: real fuzzy search + native content preview via pickers.nvim's
 -- Pickers.Item support, instead of kit.picker's plain substring match and no
