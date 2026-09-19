@@ -514,6 +514,16 @@ function M.open_cwd()
 end
 
 ---Toggle the tree at a given position, optionally revealing a file / setting root.
+---
+---Self-heals one neo-tree race. Toggling again before the (debounced)
+---`filesystem_navigate` scan of a previous toggle has settled -- a keypress
+---that lands right after startup is the easiest way -- makes
+---`nvim_buf_set_name` collide inside `renderer.acquire_window()` (E95: a
+---buffer with this name already exists). Left alone, that leaves a blank,
+---unfocusable "neo-tree" window that re-errors on every redraw; the manual
+---remedy was to press the key again, which opened a second, working window
+---next to the dead one. So on failure any window still showing an unnamed
+---(never rendered) neo-tree buffer is closed and the toggle is retried once.
 ---@param position FiletreeTreePosition
 ---@param opts? FiletreeToggleOpts
 ---@return boolean
@@ -521,17 +531,27 @@ function M.toggle_at(position, opts)
   opts = opts or {}
   local commands = get_commands()
   if not commands then return false end
-  return (
-    pcall(commands.execute, {
-      action = "focus",
-      source = "filesystem",
-      position = position,
-      toggle = true,
-      reveal = opts.reveal == true,
-      reveal_file = opts.reveal and opts.file or nil,
-      dir = opts.dir,
-    })
-  )
+  local exec_opts = {
+    action = "focus",
+    source = "filesystem",
+    position = position,
+    toggle = true,
+    reveal = opts.reveal == true,
+    reveal_file = opts.reveal and opts.file or nil,
+    reveal_force_cwd = opts.reveal == true and opts.reveal_force_cwd == true,
+    dir = opts.dir,
+  }
+  if pcall(commands.execute, exec_opts) then return true end
+
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local buf = vim.api.nvim_win_get_buf(win)
+    if vim.bo[buf].filetype == "neo-tree" and vim.api.nvim_buf_get_name(buf) == "" then
+      pcall(vim.api.nvim_win_close, win, true)
+    end
+  end
+  local ok, err = pcall(commands.execute, exec_opts)
+  if not ok then notify.warn("toggle failed: " .. tostring(err)) end
+  return ok
 end
 
 ---@return boolean

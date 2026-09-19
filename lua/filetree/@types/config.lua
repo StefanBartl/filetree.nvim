@@ -80,6 +80,8 @@
 ---@field open_replace        FiletreeOpenReplaceConfig?
 ---@field open_variants       FiletreeOpenVariantsConfig?
 ---@field reveal_alt          FiletreeRevealAltConfig?
+---@field source_switcher     FiletreeSourceSwitcherConfig?
+---@field tree_toggle         FiletreeTreeToggleConfig?
 ---@field buffer_save         FiletreeBufferSaveConfig?
 ---@field window_size_cycler  FiletreeWindowSizeCyclerConfig?
 ---@field open_in_fm          FiletreeOpenInFmConfig?
@@ -811,6 +813,32 @@
 ---@class FiletreeRevealAltConfig
 ---@field enabled  boolean
 ---@field keymap   string?  Key in tree buffer (default "B"). Reveals the alternate buffer (#) in the tree.
+
+-- ── source_switcher ───────────────────────────────────────────────────────────
+
+---@class FiletreeSourceSwitcherIcons
+---@field family?  "nerd"|"codicons"|"common"  Glyph set (default "nerd"; "common" needs no font).
+---@field variant? "v1"|"v2"                   Glyph variant within the family (default "v1").
+---@field length?  "long"|"short"              Name length in `display_name` (default "long").
+
+---@class FiletreeSourceSwitcherConfig
+---@field enabled     boolean
+---@field keymap_next string?   Key in tree buffer: next source, wrapping (default `"`).
+---@field keymap_prev string?   Key in tree buffer: previous source (default `!`).
+---@field keymap_pick string?   Global normal-mode key: pick a source from a list (default nil).
+---@field sources     string[]? Override the source list (default: neo-tree's configured `sources`).
+---@field icons       FiletreeSourceSwitcherIcons
+
+-- ── tree_toggle (opt-in) ──────────────────────────────────────────────────────
+
+---@class FiletreeTreeToggleConfig
+---@field enabled          boolean  Default false: four global Alt keys are opt-in.
+---@field reveal           boolean  Reveal the current file when opening (default true).
+---@field reveal_force_cwd boolean  Re-root to the cwd when that file lies outside the tree (default true).
+---@field keymap_current   string?  Global key: toggle in the current window (default "<M-c>").
+---@field keymap_float     string?  Global key: toggle as a float (default "<M-f>").
+---@field keymap_left      string?  Global key: toggle on the left (default "<M-l>").
+---@field keymap_right     string?  Global key: toggle on the right (default "<M-r>").
 
 -- ── buffer_save ───────────────────────────────────────────────────────────────
 

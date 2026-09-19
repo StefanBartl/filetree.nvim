@@ -273,6 +273,52 @@ local TREE = {
     end,
   },
 
+  -- ── source_switcher (neo-tree only) ─────────────────────────────────────────
+  -- :Filetree source            pick from a list
+  -- :Filetree source <name>     switch to a source by name
+  -- :Filetree source next|prev  cycle
+  -- :Filetree source debug      print what the switcher sees
+  source = {
+    [""] = function(a)
+      local f = ft("source_switcher")
+      if not f then return end
+      if a[1] and a[1] ~= "" then
+        local ok, err = f.switch(a[1])
+        if not ok then notify.warn(err or "switch failed") end
+      else
+        f.pick()
+      end
+    end,
+    pick = function(_)
+      local f = ft("source_switcher")
+      if f then f.pick() end
+    end,
+    next = function(_)
+      local f = ft("source_switcher")
+      if f then f.next() end
+    end,
+    prev = function(_)
+      local f = ft("source_switcher")
+      if f then f.prev() end
+    end,
+    debug = function(_)
+      local f = ft("source_switcher")
+      if f then f.debug() end
+    end,
+  },
+
+  -- ── tree_toggle (opt-in) ────────────────────────────────────────────────────
+  -- :Filetree toggle [left|right|float|current]   (default: left)
+  toggle = function(args)
+    local f = ft("tree_toggle")
+    if not f then
+      notify.warn("tree_toggle is off (features.tree_toggle.enabled = true turns it on)")
+      return
+    end
+    local ok, err = f.toggle(args[1] or "left")
+    if not ok then notify.warn(err or "toggle failed") end
+  end,
+
   -- ── resize ──────────────────────────────────────────────────────────────────
   -- :Filetree resize [width]
   resize = function(args)

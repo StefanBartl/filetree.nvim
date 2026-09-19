@@ -53,6 +53,46 @@ return {
       feature = "buffer_cycle",
       scope = "tree",
     },
+    {
+      lhs = '"',
+      desc = "Next neo-tree source, keeping the tree's position",
+      feature = "source_switcher",
+      scope = "tree",
+    },
+    {
+      lhs = "!",
+      desc = "Previous neo-tree source, keeping the tree's position",
+      feature = "source_switcher",
+      scope = "tree",
+    },
+    {
+      lhs = "<M-c>",
+      desc = "Toggle the tree in the current window (reveal)",
+      feature = "tree_toggle",
+      scope = "global",
+      opt_in = true,
+    },
+    {
+      lhs = "<M-f>",
+      desc = "Toggle the tree as a float (reveal)",
+      feature = "tree_toggle",
+      scope = "global",
+      opt_in = true,
+    },
+    {
+      lhs = "<M-l>",
+      desc = "Toggle the tree on the left (reveal)",
+      feature = "tree_toggle",
+      scope = "global",
+      opt_in = true,
+    },
+    {
+      lhs = "<M-r>",
+      desc = "Toggle the tree on the right (reveal)",
+      feature = "tree_toggle",
+      scope = "global",
+      opt_in = true,
+    },
   },
   ui = {
     {

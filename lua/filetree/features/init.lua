@@ -28,6 +28,8 @@ M.FEATURES = {
   no_name_guard = { mod = "filetree.features.nav.no_name_guard", category = "nav" },
   sidebar_guard = { mod = "filetree.features.nav.sidebar_guard", category = "nav" },
   buffer_cycle = { mod = "filetree.features.nav.buffer_cycle", category = "nav" },
+  source_switcher = { mod = "filetree.features.nav.source_switcher", category = "nav" },
+  tree_toggle = { mod = "filetree.features.nav.tree_toggle", category = "nav" },
 
   -- ── ui: cosmetic / display ─────────────────────────────────────────────────
   window_style = { mod = "filetree.features.ui.window_style", category = "ui" },

@@ -78,6 +78,7 @@
 ---@class FiletreeToggleOpts
 ---@field reveal? boolean   Reveal the current file when opening.
 ---@field file?   string?   File to reveal (absolute), when reveal is true.
+---@field reveal_force_cwd? boolean  With reveal: re-root the tree to the cwd when the file lies outside it.
 ---@field dir?    string?   Root directory to open at (nil = leave as-is).
 
 ---@alias FiletreeFilterMode
