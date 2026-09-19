@@ -104,7 +104,7 @@ end
 
 -- ── Display modes ─────────────────────────────────────────────────────────────
 
---- Write one window's winbar, through `ui.winbar` when ui.nvim is present.
+--- Write one window's winbar, through `ui.winbar`.
 ---
 --- `vim.wo.winbar` is a surface with no notion of an owner, and this plugin
 --- is not the only thing writing it: `my.nvim`'s breadcrumbs put a symbol
@@ -114,18 +114,16 @@ end
 --- contributes through it. This plugin did not, so a `CursorMoved` in the
 --- tree overwrote my.nvim's line in every editor window.
 ---
---- Soft, like every other ui.nvim touchpoint here: without ui.nvim the
---- direct write is still correct, and this plugin keeps working standalone.
+--- Bare, like every other ui.nvim touchpoint here: ui.nvim is a required
+--- dependency (see docs/installation.md), and `ui.winbar` has been part of
+--- it since before `ui.kit` was, which this plugin already bare-requires
+--- everywhere else -- there is no ui.nvim install that has one without the
+--- other, so there is nothing genuine left to degrade to here.
 ---@param win integer
 ---@param line string
 ---@return nil
 local function set_winbar(win, line)
-  local ok, ui_winbar = pcall(require, "ui.winbar")
-  if ok and type(ui_winbar.set) == "function" then
-    ui_winbar.set(line, win)
-    return
-  end
-  pcall(vim.api.nvim_set_option_value, "winbar", line, { win = win })
+  require("ui.winbar").set(line, win)
 end
 
 local function update_winbar(highlighted, target_win)
