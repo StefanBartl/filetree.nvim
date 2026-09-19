@@ -9,6 +9,7 @@ Everything CI runs, plus the manual pass it cannot.
 | [`menu.lua`](menu.lua) | unit: `integrations/menu.lua`, against a stubbed `filetree` module |
 | [`cwd_mode.lua`](cwd_mode.lua) | unit: the cwd/root policy feature, against a stub adapter and a temp tree |
 | [`sidebar_guard.lua`](sidebar_guard.lua) | unit: `&winfixbuf` pinning of the tree window, neo-tree event (un)subscription, no-op on a non-neotree adapter |
+| [`nav_switch_toggle.lua`](nav_switch_toggle.lua) | unit: `source_switcher` (pick / cycle / display names for neo-tree sources) and `tree_toggle` (global positional toggle keys), plus the neo-tree adapter's E95 self-heal in `toggle_at` — against a stubbed `neo-tree` / `neo-tree.command` |
 | [`gaps.lua`](gaps.lua) | unit: fs-heavy and lifecycle modules `units.lua`/`smoke.lua` had not reached yet — see "gaps.lua" below |
 | [`adapter_lines.lua`](adapter_lines.lua) | integration: the adapter's line→node mapping, against a **real neo-tree and a real nvim-tree** — the only suite that needs a tree plugin |
 | [`refs/`](refs/) | fixture-based: real on-disk multi-file projects, described below |

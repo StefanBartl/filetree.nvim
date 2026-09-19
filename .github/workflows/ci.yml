@@ -102,6 +102,7 @@ jobs:
           nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
           nvim --clean --headless -u NONE -l TESTS/sidebar_guard.lua
           nvim --clean --headless -u NONE -l TESTS/gaps.lua
+          nvim --clean --headless -u NONE -l TESTS/nav_switch_toggle.lua
           nvim --clean --headless -u NONE -l TESTS/refs/run.lua
 
       # The FEATURE REFERENCE section of doc/filetree.txt is generated from

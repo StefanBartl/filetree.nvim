@@ -119,6 +119,7 @@ local DEFAULT_OFF = {
   "auto_resize",
   "handle_guard",
   "size_info",
+  "tree_toggle",
 }
 do
   local warnings = 0

@@ -40,6 +40,19 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree marks show` | Show floating list |
 | `:Filetree marks all` | Mark all visible nodes |
 
+### Source (neo-tree)
+| Command | Action |
+|---------|--------|
+| `:Filetree source` | Pick a neo-tree source from a floating list |
+| `:Filetree source <name>` | Switch to that source, keeping the tree's position |
+| `:Filetree source next` / `prev` | Cycle, wrapping |
+| `:Filetree source debug` | Print the source list, where it came from, and which sources can load |
+
+### Toggle (opt-in feature)
+| Command | Action |
+|---------|--------|
+| `:Filetree toggle [left\|right\|float\|current]` | Toggle the tree at that position (default `left`), revealing the current file |
+
 ### Diff
 | Command | Action |
 |---------|--------|

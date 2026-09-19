@@ -48,6 +48,61 @@ the tree-buffer analogue of `:e #`.
 - **Module:** [`features/nav/reveal_alt/init.lua`](../../lua/filetree/features/nav/reveal_alt/init.lua)
 - **Keymaps:** `B` (config field `keymap`)
 
+## Source Switcher (neo-tree)
+
+neo-tree renders its filesystem, buffer list, git status, symbol outline,
+diagnostics and (with neo-tree-tests-source) tests through one window.
+Its own `<`/`>` re-open the tree at the *configured* position — not where
+it is when you press the key in a float. This feature keeps the position:
+`"`/`!` cycle to the next/previous source in place, `:Filetree source`
+(or a global key) opens a floating list with each source's icon and name,
+the current one marked and a `[!]` on one that cannot load right now
+(`document_symbols` without an LSP client, an uninstalled optional source).
+
+The pure half needs no `setup()`: `display_name(source, opts)` returns the
+` <icon> <Name>` string neo-tree's `source_selector` wants, in three icon
+families (`nerd`, `codicons`, `common` for a font without glyphs) and two
+name lengths — so a host builds neo-tree's own opts from it:
+
+```lua
+local sw = require("filetree.features.nav.source_switcher")
+source_selector = {
+  winbar = true,
+  sources = sw.display_names({ "filesystem", "buffers", "git_status" }, { family = "nerd" }),
+}
+```
+
+A silent no-op on every other adapter: one tree, nothing to switch.
+
+- **Module:** [`features/nav/source_switcher/init.lua`](../../lua/filetree/features/nav/source_switcher/init.lua)
+- **Keymaps:** `"` next, `!` previous (config fields `keymap_next`/`keymap_prev`, tree-local); `keymap_pick` (global, default unset)
+- **Usercmds:** `:Filetree source [name|pick|next|prev|debug]`
+- **Config:** `opts.features.source_switcher.sources` (override the list), `.icons = { family, variant, length }`
+
+## Tree Toggle (opt-in)
+
+Four global keys that open (or close) the tree at a chosen position and
+reveal the current file on the way in, re-rooting to the cwd when the file
+lies outside the tree: `<M-l>` left, `<M-r>` right, `<M-f>` float, `<M-c>`
+in the current window. The `:Neotree toggle position=… reveal
+reveal_force_cwd` most configs write four times, through
+`adapter.toggle_at()` instead — so it works on every backend that can place
+its tree, and refuses with a reason on one that cannot.
+
+On neo-tree the adapter also heals one race: toggling again before the
+previous toggle's debounced scan has settled makes `nvim_buf_set_name`
+collide (E95) and leaves a blank, unfocusable tree window that re-errors on
+every redraw. The adapter closes any never-rendered neo-tree window and
+retries once, which is what pressing the key again used to do by hand.
+
+Off by default: four global Alt keys are a claim on the keyboard the user
+makes, not the plugin.
+
+- **Module:** [`features/nav/tree_toggle/init.lua`](../../lua/filetree/features/nav/tree_toggle/init.lua)
+- **Keymaps:** `<M-c>`, `<M-f>`, `<M-l>`, `<M-r>` (global; config fields `keymap_current`, `keymap_float`, `keymap_left`, `keymap_right`)
+- **Usercmds:** `:Filetree toggle [left|right|float|current]`
+- **Config:** `opts.features.tree_toggle.enabled` (default **false**), `reveal` (true), `reveal_force_cwd` (true)
+
 ## Auto Resize (opt-in)
 
 Responsive tree sidebar width driven by `VimResized`: breakpoints map

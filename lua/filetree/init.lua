@@ -55,6 +55,7 @@ local DEFAULT_DISABLED = {
   auto_resize = true,
   handle_guard = true, -- patches a neo-tree internal + closes uv handles; opt-in.
   size_info = true, -- cosmetic clutter + per-node `du`/`Get-ChildItem` by default; opt-in.
+  tree_toggle = true, -- four global Alt keys; a claim on the keyboard the user makes, not the plugin.
 }
 
 ---@type table<string, table>  name → loaded feature module
