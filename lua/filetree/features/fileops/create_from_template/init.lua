@@ -209,12 +209,45 @@ local function order_file()
   return template_dir() .. "/.order.json"
 end
 
+---Back up `order_file()`'s current on-disk content to `<path>.corrupt`, once,
+---so a broken-but-present file never turns into silent data loss the next
+---time `save_order()` writes a fresh order over it. Not re-written if a
+---backup already exists (an earlier corruption caught on a previous load).
+---@internal
+local function backup_corrupt_order()
+  local path = order_file()
+  local backup_path = path .. ".corrupt"
+  if vim.fn.filereadable(backup_path) == 1 then return end
+  local ok, lines = pcall(vim.fn.readfile, path)
+  if ok and type(lines) == "table" then pcall(vim.fn.writefile, lines, backup_path) end
+end
+
+---"No order saved yet" (nothing to load -- fine, list_templates() falls back
+---to alphabetical) and "order file present but unreadable/undecodable" are
+---NOT the same situation: `M.move()` normalizes to the FULL current template
+---list and calls `save_order()`, which unconditionally overwrites
+---`order_file()` with that normalized list. Collapsing "corrupt" to the same
+---empty result as "missing" means the very next reorder silently discards
+---whatever custom order the file held (transient write failure, hand edit,
+---partial write from a crash) with no trace it ever existed. A present-but-
+---broken file is therefore backed up before being treated as empty, and
+---reported, instead of failing quietly.
 ---@internal
 ---@return string[]
 local function load_order()
-  local ok, decoded = pcall(json.read, order_file())
-  if not ok or type(decoded) ~= "table" or type(decoded.order) ~= "table" then return {} end
-  return decoded.order
+  if vim.fn.filereadable(order_file()) == 0 then return {} end -- nothing saved yet: not an error
+
+  local decoded, err = json.read(order_file())
+  if type(decoded) == "table" and type(decoded.order) == "table" then return decoded.order end
+
+  backup_corrupt_order()
+  notify.warn(
+    "Template order file is unreadable or corrupt; falling back to alphabetical order (original kept at "
+      .. order_file()
+      .. ".corrupt): "
+      .. tostring(err)
+  )
+  return {}
 end
 
 ---@internal
