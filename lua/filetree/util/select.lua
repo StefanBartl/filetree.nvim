@@ -1,26 +1,24 @@
 ---@module 'filetree.util.select'
 --- Selection prompt — routes vim.ui.select through ui.kit.
 ---
---- Drop-in for `vim.ui.select(items, opts, on_choice)`. When lib.nvim is present
---- it renders via `ui.kit` (`kit.select`) for a consistent floating UI
---- across the author's plugins; otherwise it falls back to `vim.ui.select`. Call
---- sites keep the native signature:
+--- Drop-in for `vim.ui.select(items, opts, on_choice)`. Renders via `ui.kit`
+--- (`kit.select`) for a consistent floating UI across the author's plugins.
+--- ui.nvim is a required dependency (see docs/installation.md) and ui.kit is
+--- bare-required the same way it is everywhere else in this plugin; there is
+--- no `vim.ui.select` fallback. Call sites keep the native signature:
 ---
 ---   local ui_select = require("filetree.util.select")
 ---   ui_select(items, { prompt = "…", format_item = f }, function(choice, idx) … end)
 
-local _ok, kit = pcall(require, "ui.kit")
-local has_kit = _ok and type(kit) == "table" and type(kit.select) == "function"
+local kit = require("ui.kit")
 
----Prompt the user to select one of `items`, via ui.kit if available.
+---Prompt the user to select one of `items`, via ui.kit.
 ---@param items any[]
 ---@param opts  table|nil   { prompt?, format_item? } (as vim.ui.select)
 ---@param on_choice fun(item: any|nil, idx: integer|nil)
 return function(items, opts, on_choice)
   opts = opts or {}
   on_choice = on_choice or function() end
-
-  if not has_kit then return vim.ui.select(items, opts, on_choice) end
 
   -- kit.select sizes the float to its widest item by default, so the old
   -- `auto_width` workaround for hover_select's fixed min-width is no longer
