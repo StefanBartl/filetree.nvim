@@ -4336,6 +4336,25 @@ do
     "project_root: clear_cache() forces a fresh walk (marker now gone)",
     root4:gsub("\\", "/") ~= tmp .. "/proj"
   )
+
+  -- Glob-shaped marker ("*.rockspec", the only one in the default list) --
+  -- previously fed the directory path straight into vim.fn.glob as part of
+  -- the pattern (XP-01); now routed through lib.nvim.fs.globbable first.
+  -- Not the exact Windows 8.3-short-name repro (not portably constructible
+  -- here), but this exercises the glob-marker branch end to end, which had
+  -- no coverage at all before.
+  local rock_dir = tmp .. "/rockproj"
+  vim.fn.mkdir(rock_dir .. "/src", "p")
+  vim.fn.writefile({ "package = 'x'" }, rock_dir .. "/x-1.0-1.rockspec")
+  vim.fn.writefile({ "x" }, rock_dir .. "/src/init.lua")
+
+  proot.clear_cache()
+  local root5 = proot.find(rock_dir .. "/src/init.lua")
+  eq(
+    "project_root: glob-shaped marker (*.rockspec) still finds its directory as root",
+    root5:gsub("\\", "/"),
+    rock_dir
+  )
 end
 
 -- ── cheatsheet: `?` opens a float listing active tree-scoped keymaps ────────

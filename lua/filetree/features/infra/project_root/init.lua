@@ -8,6 +8,8 @@
 --- Integrates with cwd_sync: when enabled, open_reveal uses the project root
 --- as the tree root instead of the buffer's immediate parent directory.
 
+local globbable = require("lib.nvim.fs.globbable")
+
 local M = {}
 
 ---@type FiletreeProjectRootConfig
@@ -87,9 +89,14 @@ local function find_from(dir)
 
   while current ~= prev do
     for _, marker in ipairs(_cfg.markers) do
-      -- Support simple glob patterns like "*.rockspec"
+      -- Support simple glob patterns like "*.rockspec". `current` is a
+      -- filesystem path being walked, not a pattern -- only `marker` is
+      -- meant to be read as one (XP-01): globbable() re-spells an 8.3
+      -- short-name `~` component (e.g. under a Windows %TEMP% for a long
+      -- profile name) so glob does not misread it as a home-directory
+      -- reference and silently return an empty list.
       if marker:find("*", 1, true) then
-        local ok, files = pcall(vim.fn.glob, current .. "/" .. marker, false, true)
+        local ok, files = pcall(vim.fn.glob, globbable(current) .. "/" .. marker, false, true)
         if ok and files and #files > 0 then
           found = current
           break
