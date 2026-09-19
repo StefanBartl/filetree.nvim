@@ -105,6 +105,12 @@ function M.setup(user_config)
     notify.error("No supported filetree plugin found. Aborting setup.")
     return
   end
+  -- Write the actually-resolved adapter back into the config cfg.get() returns
+  -- by reference, so anything reading cfg.adapter afterwards (health.lua's
+  -- "Configuration loaded (adapter = ...)" line) reports what is really
+  -- running, not the unresolvable name that was asked for and silently
+  -- fell back from above.
+  cfg.adapter = adapter.name
 
   -- Apply the global debug switch so notifier.debug(...) becomes visible.
   require("filetree.util.notify").set_debug(cfg.debug == true)

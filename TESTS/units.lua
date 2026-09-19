@@ -4141,6 +4141,46 @@ do
   local ok_setup = pcall(ft.setup, { adapter = "units-stub-err22", features = "all" })
   check("filetree.setup() does not error on a wrongly-typed features value", ok_setup)
   check("filetree.setup() completes (does not abort) on a wrongly-typed value", ft.is_initialized())
+
+  -- cfg.adapter must reflect the adapter that actually ended up active after
+  -- the "unresolvable name -> fall back to auto" path (regression: it used
+  -- to keep the unresolvable name forever, so health.lua's "Configuration
+  -- loaded (adapter = ...)" line kept reporting a name nothing was running,
+  -- masking that the fallback had happened at all). "auto" always resolves
+  -- to "netrw" here (no other adapter plugin is on rtp in this suite, and
+  -- netrw is always available -- built in) -- pin an inert stub under that
+  -- exact name first, the same no-op-metatable double used throughout this
+  -- file, so the real netrw adapter's real implementation never actually
+  -- runs against the rest of this shared test process; only the fallback
+  -- bookkeeping in filetree.setup() itself is under test here.
+  local adapter_mod = require("filetree.adapter")
+  adapter_mod.register(setmetatable({
+    name = "netrw",
+    is_available = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  }))
+  local ok_setup2 = pcall(
+    ft.setup,
+    { adapter = "totally-bogus-adapter-xyz", features = { size_info = { enabled = false } } }
+  )
+  check("config.adapter fallback: setup() still completes", ok_setup2 and ft.is_initialized())
+  cfg = config.get()
+  check(
+    "config.adapter fallback: does not keep the unresolvable name that was asked for",
+    cfg.adapter ~= "totally-bogus-adapter-xyz"
+  )
+  eq(
+    "config.adapter fallback: cfg.adapter matches the adapter that actually ended up active",
+    cfg.adapter,
+    ft.adapter().name
+  )
 end
 
 -- ── trash: default (no confirmations config at all) DOES prompt ────────────
