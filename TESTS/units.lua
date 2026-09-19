@@ -4043,6 +4043,69 @@ do
   )
 end
 
+-- ── config: unknown option / wrongly-typed value (ERR-50 / ERR-22) ─────────
+-- Validated BEFORE the merge: an unrecognized top-level key or feature name
+-- is dropped and reported via issues(), never silently merged into the
+-- active config; a wrongly-typed adapter/features falls back to its default
+-- instead of surviving into `_active`.
+do
+  local config = require("filetree.config")
+
+  config.setup({ adaptor = "neotree" }) -- typo: "adaptor"
+  local cfg = config.get()
+  eq("unknown top-level key: adapter keeps its default", cfg.adapter, "auto")
+  check("unknown top-level key: reported in issues()", #config.issues() > 0)
+  local joined = table.concat(config.issues(), "\n")
+  check(
+    "unknown top-level key: message names the typo and a did-you-mean hint",
+    joined:find("adaptor", 1, true) ~= nil and joined:find("adapter", 1, true) ~= nil,
+    joined
+  )
+
+  config.setup({ features = { auto_reaveal = { enabled = false } } }) -- typo: "auto_reaveal"
+  check("unknown feature name: reported in issues()", #config.issues() > 0)
+  joined = table.concat(config.issues(), "\n")
+  check(
+    "unknown feature name: message names the typo and a did-you-mean hint",
+    joined:find("auto_reaveal", 1, true) ~= nil and joined:find("auto_reveal", 1, true) ~= nil,
+    joined
+  )
+
+  config.setup({ adapter = 0 })
+  cfg = config.get()
+  eq("wrongly-typed adapter falls back to its default", cfg.adapter, "auto")
+  check("wrongly-typed adapter reported in issues()", #config.issues() > 0)
+
+  config.setup({ features = "all" })
+  cfg = config.get()
+  check("wrongly-typed features falls back to a table", type(cfg.features) == "table")
+  check("wrongly-typed features reported in issues()", #config.issues() > 0)
+
+  -- A clean setup() call clears the previous call's issues.
+  config.setup({ adapter = "stub" })
+  eq("issues() cleared after a clean setup()", #config.issues(), 0)
+
+  -- filetree.setup() itself never aborts over a wrongly-typed value: it
+  -- completes (is_initialized() true) with the degraded default instead.
+  local ft = require("filetree")
+  local stub = setmetatable({
+    name = "units-stub-err22",
+    is_available = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+  ft.register_adapter(stub)
+  local ok_setup = pcall(ft.setup, { adapter = "units-stub-err22", features = "all" })
+  check("filetree.setup() does not error on a wrongly-typed features value", ok_setup)
+  check("filetree.setup() completes (does not abort) on a wrongly-typed value", ft.is_initialized())
+end
+
 -- ── trash: default (no confirmations config at all) DOES prompt ────────────
 -- End-to-end check of the *actual* out-of-the-box default, not just what
 -- config.get() reports: with nothing set, delete_current() must prompt before

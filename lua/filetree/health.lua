@@ -55,11 +55,28 @@ function M.check()
   end
   vim.health.ok("Configuration loaded (adapter = " .. tostring(cfg.adapter) .. ")")
 
+  -- validate() degrades an invalid field to its default rather than
+  -- aborting setup() (ERR-22), so a failure here is informational, not an
+  -- error -- the plugin is running, just not with the value that was asked
+  -- for.
   local valid, err = config_mod.validate()
   if not valid then
-    vim.health.error("Config validation failed: " .. (err or "unknown"))
+    vim.health.warn(
+      "Config validation found an issue (using the default instead): " .. (err or "unknown")
+    )
   else
     vim.health.ok("Config validated")
+  end
+
+  -- Unknown top-level option / feature name from the last setup() call
+  -- (ERR-50) -- dropped before the merge, reported here.
+  local cfg_issues = type(config_mod.issues) == "function" and config_mod.issues() or {}
+  if #cfg_issues == 0 then
+    vim.health.ok("No unknown or wrongly-typed setup() options")
+  else
+    for _, issue in ipairs(cfg_issues) do
+      vim.health.warn(issue)
+    end
   end
 
   -- ── Adapters ──────────────────────────────────────────────────────────────
