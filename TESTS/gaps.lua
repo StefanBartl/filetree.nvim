@@ -1759,37 +1759,54 @@ do
   }
   lrc.setup({ enabled = true }, stub)
 
-  vim.fn.setreg("+", "")
+  -- `write_to_clipboard` sets BOTH `+` and `"`. Reading back through `+` alone
+  -- only works where a clipboard provider exists: a headless CI runner has
+  -- none ("clipboard: No provider"), so `getreg("+")` there answers "" however
+  -- correctly the plugin behaved, and every assertion below failed for a
+  -- reason that had nothing to do with the code under test. `"` is written
+  -- unconditionally and is therefore what these read. The system-clipboard
+  -- half is not dropped -- it is still asserted wherever a provider is
+  -- actually present.
+  local has_clipboard = vim.fn.has("clipboard") == 1
+  local function set_both(value)
+    vim.fn.setreg("+", value)
+    vim.fn.setreg('"', value)
+  end
+  local function copied()
+    return vim.fn.getreg('"')
+  end
+  local function eq_copied(name, want)
+    eq(name, copied(), want)
+    if has_clipboard then
+      eq(name .. " (and reaches the system clipboard)", vim.fn.getreg("+"), want)
+    end
+  end
+
+  set_both("")
   cur_node = { path = lrc_root .. "/plugin/lua/myplug/foo.lua", type = "file" }
   lrc.copy_require()
-  eq(
-    "copy_require: a single file resolves to its module string",
-    vim.fn.getreg("+"),
-    "require('myplug.foo')"
-  )
+  eq_copied("copy_require: a single file resolves to its module string", "require('myplug.foo')")
 
-  vim.fn.setreg("+", "")
+  set_both("")
   cur_node = { path = lrc_root .. "/plugin/lua/myplug/init.lua", type = "file" }
   lrc.copy_require()
-  eq(
+  eq_copied(
     "copy_require: an init.lua's module string drops the trailing '.init'",
-    vim.fn.getreg("+"),
     "require('myplug')"
   )
 
-  vim.fn.setreg("+", "sentinel")
+  set_both("sentinel")
   cur_node = { path = lrc_root .. "/outside/orphan.lua", type = "file" }
   lrc.copy_require()
-  eq(
+  eq_copied(
     "copy_require: a node outside any lua/ dir copies nothing (no guessed module)",
-    vim.fn.getreg("+"),
     "sentinel"
   )
 
-  vim.fn.setreg("+", "")
+  set_both("")
   cur_node = { path = lrc_root .. "/plugin/lua/myplug", type = "directory" }
   lrc.copy_require()
-  local dir_lines = vim.split(vim.fn.getreg("+"), "\n")
+  local dir_lines = vim.split(copied(), "\n")
   table.sort(dir_lines)
   eq("copy_require: a directory gathers every .lua file recursively (3 modules)", #dir_lines, 3)
   check(
@@ -1803,24 +1820,19 @@ do
   -- spelled) must not break the prefix strip.
   local prev_cwd = vim.fn.getcwd()
   vim.cmd("cd " .. vim.fn.fnameescape(lrc_root .. "/plugin"))
-  vim.fn.setreg("+", "")
+  set_both("")
   cur_node = { path = lrc_root .. "/plugin/lua/myplug/foo.lua", type = "file" }
   lrc.copy_require_relative()
-  eq(
+  eq_copied(
     "copy_require_relative: resolves relative to cwd/lua/ regardless of cwd's own separator style",
-    vim.fn.getreg("+"),
     "require('myplug.foo')"
   )
   vim.cmd("cd " .. vim.fn.fnameescape(prev_cwd))
 
   cur_node = nil
-  vim.fn.setreg("+", "sentinel2")
+  set_both("sentinel2")
   lrc.copy_require()
-  eq(
-    "copy_require: no current node is a warned no-op, clipboard untouched",
-    vim.fn.getreg("+"),
-    "sentinel2"
-  )
+  eq_copied("copy_require: no current node is a warned no-op, clipboard untouched", "sentinel2")
 
   lrc.teardown()
 end
