@@ -639,6 +639,90 @@ do
   cwd_mode.teardown()
 end
 
+-- ── badge caching: memoized badge_text(), recompute only when it matters ────
+do
+  -- component()/badge() are pulled by external statusline frameworks (lualine,
+  -- heirline, …) on every redraw, potentially many times a second. The fix
+  -- under test caches the computed text/hl and only redoes the work when
+  -- mode/pinned/tree-window-width actually changed. Proving that needs a spy
+  -- on the one non-trivial step inside `badge_text()` -- `path_shorten` --
+  -- rather than just comparing rendered strings (an unchanged string does not
+  -- by itself prove the work was skipped).
+  --
+  -- `cwd_mode` was already required at the top of this file, so its internal
+  -- `local path_shorten = require(...)` reference is bound and cannot be
+  -- swapped after the fact. Install the spy in `package.loaded` and force a
+  -- *fresh* module instance instead, used only in this block.
+  local real_path_shorten = require("lib.nvim.fs.path_shorten")
+  local shorten_calls = 0
+  package.loaded["lib.nvim.fs.path_shorten"] = function(...)
+    shorten_calls = shorten_calls + 1
+    return real_path_shorten(...)
+  end
+  package.loaded["filetree.features.nav.cwd_mode"] = nil
+  local fresh = require("filetree.features.nav.cwd_mode")
+
+  vim.cmd("vsplit")
+  local tree_win = vim.api.nvim_get_current_win()
+  vim.cmd("wincmd p")
+  vim.api.nvim_win_set_width(tree_win, 40)
+  local adapter = stub_adapter(tree_win)
+
+  local original_laststatus = vim.o.laststatus
+  vim.o.laststatus = 2
+  fresh.setup(
+    { enabled = true, indicator = { mode = "statusline", show_path = "always" } },
+    adapter
+  )
+
+  fresh.lock(base .. "/proj_a")
+  check("locking computed the badge at least once", shorten_calls > 0)
+
+  -- The very first pull after attach still recomputes once, because
+  -- refresh_indicator() computes the badge *before* it attaches to the tree
+  -- window (see its own comment), so that first computation still saw the
+  -- pre-attach fallback width. Settle the cache at the real window width
+  -- before asserting on repeated, truly unchanged pulls.
+  fresh.component()
+  local settled = shorten_calls
+  check("the badge settles at the tree window's real width", settled > 0)
+
+  fresh.component()
+  fresh.component()
+  fresh.badge()
+  eq("repeated pulls with no state change reuse the cache", shorten_calls, settled)
+
+  -- A real state change (a different pinned root, still in lock mode) must
+  -- invalidate it -- and does so as part of the same call that changes the
+  -- state, via refresh_indicator(), not only on the next pull.
+  local before_reroot = shorten_calls
+  fresh.notify_manual_root(base .. "/proj_b")
+  check("a root change recomputes the badge", shorten_calls > before_reroot)
+  local after_reroot = shorten_calls
+
+  fresh.component()
+  fresh.component()
+  eq("cache holds again once the root change has settled", shorten_calls, after_reroot)
+
+  -- A tree-window resize changes the truncation budget without touching
+  -- mode/root/scope/pin, and nothing calls refresh_indicator() for a plain
+  -- resize -- the next pull must still notice and recompute on its own.
+  local before_resize = shorten_calls
+  vim.api.nvim_win_set_width(tree_win, 15)
+  fresh.component()
+  check("a tree-window resize recomputes the badge", shorten_calls > before_resize)
+  local after_resize = shorten_calls
+
+  fresh.component()
+  fresh.component()
+  eq("cache holds again once the resize has settled", shorten_calls, after_resize)
+
+  fresh.teardown()
+  vim.o.laststatus = original_laststatus
+  package.loaded["lib.nvim.fs.path_shorten"] = nil
+  require("lib.nvim.fs.path_shorten")
+end
+
 -- ── FiletreeCwdModeChanged: the event an external statusline hooks ───────────
 do
   local fires = 0
