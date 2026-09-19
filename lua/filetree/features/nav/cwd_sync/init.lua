@@ -29,6 +29,7 @@ local notify = require("filetree.util.notify").create("[filetree.cwd_sync]")
 local path = require("filetree.util.path")
 local lib_debounce = require("lib.nvim.debounce")
 local chdir = require("lib.nvim.fs.chdir")
+local find_root = require("lib.nvim.fs.find_root")
 
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
@@ -60,7 +61,7 @@ local _adapter = nil
 ---Cached marker-based root finder. The shape was hand-copied here as
 ---`FiletreeRootFinder` before lib.nvim shipped `Lib.Fs.FindRoot` for it; the
 ---copy is what made every assignment from `find_root()` a type mismatch.
----nil when disabled via root_markers=false, or lib.nvim is unavailable.
+---nil when disabled via root_markers=false.
 ---@type Lib.Fs.FindRoot?
 local _root_finder = nil
 
@@ -287,10 +288,7 @@ function M.setup(config, adapter)
   _root_finder = nil
   local markers = _cfg.root_markers
   if markers == nil then markers = { ".git" } end
-  if markers ~= false then
-    local ok, find_root = pcall(require, "lib.nvim.fs.find_root")
-    if ok and type(find_root) == "function" then _root_finder = find_root({ markers = markers }) end
-  end
+  if markers ~= false then _root_finder = find_root({ markers = markers }) end
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_cwd_sync", true)

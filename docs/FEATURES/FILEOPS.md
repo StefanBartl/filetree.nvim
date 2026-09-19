@@ -29,7 +29,7 @@ nothing is touched). No conflicts means no prompt — pasting into an empty
 or non-colliding directory behaves exactly as before.
 
 A multi-item paste shows a progress indicator (current item, N/M, final
-summary) via the optional `lib.nvim.progress` dependency — see
+summary) via `lib.nvim.progress` — see
 [Progress indicators](../configuration.md#full-option-reference)'s
 `progress_style` option (top-level `require("filetree").setup({...})`
 config, not per-feature).
@@ -159,7 +159,7 @@ for trash history. How far back that reaches is `features.trash.max_history`
 anything, since the history is a small JSON file. Marking multiple nodes and
 trashing them opens one batch confirmation instead of one prompt per
 file, and force-closes any open buffers backed by the deleted paths so
-they don't linger as edits-to-nowhere. Same optional progress indicator
+they don't linger as edits-to-nowhere. Same progress indicator
 as Copy / Move above, for both the "delete all at once" and "confirm
 each individually" batch paths.
 
@@ -391,8 +391,8 @@ The scan uses **ripgrep** as a pre-filter when it is installed (only files
 that mention the name at all are read). Without ripgrep it falls back to a
 capped libuv walk, which is slower but still correct. Over ~20 extension-
 matching files that walk reads them in chunks across event-loop ticks with a
-`[filetree.refs]` progress indicator (no-op without lib.nvim) instead of
-freezing the editor for the whole scan.
+`[filetree.refs]` progress indicator instead of freezing the editor for the
+whole scan.
 
 The per-feature options this replaces — `check_markdown_refs`,
 `refs_picker_prefer`, `smart_rename.update_references` — are migrated

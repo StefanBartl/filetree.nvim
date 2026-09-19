@@ -46,7 +46,7 @@ require("filetree").setup({
   confirmations = nil,
 
   -- Style for batch-operation progress indicators (trash, paste, …) — see
-  -- "Progress indicators" below. Needs lib.nvim.progress; a no-op without it.
+  -- "Progress indicators" below.
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
   -- Cap on how many nodes one walk of the rendered tree collects. Only a

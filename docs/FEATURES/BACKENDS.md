@@ -12,8 +12,7 @@ native `?` cheatsheet integration (filetree injects its own keymaps into
 neo-tree's `window.mappings`, see `attach.lua`), a native "follow cwd"
 feature (`bind_to_cwd`/`follow_current_file`) that `cwd_sync.reveal` should
 defer to, and libuv directory watchers that motivate `handle_guard`/
-`watcher_quarantine` below. Resolves the current node via `lib.nvim.neotree.node`
-when `lib.nvim` is present, with a local fallback otherwise.
+`watcher_quarantine` below. Resolves the current node via `lib.nvim.neotree.node`.
 
 Resolves a buffer line back to the node drawn on it (`get_node_at_line`)
 through the nui tree's own line mapping, which is what lets git status, LSP

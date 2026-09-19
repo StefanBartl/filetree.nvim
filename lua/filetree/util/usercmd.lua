@@ -1,16 +1,14 @@
 ---@module 'filetree.util.usercmd'
---- User-command helpers — delegate to lib.nvim.bindings.usercmd, with fallbacks.
+--- User-command helpers — delegate to lib.nvim.bindings.usercmd (a hard dependency).
 ---
 --- `lib.nvim.bindings.usercmd.create(name, callback, opts)` is a drop-in for
---- `nvim_create_user_command`, so filetree shares the user's usercmd conventions
---- when lib.nvim is present and still works standalone otherwise.
+--- `nvim_create_user_command`, so filetree shares the user's usercmd conventions.
 ---
 ---   local usercmd = require("filetree.util.usercmd")
 ---   usercmd.create("Filetree", handler, { nargs = "*", complete = comp })
 ---   usercmd.del("Filetree")
 
-local _ok, lib = pcall(require, "lib.nvim.bindings.usercmd")
-local has_lib = _ok and type(lib) == "table" and type(lib.create) == "function"
+local lib = require("lib.nvim.bindings.usercmd")
 
 local M = {}
 
@@ -19,8 +17,7 @@ local M = {}
 ---@param callback string|fun(args: table)
 ---@param opts     table|nil
 function M.create(name, callback, opts)
-  if has_lib then return lib.create(name, callback, opts or {}) end
-  return vim.api.nvim_create_user_command(name, callback, opts or {})
+  return lib.create(name, callback, opts or {})
 end
 
 ---Delete a user command, ignoring errors.

@@ -7,12 +7,11 @@
 ---
 --- Precedence for the name list (highest first):
 ---   1. User supplies `ignore_list = { ".git", … }` → uses that array verbatim.
----   2. lib.nvim is on the runtimepath → uses require("lib.nvim.fs.ignore.list").basenames.
----   3. Built-in fallback embedded below.
+---   2. Otherwise → require("lib.nvim.fs.ignore.list").basenames (a hard dependency).
 ---
 --- Config (driven from top-level `ignore_list` in FiletreeConfig, not from features):
 ---   enabled  boolean     true = hide; false = skip entirely.
----   names    string[]?   nil = resolve from lib.nvim / built-in.
+---   names    string[]?   nil = resolve from lib.nvim.
 ---
 --- Toggle at runtime: use the adapter's own "toggle hidden" mechanism.
 ---   neotree  → `H` (toggle_hidden) shows/hides everything in filtered_items.
@@ -21,65 +20,22 @@
 
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
+local lib_ignore_list = require("lib.nvim.fs.ignore.list")
 local M = {}
 
--- ── Built-in name list (mirrored from lib.nvim's canonical ignore list) ───────
-
-local _BUILTIN = {
-  ".git",
-  ".github",
-  ".hg",
-  ".svn",
-  ".svc",
-  ".stfolder",
-  ".stversions",
-  "node_modules",
-  ".pnpm-store",
-  ".yarn",
-  ".venv",
-  ".direnv",
-  "__pycache__",
-  ".mypy_cache",
-  ".pytest_cache",
-  ".cache",
-  ".sass-cache",
-  "build",
-  "dist",
-  "out",
-  "target",
-  "bin",
-  "obj",
-  "zig-cache",
-  "zig-out",
-  ".DS_Store",
-  "thumbs.db",
-  ".vscode",
-  ".idea",
-}
-
----Resolve the effective name list: user override → lib.nvim → built-in.
----@param user_names string[]? explicit list from config; nil = use defaults
+---Resolve the effective name list: user override → lib.nvim.
+---@param user_names string[]? explicit list from config; nil = use lib.nvim's
 ---@return string[]
 local function resolve_names(user_names)
-  if user_names then return user_names end
-  local ok, lib_list = pcall(require, "lib.nvim.fs.ignore.list")
-  if ok and type(lib_list) == "table" and type(lib_list.basenames) == "table" then
-    return lib_list.basenames
-  end
-  return _BUILTIN
+  return user_names or lib_ignore_list.basenames
 end
 
 ---Resolve Lua-pattern rules (file basenames like `.log`/`.pyc`, not covered by
----exact basenames) from lib.nvim. No built-in fallback: `_BUILTIN` above is
----basenames only, and these only matter to path-output actions, not the tree
----display this feature otherwise drives.
+---exact basenames) from lib.nvim. These only matter to path-output actions,
+---not the tree display this feature otherwise drives.
 ---@return string[]
 local function resolve_patterns()
-  local ok, lib_list = pcall(require, "lib.nvim.fs.ignore.list")
-  if ok and type(lib_list) == "table" and type(lib_list.patterns) == "table" then
-    return lib_list.patterns
-  end
-  return {}
+  return lib_ignore_list.patterns
 end
 
 -- ── Path-output predicate (copy_file_list, markdown_links, …) ───────────────

@@ -51,6 +51,7 @@ local is_subpath = require("lib.nvim.fs.is_subpath")
 local normkey = require("lib.nvim.fs.normkey")
 local path_shorten = require("lib.nvim.fs.path_shorten")
 local ui_statusline = require("lib.nvim.ui.statusline")
+local store_project = require("lib.nvim.store.project")
 
 local M = {}
 
@@ -295,13 +296,12 @@ end
 
 -- ── Persistence ───────────────────────────────────────────────────────────────
 
----The project store, or nil when persistence is off/unavailable.
+---The project store, or nil when persistence is off.
 ---@return Lib.Store.Project?
 ---@internal
 local function store()
   if not _cfg.persist or not _persist_path then return nil end
-  local ok, mod = pcall(require, "lib.nvim.store.project")
-  return ok and mod or nil
+  return store_project
 end
 
 ---Write the current policy for this project.

@@ -4,11 +4,8 @@
 local notify = require("filetree.util.notify").create("[filetree.adapter.neotree]")
 local registry = require("filetree.adapter")
 
--- Shared neo-tree node helpers live in lib.nvim (a declared dependency). We still
--- pcall it so filetree degrades gracefully to a local fallback if lib.nvim is
--- absent, matching the adapter's defensive style everywhere else.
-local _ok_libnode, libnode = pcall(require, "lib.nvim.neotree.node")
-if not _ok_libnode then libnode = nil end
+-- Shared neo-tree node helpers live in lib.nvim (a hard dependency).
+local libnode = require("lib.nvim.neotree.node")
 
 ---@class FiletreeNeotreeAdapter : FiletreeAdapter
 local M = {
@@ -106,11 +103,8 @@ local function node_path(node)
   end
   if type(p) == "string" and p ~= "" then return p end
 
-  if libnode then
-    local lp = libnode.get_path(node)
-    return lp ~= "" and lp or nil
-  end
-  return nil
+  local lp = libnode.get_path(node)
+  return lp ~= "" and lp or nil
 end
 
 ---Determine whether a node is a directory (uses node.type, falls back to a
@@ -257,16 +251,7 @@ end
 ---@param nodes table[]
 ---@return string[] paths, string[] names
 function M.extract_paths(nodes)
-  if libnode then return libnode.extract_paths(nodes) end
-  local paths, names = {}, {}
-  for _, node in ipairs(nodes or {}) do
-    local p = node_path(node)
-    if p then
-      paths[#paths + 1] = p
-      names[#names + 1] = node.name or vim.fn.fnamemodify(p, ":t")
-    end
-  end
-  return paths, names
+  return libnode.extract_paths(nodes)
 end
 
 -- Safety cap: the walk already only descends into *expanded* nodes (so it is
