@@ -4,9 +4,11 @@
 --- File sizes come from vim.uv.fs_stat() (fast, synchronous per node).
 --- Directory sizes are computed asynchronously via `du -sh` (POSIX) or
 --- PowerShell Get-ChildItem (Windows), since walking a full directory tree
---- is slow. Sizes are cached, each entry expiring after a few seconds
---- (see CACHE_TTL) so a size measured once does not stay frozen for the
---- rest of the session.
+--- is slow. Sizes are cached, each entry expiring after a bound so a size
+--- measured once does not stay frozen for the rest of the session -- files
+--- (see FILE_CACHE_TTL) expire quickly since fs_stat is cheap to redo;
+--- directories (see DIR_CACHE_TTL) expire far less often since re-measuring
+--- means spawning another `du`/Get-ChildItem walk.
 ---
 --- Display examples:  4.2 KB   1.3 MB   128 B   (dir: 23 MB)
 ---
@@ -20,6 +22,7 @@
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local bufutil = require("filetree.util.buffer")
+local pathutil = require("filetree.util.path")
 local M = {}
 
 ---@type FiletreeSizeInfoConfig
@@ -41,21 +44,42 @@ local _ns = -1
 -- build growing the file, `git pull`, another process writing to it) with no
 -- event filetree would ever see, so "cached forever" has no defined point at
 -- which it becomes wrong -- PERF-42. TTL + an explicit invalidation trigger,
--- same shape as util/buffer.lua's validity cache: a short TTL bounds the
--- staleness of everything, and BufWritePost below clears the one path that
--- has a precise "it just changed" signal instead of waiting out the TTL.
+-- same shape as util/buffer.lua's validity cache: a TTL bounds the staleness
+-- of everything, and BufWritePost below clears the one path that has a
+-- precise "it just changed" signal instead of waiting out the TTL.
 ---@type table<string, {value:string, timestamp:number}>  abs_path → cached size + when
 local _cache = {}
 
-local CACHE_TTL = 5000 -- ms
+-- Two TTLs, not one: a file's size comes from a synchronous fs_stat() (cheap
+-- to redo, so a short bound is fine), while a directory's size comes from
+-- spawning `du`/Get-ChildItem over the whole subtree (potentially the exact
+-- slow walk "cached forever" was originally chosen to avoid paying more than
+-- once, see the PERF-42 note above). Re-using the file TTL for directories
+-- turned ordinary CursorHold-driven browsing into a recurring subprocess
+-- spawn per visible, TTL-expired directory -- every render pass more than
+-- the TTL after the last one re-triggers every stale entry at once, and
+-- default 'updatetime' (4000ms) already sits below a 5s TTL. DIR_CACHE_TTL
+-- is long enough that normal browsing doesn't repeatedly re-walk the same
+-- directories, while still eventually catching up to an external change.
+local FILE_CACHE_TTL = 5000 -- ms
+local DIR_CACHE_TTL = 60000 -- ms
 
+-- Cache keys are normalized to forward-slash (pathutil.slashify) before every
+-- lookup/store. Adapter node.path is native-separator (backslash on Windows,
+-- see adapter/neotree.lua's key_of() and the matching comments in
+-- adapter/nvimtree.lua and adapter/netrw.lua), while the BufWritePost
+-- invalidation path comes from vim.api.nvim_buf_get_name(), which is
+-- forward-slash on that same platform. Without a shared normalized form, a
+-- write's invalidation silently misses the entry a render created.
 ---@param path string
+---@param ttl number  milliseconds; FILE_CACHE_TTL or DIR_CACHE_TTL depending on node type
 ---@return string?
-local function cache_get(path)
-  local entry = _cache[path]
+local function cache_get(path, ttl)
+  local key = pathutil.slashify(path)
+  local entry = _cache[key]
   if not entry then return nil end
-  if (vim.uv or vim.loop).now() - entry.timestamp >= CACHE_TTL then
-    _cache[path] = nil
+  if (vim.uv or vim.loop).now() - entry.timestamp >= ttl then
+    _cache[key] = nil
     return nil
   end
   return entry.value
@@ -64,7 +88,12 @@ end
 ---@param path string
 ---@param value string
 local function cache_set(path, value)
-  _cache[path] = { value = value, timestamp = (vim.uv or vim.loop).now() }
+  _cache[pathutil.slashify(path)] = { value = value, timestamp = (vim.uv or vim.loop).now() }
+end
+
+---@param path string
+local function cache_invalidate(path)
+  _cache[pathutil.slashify(path)] = nil
 end
 
 -- ── Formatting ────────────────────────────────────────────────────────────────
@@ -131,7 +160,7 @@ end
 -- ── File size (sync via uv.fs_stat) ──────────────────────────────────────────
 
 local function get_file_size(path)
-  local cached = cache_get(path)
+  local cached = cache_get(path, FILE_CACHE_TTL)
   if cached then return cached end
   local uv = vim.uv or vim.loop
   local stat = uv.fs_stat(path)
@@ -162,7 +191,7 @@ function M._render()
       if node.type == "file" and _cfg.show_files then
         size_str = get_file_size(node.path)
       elseif node.type == "directory" and _cfg.show_dirs then
-        size_str = cache_get(node.path)
+        size_str = cache_get(node.path, DIR_CACHE_TTL)
         if not size_str and _cfg.dir_async then
           -- Kick off async query; render will be called again when done
           query_dir_size(node.path, function() end)
@@ -209,7 +238,7 @@ function M.setup(config, adapter)
     load = function(evt)
       if evt.key:find("BufWritePost", 1, true) == 1 then
         local path = vim.api.nvim_buf_get_name(evt.buf)
-        if path ~= "" then _cache[path] = nil end
+        if path ~= "" then cache_invalidate(path) end
       end
       M._render()
     end,
