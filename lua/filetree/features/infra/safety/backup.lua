@@ -3,6 +3,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.safety.backup]")
 local path = require("filetree.util.path")
+local globbable = require("lib.nvim.fs.globbable")
 
 local M = {}
 
@@ -77,7 +78,12 @@ end
 ---Remove oldest backups when count exceeds max_backups.
 function M.prune()
   local max = _cfg.max_backups or 5
-  local ok, files = pcall(vim.fn.glob, _dir .. "/*", false, true)
+  -- `_dir` is a filesystem path, not a pattern -- globbable() (XP-01) keeps
+  -- an 8.3 short-name `~` component (a config.backup_dir under a Windows
+  -- %TEMP%, for a profile name over eight characters) from being misread as
+  -- a home-directory reference, which would make glob silently return an
+  -- empty list here instead of the real backup files.
+  local ok, files = pcall(vim.fn.glob, globbable(_dir) .. "/*", false, true)
   if not ok or not files then return end
   -- Sort by name (timestamp prefix ensures chronological order)
   table.sort(files)
@@ -94,7 +100,7 @@ end
 ---List all backups (sorted oldest→newest).
 ---@return string[]
 function M.list()
-  local ok, files = pcall(vim.fn.glob, _dir .. "/*", false, true)
+  local ok, files = pcall(vim.fn.glob, globbable(_dir) .. "/*", false, true)
   if not ok or not files then return {} end
   table.sort(files)
   return files
