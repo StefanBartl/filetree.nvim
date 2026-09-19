@@ -1,0 +1,4 @@
+{
+  "DEP-02": "lua/filetree/features/system/shell_run/init.lua:76 is the else-branch of the same nvim-0.11 has()-gated jobstart/termopen fallback as debugging.nvim's proc_trace.lua, with `---@diagnostic disable-next-line: deprecated` above it -- known false positive documented in this ruleset's own DEP-02 entry since 2026-09-05. Lines 8/68 in the same finding are doc comments explaining the gate, not calls.",
+  "SEC-01": "lua/filetree/features/fileops/trash/platform.lua:91 is a comment ('This used to be an os.execute() shell string') documenting a PAST fix, not a call -- grep matches the comment text, not code."
+}
