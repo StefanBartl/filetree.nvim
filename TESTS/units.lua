@@ -4969,7 +4969,18 @@ do
   -- the `relative` format look broken when it is behaving exactly right.
   tmp = (vim.fn.getcwd()):gsub("\\", "/")
 
-  local native = (tmp .. "/sub/b.lua"):gsub("/", "\\")
+  -- Backslashed only where a backslash IS a separator. On Windows that is the
+  -- point of this block: an adapter reports native separators there, and a
+  -- forward-slash path would let every format pass without doing anything. On
+  -- a Unix host a backslash is an ordinary filename character, so the same
+  -- spelling makes the path *relative* -- `:.` then has nothing under the cwd
+  -- to rewrite and hands it straight back, which is what made `relative` look
+  -- broken on macOS while it was behaving correctly. (Linux never showed it:
+  -- this whole block is behind HAS_CLIPBOARD and a headless Linux runner has
+  -- no provider, so it was skipped there rather than passing.)
+  local is_win = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
+  local node_path = tmp .. "/sub/b.lua"
+  local native = is_win and (node_path:gsub("/", "\\")) or node_path
   local cur_node = { path = native, type = "file" }
   local stub = setmetatable({
     name = "units-stub-pathcopy",
