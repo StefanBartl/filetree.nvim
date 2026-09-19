@@ -58,12 +58,48 @@ local function ensure_dir()
   if vim.fn.isdirectory(dir) == 0 then vim.fn.mkdir(dir, "p") end
 end
 
+---Back up `_store_path`'s current on-disk lines to `<path>.corrupt`, once, so
+---a broken-but-present file never turns into silent data loss the next time
+---`save_store()` writes the whole file back over it. Not re-written if a
+---backup already exists (an earlier corruption caught on a previous load),
+---so a caller retrying after that does not clobber it with, say, an
+---even-more-truncated read.
+---@param lines string[]?  Already-read lines, when available (avoids a second read).
+local function backup_corrupt_store(lines)
+  local backup_path = _store_path .. ".corrupt"
+  if vim.fn.filereadable(backup_path) == 1 then return end
+  lines = lines or select(2, pcall(vim.fn.readfile, _store_path))
+  if type(lines) == "table" then pcall(vim.fn.writefile, lines, backup_path) end
+end
+
+---"File missing" (nothing saved yet — fine) and "file present but broken"
+---(unreadable, undecodable, or decoded to something other than a table) are
+---NOT the same situation: `save_store()` unconditionally serializes the
+---WHOLE `_sessions` table back over `_store_path`, so collapsing "broken" to
+---the same silent empty `_sessions` as "missing" means the very next save —
+---triggered by any project, not just the one whose entry was being read —
+---permanently discards every other project's saved adapter, root, scroll
+---position and expanded-dir list with no trace it ever existed. A broken
+---file is therefore backed up before being treated as empty, and reported,
+---instead of failing quietly.
 local function load_store()
-  if vim.fn.filereadable(_store_path) == 0 then return end
+  if vim.fn.filereadable(_store_path) == 0 then return end -- first run: nothing to load, not an error
+
   local ok, content = pcall(vim.fn.readfile, _store_path)
-  if not ok or not content or #content == 0 then return end
-  local json_ok, data = pcall(vim.fn.json_decode, table.concat(content, "\n"))
-  if json_ok and type(data) == "table" then _sessions = data end
+  if ok and content and #content > 0 then
+    local json_ok, data = pcall(vim.fn.json_decode, table.concat(content, "\n"))
+    if json_ok and type(data) == "table" then
+      _sessions = data
+      return
+    end
+  end
+
+  backup_corrupt_store(ok and content or nil)
+  notify.warn(
+    "Session store is unreadable or corrupt; starting fresh (original kept at "
+      .. _store_path
+      .. ".corrupt)"
+  )
 end
 
 local function save_store()
