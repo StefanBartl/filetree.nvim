@@ -4183,6 +4183,122 @@ do
   )
 end
 
+-- ── config: nested unknown key / degraded value (ERR-50 / ERR-22) ──────────
+-- sanitize() recurses one level into `menu` and into the `features.<name>`
+-- bodies DEFAULTS.lua declares centrally -- a typo there used to vanish into
+-- the default with zero diagnostic (ERR-50). Separately, normalize_values()
+-- degrades a handful of numeric/string fields whose only prior guard was
+-- `x or default` (catches nil, nothing else) before they reach a consumer
+-- that throws on the wrong type (ERR-22).
+do
+  local config = require("filetree.config")
+
+  -- ERR-50: a typo inside a centrally-known feature body is caught by full
+  -- dotted path, and the real option keeps its default -- not silently
+  -- dropped into the merged config as a dead field.
+  config.setup({ features = { cwd_sync = { enabled = true, dedounce_ms = 300 } } })
+  local cfg = config.get()
+  eq(
+    "nested feature typo: the real option (debounce_ms) keeps its default",
+    cfg.features.cwd_sync.debounce_ms,
+    150
+  )
+  check(
+    "nested feature typo: the typo'd key does not leak into the active config",
+    cfg.features.cwd_sync.dedounce_ms == nil
+  )
+  local joined = table.concat(config.issues(), "\n")
+  check(
+    "nested feature typo: message carries the FULL dotted path, not just the bare key",
+    joined:find("features.cwd_sync.dedounce_ms", 1, true) ~= nil,
+    joined
+  )
+
+  -- ERR-50: same one-level recursion for `menu`.
+  config.setup({ menu = { fielops = true } })
+  joined = table.concat(config.issues(), "\n")
+  check(
+    "menu typo: reported by full dotted path",
+    joined:find("menu.fielops", 1, true) ~= nil,
+    joined
+  )
+
+  -- ERR-22: a wrong-type numeric field degrades to its documented default
+  -- instead of surviving into `_active` to crash a debounce timer / a numeric
+  -- `for` limit / a bare length comparison downstream.
+  config.setup({
+    features = {
+      layout_guard = { enabled = true, delay_ms = true }, -- boolean, not a number
+      cwd_sync = { enabled = true, debounce_ms = {}, parent_levels = "abc" },
+      current_hl = { enabled = true, debounce_ms = -5 }, -- negative
+      safety = { enabled = true, max_backups = "5", backup_dir = {} },
+    },
+    refs = { scan = { max_files = true, timeout_ms = 0 } },
+  })
+  cfg = config.get()
+  eq(
+    "ERR-22: layout_guard.delay_ms (boolean) degrades to its default",
+    cfg.features.layout_guard.delay_ms,
+    50
+  )
+  eq(
+    "ERR-22: cwd_sync.debounce_ms (table) degrades to its default",
+    cfg.features.cwd_sync.debounce_ms,
+    150
+  )
+  eq(
+    "ERR-22: cwd_sync.parent_levels (string) degrades to its default",
+    cfg.features.cwd_sync.parent_levels,
+    0
+  )
+  eq(
+    "ERR-22: current_hl.debounce_ms (negative) degrades to its default",
+    cfg.features.current_hl.debounce_ms,
+    100
+  )
+  eq(
+    "ERR-22: safety.max_backups (numeric string) degrades to its default",
+    cfg.features.safety.max_backups,
+    5
+  )
+  check(
+    "ERR-22: safety.backup_dir (table) degrades to nil (the documented default)",
+    cfg.features.safety.backup_dir == nil
+  )
+  eq("ERR-22: refs.scan.max_files (boolean) degrades to its default", cfg.refs.scan.max_files, 5000)
+  eq("ERR-22: refs.scan.timeout_ms (zero) degrades to its default", cfg.refs.scan.timeout_ms, 3000)
+  check(
+    "ERR-22: every degraded value is reported in issues()",
+    #config.issues() >= 8,
+    table.concat(config.issues(), "\n")
+  )
+
+  -- The consumers themselves must not throw once the config holds the
+  -- degraded value -- the actual crash sites this fix closes.
+  local debounce = require("lib.nvim.debounce")
+  local ok_debounce = pcall(function()
+    local d = debounce.new(function() end, cfg.features.cwd_sync.debounce_ms)
+    d.call()
+  end)
+  check(
+    "ERR-22: lib.nvim.debounce.call() no longer throws on the degraded debounce_ms",
+    ok_debounce
+  )
+  local ok_defer = pcall(vim.defer_fn, function() end, cfg.features.layout_guard.delay_ms)
+  check("ERR-22: vim.defer_fn() no longer throws on the degraded delay_ms", ok_defer)
+  local ok_forloop = pcall(function()
+    for _ = 1, cfg.features.cwd_sync.parent_levels do
+    end
+  end)
+  check("ERR-22: the parent_levels for-loop no longer throws on the degraded value", ok_forloop)
+  local ok_cmp = pcall(function()
+    return 7 > cfg.features.safety.max_backups
+  end)
+  check("ERR-22: the max_backups comparison no longer throws on the degraded value", ok_cmp)
+
+  config.setup({ adapter = "stub" }) -- reset for the suites that follow
+end
+
 -- ── trash: default (no confirmations config at all) DOES prompt ────────────
 -- End-to-end check of the *actual* out-of-the-box default, not just what
 -- config.get() reports: with nothing set, delete_current() must prompt before

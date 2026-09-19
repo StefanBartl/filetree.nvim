@@ -70,6 +70,57 @@ local KNOWN_TOP = {
 ---@type string[]
 local issues = {}
 
+---Sub-key sets for the `features.<name>` bodies that `DEFAULTS.lua` itself
+---declares centrally (i.e. every feature listed under `DEFAULTS.features`).
+---Checked one level deep, by full dotted path (`features.cwd_sync.debounce_ms`,
+---not just `debounce_ms`), so a typo inside one of these does not silently
+---vanish into the default the way a top-level-only check would miss it.
+---
+---Every *other* feature (the ~50 not listed in `DEFAULTS.features`) still
+---only gets its NAME checked against the registry, same as before: its body
+---shape belongs to that feature module, which this file has no way to know
+---without duplicating (and inevitably drifting from) that module's own
+---`@types` annotation. Extend this table when a feature's defaults move into
+---`DEFAULTS.features` (see that file's header comment on which features are
+---"worth surfacing centrally").
+---@type table<string, table<string, boolean>>
+local KNOWN_FEATURE_BODY = {
+  layout_guard = { enabled = true, delay_ms = true },
+  no_name_guard = { enabled = true },
+  sidebar_guard = { enabled = true, winfixbuf = true },
+  cwd_sync = {
+    enabled = true,
+    debounce_ms = true,
+    parent_levels = true,
+    keep_focus = true,
+    change_dir = true,
+    reveal = true,
+    use_project_root = true,
+    root_markers = true,
+  },
+  -- cwd_mode deliberately excluded: its own DEFAULTS (cwd_mode/DEFAULTS.lua)
+  -- is a large, deeply-nested surface (indicator.labels/icons/hl, …) that the
+  -- feature module owns outright -- see that file's header. Only its NAME is
+  -- checked here, like the other feature-owned bodies.
+  current_hl = { enabled = true, file_hl = true, parent_hl = true, debounce_ms = true },
+  safety = { enabled = true, backup_dir = true, max_backups = true, dry_run = true },
+}
+
+---Known sub-keys of the top-level `menu` table (see `DEFAULTS.lua`).
+---@type table<string, boolean>
+local KNOWN_MENU = {
+  enable = true,
+  fileops = true,
+  clipboard = true,
+  delete = true,
+  open = true,
+  paths = true,
+  search = true,
+  info = true,
+  marks = true,
+  window = true,
+}
+
 ---@internal
 ---`key` with the nearest known one as a hint when there is a plausible one
 ---(edit distance <= 3).
@@ -98,8 +149,11 @@ end
 ---is dropped so the built-in default applies instead of taking the whole
 ---plugin down (ERR-22 — see `filetree/init.lua`'s `M.setup`, which is the
 ---other half of that fix: it never aborts on a validation issue). Does not
----mutate `opts`. Deliberately shallow beyond the `features` name check: each
----feature module owns and validates its own option shape.
+---mutate `opts`. Recurses one level into `menu` and into the handful of
+---`features.<name>` bodies `DEFAULTS.lua` declares centrally (see
+---KNOWN_FEATURE_BODY above); every other feature's body still only gets its
+---NAME checked here -- that feature module owns and validates its own option
+---shape.
 ---@internal
 ---@param opts table
 ---@return table clean
@@ -124,12 +178,47 @@ local function sanitize(opts)
         local clean_features = {}
         for fname, fval in pairs(value) do
           if feature_registry[fname] then
-            clean_features[fname] = fval
+            local body_known = KNOWN_FEATURE_BODY[fname]
+            if body_known and type(fval) == "table" then
+              -- One level deep, by full dotted path -- see KNOWN_FEATURE_BODY's
+              -- doc comment for why only these features get this treatment.
+              local clean_body = {}
+              for bkey, bval in pairs(fval) do
+                if body_known[bkey] then
+                  clean_body[bkey] = bval
+                else
+                  found_issues[#found_issues + 1] =
+                    describe_unknown(bkey, body_known, "features." .. fname .. ".")
+                end
+              end
+              clean_features[fname] = clean_body
+            else
+              -- Not a centrally-known body (or not even a table -- ERR-22's
+              -- normalize() step below degrades a wrongly-typed one): pass it
+              -- through untouched, same as before.
+              clean_features[fname] = fval
+            end
           else
             found_issues[#found_issues + 1] = describe_unknown(fname, feature_registry, "features.")
           end
         end
         clean[key] = clean_features
+      end
+    elseif key == "menu" then
+      if type(value) ~= "table" then
+        found_issues[#found_issues + 1] = ("option 'menu' must be a table, got %s -- using the default"):format(
+          type(value)
+        )
+      else
+        local clean_menu = {}
+        for mkey, mval in pairs(value) do
+          if KNOWN_MENU[mkey] then
+            clean_menu[mkey] = mval
+          else
+            found_issues[#found_issues + 1] = describe_unknown(mkey, KNOWN_MENU, "menu.")
+          end
+        end
+        clean[key] = clean_menu
       end
     else
       clean[key] = value
@@ -321,6 +410,114 @@ local function apply_legacy_refs(cfg)
   end
 end
 
+-- ── Value normalization (ERR-22) ─────────────────────────────────────────────
+-- Runs AFTER the merge, on the active config: `sanitize()` above only rejects
+-- keys the *shape* is wrong for (unknown key, non-table where a table is
+-- required). It says nothing about a value that has the right shape but is
+-- out of range for what its consumer actually does with it -- several of
+-- these reach `vim.defer_fn`, a libuv timer, a numeric `for` limit or a bare
+-- length comparison downstream, each guarded only by `x or default` at the
+-- point of use (catches `nil`, nothing else). A string, boolean or table
+-- there throws instead of falling back; degrading it here, once, means every
+-- one of those call sites can go on trusting the value it reads.
+
+---Degrade `tbl[field]` to `default` (recording why in `issues`) unless it is
+---a number `>= min`. A `nil` field is left alone -- that is the merge having
+---produced exactly the default, not a user-supplied bad value, so there is
+---nothing to report.
+---@internal
+---@param tbl table
+---@param field string
+---@param label string  dotted path for the message, e.g. "features.cwd_sync.debounce_ms"
+---@param default number
+---@param min number
+---@param out_issues string[]
+local function degrade_number(tbl, field, label, default, min, out_issues)
+  local v = tbl[field]
+  if v == nil then return end
+  if type(v) ~= "number" or v < min or v ~= v then -- v ~= v: reject NaN
+    out_issues[#out_issues + 1] = ("option '%s' must be a number >= %d, got %s -- using the default"):format(
+      label,
+      min,
+      type(v) == "number" and tostring(v) or type(v)
+    )
+    tbl[field] = default
+  end
+end
+
+---Degrade `cfg` fields whose consumer only guards against `nil`, one field at
+---a time, by dotted path. See the section comment above for why this lives
+---here rather than in each consumer.
+---@internal
+---@param cfg FiletreeConfig
+---@param out_issues string[]
+local function normalize_values(cfg, out_issues)
+  local feat = cfg.features
+  if type(feat) == "table" then
+    if type(feat.layout_guard) == "table" then
+      degrade_number(
+        feat.layout_guard,
+        "delay_ms",
+        "features.layout_guard.delay_ms",
+        50,
+        0,
+        out_issues
+      )
+    end
+    if type(feat.cwd_sync) == "table" then
+      degrade_number(
+        feat.cwd_sync,
+        "debounce_ms",
+        "features.cwd_sync.debounce_ms",
+        150,
+        0,
+        out_issues
+      )
+      degrade_number(
+        feat.cwd_sync,
+        "parent_levels",
+        "features.cwd_sync.parent_levels",
+        0,
+        0,
+        out_issues
+      )
+    end
+    if type(feat.current_hl) == "table" then
+      degrade_number(
+        feat.current_hl,
+        "debounce_ms",
+        "features.current_hl.debounce_ms",
+        100,
+        0,
+        out_issues
+      )
+    end
+    if type(feat.safety) == "table" then
+      degrade_number(feat.safety, "max_backups", "features.safety.max_backups", 5, 0, out_issues)
+
+      -- backup_dir: nil (documented default -- stdpath("data")/filetree/backups)
+      -- or a non-empty string. A table crashes vim.fn.fnamemodify() outright
+      -- (E730); a number/boolean silently resolves to a nonsense path under
+      -- the cwd; an empty string resolves to the cwd itself -- backups of
+      -- deleted/moved files landing inside whatever project happens to be
+      -- open, silently, instead of the intended backup directory.
+      local bd = feat.safety.backup_dir
+      if bd ~= nil and (type(bd) ~= "string" or bd == "") then
+        out_issues[#out_issues + 1] = ("option 'features.safety.backup_dir' must be a non-empty string or nil, got %s -- using the default"):format(
+          type(bd) == "string" and "empty string" or type(bd)
+        )
+        feat.safety.backup_dir = nil
+      end
+    end
+  end
+
+  local refs = cfg.refs
+  if type(refs) == "table" and type(refs.scan) == "table" then
+    degrade_number(refs.scan, "max_files", "refs.scan.max_files", 5000, 1, out_issues)
+    degrade_number(refs.scan, "timeout_ms", "refs.scan.timeout_ms", 3000, 1, out_issues)
+  end
+end
+
 ---Apply user config on top of defaults.
 ---@param user FiletreeOpts?
 function M.setup(user)
@@ -330,6 +527,8 @@ function M.setup(user)
   -- Deep-copy defaults
   _active = vim.deepcopy(_defaults)
   deep_merge(_active, clean)
+  normalize_values(_active, issues)
+  table.sort(issues)
   apply_keymap_remap(_active)
   apply_autocmd_overrides(_active)
   apply_confirmations(_active)
@@ -343,9 +542,9 @@ function M.get()
   return _active
 end
 
----What the last `M.setup()` call rejected (unknown option, wrong type),
----one message per issue -- empty when everything validated. For
----`:checkhealth filetree`.
+---What the last `M.setup()` call rejected or degraded (unknown option, wrong
+---type, an out-of-range value normalize_values() fell back on), one message
+---per issue -- empty when everything validated. For `:checkhealth filetree`.
 ---@return string[]
 function M.issues()
   return vim.deepcopy(issues)
