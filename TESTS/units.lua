@@ -4962,6 +4962,12 @@ do
   vim.fn.mkdir(tmp .. "/sub", "p")
   vim.fn.writefile({ "x" }, tmp .. "/sub/b.lua")
   vim.fn.chdir(tmp)
+  -- Take the cwd back from Neovim instead of trusting `tmp`: on macOS $TMPDIR
+  -- lives under /var, which is a symlink to /private/var, and chdir resolves
+  -- it. `:.` only rewrites a path that is under the cwd, so a node path still
+  -- spelled the unresolved way is not under it and stays absolute -- making
+  -- the `relative` format look broken when it is behaving exactly right.
+  tmp = (vim.fn.getcwd()):gsub("\\", "/")
 
   local native = (tmp .. "/sub/b.lua"):gsub("/", "\\")
   local cur_node = { path = native, type = "file" }
