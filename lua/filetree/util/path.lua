@@ -24,10 +24,33 @@ local _has_lib_relpath = _ok_relpath and type(_lib_relpath) == "function"
 
 -- Optional: lib.nvim.cross.fs.expand_path resolves ~/$VAR/${VAR}/%VAR% before
 -- fnamemodify runs. Prefer it when present (same reasoning as unify_slashes
--- above); without it, fall back to vim.fn.expand, which covers ~/$VAR but
--- never %VAR% on Windows.
+-- above).
 local _ok_expand, _lib_expand_path = pcall(require, "lib.nvim.cross.fs.expand_path")
 local _has_lib_expand_path = _ok_expand and type(_lib_expand_path) == "function"
+
+---@internal
+---`~` and `$VAR`/`${VAR}` expansion only, used when lib.nvim's own primitive
+---is unavailable -- deliberately NOT vim.fn.expand (SEC-34): `p` here can be
+---a raw path typed by the user or read from a config value, and vim.fn.expand
+---runs a backtick span through `&shell` and treats `%`/`#`/`<cfile>`/`<cword>`
+---as command-line specials, none of which belong on arbitrary path text. No
+---`%VAR%` support on Windows -- the same documented limitation this fallback
+---already carried before.
+---@param p string
+---@return string
+local function fallback_expand(p)
+  if p:sub(1, 1) == "~" then
+    local home = vim.env.HOME or vim.env.USERPROFILE
+    if home and home ~= "" then p = home .. p:sub(2) end
+  end
+  return (
+    p:gsub("%$%{([%w_]+)%}", function(name)
+      return vim.env[name] or ""
+    end):gsub("%$([%w_]+)", function(name)
+      return vim.env[name] or ""
+    end)
+  )
+end
 
 local M = {}
 
@@ -39,7 +62,7 @@ function M.to_absolute(p)
     local ok, expanded = pcall(_lib_expand_path, p)
     if ok and type(expanded) == "string" then p = expanded end
   else
-    p = vim.fn.expand(p)
+    p = fallback_expand(p)
   end
   p = vim.fn.fnamemodify(p, ":p")
   return (p:gsub('^"(.*)"$', "%1"):gsub("^'(.*)'$", "%1"))
