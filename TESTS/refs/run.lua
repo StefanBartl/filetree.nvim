@@ -100,7 +100,21 @@ add_lib_nvim()
 add_ui_nvim()
 
 local fixtures_root = vim.fn.fnamemodify(this, ":p:h") .. "/fixtures"
+--- Scratch tree for the fixtures, spelled canonically.
+---
+--- The canonicalization is not cosmetic: on macOS `/tmp` is a symlink to
+--- `/private/tmp`, so a path built from the literal `/tmp` and a path that has
+--- been through `:cd`, a buffer name or `fs_realpath` are two spellings of one
+--- directory. Checks that compare a fixture path against one the editor
+--- produced then fail while the code under test is correct. Resolving once,
+--- here, keeps every path in this suite in the same spelling.
 local scratch_root = (vim.fn.has("win32") == 1 and vim.env.TEMP or "/tmp") .. "/filetree-refs-test"
+do
+  local uv = vim.uv or vim.loop
+  vim.fn.mkdir(scratch_root, "p")
+  local real = uv.fs_realpath(scratch_root)
+  if real then scratch_root = (real:gsub("\\", "/")) end
+end
 
 local passed, failed = 0, 0
 local function check(name, ok, detail)
