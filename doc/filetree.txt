@@ -1268,7 +1268,11 @@ When something links to the file being deleted, the plain yes/no becomes a
 chooser — Delete + remove refs (blanks the dangling links to `REF!`),
 Inspect first (pick which ones), Delete, keep refs, Cancel. Undoing such a
 delete with `U` restores the `REF!` markers along with the file. See
-References.
+References. For a large batch, the reference rewrite can still be in flight
+when `U` fires — undo does not wait for it. `U` still restores the file
+immediately; if the rewrite finishes after that, a warning names how many
+references it touched and points at `:Filetree refs undo` to revert those
+separately.
 
 `:Filetree trash dry-run` covers that reference rewrite too, not just the
 delete: it reports what *would* be marked and writes nothing. It is the one
