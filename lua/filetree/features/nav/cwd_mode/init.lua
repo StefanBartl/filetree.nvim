@@ -76,6 +76,59 @@ local bind = require("filetree.util.bind")
 ---@type FiletreeCwdModeConfig
 local _cfg = vim.deepcopy(DEFAULTS)
 
+local MODE_NAMES = { "follow", "project", "nearest", "lock", "manual", "tree_leads" }
+
+---A record with one spec per cwd mode (`labels`, `icons`, `hl`, ...).
+---@param spec FiletreeOptSpec
+---@return FiletreeOptSpec
+local function per_mode(spec)
+  local fields = {}
+  for _, mode in ipairs(MODE_NAMES) do
+    fields[mode] = spec
+  end
+  return { "table", fields = fields }
+end
+
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.cwd_mode` accepts. Keep it in step with `DEFAULTS.lua`;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  mode = { "string", enum = MODE_NAMES },
+  scope = { "string", enum = { "global", "tab", "win" } },
+  project = {
+    "table",
+    fields = {
+      markers = { "table", of = "string" },
+      skip_dirs = { "table", of = "string" },
+      max_depth = { "number", min = 1 },
+      sticky = "boolean",
+    },
+  },
+  nearest = { "table", fields = { markers = { "table", of = "string" } } },
+  lock = { "table", fields = { enforce = "boolean", follow_manual_root = "boolean" } },
+  reveal_outside = { "string", enum = { "skip", "reveal" } },
+  persist = "boolean",
+  indicator = {
+    "table",
+    fields = {
+      enabled = "boolean",
+      mode = { "string", enum = { "auto", "statusline", "float" } },
+      align = { "string", enum = { "left", "center", "right" } },
+      show_path = { "string", enum = { "never", "lock", "always" } },
+      style = { "string", enum = { "text", "short", "numeric", "icon" } },
+      labels = per_mode("string"),
+      labels_short = per_mode("string"),
+      labels_numeric = per_mode("string"),
+      icons = per_mode("string"),
+      hl = per_mode("string"),
+    },
+  },
+  cycle = { "table", of = { "string", enum = MODE_NAMES } },
+  keymap_cycle = "keymap",
+  keymap_lock_here = "keymap",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

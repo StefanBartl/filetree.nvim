@@ -13,6 +13,14 @@ local _cfg = {
   enabled = false,
   keymap = "rq",
 }
+
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.lua_require_copy` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+}
 ---@type FiletreeAdapter?
 local _adapter = nil
 

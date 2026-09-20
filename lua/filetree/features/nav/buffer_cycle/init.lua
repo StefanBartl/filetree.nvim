@@ -25,6 +25,15 @@ local bind = require("filetree.util.bind")
 
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.buffer_cycle` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap_next = "keymap",
+  keymap_prev = "keymap",
+}
+
 ---@internal
 ---Run `cmd` ("bnext"/"bprevious") in the adjacent editor window without
 ---moving focus away from the tree.

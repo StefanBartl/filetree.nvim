@@ -52,6 +52,14 @@ local notify = require("filetree.util.notify").create("[filetree.sidebar_guard]"
 
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.sidebar_guard` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  winfixbuf = "boolean",
+}
+
 ---Positions where the tree is a real split that can be hijacked. "float" has no
 ---hijack path and "current" is *meant* to share its window, so both are left
 ---unpinned.

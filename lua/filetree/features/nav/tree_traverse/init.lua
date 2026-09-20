@@ -90,6 +90,16 @@ local DEFAULTS = {
   sync_cwd = false,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.tree_traverse` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap_up = "keymap",
+  keymap_down = "keymap",
+  sync_cwd = "boolean",
+}
+
 ---@param cfg FiletreeTreeTraverseConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)

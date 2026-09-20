@@ -37,6 +37,19 @@ local _cfg = {
   keymap_picker = false, -- mode "picker"   (ask; see M.open_picker)
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.pdf_open` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  default_mode = { "string", enum = { "buffer", "float", "terminal", "system", "picker" } },
+  keymap_open = "keymap",
+  keymap_text = "keymap",
+  keymap_system = "keymap",
+  keymap_terminal = "keymap",
+  keymap_picker = "keymap",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

@@ -34,6 +34,17 @@ local _cfg = {
   dir_async = true, -- use du for dirs (async; may be slow on large trees)
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.size_info` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  show_files = "boolean",
+  show_dirs = "boolean",
+  hl_group = "string",
+  dir_async = "boolean",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

@@ -43,6 +43,12 @@ local au = require("filetree.util.autocmd")
 
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.no_name_guard` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {}
+
 ---@type integer?
 local _augroup = nil
 

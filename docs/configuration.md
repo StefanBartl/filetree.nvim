@@ -11,6 +11,15 @@ feature entirely leaves it at its default (on) with its default options.
 require("filetree").setup({ adapter = "neotree" })
 ```
 
+**Mistakes are reported, not swallowed.** `setup()` checks every option you pass
+— top-level keys, feature names, and each `features.<name>` body against that
+feature's own schema. An unknown option (`features.trash.confrim`), a value of
+the wrong type (`max_history = "50"`), one outside its range (`debounce_ms = -1`)
+or outside its allowed set (`mode = "permenant"`), and a feature body that is not
+a table at all (`features.trash = true`) each produce a warning naming the
+option — with a *did you mean* hint for a typo — and the option falls back to its
+default. The same list is in `:checkhealth filetree`.
+
 ## Full option reference
 
 The block below shows the tunable options of a representative selection with

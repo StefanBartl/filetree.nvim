@@ -21,6 +21,14 @@
 local bind = require("filetree.util.bind")
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.tree_reset` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+}
+
 local function do_reset()
   -- 1. Preview
   local _, preview = require("filetree.features").load("preview")

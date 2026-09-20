@@ -26,6 +26,15 @@ local _cfg = {
   sizes = { 30, 50, 15 },
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.window_size_cycler` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  sizes = { "table", of = { "number", min = 1 } },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

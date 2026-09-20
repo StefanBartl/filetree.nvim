@@ -23,6 +23,14 @@ local au = require("filetree.util.autocmd")
 local lib_ignore_list = require("lib.nvim.fs.ignore.list")
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.ignore_list` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  names = { "table", of = "string" },
+}
+
 ---Resolve the effective name list: user override → lib.nvim.
 ---@param user_names string[]? explicit list from config; nil = use lib.nvim's
 ---@return string[]

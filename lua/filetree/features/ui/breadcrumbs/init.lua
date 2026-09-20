@@ -32,6 +32,20 @@ local _cfg = {
   winbar_hl = "WinBar",
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.breadcrumbs` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  mode = { "string", enum = { "winbar", "float", "statusline" } },
+  separator = "string",
+  max_depth = { "number", min = 1 },
+  hl_dir = "string",
+  hl_file = "string",
+  hl_sep = "string",
+  winbar_hl = "string",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

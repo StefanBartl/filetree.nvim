@@ -46,6 +46,25 @@ local DEFAULTS = {
   icons = { family = "nerd", variant = "v1", length = "long" },
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.source_switcher` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap_next = "keymap",
+  keymap_prev = "keymap",
+  keymap_pick = "keymap",
+  sources = { "table", of = "string" },
+  icons = {
+    "table",
+    fields = {
+      family = { "string", enum = { "nerd", "codicons", "common" } },
+      variant = { "string", enum = { "v1", "v2" } },
+      length = { "string", enum = { "long", "short" } },
+    },
+  },
+}
+
 ---@type FiletreeSourceSwitcherConfig
 local _cfg = vim.deepcopy(DEFAULTS)
 ---@type FiletreeAdapter|nil

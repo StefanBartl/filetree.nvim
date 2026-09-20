@@ -38,6 +38,19 @@ local _cfg = {
   max_width = 60,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.auto_resize` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  breakpoints = {
+    "table",
+    of = { "table", fields = { cols = { "number", min = 0 }, width = { "number", min = 1 } } },
+  },
+  min_width = { "number", min = 1 },
+  max_width = { "number", min = 1 },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

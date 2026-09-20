@@ -51,6 +51,39 @@ local _cfg = {
   },
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.preview` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  mode = { "string", enum = { "buffer", "float" } },
+  highlight = "boolean",
+  cursor_debounce_ms = { "number", min = 0 },
+  keymap = "keymap",
+  keymap_open = "keymap",
+  max_lines = { "number", min = 1 },
+  max_width = { "number", min = 1 },
+  max_height = { "number", min = 1 },
+  wrap = "boolean",
+  keymap_scroll_up = "keymap",
+  keymap_scroll_down = "keymap",
+  keymap_scroll_up10 = "keymap",
+  keymap_scroll_down10 = "keymap",
+  image = {
+    "table",
+    fields = {
+      backend = {
+        "string|false",
+        enum = { "auto", "images.nvim", "snacks", "image.nvim", "system" },
+      },
+    },
+  },
+  pdf = {
+    "table",
+    fields = { backend = { "string|false", enum = { "pdfport", "system" } } },
+  },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

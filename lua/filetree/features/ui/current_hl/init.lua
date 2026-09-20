@@ -11,6 +11,18 @@ local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.current_hl` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  file_hl = "string|table",
+  parent_hl = "string|table",
+  debounce_ms = { "number", min = 0 },
+  icon = "string",
+  icon_hl = "string|table",
+}
+
 ---@type integer?
 local _augroup = nil
 

@@ -38,6 +38,19 @@ local _cfg = {
   },
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.git_status` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  debounce_ms = { "number", min = 0 },
+  show_ignored = "boolean",
+  signs = {
+    "table",
+    of = { "table", fields = { text = "string", hl = "string" } },
+  },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

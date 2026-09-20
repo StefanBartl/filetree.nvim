@@ -39,6 +39,19 @@ local _cfg = {
   debounce_ms = 80,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.live_search` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  match = { "string", enum = { "name", "path" } },
+  hl_match = "string",
+  hl_dim = "string",
+  commit_to_filter = "boolean",
+  debounce_ms = { "number", min = 0 },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 
