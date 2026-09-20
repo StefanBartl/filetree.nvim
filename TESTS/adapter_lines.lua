@@ -565,6 +565,274 @@ local function run_backend(spec)
   end, 50)
 end
 
+-- ── nvim-tree only: a live-filter prompt must never resolve to the root ────
+-- `core.get_nodes_starting_line()` bumps its returned offset by ONE for EACH
+-- of two independent, additive reasons: the root-folder label being shown,
+-- and the live filter/search prompt being active. With `root_folder_label =
+-- false` and an active live filter, that produces the exact same number
+-- (`start == 2`) as "label shown, no filter" -- so a naive `start > 1` check
+-- cannot tell the two states apart, and used to stamp the root directory node
+-- onto line 1 even though line 1 is really nvim-tree's own "[FILTER]: …"
+-- prompt, not a node. Every decorating feature that walks every rendered
+-- line (git_status/lsp_diagnostics/size_info/copy_move) would then attach
+-- the root's data to the filter-prompt line.
+local function run_nvimtree_filter_line_check()
+  print("\n== nvim-tree: the live-filter prompt line resolves to nil, not the root ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-nvimtree-filterline")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/src", "p")
+  vim.fn.writefile({ "aaa" }, work .. "/src/a.lua")
+  vim.fn.writefile({ "bbb" }, work .. "/src/b.lua")
+  vim.cmd("cd " .. vim.fn.fnameescape(work))
+
+  -- root_folder_label = false is the reported precondition -- without it,
+  -- get_nodes_starting_line's two reasons for bumping the offset don't
+  -- collide, and the pre-fix code already handled this case correctly.
+  require("nvim-tree").setup({
+    hijack_netrw = false,
+    update_focused_file = { enable = false },
+    renderer = { group_empty = true, root_folder_label = false },
+    view = { width = 40 },
+  })
+
+  local adapter = require("filetree.adapter.nvimtree")
+  require("nvim-tree.api").tree.open({ path = work })
+  vim.wait(4000, function()
+    local b = adapter.get_bufnr()
+    return b ~= nil and vim.api.nvim_buf_line_count(b) > 1
+  end, 50)
+  local bufnr = adapter.get_bufnr()
+  check("filter-line: the tree buffer exists", bufnr ~= nil, tostring(bufnr))
+  if not bufnr then return end
+
+  check(
+    "filter-line: line 0 already resolves to a real node before any filter",
+    adapter.get_node_at_line(bufnr, 0) ~= nil
+  )
+
+  -- Drive nvim-tree's OWN live filter directly -- exactly the mechanism
+  -- filter/init.lua's nvimtree_filter() uses, so this is the real trigger
+  -- path, not a synthetic one.
+  local core = require("nvim-tree.core")
+  local explorer = core.get_explorer()
+  explorer.live_filter.filter = "a"
+  explorer.live_filter:apply_filter()
+  if explorer.renderer and explorer.renderer.draw then explorer.renderer:draw() end
+  vim.wait(500, function()
+    return false
+  end, 20)
+
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  check(
+    "filter-line: line 0 is really nvim-tree's own filter prompt now",
+    (lines[1] or ""):find("FILTER", 1, true) ~= nil,
+    lines[1]
+  )
+  local resolved = adapter.get_node_at_line(bufnr, 0)
+  check(
+    "filter-line: it resolves to nil -- not the root directory node",
+    resolved == nil,
+    resolved and vim.inspect(resolved) or "nil"
+  )
+  check(
+    "filter-line: get_visible_nodes carries no phantom root entry either",
+    (function()
+      for _, n in ipairs(adapter.get_visible_nodes()) do
+        if n.line_number == 1 and n.type == "directory" and n.path == work then return false end
+      end
+      return true
+    end)()
+  )
+
+  -- And the legitimate case must still work: root label genuinely shown, no
+  -- filter -- line 0 must still resolve to the root.
+  explorer.live_filter.filter = nil
+  explorer.live_filter:apply_filter()
+  local ok_cfg, cfg = pcall(require, "nvim-tree.config")
+  if ok_cfg then cfg.g.renderer.root_folder_label = nil end
+  if explorer.renderer and explorer.renderer.draw then explorer.renderer:draw() end
+  vim.wait(300, function()
+    return false
+  end, 20)
+  local root_node = adapter.get_node_at_line(bufnr, 0)
+  check(
+    "filter-line: with the root label genuinely shown, line 0 is still the root",
+    root_node ~= nil and root_node.type == "directory",
+    root_node and vim.inspect(root_node) or "nil"
+  )
+
+  pcall(adapter.close)
+  vim.wait(500, function()
+    return false
+  end, 50)
+end
+
+-- ── neo-tree only: a clear-then-retype race must not corrupt the restore ───
+-- `filter/init.lua`'s neotree_filter() re-derives the pre-search expansion
+-- snapshot from `state.tree` whenever it looks unset -- but neo-tree's own
+-- `reset_search` nils `state.open_folders_before_search` SYNCHRONOUSLY while
+-- its re-render (`M.navigate`) is debounced ~100ms. A clear immediately
+-- followed by a new query used to land inside that window and re-capture the
+-- baseline from a stale/still-filtered tree instead of the true pre-search
+-- state, so the eventual restore reopened only what the search had happened
+-- to still show, silently dropping whatever else the user had expanded
+-- before searching at all.
+local function run_neotree_filter_race_check()
+  print("\n== neo-tree: a clear-then-retype race must not corrupt the restore ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-filterrace")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/dirA", "p")
+  vim.fn.mkdir(work .. "/dirB", "p")
+  vim.fn.writefile({ "aaa" }, work .. "/dirA/xray.lua")
+  vim.fn.writefile({ "bbb" }, work .. "/dirB/yankee.lua")
+  vim.cmd("cd " .. vim.fn.fnameescape(work))
+
+  require("filetree").setup({
+    adapter = "neotree",
+    features = { filter = { enabled = true } },
+  })
+
+  local adapter = require("filetree.adapter.neotree")
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  -- A prior run_backend() pass left the tree open on a DIFFERENT, already
+  -- multi-line project -- a bare line-count wait would pass on that stale
+  -- buffer before the navigate to `work` ever re-renders. Wait for this
+  -- fixture's own marker instead.
+  vim.wait(4000, function()
+    local b = adapter.get_bufnr()
+    if not b then return false end
+    local text = table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n")
+    return text:find("dirA", 1, true) ~= nil and text:find("dirB", 1, true) ~= nil
+  end, 50)
+  local bufnr = adapter.get_bufnr()
+  check("filter-race: the tree buffer exists", bufnr ~= nil, tostring(bufnr))
+  if not bufnr then return end
+
+  local mgr = require("neo-tree.sources.manager")
+  local renderer = require("neo-tree.ui.renderer")
+  local state = mgr.get_state("filesystem")
+
+  -- neo-tree node ids are native paths (backslashes on Windows), not the
+  -- forward-slash form `work` is built from -- resolve them from what the
+  -- adapter actually rendered instead of hand-building candidate strings.
+  local function find_dir_path(name)
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    for i = 0, #lines - 1 do
+      local n = adapter.get_node_at_line(bufnr, i)
+      if n and n.type == "directory" and n.name == name then return n.path end
+    end
+    return nil
+  end
+
+  local dirA_native, dirB_native = find_dir_path("dirA"), find_dir_path("dirB")
+  check(
+    "filter-race: both dirs were found in the rendered tree",
+    dirA_native and dirB_native ~= nil
+  )
+  if not (dirA_native and dirB_native) then return end
+
+  -- Expand both dirs before any search -- this is the baseline the whole
+  -- race is about preserving.
+  for _, p in ipairs({ dirA_native, dirB_native }) do
+    local node = state.tree:get_node(p)
+    if node then node:expand() end
+  end
+  renderer.redraw(state)
+  vim.wait(300, function()
+    return false
+  end, 20)
+
+  local function expanded_set()
+    local set = {}
+    for _, id in ipairs(renderer.get_expanded_nodes(state.tree)) do
+      set[slash(id)] = true
+    end
+    return set
+  end
+  local dirA, dirB = slash(dirA_native), slash(dirB_native)
+
+  local before = expanded_set()
+  check(
+    "filter-race: both dirs are genuinely expanded before searching",
+    before[dirA] and before[dirB],
+    vim.inspect(before)
+  )
+
+  local filter = require("filetree.features.search.filter")
+
+  -- Drive the actual race. `apply("xray")` captures the true, uncorrupted
+  -- baseline (both dirs, since nothing has narrowed the tree yet). Real
+  -- neo-tree narrows `state.tree` for a search asynchronously (a live fs
+  -- scan, ~300-400ms even for two tiny dirs) -- waiting for that would make
+  -- this check both slow and timing-flaky across machines. Collapsing dirB
+  -- by hand right after the capture reproduces the exact precondition the
+  -- bug depended on (the tree looking narrower than the true baseline at the
+  -- moment of the next capture) deterministically, without the wait.
+  filter.apply("xray")
+  local node_b = state.tree:get_node(dirB_native)
+  if node_b then node_b:collapse() end
+  filter.apply("")
+  filter.apply("yankee")
+  filter.apply("")
+
+  -- Let neo-tree's debounced navigate (and this fix's own 150ms deferred
+  -- release) actually settle before reading the result.
+  vim.wait(1000, function()
+    return false
+  end, 50)
+
+  local after = expanded_set()
+  check(
+    "filter-race: dirA survives the race and is still expanded after the final clear",
+    after[dirA] == true,
+    vim.inspect(after)
+  )
+  check(
+    "filter-race: dirB ALSO survives -- the corrupted-capture bug would have "
+      .. "dropped it (only what the intermediate 'xray' filter still showed "
+      .. "would have been re-captured)",
+    after[dirB] == true,
+    vim.inspect(after)
+  )
+
+  -- The fix must not leak the snapshot forever either: collapse dirB, start a
+  -- genuinely new, independent filter session, and confirm a clear restores
+  -- the CURRENT state (dirA open, dirB collapsed) rather than the stale one
+  -- the race above captured.
+  local nodeB = state.tree:get_node(dirB_native)
+  if nodeB then nodeB:collapse() end
+  renderer.redraw(state)
+  vim.wait(300, function()
+    return false
+  end, 20)
+
+  filter.apply("xray")
+  vim.wait(300, function()
+    return false
+  end, 20)
+  filter.apply("")
+  vim.wait(1000, function()
+    return false
+  end, 50)
+
+  local settled = expanded_set()
+  check(
+    "filter-race: the snapshot does not stick forever -- a later, unrelated "
+      .. "session restores the CURRENT state (dirB stays collapsed), not the "
+      .. "earlier race's",
+    settled[dirA] == true and settled[dirB] ~= true,
+    vim.inspect(settled)
+  )
+
+  filter.teardown()
+  pcall(adapter.close)
+  vim.wait(500, function()
+    return false
+  end, 50)
+end
+
 -- ── Run ──────────────────────────────────────────────────────────────────────
 
 local wanted = vim.env.FILETREE_ADAPTER_LINES
@@ -588,6 +856,7 @@ if has_neotree and has_nui and want("neotree") then
       require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
     end,
   })
+  run_neotree_filter_race_check()
   ran = ran + 1
 else
   print("\nneo-tree: not installed (or excluded) -- skipping that pass.")
@@ -606,6 +875,7 @@ if has_nvimtree and want("nvimtree") then
       require("nvim-tree.api").tree.open({ path = work })
     end,
   })
+  run_nvimtree_filter_line_check()
   ran = ran + 1
 else
   print("\nnvim-tree: not installed (or excluded) -- skipping that pass.")
