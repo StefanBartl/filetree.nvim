@@ -211,7 +211,9 @@ local DEFAULTS = {
 M.SCHEMA = {
   keymap = "keymap",
   show_lines = "boolean",
-  max_lines_size = { "number", min = 1 },
+  -- The line count is read synchronously on the main loop, so it is capped: a
+  -- typo of a few zeros must not freeze Neovim on a large file.
+  max_lines_size = { "number", min = 1, max = 256 * 1024 * 1024 },
   max_entries = { "number", min = 1 },
 }
 

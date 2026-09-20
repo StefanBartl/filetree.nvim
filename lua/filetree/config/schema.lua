@@ -20,7 +20,8 @@
 ---                       one Lua type; `|` unites several, and the token
 ---                       `false` matches the literal `false`:
 ---                       "string|false" = a string, or `false` to switch off
----   "keymap"            alias for "string|false"
+---   "keymap"            a key, a list of keys, or `false` (unmapped) -- what
+---                       `util.bind` hands to lib.nvim's keymap registry
 ---   { "number", min = 0, max = 10 }
 ---                       inclusive bounds; NaN and +-inf never pass
 ---   { "string", enum = { "a", "b" } }
@@ -88,7 +89,6 @@ local parsed_cache = {}
 ---@param union string
 ---@return FiletreeParsedSpec
 local function parse_union(union)
-  if union == "keymap" then union = "string|false" end
   local hit = parsed_cache[union]
   if hit then return hit end
   local types, is_false, labels = {}, false, {}
@@ -124,8 +124,34 @@ end
 ---@return any
 local function check_value(value, spec, path, issues)
   local t = type(spec) == "table" and spec or { spec }
-  local p = parse_union(t[1])
   local vt = type(value)
+
+  -- `util.bind` passes every keymap field to lib.nvim's keymap registry, which
+  -- takes a key, a list of keys, or `false`. A plain "string|false" union would
+  -- refuse the list form that already works.
+  if t[1] == "keymap" then
+    if value == false or vt == "string" then return value end
+    if vt == "table" and (vim.islist or vim.tbl_islist)(value) then
+      for i, lhs in ipairs(value) do
+        if type(lhs) ~= "string" then
+          issues[#issues + 1] = ("option '%s.%d' must be a string, got %s -- using the default"):format(
+            path,
+            i,
+            describe_got(lhs)
+          )
+          return nil
+        end
+      end
+      return vim.list_slice(value)
+    end
+    issues[#issues + 1] = ("option '%s' must be a string, a list of strings or false, got %s -- using the default"):format(
+      path,
+      describe_got(value)
+    )
+    return nil
+  end
+
+  local p = parse_union(t[1])
 
   local matches = p.types[vt] or (value == false and p.is_false)
   if not matches then
