@@ -322,21 +322,21 @@ Exercises: the `vim.ui.select` fallback, the telescope/fzf cascade.
 
 To enable these, uncomment the corresponding blocks in `minimal_neotree.lua`.
 
-**I.1 — keymap remap (`keymaps = { ["gs"] = "<leader>gs" }`):**
+#### I.1 — keymap remap (`keymaps = { ["gs"] = "<leader>gs" }`):
 
 | # | Test | Expected |
 |---|------|----------|
 | I.1 | Press `gs` in the tree | No live search — the key was remapped |
 | I.2 | Press `<leader>gs` in the tree | Live search opens |
 
-**I.2 — keymap disable (`keymaps = { ["I"] = false }`):**
+#### I.2 — keymap disable (`keymaps = { ["I"] = false }`):
 
 | # | Test | Expected |
 |---|------|----------|
 | I.3 | Press `I` in the tree | Nothing happens (no node_info float) |
 | I.4 | `:Filetree info` | The float opens — the command still works |
 
-**I.3 — command rename (`command = { name = "Ft", aliases = { "Filetree" } }`):**
+#### I.3 — command rename (`command = { name = "Ft", aliases = { "Filetree" } }`):
 
 | # | Test | Expected |
 |---|------|----------|
@@ -344,7 +344,7 @@ To enable these, uncomment the corresponding blocks in `minimal_neotree.lua`.
 | I.6 | `:Filetree marks show` | Works too (alias) |
 | I.7 | Tab completion on `:Ft<Tab>` | Subcommands are offered |
 
-**I.4 — autocmd disable (`autocmds = { auto_reveal = false }`):**
+#### I.4 — autocmd disable (`autocmds = { auto_reveal = false }`):
 
 | # | Test | Expected |
 |---|------|----------|
@@ -355,7 +355,7 @@ To enable these, uncomment the corresponding blocks in `minimal_neotree.lua`.
 
 ### J. ignore_list + the `:Ft` alias
 
-**J.1 — ignore_list default (no config entry needed, on by default):**
+#### J.1 — ignore_list default (no config entry needed, on by default):
 
 | # | Test | Expected |
 |---|------|----------|
@@ -363,19 +363,19 @@ To enable these, uncomment the corresponding blocks in `minimal_neotree.lua`.
 | J.2 | Press `H` in the tree | Every hidden item (including `.git`) is shown |
 | J.3 | Press `H` again | Hidden again |
 
-**J.2 — ignore_list off (uncomment `ignore_list = false` in minimal_neotree.lua):**
+#### J.2 — ignore_list off (uncomment `ignore_list = false` in minimal_neotree.lua):
 
 | # | Test | Expected |
 |---|------|----------|
 | J.4 | Open the tree | `.git` is visible |
 
-**J.3 — ignore_list with a custom list (`ignore_list = { ".git", "node_modules" }`):**
+#### J.3 — ignore_list with a custom list (`ignore_list = { ".git", "node_modules" }`):
 
 | # | Test | Expected |
 |---|------|----------|
 | J.5 | Open the tree | Only `.git` and `node_modules` are hidden; other folders (e.g. `build`) are visible |
 
-**J.4 — the `:Ft` alias (always on, needs no config):**
+#### J.4 — the `:Ft` alias (always on, needs no config):
 
 | # | Test | Expected |
 |---|------|----------|
