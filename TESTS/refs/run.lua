@@ -1160,6 +1160,171 @@ local function run_delete_undo_refs_check()
   apply.reset()
 end
 
+-- ── Delete + immediate undo, while the refs rewrite is still chunking ──────
+-- `apply.run`'s chunked path (more than APPLY_CHUNK_SIZE=8 distinct
+-- referencing files) does its first chunk synchronously, then yields via
+-- `vim.schedule` before the rest -- and `attach_refs` only runs once every
+-- chunk has landed. Nothing gates `U` while that's in flight: pressing it
+-- during the yield used to remove the trash-history entry before
+-- `attach_refs` ever got a chance to attach the rewrite's undo token to it,
+-- silently orphaning the whole rewrite from `U`/`<leader>th` (still reachable
+-- via the unrelated `:Filetree refs undo`, but with no indication that was
+-- necessary). `mark_refs_pending`/the `_pending` tracking in trash/undo.lua
+-- exists to catch exactly this. This drives the real race, not a description
+-- of it: it calls `apply.run` the same way trash/init.lua's
+-- `trash_then_cleanup` does (a callback, so >8 files takes the chunked
+-- path), and restores mid-chunk before any `vim.wait`/`vim.schedule` tick has
+-- had a chance to run.
+local function run_delete_undo_refs_chunked_race_check()
+  print("\n== delete + undo: race against a chunked (>8 file) refs rewrite ==")
+
+  local work = scratch_root .. "/delete_undo_chunked_race"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+
+  local victim = work .. "/shared.md"
+  vim.fn.writefile({ "# Shared" }, victim)
+  -- 10 distinct referencing files: > APPLY_CHUNK_SIZE (8), so apply.run must
+  -- take the chunked path rather than resolving everything synchronously.
+  local N = 10
+  for i = 1, N do
+    vim.fn.writefile(
+      { ("Referrer %d: [shared](./shared.md)."):format(i) },
+      string.format("%s/ref%02d.md", work, i)
+    )
+  end
+
+  local trash_undo = require("filetree.features.fileops.trash.undo")
+  apply.reset()
+
+  local found, scanned = nil, false
+  refs.for_delete({ victim }, { root = work }, function(r)
+    found = r
+    scanned = true
+  end)
+  vim.wait(2000, function()
+    return scanned
+  end, 10)
+  check(
+    "chunked race: found refs in all " .. N .. " referencing files",
+    found ~= nil and #found == N,
+    found and #found or "nil"
+  )
+
+  -- Mirrors trash/init.lua's trash_then_cleanup exactly: record the trash
+  -- history entry, mark its refs rewrite pending, THEN kick off the
+  -- (necessarily chunked) apply -- in that order, since that ordering is
+  -- itself the fix.
+  trash_undo.record(victim)
+  local said = {}
+  local real_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg, level, opts)
+    said[#said + 1] = tostring(msg)
+    return real_notify(msg, level, opts)
+  end
+
+  trash_undo.mark_refs_pending(victim)
+  local finished_applied, finished_undo_id
+  apply.run(found or {}, { label = "delete: shared.md" }, function(applied, _, undo_id)
+    finished_applied, finished_undo_id = applied, undo_id
+    trash_undo.attach_refs(victim, undo_id, applied)
+  end)
+
+  -- Still inside the race window: apply.run's first chunk ran synchronously
+  -- (8 of the 10 files), but it yielded via vim.schedule before the last 2 --
+  -- attach_refs above has NOT run yet, so the history entry's refs_undo_id is
+  -- still nil. Nothing has ticked the event loop since apply.run returned.
+  check("chunked race: the rewrite has not finished yet (still mid-chunk)", finished_undo_id == nil)
+  local before_restore = trash_undo.history()
+  check(
+    "chunked race: the history entry exists, with no token attached yet",
+    before_restore[1] ~= nil
+      and before_restore[1].original_path == victim
+      and before_restore[1].refs_undo_id == nil
+  )
+
+  -- `U`, fired right now -- this is the race.
+  local run_argv = require("lib.nvim.cross.run_argv")
+  local orig_run_blocking = run_argv.run_blocking
+  ---@diagnostic disable-next-line: duplicate-set-field
+  run_argv.run_blocking = function()
+    return true, nil -- pretend the OS-level restore succeeded; no real file to move
+  end
+  local restore_ok = trash_undo.restore_last()
+  run_argv.run_blocking = orig_run_blocking
+
+  check("chunked race: U itself reports success", restore_ok == true)
+  check(
+    "chunked race: the history entry is gone (the race actually happened)",
+    #trash_undo.history() == 0 or trash_undo.history()[1].original_path ~= victim
+  )
+  check(
+    "chunked race: restore_refs warned instead of staying silent about a nil id",
+    (function()
+      for _, m in ipairs(said) do
+        if m:find("still running", 1, true) then return true end
+      end
+      return false
+    end)(),
+    table.concat(said, " | ")
+  )
+
+  -- Let the rest of the chunked rewrite actually finish.
+  vim.wait(2000, function()
+    return finished_undo_id ~= nil
+  end, 10)
+  check("chunked race: the rewrite did eventually finish", finished_applied == N)
+  vim.notify = real_notify
+
+  check(
+    "chunked race: attach_refs warned that the finished rewrite has nowhere to attach",
+    (function()
+      for _, m in ipairs(said) do
+        if m:find("finished updating after undo", 1, true) then return true end
+      end
+      return false
+    end)(),
+    table.concat(said, " | ")
+  )
+
+  -- The orphaned token is not lost -- still reachable the generic way.
+  check(
+    "chunked race: the orphaned token is still on the refs undo stack",
+    finished_undo_id ~= nil and apply.has_token(finished_undo_id) == true
+  )
+  local restored_count = apply.undo_by_id(finished_undo_id)
+  check("chunked race: :Filetree refs undo can still revert it manually", restored_count == N)
+
+  -- attach_refs clears `_pending[victim]` unconditionally (the vim.wait above
+  -- ran it), so a brand new, unrelated delete of the same path afterward must
+  -- not inherit a stale pending mark and spuriously warn "still running" for
+  -- a rewrite that never happened this time.
+  vim.fn.writefile({ "# Shared again" }, victim)
+  trash_undo.record(victim)
+  local said2 = {}
+  vim.notify = function(msg, level, opts)
+    said2[#said2 + 1] = tostring(msg)
+    return real_notify(msg, level, opts)
+  end
+  run_argv.run_blocking = function()
+    return true, nil
+  end
+  local ok2 = trash_undo.restore_last()
+  run_argv.run_blocking = orig_run_blocking
+  vim.notify = real_notify
+  check("chunked race: a later, unrelated restore of the same path succeeds", ok2 == true)
+  for _, m in ipairs(said2) do
+    check(
+      "chunked race: ...and the stale pending mark does not leak into it",
+      not m:find("still running", 1, true),
+      m
+    )
+  end
+
+  apply.reset()
+end
+
 -- ── Cut/paste and move: reverting one op's rewrite, not "the last one" ─────
 -- `U` is trash's, but the id-scoped undo underneath it is not delete-specific:
 -- any feature that rewrites references can revert its own apply later. These
@@ -1726,6 +1891,7 @@ run_outgoing_assets_check()
 run_outgoing_assets_gate_check()
 run_outgoing_assets_independent_switch_check()
 run_delete_undo_refs_check()
+run_delete_undo_refs_chunked_race_check()
 run_cut_paste_undo_check()
 run_move_undo_check()
 run_undo_content_verification_check()

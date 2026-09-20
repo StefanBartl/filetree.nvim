@@ -391,11 +391,21 @@ local function confirm_popup(path, cb)
           -- delete just created, so `U` puts the `REF!` markers back together
           -- with the file instead of restoring a file every link still calls
           -- broken.
+          --
+          -- Marked pending BEFORE the rewrite starts, not after: above
+          -- APPLY_CHUNK_SIZE referencing files, refs.apply.run chunks the
+          -- rewrite across several event-loop ticks, and nothing stops `U`
+          -- from firing (and removing this delete's history entry) during
+          -- that yield -- without this, attach_refs below would silently
+          -- find nothing to attach the finished rewrite's undo token to.
+          -- Not marked for a permanent delete: it never gets a history entry
+          -- in the first place (see do_trash), so there is nothing to race.
+          if not is_permanent() then undo.mark_refs_pending(path) end
           refs.apply.run(
             refs_to_apply,
             { label = "delete: " .. name },
             function(applied, _, undo_id)
-              if undo_id then undo.attach_refs(path, undo_id, applied) end
+              undo.attach_refs(path, undo_id, applied)
               after_refs()
             end
           )

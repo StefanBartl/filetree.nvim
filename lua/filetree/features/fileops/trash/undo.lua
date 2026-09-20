@@ -39,6 +39,18 @@ end
 ---@type TrashEntry[]
 local _history = {}
 
+---Paths whose incoming-reference rewrite is currently in flight, from the
+---moment `M.mark_refs_pending` runs until the matching `M.attach_refs` call
+---(however long that takes -- `refs.apply.run` chunks a rewrite spanning
+---more than a handful of files across several event-loop ticks). Exists
+---solely so `M.attach_refs`/`restore_refs` can tell "this path legitimately
+---never had refs to attach" (permanent/dry-run deletes, which never call
+---`mark_refs_pending` at all) apart from "the rewrite is still running, and
+---the history entry it would have attached to might be gone by the time it
+---finishes" -- see both functions below.
+---@type table<string, true>
+local _pending = {}
+
 ---Record a successful trash operation.
 ---@param original_path string
 function M.record(original_path)
@@ -53,6 +65,19 @@ function M.record(original_path)
   if cap > 0 and #_history > cap then table.remove(_history, cap + 1) end
 end
 
+---Mark that `original_path`'s incoming-reference rewrite has started, so a
+---later `M.attach_refs` call for the same path can tell a genuine "nothing to
+---attach to" (permanent/dry-run deletes, which never call this at all) apart
+---from the race described on `M.attach_refs`.
+---
+---Call this BEFORE kicking off the (possibly multi-tick) rewrite, not after:
+---the whole point is to have already recorded "a rewrite for this path is in
+---flight" before there is any window for `U` to race it.
+---@param original_path string
+function M.mark_refs_pending(original_path)
+  _pending[original_path] = true
+end
+
 ---Link the reference rewrite a delete triggered to that delete's history
 ---entry, so restoring the file also puts the `REF!` markers back.
 ---
@@ -65,17 +90,44 @@ end
 ---Matches the newest entry for `original_path` rather than blindly taking
 ---`_history[1]`: the cascade may trash orphaned assets right after, and a
 ---mis-attached token would revert one delete's refs while restoring another's
----file. No matching entry (permanent delete, history trimmed) is a no-op.
+---file. No matching entry is usually just "permanent delete, history
+---trimmed" and a silent no-op -- but it can also mean `U` restored (and
+---removed) the entry before this rewrite finished, above `APPLY_CHUNK_SIZE`
+---files: `refs.apply.run` yields between chunks, and nothing gates `U` while
+---one is in flight, so the two can race. `_pending` (set by
+---`M.mark_refs_pending` before the rewrite started) is what tells the two
+---cases apart: only warn when the entry really did exist and really did get
+---pulled out from under this call, not for the ordinary permanent-delete
+---case where no entry was ever going to be there.
+---
+---Always call this once the rewrite settles, even when `refs_undo_id` is nil
+---(nothing was actually rewritten -- every line had changed since the scan):
+---it is what clears the pending mark either way, so that case doesn't leave
+---`original_path` stuck "pending" forever.
 ---@param original_path string
----@param refs_undo_id integer
----@param refs_count integer
+---@param refs_undo_id integer?
+---@param refs_count integer?
 function M.attach_refs(original_path, refs_undo_id, refs_count)
+  local was_pending = _pending[original_path]
+  _pending[original_path] = nil
+  if not refs_undo_id then return end
+
   for _, entry in ipairs(_history) do
     if entry.original_path == original_path then
       entry.refs_undo_id = refs_undo_id
       entry.refs_count = refs_count
       return
     end
+  end
+
+  if was_pending then
+    notify.warn(
+      string.format(
+        "%d reference(s) for the now-restored delete finished updating after undo -- "
+          .. "run :Filetree refs undo if you want to revert them too",
+        refs_count or 0
+      )
+    )
   end
 end
 
@@ -237,10 +289,27 @@ end
 ---refs undo stack: an already-reverted or trimmed-off token is reported, not
 ---silently treated as done, since those references stay broken and the user
 ---has to fix them by hand.
+---
+---A missing `refs_undo_id` usually just means the delete had no incoming refs
+---at all, nothing to say. But it can also mean the rewrite that WOULD have
+---attached one is still in flight -- `M.attach_refs` runs strictly after the
+---delete's (possibly multi-tick, for a wide fan-in) reference rewrite
+---finishes, and `U` has no reason to wait for that. `_pending` (set right
+---before that rewrite started) is what tells the two apart, so this warns
+---instead of leaving the user to discover -- with no message at all -- that
+---some of the file's links still read `REF!` after "restoring" it.
 ---@param entry TrashEntry
 local function restore_refs(entry)
   local id = entry.refs_undo_id
-  if not id then return end
+  if not id then
+    if _pending[entry.original_path] then
+      notify.warn(
+        "Reference cleanup for this delete is still running -- its links may still "
+          .. "read REF! once it finishes; run :Filetree refs undo if needed"
+      )
+    end
+    return
+  end
 
   local ok_refs, apply = pcall(require, "filetree.refs.apply")
   if not ok_refs then return end
