@@ -34,6 +34,16 @@ local _cfg = {
   keymap_mark = nil,
   keymap_paste = nil,
 }
+
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.link_create` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  keymap_mark = "keymap",
+  keymap_paste = "keymap",
+}
 ---@type FiletreeAdapter?
 local _adapter = nil
 

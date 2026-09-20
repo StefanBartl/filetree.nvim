@@ -65,6 +65,19 @@ local _cfg = {
   keep_position = true,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.open_replace` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  keymap_swap = "keymap",
+  keymap_swap_alt = "keymap",
+  close_tree = "boolean",
+  swap_close_tree = "boolean",
+  keep_position = "boolean",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

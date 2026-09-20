@@ -33,6 +33,18 @@ local _cfg = {
   keymap_badd_alt = "<S-CR>",
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.open_variants` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap_vsplit = "keymap",
+  keymap_split = "keymap",
+  keymap_tabnew = "keymap",
+  keymap_badd = "keymap",
+  keymap_badd_alt = "keymap",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

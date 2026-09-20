@@ -101,6 +101,18 @@ local _cfg = {
   prefer = "auto", -- auto | telescope | fzf | snacks | builtin
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.create_from_template` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  template_dir = "string",
+  author = "string",
+  open_after = "boolean",
+  prefer = { "string", enum = { "auto", "telescope", "fzf", "snacks", "builtin" } },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 
