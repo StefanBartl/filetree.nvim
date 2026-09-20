@@ -92,6 +92,24 @@ local _cfg = {
   keymap_history = "<leader>th",
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.trash` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  mode = { "string", enum = { "trash", "permanent" } },
+  confirm = "boolean",
+  use_safety = "boolean",
+  dry_run = "boolean",
+  max_history = { "number", min = 0 },
+  keymap = "keymap",
+  keymap_undo = "keymap",
+  keymap_history = "keymap",
+  -- Deprecated, migrated by config/init.lua's apply_legacy_refs().
+  check_markdown_refs = "boolean",
+  refs_picker_prefer = { "string", enum = { "auto", "telescope", "fzf-lua", "quickfix" } },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

@@ -18,6 +18,19 @@ local _cfg = {
   ask_clipboard = false, -- if the clipboard is non-empty, offer to paste it into the file
   notify_level = "verbose", -- "verbose" | "short" | "off" — success message verbosity
 }
+
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.smart_create` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  auto_module_annot = "boolean",
+  auto_types_template = "boolean",
+  auto_init_lua = "boolean",
+  ask_clipboard = "boolean",
+  notify_level = { "string", enum = { "verbose", "short", "off" } },
+}
 ---@type FiletreeAdapter?
 local _adapter = nil
 

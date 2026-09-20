@@ -49,6 +49,20 @@ local _cfg = {
   dry_run = false,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.rename_batch` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  confirm = "boolean",
+  use_safety = "boolean",
+  dry_run = "boolean",
+  -- Deprecated, migrated by config/init.lua's apply_legacy_refs().
+  check_markdown_refs = "boolean",
+  refs_picker_prefer = { "string", enum = { "auto", "telescope", "fzf-lua", "quickfix" } },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

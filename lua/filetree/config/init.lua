@@ -6,11 +6,7 @@
 
 local M = {}
 
--- lib.nvim is a hard dependency here, same regime as the rest of the plugin
--- (commands.lua:19 bare-requires it too, so require("filetree") cannot
--- succeed without it regardless) -- a soft pcall'd fallback would only add
--- one more unreachable path.
-local levenshtein = require("lib.lua.strings.distance").levenshtein
+local schema = require("filetree.config.schema")
 
 ---@type FiletreeConfig
 local _defaults = require("filetree.config.DEFAULTS")
@@ -121,27 +117,7 @@ local KNOWN_MENU = {
   window = true,
 }
 
----@internal
----`key` with the nearest known one as a hint when there is a plausible one
----(edit distance <= 3).
----@param key any
----@param known table<string, any>
----@param prefix string
----@return string
-local function describe_unknown(key, known, prefix)
-  local name = tostring(key)
-  local best, best_distance = nil, nil
-  for candidate in pairs(known) do
-    local d = levenshtein(name, candidate)
-    if d <= 3 and (best_distance == nil or d < best_distance) then
-      best, best_distance = candidate, d
-    end
-  end
-  if best then
-    return ("unknown option '%s%s' (did you mean '%s%s'?)"):format(prefix, name, prefix, best)
-  end
-  return ("unknown option '%s%s'"):format(prefix, name)
-end
+local describe_unknown = schema.describe_unknown
 
 ---Validate `opts` before the merge (ERR-50): an unknown top-level key or
 ---feature name is dropped with a did-you-mean hint instead of silently
@@ -151,9 +127,10 @@ end
 ---other half of that fix: it never aborts on a validation issue). Does not
 ---mutate `opts`. Recurses one level into `menu` and into the handful of
 ---`features.<name>` bodies `DEFAULTS.lua` declares centrally (see
----KNOWN_FEATURE_BODY above); every other feature's body still only gets its
----NAME checked here -- that feature module owns and validates its own option
----shape.
+---KNOWN_FEATURE_BODY above); every other feature's body is validated against
+---the `SCHEMA` that feature module exports (see `filetree.config.schema`), and
+---passed through untouched when it exports none. A body that is not a table at
+---all is dropped for every feature.
 ---@internal
 ---@param opts table
 ---@return table clean
@@ -177,9 +154,15 @@ local function sanitize(opts)
       else
         local clean_features = {}
         for fname, fval in pairs(value) do
-          if feature_registry[fname] then
+          if not feature_registry[fname] then
+            found_issues[#found_issues + 1] = describe_unknown(fname, feature_registry, "features.")
+          elseif type(fval) ~= "table" then
+            -- A boolean/string/number body would take the setup loop down at
+            -- `fcfg.enabled = true`; drop it so the feature's default applies.
+            schema.check_feature(fname, fval, found_issues)
+          else
             local body_known = KNOWN_FEATURE_BODY[fname]
-            if body_known and type(fval) == "table" then
+            if body_known then
               -- One level deep, by full dotted path -- see KNOWN_FEATURE_BODY's
               -- doc comment for why only these features get this treatment.
               local clean_body = {}
@@ -193,13 +176,10 @@ local function sanitize(opts)
               end
               clean_features[fname] = clean_body
             else
-              -- Not a centrally-known body (or not even a table -- ERR-22's
-              -- normalize() step below degrades a wrongly-typed one): pass it
-              -- through untouched, same as before.
-              clean_features[fname] = fval
+              -- Feature-owned body: validated against the feature's own SCHEMA
+              -- (or passed through when it has none).
+              clean_features[fname] = schema.check_feature(fname, fval, found_issues)
             end
-          else
-            found_issues[#found_issues + 1] = describe_unknown(fname, feature_registry, "features.")
           end
         end
         clean[key] = clean_features
@@ -364,16 +344,19 @@ local LEGACY_REFS_FEATURES = {
 
 ---Translate the deprecated per-feature reference options into `cfg.refs`.
 ---
----Only fields the user actually set are migrated (feature defaults live in the
----feature modules, not in DEFAULTS, so anything present here is a user
----choice), and an explicit `cfg.refs` setting always wins — migration fills
----in, it never overrides.
+---Only fields the user actually set are migrated, and an explicit `refs`
+---setting always wins — migration fills in, it never overrides. "Explicit"
+---means what the user's own `refs` table says (`explicit`), NOT what is in
+---`cfg.refs`: that block is already merged over `refs/DEFAULTS.lua`, so every
+---field is non-nil there and testing it would never let a migration through.
 ---@internal
 ---@param cfg FiletreeConfig
-local function apply_legacy_refs(cfg)
+---@param explicit table?  the user's own `refs` table (after sanitize), if any
+local function apply_legacy_refs(cfg, explicit)
   if type(cfg.features) ~= "table" then return end
   cfg.refs = cfg.refs or {}
-  local user_refs = cfg.refs
+  local refs = cfg.refs
+  explicit = type(explicit) == "table" and explicit or {}
   local deprecated = {}
 
   for name, spec in pairs(LEGACY_REFS_FEATURES) do
@@ -381,11 +364,11 @@ local function apply_legacy_refs(cfg)
     if type(fcfg) == "table" then
       if fcfg.check_markdown_refs == false then
         deprecated[#deprecated + 1] = name .. ".check_markdown_refs"
-        if user_refs[spec.op] == nil then user_refs[spec.op] = "off" end
+        if explicit[spec.op] == nil then refs[spec.op] = "off" end
       end
       if type(fcfg.refs_picker_prefer) == "string" then
         deprecated[#deprecated + 1] = name .. ".refs_picker_prefer"
-        if user_refs.picker == nil then user_refs.picker = fcfg.refs_picker_prefer end
+        if explicit.picker == nil then refs.picker = fcfg.refs_picker_prefer end
       end
     end
   end
@@ -395,9 +378,10 @@ local function apply_legacy_refs(cfg)
   local sr = cfg.features.smart_rename
   if type(sr) == "table" and sr.update_references == false then
     deprecated[#deprecated + 1] = "smart_rename.update_references"
-    user_refs.providers = user_refs.providers or {}
+    local explicit_providers = type(explicit.providers) == "table" and explicit.providers or {}
+    refs.providers = refs.providers or {}
     for _, provider in ipairs({ "lua", "python", "ts_js" }) do
-      if user_refs.providers[provider] == nil then user_refs.providers[provider] = false end
+      if explicit_providers[provider] == nil then refs.providers[provider] = false end
     end
   end
 
@@ -533,7 +517,7 @@ function M.setup(user)
   apply_autocmd_overrides(_active)
   apply_confirmations(_active)
   apply_ignore_list(_active)
-  apply_legacy_refs(_active)
+  apply_legacy_refs(_active, clean.refs)
 end
 
 ---Return the active configuration.

@@ -25,6 +25,16 @@ local bind = require("filetree.util.bind")
 
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.buffer_save` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  force = "boolean",
+  keymap_adjacent = "keymap",
+  keymap_node = "keymap",
+}
+
 ---@internal
 ---Save buffer `bufnr`.  Returns true on success.
 ---@param bufnr  integer
