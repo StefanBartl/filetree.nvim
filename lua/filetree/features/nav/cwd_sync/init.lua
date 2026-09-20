@@ -35,6 +35,20 @@ local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.cwd_sync` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  debounce_ms = { "number", min = 0 },
+  parent_levels = { "number", min = 0 },
+  keep_focus = "boolean",
+  change_dir = "boolean",
+  reveal = "boolean",
+  use_project_root = "boolean",
+  root_markers = { "table|false", of = "string" },
+}
+
 ---@class CwdSyncState
 ---@field last_path       string?  Last file we revealed.
 ---@field paused_until    number   Timestamp (uv.hrtime) after which sync resumes.

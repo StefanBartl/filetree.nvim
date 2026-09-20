@@ -2,17 +2,18 @@
 --- Declarative option schemas for the feature-owned config bodies (ERR-50 /
 --- ERR-22).
 ---
---- `config/init.lua`'s `sanitize()` validates top-level keys, feature names and
---- the few `features.<name>` bodies `DEFAULTS.lua` declares centrally. Every
---- other feature owns its option shape, so it also owns the description of it:
+--- `config/init.lua`'s `sanitize()` validates top-level keys and feature names.
+--- Every feature owns its option shape, so it also owns the description of it:
 --- a feature module exports `M.SCHEMA` next to its own defaults, and
 --- `check_feature()` below applies it to the body the user supplied, BEFORE the
---- feature's own `vim.tbl_deep_extend`. Keeping the schema in the module (rather
---- than a second key list in `config/`) is what stops it drifting from the code
---- that reads the options; `TESTS/config_schema.lua` fails when a module reads
---- a key its schema does not declare.
+--- feature's own merge. Keeping the schema in the module (rather than a second
+--- key list in `config/`) is what stops it drifting from the code that reads the
+--- options -- an earlier central list did drift and rejected `current_hl.icon`.
+--- `TESTS/config_schema.lua` fails when a module reads a key its schema does
+--- not declare, or when the schema rejects the module's own defaults.
 ---
---- A feature without a `SCHEMA` is passed through untouched, as before.
+--- A feature without a `SCHEMA` is passed through untouched; the test above
+--- makes that a failure for every feature in the registry.
 ---
 --- Spec forms (the values of a `SCHEMA` table):
 ---   "boolean" | "number" | "string" | "table" | "function"

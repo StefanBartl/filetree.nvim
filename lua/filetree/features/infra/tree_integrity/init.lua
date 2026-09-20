@@ -70,6 +70,14 @@ local _cfg = {
   silent = true, -- only notifier.debug(...) output, and only when healing
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.tree_integrity` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  silent = "boolean",
+}
+
 ---Original `NuiTree.set_nodes`, kept so teardown can put it back.
 ---@type function?
 local _original = nil

@@ -393,6 +393,16 @@ do
   check("line_count.is_binary_ext png", lc.is_binary_ext("png") == true)
   check("line_count.count README > 0", (lc.count(root .. "/README.md", "md") or 0) > 0)
   eq("line_count.format 1", lc.format(1), "1 line")
+  eq("line_count.MAX_BYTES is the documented 5 MiB default", lc.MAX_BYTES, 5 * 1024 * 1024)
+  eq(
+    "line_count.count: a file above the caller's max_bytes is not counted",
+    lc.count(root .. "/README.md", "md", 1),
+    nil
+  )
+  check(
+    "line_count.count: a file within the caller's max_bytes is",
+    (lc.count(root .. "/README.md", "md", 10 * 1024 * 1024) or 0) > 0
+  )
 end
 
 -- ── util.map / util.autocmd (wrappers) ────────────────────────────────────────
@@ -4304,16 +4314,16 @@ do
 end
 
 -- ── config: nested unknown key / degraded value (ERR-50 / ERR-22) ──────────
--- sanitize() recurses one level into `menu` and into the `features.<name>`
--- bodies DEFAULTS.lua declares centrally -- a typo there used to vanish into
--- the default with zero diagnostic (ERR-50). Separately, normalize_values()
+-- sanitize() recurses one level into `menu` and validates every
+-- `features.<name>` body against that feature's SCHEMA -- a typo there used to
+-- vanish into the default with zero diagnostic (ERR-50). Separately, normalize_values()
 -- degrades a handful of numeric/string fields whose only prior guard was
 -- `x or default` (catches nil, nothing else) before they reach a consumer
 -- that throws on the wrong type (ERR-22).
 do
   local config = require("filetree.config")
 
-  -- ERR-50: a typo inside a centrally-known feature body is caught by full
+  -- ERR-50: a typo inside a feature body is caught by full
   -- dotted path, and the real option keeps its default -- not silently
   -- dropped into the merged config as a dead field.
   config.setup({ features = { cwd_sync = { enabled = true, dedounce_ms = 300 } } })

@@ -61,6 +61,24 @@ local _cfg = {
   notify = true,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.path_copy` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap_pick = "keymap",
+  keymap_abs = "string|table|false", -- a string or a list of them
+  keymap_dirname = "keymap",
+  keymap_name = "keymap",
+  keymap_project_root = "keymap",
+  keymap_project_rel = "keymap",
+  keymap_buffer_rel = "keymap",
+  keymap_env_root = "keymap",
+  root_markers = { "table|false", of = "string" },
+  env_roots = { "table", of = "string" },
+  notify = "boolean",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

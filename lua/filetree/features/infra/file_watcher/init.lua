@@ -33,6 +33,16 @@ local _cfg = {
   ignore_events = {},
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.file_watcher` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  debounce_ms = { "number", min = 0 },
+  watch_recursive = "boolean",
+  ignore_events = { "table", of = "string" },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

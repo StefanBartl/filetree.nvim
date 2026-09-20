@@ -44,6 +44,19 @@ local _cfg = {
   extra_args = {},
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.grep_in_dir` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  keymap_cword = "keymap",
+  keymap_telescope = "keymap",
+  prefer = { "string", enum = { "auto", "telescope", "fzf-lua", "builtin" } },
+  hidden = "boolean",
+  extra_args = { "table", of = "string" },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

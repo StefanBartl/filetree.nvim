@@ -179,6 +179,19 @@ local DEFAULTS = {
   keymap_dirs_rel = "]F",
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.copy_file_list` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap_files_abs = "keymap",
+  keymap_files_rel = "keymap",
+  keymap_dirs_abs = "keymap",
+  keymap_dirs_rel = "keymap",
+  preview_limit = { "number", min = 0 },
+  separator = "string",
+}
+
 ---@param cfg FiletreeCopyFileListConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)

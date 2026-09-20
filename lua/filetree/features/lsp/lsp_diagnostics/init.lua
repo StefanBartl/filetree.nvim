@@ -33,6 +33,19 @@ local _cfg = {
   debounce_ms = 300,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.lsp_diagnostics` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  show_errors = "boolean",
+  show_warnings = "boolean",
+  show_hints = "boolean",
+  show_info = "boolean",
+  format = "function",
+  debounce_ms = { "number", min = 0 },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

@@ -36,6 +36,19 @@ local DEFAULTS = {
   keymap_right = "<M-r>",
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.tree_toggle` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  reveal = "boolean",
+  reveal_force_cwd = "boolean",
+  keymap_current = "keymap",
+  keymap_float = "keymap",
+  keymap_left = "keymap",
+  keymap_right = "keymap",
+}
+
 ---@type FiletreeTreeToggleConfig
 local _cfg = vim.deepcopy(DEFAULTS)
 ---@type FiletreeAdapter|nil

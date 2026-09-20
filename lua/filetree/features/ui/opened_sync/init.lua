@@ -18,6 +18,14 @@ local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.opened_sync` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  debounce_ms = { "number", min = 0 },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

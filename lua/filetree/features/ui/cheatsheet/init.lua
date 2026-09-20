@@ -33,6 +33,14 @@ local _cfg = {
   keymap = "?",
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.cheatsheet` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+}
+
 ---@type Ui.Kit.Surface|nil
 local _surf = nil
 

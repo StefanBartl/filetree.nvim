@@ -141,10 +141,11 @@ function M.info_lines(path)
   -- Line count for files
   if _cfg.show_lines ~= false and stat.type == "file" then
     local e = path:match("%.([^.]+)$") or ""
-    local count = line_count.count(path, e)
+    local limit = _cfg.max_lines_size or line_count.MAX_BYTES
+    local count = line_count.count(path, e, limit)
     if count then
       lines[#lines + 1] = "  Lines:    " .. line_count.format(count)
-    elseif stat.size > 5 * 1024 * 1024 then
+    elseif stat.size > limit then
       lines[#lines + 1] = "  Lines:    (file too large)"
     end
   end
@@ -201,6 +202,17 @@ local DEFAULTS = {
   keymap = "I",
   show_lines = true,
   max_entries = 100000, -- cap for the recursive directory scan behind Items/Size
+}
+
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.node_info` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  show_lines = "boolean",
+  max_lines_size = { "number", min = 1 },
+  max_entries = { "number", min = 1 },
 }
 
 ---@param cfg FiletreeNodeInfoConfig

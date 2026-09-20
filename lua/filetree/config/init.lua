@@ -66,42 +66,6 @@ local KNOWN_TOP = {
 ---@type string[]
 local issues = {}
 
----Sub-key sets for the `features.<name>` bodies that `DEFAULTS.lua` itself
----declares centrally (i.e. every feature listed under `DEFAULTS.features`).
----Checked one level deep, by full dotted path (`features.cwd_sync.debounce_ms`,
----not just `debounce_ms`), so a typo inside one of these does not silently
----vanish into the default the way a top-level-only check would miss it.
----
----Every *other* feature (the ~50 not listed in `DEFAULTS.features`) still
----only gets its NAME checked against the registry, same as before: its body
----shape belongs to that feature module, which this file has no way to know
----without duplicating (and inevitably drifting from) that module's own
----`@types` annotation. Extend this table when a feature's defaults move into
----`DEFAULTS.features` (see that file's header comment on which features are
----"worth surfacing centrally").
----@type table<string, table<string, boolean>>
-local KNOWN_FEATURE_BODY = {
-  layout_guard = { enabled = true, delay_ms = true },
-  no_name_guard = { enabled = true },
-  sidebar_guard = { enabled = true, winfixbuf = true },
-  cwd_sync = {
-    enabled = true,
-    debounce_ms = true,
-    parent_levels = true,
-    keep_focus = true,
-    change_dir = true,
-    reveal = true,
-    use_project_root = true,
-    root_markers = true,
-  },
-  -- cwd_mode deliberately excluded: its own DEFAULTS (cwd_mode/DEFAULTS.lua)
-  -- is a large, deeply-nested surface (indicator.labels/icons/hl, …) that the
-  -- feature module owns outright -- see that file's header. Only its NAME is
-  -- checked here, like the other feature-owned bodies.
-  current_hl = { enabled = true, file_hl = true, parent_hl = true, debounce_ms = true },
-  safety = { enabled = true, backup_dir = true, max_backups = true, dry_run = true },
-}
-
 ---Known sub-keys of the top-level `menu` table (see `DEFAULTS.lua`).
 ---@type table<string, boolean>
 local KNOWN_MENU = {
@@ -125,12 +89,10 @@ local describe_unknown = schema.describe_unknown
 ---is dropped so the built-in default applies instead of taking the whole
 ---plugin down (ERR-22 — see `filetree/init.lua`'s `M.setup`, which is the
 ---other half of that fix: it never aborts on a validation issue). Does not
----mutate `opts`. Recurses one level into `menu` and into the handful of
----`features.<name>` bodies `DEFAULTS.lua` declares centrally (see
----KNOWN_FEATURE_BODY above); every other feature's body is validated against
----the `SCHEMA` that feature module exports (see `filetree.config.schema`), and
----passed through untouched when it exports none. A body that is not a table at
----all is dropped for every feature.
+---mutate `opts`. Recurses one level into `menu`; every `features.<name>` body
+---is validated against the `SCHEMA` that feature module exports (see
+---`filetree.config.schema`) and passed through untouched when it exports none.
+---A body that is not a table at all is dropped for every feature.
 ---@internal
 ---@param opts table
 ---@return table clean
@@ -156,30 +118,12 @@ local function sanitize(opts)
         for fname, fval in pairs(value) do
           if not feature_registry[fname] then
             found_issues[#found_issues + 1] = describe_unknown(fname, feature_registry, "features.")
-          elseif type(fval) ~= "table" then
-            -- A boolean/string/number body would take the setup loop down at
-            -- `fcfg.enabled = true`; drop it so the feature's default applies.
-            schema.check_feature(fname, fval, found_issues)
           else
-            local body_known = KNOWN_FEATURE_BODY[fname]
-            if body_known then
-              -- One level deep, by full dotted path -- see KNOWN_FEATURE_BODY's
-              -- doc comment for why only these features get this treatment.
-              local clean_body = {}
-              for bkey, bval in pairs(fval) do
-                if body_known[bkey] then
-                  clean_body[bkey] = bval
-                else
-                  found_issues[#found_issues + 1] =
-                    describe_unknown(bkey, body_known, "features." .. fname .. ".")
-                end
-              end
-              clean_features[fname] = clean_body
-            else
-              -- Feature-owned body: validated against the feature's own SCHEMA
-              -- (or passed through when it has none).
-              clean_features[fname] = schema.check_feature(fname, fval, found_issues)
-            end
+            -- Validated against the feature's own SCHEMA (`filetree.config.schema`);
+            -- a body that is not a table at all is dropped, so the feature's
+            -- default applies instead of `fcfg.enabled = true` taking setup()
+            -- down on a boolean.
+            clean_features[fname] = schema.check_feature(fname, fval, found_issues)
           end
         end
         clean[key] = clean_features

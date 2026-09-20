@@ -26,6 +26,16 @@ local _cfg = {
   patch_neotree_watch = true, -- wrap neo-tree's fs_watch callbacks to swallow EPERM
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.watcher_quarantine` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  duration_ms = { "number", min = 0 },
+  silent = "boolean",
+  patch_neotree_watch = "boolean",
+}
+
 ---@class QuarantineState
 ---@field active         boolean
 ---@field until_ms       number    vim.uv.now() timestamp after which quarantine ends.

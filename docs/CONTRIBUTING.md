@@ -65,9 +65,16 @@ support, measured rather than assumed.
    [`FEATURES/`](FEATURES/README.md) which category it belongs to and why its
    default is what it is.
 3. Give it a keymap that can be remapped or disabled through the same entry.
-4. Add a spec under `TESTS/`, including at least one adapter that does *not*
+4. Export an `M.SCHEMA` from the module, next to its defaults: one entry per
+   option it reads (`"boolean"`, `{ "number", min = 0 }`, `"keymap"`, an enum
+   for a closed set — the full spec forms are in
+   [`config/schema.lua`](../lua/filetree/config/schema.lua)). `setup()` uses it
+   to report a mistyped or out-of-range option instead of letting it vanish into
+   the default, and `TESTS/config_schema.lua` fails when the module reads an
+   option the schema does not declare.
+5. Add a spec under `TESTS/`, including at least one adapter that does *not*
    support what it needs.
-5. Document it in the matching `FEATURES/` page and in
+6. Document it in the matching `FEATURES/` page and in
    [`BINDINGS.md`](BINDINGS.md).
 
 ## Tests

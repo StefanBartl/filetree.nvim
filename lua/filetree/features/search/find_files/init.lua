@@ -48,6 +48,19 @@ local _cfg = {
   hidden = false,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.find_files` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap_tree = "keymap",
+  keymap_telescope = "keymap",
+  keymap_global = "keymap",
+  prefer = { "string", enum = { "auto", "telescope", "fzf-lua", "mini.pick", "builtin" } },
+  reveal_on_open = "boolean",
+  hidden = "boolean",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

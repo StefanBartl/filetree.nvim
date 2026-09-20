@@ -122,6 +122,9 @@ local BINARY_EXTS = {
 
 local MAX_BYTES = 5 * 1024 * 1024
 
+---Default size cap for `M.count()`, in bytes.
+M.MAX_BYTES = MAX_BYTES
+
 ---Return true when the extension is a known text/source type.
 ---@param ext string|nil  Without leading dot, any case.
 ---@return boolean
@@ -144,14 +147,15 @@ end
 ---Returns nil for binary, oversized, or unreadable files.
 ---@param path string  Absolute path.
 ---@param ext  string|nil  File extension without dot.
+---@param max_bytes integer|nil  Larger files are not counted (default `M.MAX_BYTES`).
 ---@return integer|nil
-function M.count(path, ext)
+function M.count(path, ext, max_bytes)
   if not M.is_countable(ext) then return nil end
   if type(path) ~= "string" or path == "" then return nil end
 
   local stat = uv.fs_stat(path)
   if not stat or stat.type ~= "file" then return nil end
-  if stat.size > MAX_BYTES then return nil end
+  if stat.size > (max_bytes or MAX_BYTES) then return nil end
   if stat.size == 0 then return 0 end
 
   local f = io.open(path, "r")

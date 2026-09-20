@@ -11,9 +11,10 @@
 --      body, a wrongly-typed or out-of-range value and a non-table body are
 --      reported and dropped -- and a legitimate config (including the
 --      deprecated per-feature reference options) raises nothing.
---   3. Drift: every feature module exports a SCHEMA (bar the ones validated
---      centrally), the SCHEMA accepts the module's own defaults, and the module
---      reads no option its SCHEMA does not declare.
+--   3. Drift: every feature module exports a SCHEMA, the SCHEMA accepts the
+--      module's own defaults (in the module, a sibling DEFAULTS.lua, or
+--      `config/DEFAULTS.lua`), and the module reads no option its SCHEMA does
+--      not declare.
 --
 -- Usage (from the repo root):
 --   nvim --clean --headless -u NONE -l TESTS/config_schema.lua
@@ -198,6 +199,44 @@ do
     "option 'features.layout_guard' must be a table"
   )
 
+  config.setup({ features = { cwd_mode = { indicator = { labels = { lcok = "X" } } } } })
+  has(
+    "cwd_mode: a typo'd mode name inside indicator.labels is reported",
+    joined(),
+    "features.cwd_mode.indicator.labels.lcok"
+  )
+  config.setup({ features = { cwd_mode = { mode = "prject" } } })
+  has("cwd_mode: an unknown mode is reported", joined(), [[one of "follow", "project"]])
+  config.setup({
+    features = {
+      cwd_mode = { cycle = { "follow", "lock" }, scope = "tab", indicator = { style = "short" } },
+    },
+  })
+  eq("cwd_mode: a legitimate configuration raises no issue", config.issues(), {})
+
+  -- Regression: the six bodies `config/DEFAULTS.lua` declares centrally used to
+  -- be checked against a second key list that had drifted -- `current_hl.icon`,
+  -- a documented option the module reads, was rejected as unknown and dropped.
+  config.setup({ features = { current_hl = { enabled = true, icon = "▸", icon_hl = "Special" } } })
+  eq("current_hl.icon / icon_hl are accepted", config.issues(), {})
+  eq("current_hl.icon reaches the active config", config.get().features.current_hl.icon, "▸")
+  config.setup({ features = { cwd_sync = { debounce_ms = -1 }, safety = { max_backups = "many" } } })
+  has(
+    "centrally-declared body: out-of-range value reported",
+    joined(),
+    "features.cwd_sync.debounce_ms' must be a number >= 0"
+  )
+  has(
+    "centrally-declared body: wrong type reported",
+    joined(),
+    "option 'features.safety.max_backups' must be a number"
+  )
+  eq(
+    "centrally-declared body: rejected value falls back to the DEFAULTS.lua one",
+    config.get().features.cwd_sync.debounce_ms,
+    150
+  )
+
   -- A legitimate, generous configuration raises nothing.
   config.setup({
     features = {
@@ -278,40 +317,29 @@ end
 
 -- ── 3. drift ─────────────────────────────────────────────────────────────────
 
----Features whose body is validated centrally (KNOWN_FEATURE_BODY in
----config/init.lua) and therefore export no SCHEMA.
-local CENTRAL = {
-  cwd_sync = true,
-  current_hl = true,
-  safety = true,
-  layout_guard = true,
-  no_name_guard = true,
-  sidebar_guard = true,
-}
-
----Categories (as in `filetree.features`) whose modules have no SCHEMA yet.
----Empty means done.
-local UNMIGRATED = {
-  nav = true,
-  ui = true,
-  search = true,
-  paths = true,
-  git = true,
-  org = true,
-  system = true,
-  lsp = true,
-  compare = true,
-  infra = true,
-}
-
 ---Identifiers a module legitimately reads off something named `cfg`/`config`
 ---that is not its option table.
 local NOT_OPTIONS = {
   breadcrumbs = { relative = true }, -- a window's `relative`, not an option
-  -- Bound through `bind.bind(..., { cfg = keymaps })`: `copy` & co. are the
-  -- fields of the nested `keymaps` record, declared under it.
-  copy_move = { copy = true, cut = true, paste = true, show = true, clear = true },
+  layout_guard = { relative = true }, -- likewise
 }
+
+---Every option name a SCHEMA declares, at any depth: a module often reads a
+---nested record through a local (`ind.hl`, `keymaps.copy`), which a scan of
+---identifiers cannot tell from a top-level read.
+---@param fields table
+---@param out table<string, boolean>
+---@return table<string, boolean>
+local function flatten(fields, out)
+  for key, spec in pairs(fields) do
+    out[key] = true
+    if type(spec) == "table" then
+      if spec.fields then flatten(spec.fields, out) end
+      if type(spec.of) == "table" and spec.of.fields then flatten(spec.of.fields, out) end
+    end
+  end
+  return out
+end
 
 local function read_file(path)
   local f = assert(io.open(path, "rb"))
@@ -338,20 +366,20 @@ for name, info in pairs(registry.FEATURES) do
   local src = read_file(path)
   local mod = require(info.mod)
 
-  if CENTRAL[name] then
-    check(name .. ": validated centrally, exports no SCHEMA", mod.SCHEMA == nil)
-  elseif UNMIGRATED[info.category] then
-    check(name .. ": (not migrated yet)", true)
-  else
+  do
     check(name .. ": exports a SCHEMA", type(mod.SCHEMA) == "table")
     if type(mod.SCHEMA) == "table" then
-      local declared =
-        vim.tbl_extend("force", { enabled = true, autocmds_enabled = true }, mod.SCHEMA)
+      local declared = flatten(mod.SCHEMA, { enabled = true, autocmds_enabled = true })
 
-      -- The SCHEMA accepts the module's own defaults.
-      for _, literal in ipairs({ "_cfg", "DEFAULTS" }) do
-        local defaults = literal_defaults(src, literal)
-        if defaults then
+      -- The SCHEMA accepts the module's own defaults: a literal in the module,
+      -- or a sibling DEFAULTS.lua.
+      local sources =
+        { _cfg = literal_defaults(src, "_cfg"), DEFAULTS = literal_defaults(src, "DEFAULTS") }
+      sources["config/DEFAULTS.lua"] = require("filetree.config.DEFAULTS").features[name]
+      local ok_file, from_file = pcall(require, info.mod .. ".DEFAULTS")
+      if ok_file then sources["DEFAULTS.lua"] = from_file end
+      for literal, defaults in pairs(sources) do
+        do
           local issues = {}
           schema.check(defaults, mod.SCHEMA, "features." .. name, issues)
           check(

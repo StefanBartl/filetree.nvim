@@ -17,6 +17,14 @@ local bind = require("filetree.util.bind")
 
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.reveal_alt` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+}
+
 ---@param config FiletreeRevealAltConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)

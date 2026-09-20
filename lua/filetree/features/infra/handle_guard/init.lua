@@ -25,6 +25,12 @@ local watch = require("lib.nvim.neotree.watch")
 
 local M = {}
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.handle_guard` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {}
+
 ---Close the file-watcher handle(s) on `paths` (and every watched subpath) so a
 ---mutation there is not blocked by an open handle. Safe to call always: a no-op
 ---when the feature is off / not installed (see `M.installed`).

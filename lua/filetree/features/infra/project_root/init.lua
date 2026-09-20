@@ -42,6 +42,17 @@ local _cfg = {
   max_cache_entries = 1000,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.project_root` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  markers = { "table", of = "string" },
+  fallback = { "string", enum = { "cwd", "parent" } },
+  cache = "boolean",
+  max_cache_entries = { "number", min = 1 },
+}
+
 -- ── Cache ─────────────────────────────────────────────────────────────────────
 -- A directory's project root essentially never changes within a session, so
 -- every directory visited on a walk is cached, not just the query directory

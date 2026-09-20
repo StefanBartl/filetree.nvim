@@ -35,6 +35,14 @@ local _cfg = {
   keymap = "<RightMouse>",
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.context_menu` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+}
+
 ---@type boolean
 local _warned_missing = false
 

@@ -68,6 +68,17 @@ local _cfg = {
   sync_on_enter = true,
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.auto_reveal` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  debounce_ms = { "number", min = 0 },
+  ignore_ft = { "table", of = "string" },
+  only_if_open = "boolean",
+  sync_on_enter = "boolean",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

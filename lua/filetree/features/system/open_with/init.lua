@@ -34,6 +34,26 @@ local _cfg = {
   apps = {},
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.open_with` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  keymap = "keymap",
+  apps = {
+    "table",
+    of = {
+      "table",
+      fields = {
+        name = "string",
+        cmd = "string",
+        args = { "table", of = "string" },
+        keymap = "keymap",
+      },
+    },
+  },
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 

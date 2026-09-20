@@ -33,6 +33,23 @@ local _cfg = {
   keymap_prev = "[M",
 }
 
+---Option schema (see `filetree.config.schema`): exactly what
+---`features.marks` accepts. Keep it in step with the keys this module reads;
+---`TESTS/config_schema.lua` fails when it drifts.
+---@type FiletreeSchema
+M.SCHEMA = {
+  indicator = "string",
+  hl_group = "string",
+  keymap = "keymap",
+  keymap_all = "keymap",
+  keymap_unmark_all = "keymap",
+  keymap_clear = "keymap",
+  keymap_show = "keymap",
+  keymap_goto = "keymap",
+  keymap_next = "keymap",
+  keymap_prev = "keymap",
+}
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 
