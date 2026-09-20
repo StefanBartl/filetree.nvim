@@ -24,7 +24,7 @@ individual tree keys carry a `desc` so which-key shows them out of the box.
 > search** (neo-tree otherwise maps `/` to run the tree filter), so you can search
 > the cheatsheet text and page matches with `n`/`N`.
 
-**Remap filetree feature keys:**
+## Remap filetree feature keys:
 
 ```lua
 require("filetree").setup({
@@ -36,7 +36,7 @@ require("filetree").setup({
 })
 ```
 
-**Noop an adapter (neotree) built-in key:**
+## Noop an adapter (neotree) built-in key:
 
 ```lua
 require("filetree").setup({

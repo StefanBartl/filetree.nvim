@@ -5,7 +5,7 @@ Full sub-command reference for `:Filetree` (configurable name):
 
 `:Ft` works out of the box as a short alias for `:Filetree`.
 
-**Rename the command:**
+## Rename the command:
 
 ```lua
 require("filetree").setup({

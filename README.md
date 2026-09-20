@@ -31,13 +31,13 @@ of it.
 Start at [docs/README.md](docs/README.md) — what's where, and which question
 each page answers.
 
-**The Basics**
+### The Basics
 
 - [Requirements](docs/installation.md#requirements) — Neovim version, required and optional plugins.
 - [Installation](docs/installation.md) — every plugin manager.
 - [Quickstart](docs/quickstart.md) — the first thing to run after installing.
 
-**Configuration & Commands**
+### Configuration & Commands
 
 - [What you get with the defaults](docs/what-you-get.md) — the things worth knowing on day one.
 - [All options](docs/configuration.md) — every `setup()` option and its default.
@@ -45,7 +45,7 @@ each page answers.
 - [Keymaps](docs/keymaps.md) — the tree-buffer keys, and how to remap or disable one.
 - [Lua API](docs/api.md) — the public API, and how to register a custom adapter.
 
-**The Rest**
+### The Rest
 
 - [Features](docs/FEATURES/README.md) — every feature by category, the default-disabled ones, and deep dives into the core.
 - [Around it](docs/around-it.md) — how this plugin's scope differs from its siblings in the collection.
