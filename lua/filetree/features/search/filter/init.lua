@@ -45,6 +45,21 @@ local _query = ""
 -- ── Adapter-native filter ─────────────────────────────────────────────────────
 
 ---@internal
+---Pre-search expanded-folders snapshot, tracked independently of neo-tree's
+---own `state.open_folders_before_search`.
+---
+---`reset_search` nils that field synchronously but its own re-render
+---(`navigate`) is debounced ~100ms. A quick clear-then-retype inside that
+---window used to make the "capture if unset" guard below re-derive the
+---baseline from `state.tree`, which at that moment could still be showing
+---stale/filtered content rather than the true pre-search tree -- corrupting
+---what later gets restored. Owning the snapshot here means it survives a
+---`reset_search` call untouched, and is only released once a deferred check
+---confirms no new search picked it back up.
+---@type table?
+local _pre_search_folders = nil
+
+---@internal
 ---Drive neo-tree's own filter: it is `state.search_pattern` plus a refresh,
 ---which is exactly what its filter prompt does on submit. The pre-search
 ---expansion is recorded first so `reset_search` can put the tree back the way
@@ -62,15 +77,25 @@ local function neotree_filter(query)
 
     if not query or query == "" then
       fs.reset_search(state, true)
+      -- Release the snapshot only once we're sure this clear stuck -- if
+      -- another query lands before neo-tree's debounced re-render fires,
+      -- search_pattern will be set again and the release is skipped, so the
+      -- original snapshot survives for that next apply/clear round instead
+      -- of being re-derived from a not-yet-settled tree.
+      vim.defer_fn(function()
+        local ok_st, st = pcall(mgr.get_state, "filesystem")
+        if ok_st and st and not st.search_pattern then _pre_search_folders = nil end
+      end, 150)
       return true
     end
 
-    if not state.open_folders_before_search then
+    if not _pre_search_folders then
       local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
       if ok_r and state.tree and renderer.get_expanded_nodes then
-        state.open_folders_before_search = renderer.get_expanded_nodes(state.tree)
+        _pre_search_folders = renderer.get_expanded_nodes(state.tree)
       end
     end
+    state.open_folders_before_search = _pre_search_folders
     state.search_pattern = query
     mgr.refresh("filesystem")
     return true
@@ -252,6 +277,7 @@ function M.teardown()
   M.clear()
   if _surf then _surf:close() end
   _adapter = nil
+  _pre_search_folders = nil
 end
 
 return M

@@ -241,7 +241,21 @@ local function lines_map(bufnr)
     -- which IS a node (RootNode: DirectoryNode). Decorating the root the same
     -- way neo-tree does is the consistent behaviour; leaving it nil would make
     -- "the tree's own root" the one undecoratable line on one backend only.
-    if result[1] == nil and start > 1 and type(explorer.absolute_path) == "string" then
+    --
+    -- `start > 1` alone is NOT "the root label is on line 1": `start` (from
+    -- `get_nodes_starting_line` above) is bumped by TWO independent, additive
+    -- reasons -- the root label being shown, and the live filter/search prompt
+    -- being active -- so `root_folder_label = false` plus an active live
+    -- filter also produces `start == 2`, indistinguishable from "label shown,
+    -- no filter" by that number alone. In that state line 1 is really
+    -- nvim-tree's own "[FILTER]: /query/" prompt, not a node, and stamping the
+    -- root onto it made every decorating feature attach the root's data to
+    -- that prompt line instead. Ask the exact question `get_nodes_starting_line`
+    -- itself asks -- `view.is_root_folder_visible`, not a number derived from
+    -- it -- so this stays correct regardless of why `start` moved.
+    local ok_view, view = pcall(require, "nvim-tree.view")
+    local root_shown = ok_view and view.is_root_folder_visible(explorer.absolute_path)
+    if result[1] == nil and root_shown and type(explorer.absolute_path) == "string" then
       result[1] = explorer
     end
     return result
