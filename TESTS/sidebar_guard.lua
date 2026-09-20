@@ -123,11 +123,16 @@ end
 
 -- ── the source-switch lift: BEFORE clears, AFTER re-sets ────────────────────
 do
+  -- BEFORE_OPEN carries no window info, so it infers the window undergoing
+  -- the switch from whatever is focused right now -- exactly like a real
+  -- winbar click, which necessarily focuses the sidebar first.
+  vim.api.nvim_set_current_win(tree_win)
   captured["neo_tree_window_before_open"].handler()
   check(
     "BEFORE_OPEN lifts winfixbuf so neo-tree can reuse the window",
     vim.wo[tree_win].winfixbuf == false
   )
+  vim.api.nvim_set_current_win(editor_win)
 
   -- during the lift a BufWinEnter must NOT re-pin
   vim.api.nvim_exec_autocmds("BufWinEnter", { buffer = tree_buf })
@@ -233,7 +238,11 @@ do
 
   -- A source switch swaps the buffer IN the sidebar on purpose, so the
   -- redirect has to stand down for it -- otherwise `filesystem -> git_status`
-  -- would get thrown into an editor window.
+  -- would get thrown into an editor window. BEFORE_OPEN carries no window
+  -- info and infers it from whatever is currently focused, so -- matching a
+  -- real winbar click -- focus is put on `rd_tree` first (it was left on
+  -- `rd_editor` by the redirect check just above).
+  vim.api.nvim_set_current_win(rd_tree)
   captured["neo_tree_window_before_open"].handler()
   local other_source = vim.api.nvim_create_buf(false, true)
   vim.bo[other_source].filetype = "neo-tree"
@@ -311,6 +320,205 @@ do
   )
 
   guard.teardown()
+  vim.cmd("tabclose")
+end
+
+-- ── No editor window can be found OR made: the tree still goes back ────────
+-- The "alone" block above covers the case where no editor window exists but
+-- one CAN be made. This is the narrower, worse case: none exists and none can
+-- be made either (window.util.open_editor_window itself fails -- e.g. a
+-- terminal too small to split either way). An earlier version of redirect()
+-- bailed out entirely in this branch, leaving the intruding buffer sitting in
+-- the tree window while `_sidebars` still tracked it as a sidebar -- so
+-- `adapter.is_open()`/`get_bufnr()` (which trust whatever buffer currently
+-- occupies the tracked window, with no is-it-really-a-tree check) would keep
+-- reporting the tree as open, and any decoration feature refreshing on its
+-- own schedule would write tree-node extmarks into what is actually the
+-- user's real, unrelated file. The tree buffer must go back to the sidebar
+-- window regardless of whether a target could be found.
+do
+  guard.teardown()
+
+  vim.cmd("tabnew")
+  local lone_tree2 = vim.api.nvim_get_current_win()
+  local lone_buf2 = vim.api.nvim_create_buf(false, true)
+  vim.bo[lone_buf2].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(lone_tree2, lone_buf2)
+  vim.cmd("only")
+
+  guard.setup({ enabled = true }, adapter)
+  vim.wait(50, function()
+    return false
+  end)
+
+  -- Force the "nowhere to put it" branch deterministically, rather than
+  -- relying on winminwidth/winminheight tricks that vary by machine: make
+  -- open_editor_window itself report failure for the duration of this switch.
+  local window_mod = require("filetree.util.window")
+  local orig_open_editor_window = window_mod.open_editor_window
+  ---@diagnostic disable-next-line: duplicate-set-field
+  window_mod.open_editor_window = function()
+    return nil
+  end
+
+  local file_buf2 = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(file_buf2, "nowhere-to-put-me.lua")
+  vim.api.nvim_set_current_win(lone_tree2)
+  local ok_switch2 = pcall(vim.api.nvim_set_current_buf, file_buf2)
+  vim.wait(100, function()
+    return false
+  end)
+
+  window_mod.open_editor_window = orig_open_editor_window
+
+  check("no-target: the switch itself is still allowed", ok_switch2)
+  check(
+    "no-target: the tree window shows the tree buffer again, not the intruder",
+    vim.api.nvim_win_is_valid(lone_tree2) and vim.api.nvim_win_get_buf(lone_tree2) == lone_buf2,
+    "window holds buf " .. tostring(vim.api.nvim_win_get_buf(lone_tree2))
+  )
+  local visible_elsewhere = false
+  for _, w in ipairs(vim.api.nvim_list_wins()) do
+    if vim.api.nvim_win_get_buf(w) == file_buf2 then visible_elsewhere = true end
+  end
+  check(
+    "no-target: the intruder is not stuck displayed in the sidebar window",
+    not visible_elsewhere
+  )
+  check(
+    "no-target: the intruder buffer still exists (loaded, not lost)",
+    vim.api.nvim_buf_is_valid(file_buf2)
+  )
+
+  guard.teardown()
+  vim.cmd("tabclose")
+end
+
+-- ── A source switch in one tab must not disarm another tab's sidebar ───────
+-- `_lift_until` used to be a single module-level scalar: a source switch in
+-- ANY tab's sidebar (NEO_TREE_WINDOW_BEFORE_OPEN carries no window info)
+-- lifted/unpinned every tree window across every tabpage, not just the one
+-- being switched. Two tabs, each with its own tree + editor window: starting
+-- a source switch in tab A's sidebar must leave tab B's hijack protection
+-- fully armed.
+do
+  guard.teardown()
+
+  vim.cmd("tabnew")
+  local a_editor = vim.api.nvim_get_current_win()
+  vim.cmd("vsplit")
+  local a_tree = vim.api.nvim_get_current_win()
+  local a_tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[a_tree_buf].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(a_tree, a_tree_buf)
+
+  vim.cmd("tabnew")
+  local b_editor = vim.api.nvim_get_current_win()
+  vim.cmd("vsplit")
+  local b_tree = vim.api.nvim_get_current_win()
+  local b_tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[b_tree_buf].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(b_tree, b_tree_buf)
+
+  guard.setup({ enabled = true }, adapter) -- default: redirect, not hard-pin
+  vim.wait(50, function()
+    return false
+  end)
+
+  -- Tab A's sidebar starts a source switch (focus there first, matching a
+  -- real winbar click -- see the note on the block above).
+  vim.api.nvim_set_current_win(a_tree)
+  captured["neo_tree_window_before_open"].handler()
+
+  -- An UNRELATED hijack in tab B, entirely independent of tab A's switch.
+  local intruder = vim.api.nvim_create_buf(true, false)
+  vim.api.nvim_buf_set_name(intruder, "cross-tab-hijack.lua")
+  vim.api.nvim_set_current_win(b_tree)
+  local ok_switch = pcall(vim.api.nvim_set_current_buf, intruder)
+  vim.wait(100, function()
+    return false
+  end)
+
+  check("cross-tab: tab B's switch is still allowed", ok_switch)
+  check(
+    "cross-tab: tab A's source switch did not suppress tab B's redirect",
+    vim.api.nvim_win_is_valid(b_tree) and vim.api.nvim_win_get_buf(b_tree) == b_tree_buf,
+    "tab B's sidebar holds buf " .. tostring(vim.api.nvim_win_get_buf(b_tree))
+  )
+  check(
+    "cross-tab: the intruder landed in tab B's own editor window",
+    vim.api.nvim_win_is_valid(b_editor) and vim.api.nvim_win_get_buf(b_editor) == intruder
+  )
+  check(
+    "cross-tab: tab A's own windows were left alone by tab B's hijack",
+    vim.api.nvim_win_is_valid(a_editor) and vim.api.nvim_win_get_buf(a_editor) ~= intruder
+  )
+
+  -- Finish tab A's switch and confirm it re-armed correctly for tab A too --
+  -- the fix is about scoping the lift, not about disabling it.
+  captured["neo_tree_window_after_open"].handler({ position = "left", winid = a_tree })
+
+  guard.teardown()
+  vim.cmd("tabclose")
+  vim.cmd("tabclose")
+end
+
+-- ── Same cross-tab leak, hard-pin mode: AFTER_OPEN must not leave another ───
+-- ── tab's window permanently unpinned ───────────────────────────────────────
+-- With `winfixbuf = true`, BEFORE_OPEN unpins the switching tab's window and
+-- AFTER_OPEN re-pins only `args.winid` -- the one window neo-tree names. If
+-- BEFORE_OPEN had unpinned every tab's tree window (the same bug as above),
+-- every OTHER tab's window would come out of this permanently unpinned, with
+-- nothing to ever re-pin it again.
+do
+  guard.teardown()
+
+  vim.cmd("tabnew")
+  vim.cmd("vsplit")
+  local hp_a_tree = vim.api.nvim_get_current_win()
+  local hp_a_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[hp_a_buf].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(hp_a_tree, hp_a_buf)
+
+  vim.cmd("tabnew")
+  vim.cmd("vsplit")
+  local hp_b_tree = vim.api.nvim_get_current_win()
+  local hp_b_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[hp_b_buf].filetype = "neo-tree"
+  vim.api.nvim_win_set_buf(hp_b_tree, hp_b_buf)
+
+  guard.setup({ enabled = true, winfixbuf = true }, adapter)
+  vim.wait(50, function()
+    return false
+  end)
+  check("hard-pin cross-tab: both tabs start pinned", vim.wo[hp_a_tree].winfixbuf == true)
+  check(
+    "hard-pin cross-tab: ...both of them",
+    vim.wo[hp_b_tree].winfixbuf == true,
+    tostring(vim.wo[hp_b_tree].winfixbuf)
+  )
+
+  vim.api.nvim_set_current_win(hp_a_tree)
+  captured["neo_tree_window_before_open"].handler()
+  check(
+    "hard-pin cross-tab: tab B stays pinned while tab A's switch is in flight",
+    vim.wo[hp_b_tree].winfixbuf == true,
+    tostring(vim.wo[hp_b_tree].winfixbuf)
+  )
+
+  captured["neo_tree_window_after_open"].handler({ position = "left", winid = hp_a_tree })
+  check(
+    "hard-pin cross-tab: tab A re-pins after its own switch completes",
+    vim.wo[hp_a_tree].winfixbuf == true
+  )
+  check(
+    "hard-pin cross-tab: tab B was never touched, still pinned",
+    vim.wo[hp_b_tree].winfixbuf == true,
+    tostring(vim.wo[hp_b_tree].winfixbuf)
+  )
+
+  guard.teardown()
+  vim.cmd("tabclose")
   vim.cmd("tabclose")
 end
 

@@ -48,6 +48,7 @@
 
 local au = require("filetree.util.autocmd")
 local ftbuf = require("filetree.util.buffer")
+local notify = require("filetree.util.notify").create("[filetree.sidebar_guard]")
 
 local M = {}
 
@@ -63,8 +64,18 @@ local LIFT_GRACE_MS = 1500
 
 ---@type integer?
 local _augroup = nil
----@type integer  monotonic ms; the BufWinEnter re-assert is suppressed until then
-local _lift_until = 0
+---Per-window lift deadline: window -> monotonic ms until which that window's
+---BufWinEnter re-assert is suppressed.
+---
+---A single scalar here used to mean a source switch in ONE tab's sidebar
+---suppressed hijack protection for every OTHER tab's sidebar too --
+---`NEO_TREE_WINDOW_BEFORE_OPEN` carries no window info, but `tree_windows()`
+---(used to decide what to unpin/lift) spans every tabpage, so the lift it set
+---was global by construction. Keyed by window instead: the sidebar being
+---interacted with is necessarily focused when its winbar is clicked, so the
+---window captured at BEFORE_OPEN time is the one whose lift this scopes to.
+---@type table<integer, integer>
+local _lift_until = {}
 ---@type table[]  neo-tree event handlers, kept for teardown / idempotent re-setup
 local _subs = {}
 ---Windows that currently hold, or last held, a tree sidebar -> the tree buffer
@@ -132,10 +143,13 @@ end
 ---The record is what makes the redirect possible at all: once a foreign buffer
 ---has replaced the tree's, the window no longer looks like a tree window, so
 ---the only way to recognise it is to have seen it earlier.
+---
+---Each window checks its OWN lift deadline (a source switch in one tab's
+---sidebar must not stop another tab's tree from being (re-)recorded/pinned).
 local function pin_open_trees()
-  if now_ms() < _lift_until then return end
+  local t = now_ms()
   for _, w in ipairs(tree_windows()) do
-    if is_pinnable(w) then
+    if is_pinnable(w) and t >= (_lift_until[w] or 0) then
       _sidebars[w] = vim.api.nvim_win_get_buf(w)
       if _hard_pin then set_fix(w, true) end
     end
@@ -169,23 +183,26 @@ end
 ---@internal
 ---Send `bufnr` to an editor window and give the sidebar its tree back.
 ---
----Ordering matters: the tree goes back FIRST, so neo-tree's own
----`buffer_enter_event` recovery -- the one that reparents the sidebar to the
----wrong side, which is the bug this whole feature exists for -- finds nothing
----to recover by the time it looks.
+---Ordering matters: the tree goes back to `win` FIRST -- before the intruder
+---is placed anywhere -- so neo-tree's own `buffer_enter_event` recovery (the
+---one that reparents the sidebar to the wrong side, the bug this whole
+---feature exists for) finds nothing to recover by the time it looks, AND so
+---`win` is never left showing a non-tree buffer while callers still treat it
+---as the tree window. That second part is what an earlier version of this
+---function got wrong: it looked for (or tried to make) a target window
+---FIRST and bailed out, leaving the intruder sitting in `win` untouched, if
+---none could be found. `win` then kept reporting as "the tree" to anything
+---asking (`adapter.is_open()`/`get_bufnr()` trust whatever buffer currently
+---occupies the tracked window, with no is-it-really-a-tree-buffer check) --
+---so a decoration feature refreshing on its own schedule (an async git-status
+---fetch, a debounced size query) would read stale tree nodes and write their
+---extmarks into what is actually the user's own unrelated file.
 ---@param win integer     The sidebar window the buffer landed in.
 ---@param tree_buf integer
 ---@param bufnr integer   The intruding buffer.
 local function redirect(win, tree_buf, bufnr)
   _redirecting = true
   local ok = pcall(function()
-    -- Somewhere to put the intruder FIRST, before the tree goes back.
-    --
-    -- The other order loses the file: restore the sidebar, then find no editor
-    -- window and nowhere to make one, and the buffer is loaded but displayed
-    -- nowhere -- the user's `:edit` looks like it worked and shows them the
-    -- tree. Bailing out before touching anything leaves the file visible where
-    -- it landed instead, which is wrong but not lost.
     local target = editor_win_in_tab(win)
     if not target then
       -- No editor window at all (tree opened alone): make one on the side the
@@ -196,9 +213,23 @@ local function redirect(win, tree_buf, bufnr)
         if ok_open and made then target = made end
       end
     end
-    if not target or not vim.api.nvim_win_is_valid(target) then return end
 
     if vim.api.nvim_buf_is_valid(tree_buf) then vim.api.nvim_win_set_buf(win, tree_buf) end
+
+    if not target or not vim.api.nvim_win_is_valid(target) then
+      -- No editor window exists and none could be made (e.g. a terminal too
+      -- small to split either way -- rare). `win` still got its tree buffer
+      -- back above, so it stops masquerading as a normal window; `bufnr`
+      -- itself is left loaded but not shown anywhere. Worse UX in this one
+      -- narrow case than the old "leave it visible in the wrong window"
+      -- (which is why that was the original choice), but the alternative is
+      -- corrupting a real file's display with tree decorations, not just a
+      -- misplaced one -- said explicitly, since a silently vanished `:edit`
+      -- is still confusing on its own.
+      notify.warn("No editor window available for that file -- it's loaded but not shown")
+      return
+    end
+
     vim.api.nvim_win_set_buf(target, bufnr)
     vim.api.nvim_set_current_win(target)
   end)
@@ -233,12 +264,13 @@ function M.setup(config, adapter)
         vim.schedule(pin_open_trees)
         return
       end
-      if _redirecting or _hard_pin or now_ms() < _lift_until then return end
+      if _redirecting or _hard_pin then return end
 
       -- A non-tree buffer in a window we know as a sidebar: the hijack. Handled
       -- inline rather than scheduled -- a deferred fix lets neo-tree's own
       -- recovery run first, which is what reparents the sidebar.
       local win = vim.api.nvim_get_current_win()
+      if now_ms() < (_lift_until[win] or 0) then return end
       local tree_buf = _sidebars[win]
       if not tree_buf then return end
       -- The record is only as good as what it still points at. Neovim does not
@@ -274,25 +306,36 @@ function M.setup(config, adapter)
         -- swaps the buffer IN the sidebar window, so both strategies stand
         -- down for it: the pin is lifted, and the grace window keeps the
         -- redirect from treating the new source's buffer as an intruder.
-        _lift_until = now_ms() + LIFT_GRACE_MS
-        for _, w in ipairs(tree_windows()) do
-          set_fix(w, false)
-        end
+        --
+        -- The event carries no window info, so the window undergoing the
+        -- switch is inferred as whichever one is focused right now -- the
+        -- sidebar has to be focused for its own winbar to have been clicked.
+        -- Scoped to that ONE window (not every tab's tree_windows()): the
+        -- former version cleared/lifted every tree window across every tab,
+        -- so a switch in one tab's sidebar silently suppressed the OTHER
+        -- tab's hijack protection for the whole grace window too.
+        local win = vim.api.nvim_get_current_win()
+        _lift_until[win] = now_ms() + LIFT_GRACE_MS
+        set_fix(win, false)
       end,
     }
     local after = {
       event = events.NEO_TREE_WINDOW_AFTER_OPEN,
       id = "filetree_sidebar_guard_after",
       handler = function(args)
-        _lift_until = 0
-        if type(args) ~= "table" then return pin_open_trees() end
+        if type(args) ~= "table" or not args.winid then
+          -- No window info at all: nothing to scope the lift's end to, so
+          -- clear every lift rather than leave one dangling until it expires
+          -- on its own. Rare relative to the ordinary args.winid case below.
+          _lift_until = {}
+          return pin_open_trees()
+        end
+        _lift_until[args.winid] = nil
         -- Only guard a real, hijackable split; leave float/current alone.
         if args.position and not SPLIT_POSITIONS[args.position] then return end
-        if args.winid and vim.api.nvim_win_is_valid(args.winid) then
+        if vim.api.nvim_win_is_valid(args.winid) then
           _sidebars[args.winid] = vim.api.nvim_win_get_buf(args.winid)
           if _hard_pin then set_fix(args.winid, true) end
-        else
-          pin_open_trees()
         end
       end,
     }
@@ -327,7 +370,7 @@ function M.teardown()
     end
   end
   _subs = {}
-  _lift_until = 0
+  _lift_until = {}
   _redirecting = false
   _sidebars = {}
   _adapter = nil
