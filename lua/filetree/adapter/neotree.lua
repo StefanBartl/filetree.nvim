@@ -108,14 +108,23 @@ local function node_path(node)
 end
 
 ---Determine whether a node is a directory (uses node.type, falls back to a
----filesystem check when the field is absent).
+---filesystem check only when the field is absent).
+---
+---neo-tree already resolves a symlink's real type when it can: a `"link"`
+---node only keeps that type when its target could not be `uv.fs_stat`'d at
+---all -- i.e. a dangling symlink, which by definition is not a directory. The
+---same holds for `"unknown"` (its own `uv.fs_lstat` already failed). Both
+---used to fall through to the `vim.fn.isdirectory()` stat below, which was
+---always going to fail too, on a real filesystem check per rendered line for
+---every dangling link in the tree. Any *other* non-nil type is equally
+---conclusive -- only a genuinely absent field means neo-tree told us nothing.
 ---@internal
 ---@param node table
 ---@param path string
 ---@return boolean
 local function node_is_dir(node, path)
   if node.type == "directory" then return true end
-  if node.type == "file" then return false end
+  if node.type ~= nil then return false end
   return vim.fn.isdirectory(path) == 1
 end
 
