@@ -67,7 +67,7 @@ local _cfg = {
 ---@type FiletreeSchema
 M.SCHEMA = {
   keymap_pick = "keymap",
-  keymap_abs = "string|table|false", -- a string or a list of them
+  keymap_abs = "keymap",
   keymap_dirname = "keymap",
   keymap_name = "keymap",
   keymap_project_root = "keymap",

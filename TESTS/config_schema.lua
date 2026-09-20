@@ -89,7 +89,20 @@ do
   eq("keymap: a string and `false` are both accepted", clean, { k = false, s = "x" })
   clean, msg = run({ k = true }, { k = "keymap" })
   eq("keymap: `true` is rejected", clean, {})
-  has("keymap: message says what is accepted", msg, "a string or false")
+  has("keymap: message says what is accepted", msg, "a string, a list of strings or false")
+
+  -- `util.bind` hands every keymap field to lib.nvim's registry, which takes a
+  -- list of keys too; the schema must not refuse what already works.
+  clean = run({ k = { "d", "D" }, e = {} }, { k = "keymap", e = "keymap" })
+  eq("keymap: a list of keys is accepted (and copied)", clean, { k = { "d", "D" }, e = {} })
+  local list = { "a" }
+  local kept = run({ k = list }, { k = "keymap" })
+  check("keymap: the accepted list is a copy, not the caller's table", kept.k ~= list)
+  clean, msg = run({ k = { "a", 2 } }, { k = "keymap" })
+  eq("keymap: a list with a non-string entry is rejected as a whole", clean, {})
+  has("keymap: the bad entry is named", msg, "f.k.2")
+  clean = run({ k = { a = "x" } }, { k = "keymap" })
+  eq("keymap: a map (not a list) is rejected", clean, {})
 
   clean, msg = run({ n = -1 }, { n = { "number", min = 0 } })
   eq("min: out-of-range number dropped", clean, {})
@@ -236,6 +249,22 @@ do
     config.get().features.cwd_sync.debounce_ms,
     150
   )
+
+  config.setup({ features = { trash = { keymap = { "d", "D" }, keymap_undo = false } } })
+  eq("a list of keys on a keymap field raises no issue", config.issues(), {})
+  eq("...and reaches the active config", config.get().features.trash.keymap, { "d", "D" })
+  config.setup({ features = { path_copy = { keymap_abs = { "[a", "y" } } } })
+  eq("path_copy.keymap_abs keeps its list form", config.issues(), {})
+
+  -- The line count is synchronous, so its size limit is capped.
+  config.setup({ features = { node_info = { max_lines_size = 1e12 } } })
+  has(
+    "node_info.max_lines_size above the cap is reported",
+    joined(),
+    "features.node_info.max_lines_size' must be a number between 1 and"
+  )
+  config.setup({ features = { node_info = { max_lines_size = 10 * 1024 * 1024 } } })
+  eq("node_info.max_lines_size within the cap is accepted", config.issues(), {})
 
   -- A legitimate, generous configuration raises nothing.
   config.setup({
@@ -419,6 +448,29 @@ for name, info in pairs(registry.FEATURES) do
       )
     end
   end
+end
+
+-- `attach.lua` declares the keymap fields of the `?` cheatsheet a second time,
+-- outside the feature modules; a field it reads must be in that feature's SCHEMA
+-- or the schema drops the very option the cheatsheet looks up.
+do
+  local text = read_file(root .. "/lua/filetree/attach.lua")
+  local feature, checked, missing = nil, 0, {}
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    feature = line:match("^  ([%a_]+) = {$") or feature
+    local field = line:match('field = "([%w_]+)"')
+    if field and feature then
+      checked = checked + 1
+      local fields = schema.for_feature(feature)
+      if not (fields and fields[field]) then missing[#missing + 1] = feature .. "." .. field end
+    end
+  end
+  check("attach.lua SPEC: at least one field was read", checked > 0)
+  check(
+    "attach.lua SPEC: every cheatsheet field is in its feature's SCHEMA",
+    #missing == 0,
+    table.concat(missing, ", ")
+  )
 end
 
 print(("\nfiletree.nvim config_schema: %d passed, %d failed"):format(passed, failed))
