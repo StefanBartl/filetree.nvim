@@ -455,6 +455,126 @@ do
   check("extract_paths resolves via get_id", paths[2] == "E:/c/d.lua")
 end
 
+-- ── neotree adapter: node_is_dir skips the stat for a resolved type ─────────
+-- A dangling symlink's node.type stays "link": neo-tree already tried
+-- uv.fs_stat on the target and it failed, which is exactly what makes it
+-- dangling. "unknown" means its own uv.fs_lstat failed. Both used to fall
+-- through to a vim.fn.isdirectory() stat that was always going to fail too --
+-- one real filesystem call per rendered line for every dangling link in the
+-- tree. Only a genuinely absent type (neo-tree told us nothing) should still
+-- ask the filesystem.
+do
+  package.loaded["neo-tree"] = { config = {} }
+  local fake_node
+  package.loaded["neo-tree.sources.manager"] = {
+    get_state = function()
+      return {
+        tree = {
+          get_node = function()
+            return fake_node
+          end,
+        },
+      }
+    end,
+  }
+  package.loaded["filetree.adapter.neotree"] = nil
+  local nt = dofile(root .. "/lua/filetree/adapter/neotree.lua")
+
+  local real_dir = (TMP_ROOT .. "/units-nodeisdir-real"):gsub("\\", "/")
+  vim.fn.mkdir(real_dir, "p")
+  local missing = real_dir .. "/does-not-exist"
+
+  -- A dangling symlink on a real disk resolves via the fallback exactly as
+  -- correctly as via the type check -- `isdirectory()` on a nonexistent
+  -- target returns 0 either way. So the functional result alone cannot tell
+  -- the fixed code from the pre-fix one; what changed is whether that stat
+  -- runs at all. Spy on it instead of just reading the outcome.
+  local isdirectory_calls = 0
+  local orig_isdirectory = vim.fn.isdirectory
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.fn.isdirectory = function(...)
+    isdirectory_calls = isdirectory_calls + 1
+    return orig_isdirectory(...)
+  end
+
+  ---@param node table
+  ---@return string?, integer stat_calls
+  local function resolved_type(node)
+    fake_node = node
+    isdirectory_calls = 0
+    local ft = nt.get_current_node()
+    return (ft and ft.type or nil), isdirectory_calls
+  end
+
+  do
+    local ty, stats = resolved_type({ type = "link", path = missing, name = "dangling" })
+    check("node_is_dir: a dangling-symlink node (type='link') resolves to file", ty == "file")
+    check(
+      "node_is_dir: type='link' does NOT call vim.fn.isdirectory()",
+      stats == 0,
+      tostring(stats)
+    )
+  end
+  do
+    local ty, stats = resolved_type({ type = "unknown", path = missing, name = "mystery" })
+    check(
+      "node_is_dir: an 'unknown' node (its own lstat already failed) resolves to file",
+      ty == "file"
+    )
+    check(
+      "node_is_dir: type='unknown' does NOT call vim.fn.isdirectory()",
+      stats == 0,
+      tostring(stats)
+    )
+  end
+  do
+    local ty, stats = resolved_type({ type = "directory", path = real_dir, name = "d" })
+    check("node_is_dir: type='directory' still resolves to directory", ty == "directory")
+    check(
+      "node_is_dir: type='directory' does NOT call vim.fn.isdirectory()",
+      stats == 0,
+      tostring(stats)
+    )
+  end
+  do
+    local ty, stats = resolved_type({ type = "file", path = real_dir, name = "f" })
+    check("node_is_dir: type='file' still resolves to file", ty == "file")
+    check(
+      "node_is_dir: type='file' does NOT call vim.fn.isdirectory()",
+      stats == 0,
+      tostring(stats)
+    )
+  end
+  do
+    local ty, stats = resolved_type({ path = real_dir, name = "no-type-dir" })
+    check(
+      "node_is_dir: an absent type still falls back to a real filesystem check (directory)",
+      ty == "directory"
+    )
+    check(
+      "node_is_dir: an absent type DOES call vim.fn.isdirectory() -- the one case it must",
+      stats == 1,
+      tostring(stats)
+    )
+  end
+  do
+    local ty, stats = resolved_type({ path = missing, name = "no-type-file" })
+    check(
+      "node_is_dir: an absent type on a non-directory path falls back correctly (file)",
+      ty == "file"
+    )
+    check(
+      "node_is_dir: an absent type DOES call vim.fn.isdirectory() (non-dir case too)",
+      stats == 1,
+      tostring(stats)
+    )
+  end
+
+  vim.fn.isdirectory = orig_isdirectory
+  package.loaded["neo-tree.sources.manager"] = nil
+  package.loaded["filetree.adapter.neotree"] = nil
+end
+
 -- ── attach: a source-restricted feature stays out of the shared table ───────
 --
 -- The defect this pins: `inject` runs AFTER neo-tree.setup(), so it writes
