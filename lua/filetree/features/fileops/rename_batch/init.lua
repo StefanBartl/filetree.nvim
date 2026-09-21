@@ -269,9 +269,14 @@ function M.open()
   vim.api.nvim_set_option_value("swapfile", false, { buf = bufnr })
 
   local augroup = au.group("filetree_rename_batch_" .. bufnr, true)
+  -- The id of every autocmd made through the wrapper, so the BufDelete hook can
+  -- take back their records with them: the group is named after this scratch
+  -- buffer and never asked for twice, so deleting it alone left the records in
+  -- lib.nvim's registry for the rest of the session (two per batch rename).
+  local ids = {}
 
   -- BufWriteCmd fires when user does :w
-  au.acmd("BufWriteCmd", {
+  ids[#ids + 1] = au.acmd("BufWriteCmd", {
     group = augroup,
     buffer = bufnr,
     callback = function()
@@ -290,11 +295,14 @@ function M.open()
     end,
   })
 
-  au.acmd("BufDelete", {
+  ids[#ids + 1] = au.acmd("BufDelete", {
     group = augroup,
     buffer = bufnr,
     once = true,
     callback = function()
+      for _, id in ipairs(ids) do
+        au.delete(id)
+      end
       au.del_group(augroup)
     end,
   })

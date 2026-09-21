@@ -2624,14 +2624,39 @@ do
     features = { rename_batch = { enabled = true, use_safety = false } },
   })
 
+  local lib_autocmd = require("lib.nvim.bindings.autocmd")
+  local function rb_records(b)
+    return #lib_autocmd.registered({ group = "filetree_rename_batch_" .. b })
+  end
+
   ft.feature("rename_batch").open()
   local rb_buf = vim.api.nvim_get_current_buf()
+  check("rename_batch: an open session records its autocmds", rb_records(rb_buf) > 0)
   -- Lines: header, blank, then one name per node (see M.open()'s 2-line offset).
   vim.api.nvim_buf_set_lines(rb_buf, 2, 4, false, { "a2.md", "b2.md" })
   vim.cmd("write")
   vim.wait(5000, function()
     return vim.fn.filereadable(b_new) == 1
   end, 20)
+  -- The scratch buffer is deleted once the renames went through; its BufDelete
+  -- hook takes back the autocmds' records and the group. Deleting the group
+  -- alone left two records per batch rename in lib.nvim's registry for good (the
+  -- group is named after the buffer, which is never asked for twice).
+  vim.wait(2000, function()
+    return not vim.api.nvim_buf_is_valid(rb_buf)
+  end, 20)
+  eq("rename_batch: a finished session leaves no autocmd records", rb_records(rb_buf), 0)
+  check(
+    "rename_batch: ...and no augroup",
+    not pcall(vim.api.nvim_get_autocmds, { group = "filetree_rename_batch_" .. rb_buf })
+  )
+
+  -- Cancelling (:bd) is the other way out, through the same hook.
+  ft.feature("rename_batch").open()
+  local cancel_buf = vim.api.nvim_get_current_buf()
+  check("rename_batch: a second session records its autocmds", rb_records(cancel_buf) > 0)
+  vim.cmd("bdelete!")
+  eq("rename_batch: cancelling leaves no autocmd records", rb_records(cancel_buf), 0)
 
   eq("rename_batch+refs: a.md renamed", vim.fn.filereadable(a_new), 1)
   eq("rename_batch+refs: b.md renamed", vim.fn.filereadable(b_new), 1)
