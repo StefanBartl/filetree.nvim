@@ -81,7 +81,6 @@ jobs:
       # setup() failed on a real `ui.kit` load error, and every later
       # setup() call in the same nvim process then hit Lua's cached
       # "loop or previous error loading module" instead of that real one.
-      # No `ref:` pin: ui.nvim does not publish a ci-verified branch.
       - name: Checkout ui.nvim
         uses: actions/checkout@v5
         with:
