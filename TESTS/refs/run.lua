@@ -1209,8 +1209,11 @@ local function run_delete_undo_refs_chunked_race_check()
     host_platform.current = function()
       return "windows"
     end
-    trash_undo.record(path)
+    -- Restored even if `record` throws: a stuck override would make every
+    -- later spec in this process record its trash entries as Windows ones.
+    local ok, err = pcall(trash_undo.record, path)
     host_platform.current = real_current
+    if not ok then error(err, 0) end
   end
 
   local found, scanned = nil, false
