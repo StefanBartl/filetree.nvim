@@ -162,7 +162,7 @@ end
 ---@param refs FiletreeRef[]
 ---@param opts { mode: "ask"|"auto"|"off", picker?: string, title?: string, label?: string }
 ---@param done? fun(applied: integer)
-function M.confirm_and_apply(refs, opts, done)
+function M.apply_with_confirmation(refs, opts, done)
   done = done or function() end
   if #refs == 0 or opts.mode == "off" then return done(0) end
 

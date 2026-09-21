@@ -215,7 +215,7 @@ end
 ---Ask about collisions (if any), then run.
 ---@param plan FiletreeMovePlan
 ---@param scan_result FiletreeRefScanResult
-local function resolve_conflicts_and_run(plan, scan_result)
+local function run_with_conflict_check(plan, scan_result)
   local clashing = {}
   for _, op in ipairs(plan.ops) do
     if conflict.exists(op.dst) and not case_clash.is_alias(op.src, op.dst) then
@@ -321,7 +321,7 @@ function M.move(destination)
 
     ensure_dir(plan.dir, function()
       refs_handle.await(function(scan_result)
-        resolve_conflicts_and_run(plan, scan_result)
+        run_with_conflict_check(plan, scan_result)
       end)
     end)
   end

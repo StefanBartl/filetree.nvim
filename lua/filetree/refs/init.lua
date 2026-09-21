@@ -326,7 +326,7 @@ function M.handle_result(result, moves, opts, done)
     names[#names + 1] = ftpath.basename(old)
   end
 
-  ui.confirm_and_apply(resolved, {
+  ui.apply_with_confirmation(resolved, {
     mode = M.mode(opts.op or "move", opts.mode),
     picker = opts.picker or _cfg.picker,
     title = opts.title or ("References to " .. table.concat(names, ", ")),
