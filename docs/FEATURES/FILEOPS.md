@@ -45,6 +45,16 @@ a node (see [Backends](BACKENDS.md#line-resolved-decorations)): it shows on
 neo-tree and nvim-tree, and is absent on netrw, oil and mini.files. The
 staging and the paste itself work on all five either way.
 
+**Copying a symlink copies the link, not its target.** A staged symlink —
+file or directory — pastes as a new symlink pointing at the same target,
+instead of being silently dereferenced into an independent copy of whatever
+it points at. This matters most for a symlinked *directory*: without it,
+pasting one would deep-copy everything behind the link (potentially huge,
+and unboundedly recursive through a symlink cycle, since a real directory
+tree cannot have one but a naive walk following links does not know that).
+An ordinary (non-link) directory or file still copies its actual content, as
+always.
+
 - **Module:** `lua/filetree/features/fileops/copy_move/`
 - **Keymaps:** `c` (copy), `x` (cut), `p` (paste)
 - **See also:** [Move](#move) (`M`) for the one-prompt variant
@@ -189,6 +199,12 @@ part of a delete that touches files the user did not select, so a dry-run
 has even less business making it than the delete itself — and every line of
 a dry-run, down to the closing summary, reports in the conditional, so
 nothing in the output reads as though it had happened.
+
+A dangling symlink (its target no longer exists) can still be trashed —
+the existence check that gates `d` reads the dirent itself
+(`filetree.util.conflict.exists`, `fs_lstat`-aware), not just
+`filereadable`/`isdirectory`, both of which follow the link and see nothing
+through a broken one.
 
 - **Module:** `lua/filetree/features/fileops/trash/`
 - **Keymaps:** `d`, `U`, `<leader>th`
@@ -521,6 +537,10 @@ be linked into several places in a row.
 Usercmd-first, like Path Copy's format picker: no key is bound by
 default, so set `features.link_create.keymap` (or `.keymap_mark` /
 `.keymap_paste`) if you want one.
+
+A link created this way is not just another entry in the listing — see
+[Link Marker](UI.md#link-marker) for the `⇢` sign that sets it apart in the
+tree, and Node Info's `I` window for the `Link to:` / hard-link detail.
 
 - **Module:** `lua/filetree/features/fileops/link_create/`
 - **Commands:** `:Filetree link`, `:Filetree link mark [path]`, `:Filetree link paste`

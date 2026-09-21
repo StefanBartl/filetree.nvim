@@ -9,6 +9,7 @@ as default-off. The ones worth knowing on day one:
 | Auto-reveal | The tree follows the buffer you switch to |
 | Marks | `m` marks a node; copy, move, trash, diff and more act on the whole set |
 | Preview | The node under the cursor, without opening it |
+| Link marker | A `⇢` sign on a symlinked node, `⇢!` when it dangles |
 | Smart rename | Rename, and rewrite the markdown links, `require()`s and `import`s pointing at it |
 | Batch rename | The same, over a whole directory, with a preview |
 | Trash | Delete through `trash-put`/`gio`, with undo |

@@ -41,6 +41,7 @@ M.FEATURES = {
   node_info = { mod = "filetree.features.ui.node_info", category = "ui" },
   breadcrumbs = { mod = "filetree.features.ui.breadcrumbs", category = "ui" },
   size_info = { mod = "filetree.features.ui.size_info", category = "ui" },
+  link_marker = { mod = "filetree.features.ui.link_marker", category = "ui" },
   opened_sync = { mod = "filetree.features.ui.opened_sync", category = "ui" },
   cheatsheet = { mod = "filetree.features.ui.cheatsheet", category = "ui" },
   context_menu = { mod = "filetree.features.ui.context_menu", category = "ui" },

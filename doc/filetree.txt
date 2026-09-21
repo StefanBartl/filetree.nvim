@@ -1044,6 +1044,7 @@ UI
   Cheatsheet ............................................|filetree-cheatsheet|
   Context Menu ........................................|filetree-context-menu|
   Cursor Hide ..........................................|filetree-cursor-hide|
+  Link Marker ..........................................|filetree-link-marker|
   Node Info ..............................................|filetree-node-info|
   Opened-buffer Sync ...................................|filetree-opened-sync|
   Preview ..................................................|filetree-preview|
@@ -1105,6 +1106,15 @@ node (see Backends): it shows on neo-tree and nvim-tree, and is absent on
 netrw, oil and mini.files. The staging and the paste itself work on all five
 either way.
 
+Copying a symlink copies the link, not its target. A staged symlink — file
+or directory — pastes as a new symlink pointing at the same target, instead
+of being silently dereferenced into an independent copy of whatever it points
+at. This matters most for a symlinked *directory*: without it, pasting one
+would deep-copy everything behind the link (potentially huge, and unboundedly
+recursive through a symlink cycle, since a real directory tree cannot have one
+but a naive walk following links does not know that). An ordinary (non-link)
+directory or file still copies its actual content, as always.
+
 Keymaps: c x p P <C-c>
 
 Module: lua/filetree/features/fileops/copy_move/
@@ -1135,6 +1145,10 @@ it, so one marked source can be linked into several places in a row.
 Usercmd-first, like Path Copy's format picker: no key is bound by default, so
 set `features.link_create.keymap` (or `.keymap_mark` / `.keymap_paste`) if you
 want one.
+
+A link created this way is not just another entry in the listing — see Link
+Marker for the `⇢` sign that sets it apart in the tree, and Node Info's `I`
+window for the `Link to:` / hard-link detail.
 
 Config: `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all
         unset by default)
@@ -1280,6 +1294,12 @@ part of a delete that touches files the user did not select, so a dry-run has
 even less business making it than the delete itself — and every line of a
 dry-run, down to the closing summary, reports in the conditional, so nothing
 in the output reads as though it had happened.
+
+A dangling symlink (its target no longer exists) can still be trashed — the
+existence check that gates `d` reads the dirent itself
+(`filetree.util.conflict.exists`, `fs_lstat`-aware), not just
+`filereadable`/`isdirectory`, both of which follow the link and see nothing
+through a broken one.
 
 Keymaps: d U <leader>th
 
@@ -1970,12 +1990,56 @@ check.
 Module: lua/filetree/features/ui/cursor_hide/
 
 ------------------------------------------------------------------------------
+LINK MARKER                                             *filetree-link-marker*
+
+Marks a symlinked node in the tree listing so it reads differently from an
+ordinary file/directory at a glance: a small `⇢` sign after the name (`⇢!`
+for a symlink whose target could not be resolved), optionally followed by its
+target when `show_target = true`.
+
+On by default, unlike most decorators here — it costs nothing extra per
+render: it reads `is_link`/`link_to`/`link_broken` straight off data the
+neo-tree and nvim-tree adapters already hold (neo-tree's own scan already
+calls `uv.fs_readlink()` for every link it finds), not a filesystem `stat` per
+node.
+
+Hard links are not decorated here. Telling a file with more than one name
+apart from an ordinary one needs an actual `stat`, and every one of its names
+is an equal hard link — there is no single dirent to flag as *the* hard
+link. See Node Info's `I` window for that instead, on demand rather than on
+every rendered line.
+
+Backend support. Same line-resolved-decoration contract as `size_info` below:
+neo-tree and nvim-tree draw it, netrw/oil.nvim/mini.files don't. Whether a
+dangling symlink gets its own `broken` sign also depends on the backend:
+neo-tree already knows (it tried to resolve the link during its own scan);
+nvim-tree does not expose that, so there a symlink always gets the plain sign,
+working or not.
+
+Config: `opts.features.link_marker` — `show_target` (default false),
+        `target_hl` (`"Comment"`), `signs.symlink` (`{text="⇢",
+        hl="Special"}`), `signs.broken` (`{text="⇢!",
+        hl="DiagnosticError"}`)
+
+Module: lua/filetree/features/ui/link_marker/
+
+------------------------------------------------------------------------------
 NODE INFO                                                 *filetree-node-info*
 
 A float (`I`) reporting path, type, size, permission mode, and mtime for the
 node under the cursor. For a file: line count. For a directory: recursive item
 count plus aggregate size — computed on demand, not kept live, so it
 reflects the tree at the moment you press the key.
+
+A symlink's Type line says so (`file (symlink)`) and gets its own `Link to:`
+line naming the target — flagged `(broken — target missing)` when the
+target does not resolve, rather than the whole window falling back to "No stat
+info" the way it used to (a plain `stat` alone sees nothing at all through a
+dangling link). A file with more than one hard-linked name gets a `(hardlink,
+N names)` note on its Type line instead: every one of its names is an equal
+hard link, so this reads as "shares its data with N-1 other name(s)", not
+"this one IS the hard link" — there is no single dirent to single out that
+way.
 
 Keymaps: I
 

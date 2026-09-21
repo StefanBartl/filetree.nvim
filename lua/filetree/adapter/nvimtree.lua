@@ -145,6 +145,14 @@ local function to_filetree_node(node, line_number)
   local path = node.absolute_path
   if type(path) ~= "string" or path == "" then return nil end
   local is_dir = node.nodes ~= nil
+  -- `is_link`/`link_to`: plain field access, same cost class as `node.name`
+  -- above -- nvim-tree's explorer already stores these on link nodes (both
+  -- `FileLinkNode` and the directory-link case node.nodes~=nil covers), no
+  -- extra stat. Unlike neo-tree, nvim-tree's `type` stays "link" for a
+  -- resolved symlink too, not only a dangling one, so there is no free way
+  -- to tell a broken link from a working one here -- `link_broken` is left
+  -- nil (unknown) rather than guessed.
+  local is_link = node.type == "link"
   return {
     id = path,
     name = node.name or vim.fn.fnamemodify(path, ":t"),
@@ -153,6 +161,8 @@ local function to_filetree_node(node, line_number)
     depth = depth_of(node),
     line_number = line_number,
     is_expanded = is_dir and (node.open or false) or nil,
+    is_link = is_link or nil,
+    link_to = (is_link and type(node.link_to) == "string" and node.link_to) or nil,
   }
 end
 

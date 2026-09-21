@@ -101,15 +101,52 @@ end
 ---plus item counts for a directory and a line count for a file). Public so other
 ---features (e.g. the trash confirm popup) can show the same info without
 ---duplicating the formatting. Works standalone — no setup() required.
+---
+---Link-aware: `fs_lstat` (not `fs_stat`) decides the entry's own type first, so
+---a symlink is reported as such even when it dangles — `fs_stat` alone would
+---see nothing at all through a broken link and fall straight into the
+---"No stat info" case, hiding a link that does exist. A file with more than
+---one hard-linked name (`nlink > 1`) gets that noted too; every one of its
+---names is an equal hard link, so this is "shares its data with N-1 other
+---name(s)" rather than "this dirent IS the hard link" — there is no such
+---thing as a single dirent to single out. This on-demand check is the only
+---place hard links are surfaced at all: unlike the free `is_link`/`link_to`
+---the `link_marker` decoration reads off the adapter node, telling a hard
+---link apart from an ordinary file needs an actual `stat` per node, which is
+---exactly the per-render cost that feature exists to avoid.
 ---@param path string
 ---@return string[]
 function M.info_lines(path)
-  local stat = vim.uv.fs_stat(path)
-  if not stat then return { "  No stat info for:", "  " .. path } end
+  local uv = vim.uv or vim.loop
+  local lst = uv.fs_lstat(path)
+  if not lst then return { "  No stat info for:", "  " .. path } end
+
+  local is_link = lst.type == "link"
+  -- Resolved target stat when the entry is a link; nil for a dangling one.
+  local target_stat = is_link and uv.fs_stat(path) or nil
+  -- Everything below describes the link's target when it resolves, else
+  -- falls back to the link's own (l)stat — e.g. its "Size" is then the raw
+  -- link text rather than a target that was never there to measure.
+  local stat = target_stat or lst
 
   local lines = {}
   lines[#lines + 1] = "  Path:     " .. path
-  lines[#lines + 1] = "  Type:     " .. (stat.type or "unknown")
+
+  local type_str = stat.type or "unknown"
+  if is_link then
+    type_str = type_str .. " (symlink)"
+  elseif lst.nlink and lst.nlink > 1 and lst.type == "file" then
+    type_str = type_str .. string.format(" (hardlink, %d names)", lst.nlink)
+  end
+  lines[#lines + 1] = "  Type:     " .. type_str
+
+  if is_link then
+    local target = uv.fs_readlink(path)
+    local broken = target_stat == nil
+    lines[#lines + 1] = "  Link to:  "
+      .. (target or "?")
+      .. (broken and "  (broken — target missing)" or "")
+  end
 
   if stat.type == "directory" then
     -- vim.uv.fs_stat().size is only the directory entry itself (0 on Windows),

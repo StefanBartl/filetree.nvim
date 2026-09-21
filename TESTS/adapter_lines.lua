@@ -833,6 +833,93 @@ local function run_neotree_filter_race_check()
   end, 50)
 end
 
+-- ── neo-tree only: link_marker must survive neo-tree's own async re-render ──
+-- A symlink's sign, drawn as an extmark on the very first `BufEnter`-driven
+-- render, used to be silently wiped moments later: neo-tree's filesystem
+-- source scans and draws asynchronously (`fs_scan.lua`), and its own
+-- follow-up full-content redraw -- a replace, not an incremental edit --
+-- does not carry over an extmark placed on the render before it. Fixed by
+-- also subscribing to the neo-tree adapter's `on_render` bridge (see
+-- `adapter/neotree.lua`), the same mechanism `marks`' checkmarks already
+-- rely on for the identical reason. Only a REAL neo-tree open on a REAL
+-- symlink can catch this -- a stub adapter calling `_render()` once,
+-- synchronously, has no backend-initiated re-render to race against.
+local function run_neotree_link_marker_check()
+  print("\n== neo-tree: link_marker survives neo-tree's own async re-render ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-linkmarker")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "hi" }, work .. "/plain.txt")
+
+  local link_ok = (vim.uv or vim.loop).fs_symlink(work .. "/plain.txt", work .. "/a_link.txt")
+  if not link_ok then
+    print("  note no permission to create a real symlink here -- skipping")
+    return
+  end
+
+  require("filetree").setup({
+    adapter = "neotree",
+    features = { link_marker = { enabled = true } },
+  })
+
+  local adapter = require("filetree.adapter.neotree")
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  vim.wait(4000, function()
+    local b = adapter.get_bufnr()
+    if not b then return false end
+    local text = table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n")
+    return text:find("a_link.txt", 1, true) ~= nil
+  end, 50)
+
+  local bufnr = adapter.get_bufnr()
+  check("link_marker: the tree buffer exists", bufnr ~= nil, tostring(bufnr))
+  if not bufnr then return end
+
+  -- Give the async scan's own follow-up redraw time to actually happen --
+  -- reproducing it, not dodging it, is the whole point of this test.
+  vim.wait(1000, function()
+    return false
+  end, 50)
+
+  local function marker_line()
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    for i = 0, #lines - 1 do
+      local n = adapter.get_node_at_line(bufnr, i)
+      if n and n.name == "a_link.txt" then return i end
+    end
+    return nil
+  end
+
+  local line = marker_line()
+  check("link_marker: the symlinked file is in the rendered tree", line ~= nil)
+  if line then
+    -- Read the `link_marker` namespace specifically, not "any extmark on the
+    -- line" -- `size_info` et al. may also have drawn something there.
+    local ns = vim.api.nvim_get_namespaces()["filetree_link_marker"]
+    local ms = ns
+        and vim.api.nvim_buf_get_extmarks(bufnr, ns, { line, 0 }, { line, -1 }, { details = true })
+      or {}
+    local vt = ""
+    for _, m in ipairs(ms) do
+      for _, chunk in ipairs(m[4].virt_text or {}) do
+        vt = vt .. chunk[1]
+      end
+    end
+    check(
+      "link_marker: the symlink sign is still there after neo-tree's own settling redraw",
+      vt:find("⇢", 1, true) ~= nil,
+      vt
+    )
+  end
+
+  require("filetree.features.ui.link_marker").teardown()
+  pcall(adapter.close)
+  vim.wait(500, function()
+    return false
+  end, 50)
+end
+
 -- ── Run ──────────────────────────────────────────────────────────────────────
 
 local wanted = vim.env.FILETREE_ADAPTER_LINES
@@ -857,6 +944,7 @@ if has_neotree and has_nui and want("neotree") then
     end,
   })
   run_neotree_filter_race_check()
+  run_neotree_link_marker_check()
   ran = ran + 1
 else
   print("\nneo-tree: not installed (or excluded) -- skipping that pass.")

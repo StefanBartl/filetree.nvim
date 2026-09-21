@@ -9,11 +9,19 @@
 
 local M = {}
 
----Whether a path already exists as either a file or a directory.
+---Whether a path already exists as a file, a directory, or a dirent of its
+---own that neither of those two checks can see: a symlink is exactly that
+---when it dangles -- `filereadable`/`isdirectory` both follow it, find
+---nothing at the far end, and report false, as if the link itself were not
+---there either. `fs_lstat` (not `fs_stat`) looks at the dirent itself, not
+---through it, so a broken link still counts as occupying `path` -- which it
+---does: pasting a new file there needs it removed first, same as any other
+---occupied name.
 ---@param path string
 ---@return boolean
 function M.exists(path)
-  return vim.fn.filereadable(path) == 1 or vim.fn.isdirectory(path) == 1
+  if vim.fn.filereadable(path) == 1 or vim.fn.isdirectory(path) == 1 then return true end
+  return (vim.uv or vim.loop).fs_lstat(path) ~= nil
 end
 
 ---Delete an existing destination (file or directory tree) with libuv/Vim
