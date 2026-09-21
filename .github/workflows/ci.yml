@@ -16,6 +16,7 @@ jobs:
   lint:
     name: lint (stylua + luacheck)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -45,6 +46,7 @@ jobs:
   test:
     name: tests (headless) (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       # One platform failing must not cancel the others: which of the three
       # broke is the whole information content of this job.
@@ -95,16 +97,17 @@ jobs:
       - name: Run test suites
         working-directory: filetree.nvim
         run: |
+          exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
           set -e
-          nvim --clean --headless -u NONE -l TESTS/smoke.lua
-          nvim --clean --headless -u NONE -l TESTS/units.lua
-          nvim --clean --headless -u NONE -l TESTS/menu.lua
-          nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
-          nvim --clean --headless -u NONE -l TESTS/sidebar_guard.lua
-          nvim --clean --headless -u NONE -l TESTS/gaps.lua
-          nvim --clean --headless -u NONE -l TESTS/config_schema.lua
-          nvim --clean --headless -u NONE -l TESTS/nav_switch_toggle.lua
-          nvim --clean --headless -u NONE -l TESTS/refs/run.lua
+          nvim -n --clean --headless -u NONE -l TESTS/smoke.lua
+          nvim -n --clean --headless -u NONE -l TESTS/units.lua
+          nvim -n --clean --headless -u NONE -l TESTS/menu.lua
+          nvim -n --clean --headless -u NONE -l TESTS/cwd_mode.lua
+          nvim -n --clean --headless -u NONE -l TESTS/sidebar_guard.lua
+          nvim -n --clean --headless -u NONE -l TESTS/gaps.lua
+          nvim -n --clean --headless -u NONE -l TESTS/config_schema.lua
+          nvim -n --clean --headless -u NONE -l TESTS/nav_switch_toggle.lua
+          nvim -n --clean --headless -u NONE -l TESTS/refs/run.lua
 
       # The FEATURE REFERENCE section of doc/filetree.txt is generated from
       # docs/FEATURES/*.md and the binding catalog. Without this gate it would
@@ -114,4 +117,12 @@ jobs:
       # it loads the plugin, so it needs the lib.nvim checkout.
       - name: doc/filetree.txt is in step with docs/FEATURES
         working-directory: filetree.nvim
-        run: nvim --clean --headless -u NONE -l scripts/gen_vimdoc_reference.lua --check
+        run: |
+          exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
+          nvim -n --clean --headless -u NONE -l scripts/gen_vimdoc_reference.lua --check
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-output-test-${{ matrix.os }}
+          path: ${{ runner.temp }}/test-output.log
+          if-no-files-found: ignore
