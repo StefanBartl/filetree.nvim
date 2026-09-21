@@ -62,9 +62,22 @@ function M.acmd(event, opts)
 end
 
 ---Delete an augroup by id, ignoring errors.
+---
+---This drops the autocmds in the group, but NOT their records in lib.nvim's
+---registry: those go through `delete(id)`, or when the same group name is asked
+---for again. Fine for a group with a fixed name (the next `group(name, true)`
+---forgets them); a group named per buffer or window is never asked for twice, so
+---its caller must `delete()` each autocmd first.
 ---@param id integer|nil
 function M.del_group(id)
   if id then pcall(vim.api.nvim_del_augroup_by_id, id) end
+end
+
+---Delete one autocmd by id AND forget its record (lib.nvim's `delete`), ignoring
+---errors. The autocmd may already be gone (a `once` one that fired).
+---@param id integer|nil
+function M.delete(id)
+  if id then pcall(lib.delete, id) end
 end
 
 return M
