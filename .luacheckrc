@@ -20,4 +20,8 @@ ignore = {
 exclude_files = {
   "TESTS/refs/fixtures/**",
   "lua/filetree/assets/templates/**",
+  -- `.claude/` is gitignored and holds sibling worktrees other Claude Code
+  -- sessions check out under it; CI never sees them, so a local `luacheck .`
+  -- reporting on their copies of this repo is a false alarm, not a real find.
+  ".claude/",
 }
