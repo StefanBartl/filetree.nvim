@@ -1197,6 +1197,22 @@ local function run_delete_undo_refs_chunked_race_check()
   local trash_undo = require("filetree.features.fileops.trash.undo")
   apply.reset()
 
+  -- The OS-level restore is faked through `run_argv.run_blocking`, but only
+  -- the Windows restore calls that unconditionally -- the Unix one needs a
+  -- real `gio`/XDG trash directory and bails with "Could not restore"
+  -- otherwise. Record the entry as a Windows one so every host takes the
+  -- branch the fake covers, instead of passing on Windows alone.
+  local host_platform = require("filetree.util.platform")
+  local function record_as_windows(path)
+    local real_current = host_platform.current
+    ---@diagnostic disable-next-line: duplicate-set-field
+    host_platform.current = function()
+      return "windows"
+    end
+    trash_undo.record(path)
+    host_platform.current = real_current
+  end
+
   local found, scanned = nil, false
   refs.for_delete({ victim }, { root = work }, function(r)
     found = r
@@ -1215,7 +1231,7 @@ local function run_delete_undo_refs_chunked_race_check()
   -- history entry, mark its refs rewrite pending, THEN kick off the
   -- (necessarily chunked) apply -- in that order, since that ordering is
   -- itself the fix.
-  trash_undo.record(victim)
+  record_as_windows(victim)
   local said = {}
   local real_notify = vim.notify
   ---@diagnostic disable-next-line: duplicate-set-field
@@ -1301,7 +1317,7 @@ local function run_delete_undo_refs_chunked_race_check()
   -- not inherit a stale pending mark and spuriously warn "still running" for
   -- a rewrite that never happened this time.
   vim.fn.writefile({ "# Shared again" }, victim)
-  trash_undo.record(victim)
+  record_as_windows(victim)
   local said2 = {}
   vim.notify = function(msg, level, opts)
     said2[#said2 + 1] = tostring(msg)
