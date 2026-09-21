@@ -327,7 +327,7 @@ end
 
 ---Undo id of the most recent apply (nil when the stack is empty) — the
 ---counterpart of `last_label` for callers that reached `M.run` through
----`refs.handle_result`/`ui.confirm_and_apply` and so never saw the id it
+---`refs.handle_result`/`ui.apply_with_confirmation` and so never saw the id it
 ---returned, but still want to revert their own apply later via `M.undo_by_id`.
 ---@return integer?
 function M.last_token_id()
