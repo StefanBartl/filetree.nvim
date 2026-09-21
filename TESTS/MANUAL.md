@@ -512,7 +512,7 @@ bufferline.nvim, …).
 | P.2 | Tree open on the **left**, focus inside the tree, click a buffer in the tabline | The file opens in an editor window; the tree stays put on the left, same width. It does **not** reopen on the right. |
 | P.3 | Same, tree on the **right** | Symmetric — tree stays on the right. |
 | P.4 | Switch source via the `source_selector` winbar (filesystem → buffers → git_status …) | Still works — the buffer swaps in place, no error, and the new source stays in the sidebar rather than being thrown into an editor window. |
-| P.5 | Focus **inside the tree**, then run a plugin that opens a file from a callback — `:Reposcope status` → pick a repo → open its README, or any `:lua vim.cmd.edit("…")` | The file opens in an editor window, focus follows it, the tree stays put. No `E1513`. This is what the old `winfixbuf` default broke. |
+| P.5 | Focus **inside the tree**, then run a plugin that opens a file from a callback — `:Reposcope dashboard` → pick a repo → open its README, or any `:lua vim.cmd.edit("…")` | The file opens in an editor window, focus follows it, the tree stays put. No `E1513`. This is what the old `winfixbuf` default broke. |
 | P.6 | Repeat P.5 with `sidebar_guard = { winfixbuf = true }` | The refusal is back by choice: `E1513: Cannot switch buffer` and the file does not open. The tree still stays put. |
 | P.7 | `require("filetree").setup({ features = { sidebar_guard = { enabled = false } } })`, then repeat P.2 | The old bug is back: the tree jumps to the other side. |
 
