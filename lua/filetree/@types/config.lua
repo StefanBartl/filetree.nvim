@@ -113,6 +113,7 @@
 ---@field breadcrumbs         FiletreeBreadcrumbsConfig?
 ---@field lsp_diagnostics      FiletreeLspDiagnosticsConfig?
 ---@field size_info            FiletreeSizeInfoConfig?
+---@field link_marker          FiletreeLinkMarkerConfig?
 ---@field opened_sync          FiletreeOpenedSyncConfig?
 ---@field cheatsheet           FiletreeCheatsheetConfig?
 ---@field create_from_template FiletreeCreateFromTemplateConfig?
@@ -448,6 +449,23 @@
 ---@field show_dirs   boolean  Show directory sizes (default true).
 ---@field hl_group    string   Highlight group for size text (default "Comment").
 ---@field dir_async   boolean  Use `du`/PowerShell for dir sizes (default true).
+
+-- ── link_marker ───────────────────────────────────────────────────────────────
+
+---@class FiletreeLinkMarkerSign
+---@field text string
+---@field hl   string
+
+---@class FiletreeLinkMarkerSigns
+---@field symlink FiletreeLinkMarkerSign?  Sign for a resolvable symlink (default "⇢", hl "Special").
+---@field broken  FiletreeLinkMarkerSign?  Sign for a dangling symlink, where the adapter can tell
+---                                        (neo-tree only; default "⇢!", hl "DiagnosticError").
+
+---@class FiletreeLinkMarkerConfig
+---@field enabled?     boolean
+---@field show_target? boolean  Also show the link's target after the sign (default false).
+---@field target_hl?   string   Highlight group for the target text (default "Comment").
+---@field signs?       FiletreeLinkMarkerSigns?
 
 -- ── grep_in_dir ───────────────────────────────────────────────────────────────
 

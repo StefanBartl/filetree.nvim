@@ -240,6 +240,36 @@ local function find_conflicts(dst_dir)
 end
 
 ---@internal
+---Whether `path` is itself a symlink (not whatever it points to).
+---`vim.fn.isdirectory()`/`filereadable()` both follow a link transparently,
+---so this is the one place below that needs `fs_lstat` instead.
+---@param path string
+---@return boolean
+local function is_symlink(path)
+  local lst = (vim.uv or vim.loop).fs_lstat(path)
+  return lst ~= nil and lst.type == "link"
+end
+
+---@internal
+---Recreate the symlink at `src` as a new symlink at `dst`, pointing at the
+---same (possibly relative) target, instead of letting a plain file/directory
+---copy dereference it. Two reasons this matters, not just fidelity: a
+---dereferenced *directory* symlink would deep-copy whatever it points at
+---(potentially huge, and unboundedly recursive through a symlink cycle —
+---`copy_dir` below has no cycle guard because a real directory tree cannot
+---contain one), and a dereferenced *file* symlink silently turns a link into
+---an independent full copy of its target's content.
+---@param src string
+---@param dst string
+---@return boolean ok
+local function copy_symlink(src, dst)
+  local target = (vim.uv or vim.loop).fs_readlink(src)
+  if not target then return false end
+  local ok = fsops.symlink(target, dst, vim.fn.isdirectory(src) == 1)
+  return ok == true
+end
+
+---@internal
 ---Recursively copy a directory tree without shelling out (shell-agnostic:
 ---works identically whether &shell is cmd.exe, PowerShell, or a POSIX shell).
 ---@param src string
@@ -250,7 +280,9 @@ local function copy_dir(src, dst)
   for _, name in ipairs(vim.fn.readdir(src)) do
     local s = src .. "/" .. name
     local d = dst .. "/" .. name
-    if vim.fn.isdirectory(s) == 1 then
+    if is_symlink(s) then
+      if not copy_symlink(s, d) then return 1 end
+    elseif vim.fn.isdirectory(s) == 1 then
       if copy_dir(s, d) ~= 0 then return 1 end
     else
       local ok = fsops.copy_file(s, d)
@@ -268,6 +300,7 @@ end
 ---@param dst string
 ---@return integer rc  0 on success, 1 on failure
 local function do_copy(src, dst)
+  if is_symlink(src) then return copy_symlink(src, dst) and 0 or 1 end
   if vim.fn.isdirectory(src) == 1 then return copy_dir(src, dst) end
   local ok = fsops.copy_file(src, dst)
   return ok and 0 or 1

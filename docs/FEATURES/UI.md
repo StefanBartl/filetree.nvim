@@ -25,8 +25,47 @@ the node under the cursor. For a file: line count. For a directory:
 recursive item count plus aggregate size — computed on demand, not kept
 live, so it reflects the tree at the moment you press the key.
 
+A symlink's Type line says so (`file (symlink)`) and gets its own `Link to:`
+line naming the target — flagged `(broken — target missing)` when the
+target does not resolve, rather than the whole window falling back to "No
+stat info" the way it used to (a plain `stat` alone sees nothing at all
+through a dangling link). A file with more than one hard-linked name gets a
+`(hardlink, N names)` note on its Type line instead: every one of its names
+is an equal hard link, so this reads as "shares its data with N-1 other
+name(s)", not "this one IS the hard link" — there is no single dirent to
+single out that way.
+
 - **Module:** `lua/filetree/features/ui/node_info/`
 - **Keymaps:** `I`
+
+## Link Marker
+
+Marks a symlinked node in the tree listing so it reads differently from an
+ordinary file/directory at a glance: a small `⇢` sign after the name (`⇢!`
+for a symlink whose target could not be resolved), optionally followed by
+its target when `show_target = true`.
+
+**On by default**, unlike most decorators here — it costs nothing extra per
+render: it reads `is_link`/`link_to`/`link_broken` straight off data the
+neo-tree and nvim-tree adapters already hold (neo-tree's own scan already
+calls `uv.fs_readlink()` for every link it finds), not a filesystem `stat`
+per node.
+
+**Hard links are not decorated here.** Telling a file with more than one
+name apart from an ordinary one needs an actual `stat`, and every one of
+its names is an equal hard link — there is no single dirent to flag as *the*
+hard link. See Node Info's `I` window for that instead, on demand rather
+than on every rendered line.
+
+**Backend support.** Same line-resolved-decoration contract as `size_info`
+below: neo-tree and nvim-tree draw it, netrw/oil.nvim/mini.files don't.
+Whether a dangling symlink gets its own `broken` sign also depends on the
+backend: neo-tree already knows (it tried to resolve the link during its
+own scan); nvim-tree does not expose that, so there a symlink always gets
+the plain sign, working or not.
+
+- **Module:** `lua/filetree/features/ui/link_marker/`
+- **Config:** `opts.features.link_marker` — `show_target` (default **false**), `target_hl` (`"Comment"`), `signs.symlink` (`{text="⇢", hl="Special"}`), `signs.broken` (`{text="⇢!", hl="DiagnosticError"}`)
 
 ## Breadcrumbs
 

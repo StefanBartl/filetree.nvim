@@ -90,6 +90,19 @@ do
   eq("conflict.exists: true for a file", conflict.exists(tmp .. "/a.txt"), true)
   eq("conflict.exists: true for a directory", conflict.exists(tmp), true)
 
+  -- A dangling symlink is neither filereadable() nor isdirectory() -- both
+  -- follow it and find nothing at the far end -- yet the link itself very
+  -- much occupies `path`; the fix reads for that dirent's own (l)stat too.
+  if (vim.uv or vim.loop).fs_symlink(tmp .. "/does-not-exist.txt", tmp .. "/broken-link.txt") then
+    eq(
+      "conflict.exists: true for a dangling symlink (the link itself is a dirent)",
+      conflict.exists(tmp .. "/broken-link.txt"),
+      true
+    )
+  else
+    print("  note no permission to create a real symlink here — skipping the dangling-link case")
+  end
+
   local claimed = {}
   local name1 = conflict.unique_name(tmp, "a.txt", claimed, false)
   eq("unique_name: first free slot is '(2)'", name1, "a (2).txt")
@@ -1302,6 +1315,157 @@ do
   pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
   pcall(vim.api.nvim_buf_delete, anchor_buf, { force = true })
   vim.system = orig_system
+end
+
+-- ── ui.link_marker ── symlink decoration, zero-cost per-line node read ──────
+do
+  local link_marker = require("filetree.features.ui.link_marker")
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(
+    tree_buf,
+    0,
+    -1,
+    false,
+    { "plain.txt", "a_symlink", "broken_symlink", "a_dir" }
+  )
+
+  local NODE_AT = {
+    [0] = { path = "/x/plain.txt", type = "file" },
+    [1] = { path = "/x/a_symlink", type = "file", is_link = true, link_to = "/x/plain.txt" },
+    [2] = { path = "/x/broken_symlink", type = "file", is_link = true, link_broken = true },
+    [3] = { path = "/x/a_dir", type = "directory" },
+  }
+  local stub = {
+    name = "gaps-linkmarker-stub",
+    get_bufnr = function()
+      return tree_buf
+    end,
+    get_node_at_line = function(_, linenr)
+      return NODE_AT[linenr]
+    end,
+  }
+
+  link_marker.setup({ show_target = true }, stub)
+  link_marker._render()
+
+  local function extmarks_of(line)
+    return vim.api.nvim_buf_get_extmarks(
+      tree_buf,
+      -1,
+      { line, 0 },
+      { line, -1 },
+      { details = true }
+    )
+  end
+  local function virt_text_of(line)
+    local m = extmarks_of(line)
+    if #m == 0 then return nil end
+    local parts = {}
+    for _, chunk in ipairs(m[1][4].virt_text) do
+      parts[#parts + 1] = chunk[1]
+    end
+    return table.concat(parts)
+  end
+
+  eq("link_marker: an ordinary file gets no marker", virt_text_of(0), nil)
+  eq(
+    "link_marker: a resolvable symlink gets the symlink sign + target (show_target=true)",
+    virt_text_of(1),
+    " ⇢ -> /x/plain.txt"
+  )
+  eq("link_marker: a dangling symlink gets the broken sign", virt_text_of(2), " ⇢!")
+  eq("link_marker: an ordinary directory gets no marker", virt_text_of(3), nil)
+
+  link_marker.teardown()
+  pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+end
+
+-- ── ui.node_info ── link-aware Type/Link lines, real symlink + hard link ────
+do
+  local node_info = require("filetree.features.ui.node_info")
+  local uv = vim.uv or vim.loop
+  local tmp = (TMP_ROOT .. "/gaps-nodeinfo-links"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  vim.fn.writefile({ "hi" }, tmp .. "/plain.txt")
+
+  local function find_line(lines, prefix)
+    for _, l in ipairs(lines) do
+      if l:sub(1, #prefix) == prefix then return l end
+    end
+    return nil
+  end
+
+  if uv.fs_symlink(tmp .. "/plain.txt", tmp .. "/a_link.txt") then
+    local lines = node_info.info_lines(tmp .. "/a_link.txt")
+    local type_line = find_line(lines, "  Type:")
+    check(
+      "node_info: a symlink's Type line says so",
+      type_line ~= nil and type_line:find("(symlink)", 1, true) ~= nil,
+      tostring(type_line)
+    )
+    local link_line = find_line(lines, "  Link to:")
+    -- `fs_readlink` echoes back whatever the platform's reparse point stores,
+    -- which on Windows is backslash-native regardless of the forward-slash
+    -- path `fs_symlink` was given (see lib.nvim's mutate_spec.lua for the
+    -- same quirk) -- normalize before comparing, the way that suite does.
+    local link_line_fwd = link_line and (link_line:gsub("\\", "/"))
+    check(
+      "node_info: a resolvable symlink's Link to line names the real target",
+      link_line_fwd ~= nil and link_line_fwd:find(tmp .. "/plain.txt", 1, true) ~= nil,
+      tostring(link_line)
+    )
+    check(
+      "node_info: a resolvable symlink is not flagged broken",
+      link_line ~= nil and link_line:find("broken", 1, true) == nil
+    )
+  else
+    print("  note no permission to create a real symlink here — skipping node_info symlink case")
+  end
+
+  if uv.fs_symlink(tmp .. "/does-not-exist.txt", tmp .. "/broken_link.txt") then
+    local lines = node_info.info_lines(tmp .. "/broken_link.txt")
+    local link_line = find_line(lines, "  Link to:")
+    check(
+      "node_info: a dangling symlink is flagged broken",
+      link_line ~= nil and link_line:find("broken", 1, true) ~= nil,
+      tostring(link_line)
+    )
+    check(
+      "node_info: a dangling symlink still returns real info, not 'No stat info'",
+      lines[1] ~= "  No stat info for:"
+    )
+  else
+    print(
+      "  note no permission to create a real symlink here — skipping node_info broken-link case"
+    )
+  end
+
+  if uv.fs_link(tmp .. "/plain.txt", tmp .. "/hard.txt") then
+    local lines = node_info.info_lines(tmp .. "/hard.txt")
+    local type_line = find_line(lines, "  Type:")
+    check(
+      "node_info: a file with more than one hard-linked name says so",
+      type_line ~= nil and type_line:find("hardlink", 1, true) ~= nil,
+      tostring(type_line)
+    )
+  else
+    print("  note could not create a real hard link here — skipping node_info hardlink case")
+  end
+
+  -- Control: an ordinary, unlinked file gets neither note. A fresh file, not
+  -- `plain.txt` -- the hard-link case above just gave THAT one a second name,
+  -- so by now it legitimately has its own "(hardlink, ...)" note too.
+  vim.fn.writefile({ "solo" }, tmp .. "/solo.txt")
+  local plain_lines = node_info.info_lines(tmp .. "/solo.txt")
+  local plain_type = find_line(plain_lines, "  Type:")
+  check(
+    "node_info: an ordinary file's Type line has no link/hardlink note",
+    plain_type ~= nil
+      and plain_type:find("symlink", 1, true) == nil
+      and plain_type:find("hardlink", 1, true) == nil,
+    tostring(plain_type)
+  )
 end
 
 -- ── filetree.health ── composer pre-flight must not crash when lib.nvim's ───

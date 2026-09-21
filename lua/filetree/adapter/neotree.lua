@@ -144,6 +144,20 @@ end
 ---happily reports as a path, which then makes every caller treat a notice as a
 ---file: a stat of something that does not exist per render, and, on
 ---`get_current_node`, a `d`/rename aimed at it.
+---
+---`is_link`/`link_to` cost nothing extra here: neo-tree's own scan
+---(`file-items.lua`) already calls `uv.fs_readlink()` for every symlink it
+---finds and stores the result on the item as `is_link`/`link_to`, which
+---`ui/renderer.lua` then copies onto the nui node unchanged. Reading those two
+---fields is a plain table access, same cost class as `node.name` above — not a
+---filesystem call, so it does not reintroduce the per-node `stat` this module
+---was fixed to avoid (see `node_is_dir`'s comment and
+---`docs/FEATURES/BACKENDS.md`'s "Line-resolved decorations").
+---
+---`link_broken`: a symlink's `node.type` stays the literal `"link"` only when
+---neo-tree's own `uv.fs_stat()` of the target failed (see `node_is_dir`'s
+---comment above) — i.e. exactly the dangling-link case. Any other type on a
+---link node means neo-tree resolved it fine.
 ---@internal
 ---@param node table?
 ---@param line_number integer
@@ -154,6 +168,7 @@ local function to_filetree_node(node, line_number)
   if not path then return nil end -- other virtual nodes without a real path
 
   local is_dir = node_is_dir(node, path)
+  local is_link = node.is_link == true
   return {
     id = (node.get_id and node:get_id()) or node.id or path,
     name = node.name or vim.fn.fnamemodify(path, ":t"),
@@ -162,6 +177,9 @@ local function to_filetree_node(node, line_number)
     depth = (node.get_depth and node:get_depth()) or 0,
     line_number = line_number,
     is_expanded = is_dir and ((node.is_expanded and node:is_expanded()) or false) or nil,
+    is_link = is_link or nil,
+    link_to = (is_link and type(node.link_to) == "string" and node.link_to) or nil,
+    link_broken = (is_link and node.type == "link") or nil,
   }
 end
 

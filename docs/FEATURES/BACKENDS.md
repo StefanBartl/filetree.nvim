@@ -87,15 +87,16 @@ newly-focused file's project.
 
 ## Line-resolved decorations
 
-Four features draw their annotations as extmarks on a node's own line: git
-status, LSP diagnostics, file sizes, and copy/move's staged `C`/`X` clipboard
-marker. Each walks the tree buffer line by line and asks the adapter which
-node is on a given line — `get_node_at_line(bufnr, linenr)`, with `linenr`
-0-based, matching the extmark API they place through.
+Five features draw their annotations as extmarks on a node's own line: git
+status, LSP diagnostics, file sizes, copy/move's staged `C`/`X` clipboard
+marker, and the symlink sign (`link_marker`). Each walks the tree buffer line
+by line and asks the adapter which node is on a given line —
+`get_node_at_line(bufnr, linenr)`, with `linenr` 0-based, matching the
+extmark API they place through.
 
 Only the two adapters with a real line↔node mapping implement it:
 
-| Backend | `get_node_at_line` | The four decorations |
+| Backend | `get_node_at_line` | The five decorations |
 |---|:-:|---|
 | neo-tree | ✓ | render |
 | nvim-tree | ✓ | render |
@@ -114,7 +115,7 @@ nvim-tree's root-folder label and live-filter prompt. Those lines simply carry
 no decoration. (neo-tree's root directory, by contrast, is a real node and is
 decorated like any other.)
 
-**Cost.** Each of the four features asks once per rendered line, so a lookup
+**Cost.** Each of the five features asks once per rendered line, so a lookup
 that costs a filesystem stat costs a stat per node per feature per render —
 tens of milliseconds on a large tree, every redraw. Both adapters therefore
 answer purely from the node data the backend already holds: no `stat`, no
@@ -134,7 +135,7 @@ lines it drew *before* the first node (a root-folder label, a live-filter
 prompt). Counting instead would go wrong exactly when one of those is on, and
 go wrong by shifting every node by one — the failure mode above.
 
-A fifth feature, `filter`, has a dim-fallback that reads the same method, but
+A sixth feature, `filter`, has a dim-fallback that reads the same method, but
 it is only reached when the backend has no filter of its own. neo-tree and
 nvim-tree both do, so their filtering narrows the listing for real and never
 takes that path; the three backends that would take it are the three without

@@ -32,6 +32,7 @@ filetree.nvim creates autocmds in two categories:
 | `watcher_quarantine` | none — patches `vim.notify` and neo-tree's `fs_watch.watch_folder` callback directly, no autocmds registered | Suppresses EPERM watcher noise during operations | `enabled = false` |
 | `opened_sync` | `BufAdd`, `BufDelete`, `BufWipeout`, `BufWinEnter`, `BufWinLeave` | Debounced redraw to keep "opened files" decoration in sync (deliberately not `BufEnter` — too chatty) | `enabled = false` (adapter must expose `redraw`) |
 | `size_info` | `BufEnter`, `CursorHold` | Renders size column on tree entry; refreshes (incl. async `du`/PowerShell dir-size queries) while cursor rests | `enabled = false` |
+| `link_marker` | `BufEnter`, `CursorMoved` (debounced) | Draws the tree's symlink sign; redraws on enter and while navigating | `enabled = false` |
 | `no_name_guard` | `BufWinEnter` (single buf/win pair), `BufAdd`+`BufDelete`+`BufWipeout` (swept across all windows) | Redirects a stray `[No Name]` window/buffer to a real named buffer | `enabled = false` |
 | `layout_guard` | `BufDelete`, `BufWipeout`, `WinClosed` | Opens a new empty split if only the tree window remains, so the user is never trapped inside it | `enabled = false` |
 | `auto_resize` | `VimResized`, tree-attach (apply on open/focus) | Recomputes target width from breakpoints and resizes the tree window | `enabled = false` (opt-in, default off) |

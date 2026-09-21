@@ -184,7 +184,9 @@ end
 ---@param cb fun(ok: boolean)  invoked on the main loop once the delete attempt settled
 ---@return nil
 local function do_trash(path, cb)
-  if vim.fn.filereadable(path) == 0 and vim.fn.isdirectory(path) == 0 then
+  -- `conflict.exists` (not a bare filereadable/isdirectory check): a broken
+  -- symlink is neither, yet is very much a path that needs trashing.
+  if not conflict.exists(path) then
     notify.warn("path does not exist: " .. path)
     cb(false)
     return
@@ -647,7 +649,9 @@ function M.delete(path, on_done)
     notify.warn("trash feature is disabled")
     return done(false)
   end
-  if vim.fn.filereadable(path) == 0 and vim.fn.isdirectory(path) == 0 then
+  -- `conflict.exists` (not a bare filereadable/isdirectory check): a broken
+  -- symlink is neither, yet is very much a path that needs trashing.
+  if not conflict.exists(path) then
     notify.warn("path does not exist: " .. path)
     return done(false)
   end

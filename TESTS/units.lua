@@ -1216,6 +1216,103 @@ do
   )
 end
 
+-- ── copy_move: copying a symlink recreates the link, not its target ─────────
+-- Regression: `do_copy`/`copy_dir` used to decide "directory or not" with a
+-- plain `vim.fn.isdirectory()`, which follows a symlink transparently -- a
+-- symlinked directory got silently deep-copied into a real one (unbounded
+-- through a symlink cycle, since a real directory tree cannot have one but
+-- this walk did not know that), and a symlinked file got silently
+-- dereferenced into an independent copy of its target's content.
+do
+  local tmp = (TMP_ROOT .. "/units-copymove-symlink"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/src_dir", "p")
+  vim.fn.mkdir(tmp .. "/dst", "p")
+  vim.fn.writefile({ "inner" }, tmp .. "/src_dir/inner.txt")
+  vim.fn.writefile({ "plain" }, tmp .. "/plain.txt")
+
+  local uv = vim.uv or vim.loop
+  local dir_link_ok = uv.fs_symlink(tmp .. "/src_dir", tmp .. "/link_to_dir", { dir = true })
+  local file_link_ok = uv.fs_symlink(tmp .. "/plain.txt", tmp .. "/link_to_file.txt")
+
+  if not dir_link_ok or not file_link_ok then
+    print("  note no permission to create a real symlink here — skipping copy_move symlink case")
+  else
+    local cur_node = { path = tmp .. "/link_to_dir", type = "directory" }
+    local stub = setmetatable({
+      name = "units-stub-symlink",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      get_bufnr = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-symlink",
+      features = {
+        copy_move = { enabled = true, confirm = false, use_safety = false },
+        no_name_guard = { enabled = false },
+      },
+    })
+
+    local cm = ft.feature("copy_move")
+
+    -- A symlinked directory: staged, pasted, must land as a symlink again --
+    -- not a deep copy of src_dir's contents.
+    cur_node = { path = tmp .. "/link_to_dir", type = "directory" }
+    cm.stage_copy()
+    cur_node = { path = tmp .. "/dst", type = "directory" }
+    cm.paste()
+    local lst_dir = uv.fs_lstat(tmp .. "/dst/link_to_dir")
+    check(
+      "copy_move: a symlinked directory pastes as a symlink, not a deep copy",
+      lst_dir ~= nil and lst_dir.type == "link"
+    )
+
+    -- A symlinked file: staged, pasted, must land as a symlink too -- not a
+    -- dereferenced copy of plain.txt's content.
+    cur_node = { path = tmp .. "/link_to_file.txt", type = "file" }
+    cm.stage_copy()
+    cur_node = { path = tmp .. "/dst", type = "directory" }
+    cm.paste()
+    local lst_file = uv.fs_lstat(tmp .. "/dst/link_to_file.txt")
+    check(
+      "copy_move: a symlinked file pastes as a symlink, not a dereferenced copy",
+      lst_file ~= nil and lst_file.type == "link"
+    )
+
+    -- Control: an ORDINARY directory (not a link) still deep-copies for real
+    -- -- the fix must not turn every directory copy into a symlink.
+    cur_node = { path = tmp .. "/src_dir", type = "directory" }
+    cm.stage_copy()
+    cur_node = { path = tmp .. "/dst", type = "directory" }
+    cm.paste()
+    check(
+      "copy_move: an ordinary directory still deep-copies its contents",
+      vim.fn.filereadable(tmp .. "/dst/src_dir/inner.txt") == 1
+    )
+  end
+end
+
 -- ── copy_move: a user-configured two-char sequence (e.g. "yy"/"xx") must ────
 -- still survive an adapter-native nowait single-char "y"/"x", for anyone who
 -- opts back into that style via config. neo-tree's own window.mappings apply
