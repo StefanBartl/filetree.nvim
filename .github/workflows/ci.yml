@@ -87,6 +87,7 @@ jobs:
         with:
           repository: StefanBartl/ui.nvim
           path: ui.nvim
+          ref: ci-verified
 
       - name: Install Neovim (stable)
         uses: rhysd/action-setup-vim@v1
