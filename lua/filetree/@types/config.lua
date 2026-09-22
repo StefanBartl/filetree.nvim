@@ -857,7 +857,7 @@
 -- ── source_switcher ───────────────────────────────────────────────────────────
 
 ---@class FiletreeSourceSwitcherIcons
----@field family?  "nerd"|"codicons"|"common"  Glyph set (default "nerd"; "common" needs no font).
+---@field family?  "nerd"|"codicons"|"common"  Glyph set. Left unset: "nerd" if `vim.g.have_nerd_font = true` is declared, else "common" (no font needed) -- an explicit value always wins.
 ---@field variant? "v1"|"v2"                   Glyph variant within the family (default "v1").
 ---@field length?  "long"|"short"              Name length in `display_name` (default "long").
 

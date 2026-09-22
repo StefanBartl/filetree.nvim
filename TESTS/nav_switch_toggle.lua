@@ -81,7 +81,36 @@ end
 
 local sw = require("filetree.features.nav.source_switcher")
 do
-  eq("display_name: nerd v1 long", sw.display_name("buffers"), "  Buffers")
+  -- No declared Nerd Font (this headless suite never sets
+  -- vim.g.have_nerd_font) and no explicit `family`: the default resolves to
+  -- "common" -- real ASCII-bracket icons, not the empty string a hardcoded
+  -- "nerd" default would produce without a font to render it.
+  local had_nerd_font_global = vim.g.have_nerd_font
+  vim.g.have_nerd_font = nil
+  eq(
+    "display_name: undeclared font defaults to common",
+    sw.display_name("buffers"),
+    " [BUF] Buffers"
+  )
+  eq("icon: undeclared font defaults to common", sw.icon("filesystem"), "[DIR]")
+
+  -- Explicit family = "nerd" always renders real glyphs (non-empty, exactly
+  -- one display cell) regardless of vim.g.have_nerd_font -- an explicit
+  -- request is honoured, not silently downgraded.
+  local nerd_icon = sw.icon("git_status", { family = "nerd" })
+  check("icon: explicit nerd family is a real, non-empty glyph", nerd_icon ~= "", nerd_icon)
+  eq("icon: explicit nerd family renders one display cell", vim.fn.strdisplaywidth(nerd_icon), 1)
+
+  -- Declaring the font flips the *default* (no explicit family) over to nerd.
+  vim.g.have_nerd_font = true
+  local default_icon = sw.icon("git_status")
+  eq(
+    "icon: declared font defaults to nerd",
+    default_icon,
+    sw.icon("git_status", { family = "nerd" })
+  )
+  vim.g.have_nerd_font = had_nerd_font_global
+
   eq(
     "display_name: common short",
     sw.display_name("git_status", { family = "common", length = "short" }),
@@ -94,7 +123,7 @@ do
     " [NET] Network"
   )
   eq(
-    "display_name: unknown family falls back to nerd",
+    "display_name: unknown family falls back to the same resolution as unset",
     sw.display_name("tests", { family = "nope" }),
     sw.display_name("tests")
   )

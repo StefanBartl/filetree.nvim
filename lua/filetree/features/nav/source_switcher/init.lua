@@ -23,6 +23,13 @@
 --- `common` for a font without glyphs) and two name lengths. It needs no
 --- `setup()`, so a host can call it while building neo-tree's own opts.
 ---
+--- `icons.family` left unset resolves to "nerd" only when the user declared
+--- `vim.g.have_nerd_font = true` (`lib.nvim.ui.nerd_font`'s own convention --
+--- Neovim cannot see the terminal's font), "common" otherwise; an explicit
+--- family always wins. Passing `family = "nerd"` without that declaration is
+--- a deliberate override and renders exactly what it asks for -- tofu boxes
+--- included, if the terminal font lacks the glyphs.
+---
 --- Config:
 ---   enabled       boolean
 ---   keymap_next   string?   In the tree (default `"`).
@@ -33,6 +40,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.source_switcher]")
 local bind = require("filetree.util.bind")
+local nerd_font = require("lib.nvim.ui.nerd_font")
 
 local M = {}
 
@@ -43,7 +51,11 @@ local DEFAULTS = {
   keymap_prev = "!",
   keymap_pick = nil,
   sources = nil,
-  icons = { family = "nerd", variant = "v1", length = "long" },
+  -- `family` deliberately absent: `icon_opts()` below picks "nerd" only when
+  -- `vim.g.have_nerd_font = true` is declared, "common" otherwise -- an
+  -- explicit `family = "nerd"|"codicons"|"common"` here always wins over
+  -- that default.
+  icons = { variant = "v1", length = "long" },
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -103,42 +115,42 @@ M.ICONS = {
   },
   nerd = {
     v1 = {
-      filesystem = { icon = "", long = "File System", short = "FS" },
-      buffers = { icon = "", long = "Buffers", short = "Buf" },
-      git_status = { icon = "", long = "Git Status", short = "Git" },
-      document_symbols = { icon = "", long = "Document Symbols", short = "Sym" },
-      netman = { icon = "", long = "Network", short = "Net" },
+      filesystem = { icon = "", long = "File System", short = "FS" },
+      buffers = { icon = "", long = "Buffers", short = "Buf" },
+      git_status = { icon = "", long = "Git Status", short = "Git" },
+      document_symbols = { icon = "", long = "Document Symbols", short = "Sym" },
+      netman = { icon = "", long = "Network", short = "Net" },
       tests = { icon = "⏱", long = "Test Cases", short = "Tst" },
-      diagnostics = { icon = "", long = "Diagnostics", short = "Diag" },
+      diagnostics = { icon = "", long = "Diagnostics", short = "Diag" },
     },
     v2 = {
-      filesystem = { icon = "", long = "File System", short = "FS" },
-      buffers = { icon = "", long = "Buffers", short = "Buf" },
-      git_status = { icon = "", long = "Git Status", short = "Git" },
-      document_symbols = { icon = "", long = "Document Symbols", short = "Sym" },
-      netman = { icon = "", long = "Network", short = "Net" },
-      tests = { icon = "", long = "Test Cases", short = "Tst" },
-      diagnostics = { icon = "", long = "Diagnostics", short = "Diag" },
+      filesystem = { icon = "", long = "File System", short = "FS" },
+      buffers = { icon = "", long = "Buffers", short = "Buf" },
+      git_status = { icon = "", long = "Git Status", short = "Git" },
+      document_symbols = { icon = "", long = "Document Symbols", short = "Sym" },
+      netman = { icon = "", long = "Network", short = "Net" },
+      tests = { icon = "⏱", long = "Test Cases", short = "Tst" },
+      diagnostics = { icon = "", long = "Diagnostics", short = "Diag" },
     },
   },
   codicons = {
     v1 = {
-      filesystem = { icon = "", long = "File System", short = "FS" },
-      buffers = { icon = "", long = "Buffers", short = "Buf" },
-      git_status = { icon = "", long = "Git Status", short = "Git" },
-      document_symbols = { icon = "", long = "Document Symbols", short = "Sym" },
-      netman = { icon = "", long = "Network", short = "Net" },
-      tests = { icon = "", long = "Test Cases", short = "Tst" },
-      diagnostics = { icon = "", long = "Diagnostics", short = "Diag" },
+      filesystem = { icon = "", long = "File System", short = "FS" },
+      buffers = { icon = "", long = "Buffers", short = "Buf" },
+      git_status = { icon = "", long = "Git Status", short = "Git" },
+      document_symbols = { icon = "", long = "Document Symbols", short = "Sym" },
+      netman = { icon = "", long = "Network", short = "Net" },
+      tests = { icon = "⏱", long = "Test Cases", short = "Tst" },
+      diagnostics = { icon = "", long = "Diagnostics", short = "Diag" },
     },
     v2 = {
-      filesystem = { icon = "", long = "File System", short = "FS" },
-      buffers = { icon = "", long = "Buffers", short = "Buf" },
-      git_status = { icon = "", long = "Git Status", short = "Git" },
-      document_symbols = { icon = "", long = "Document Symbols", short = "Sym" },
-      netman = { icon = "", long = "Network", short = "Net" },
-      tests = { icon = "", long = "Test Cases", short = "Tst" },
-      diagnostics = { icon = "", long = "Diagnostics", short = "Diag" },
+      filesystem = { icon = "", long = "File System", short = "FS" },
+      buffers = { icon = "", long = "Buffers", short = "Buf" },
+      git_status = { icon = "", long = "Git Status", short = "Git" },
+      document_symbols = { icon = "", long = "Document Symbols", short = "Sym" },
+      netman = { icon = "", long = "Network", short = "Net" },
+      tests = { icon = "⏱", long = "Test Cases", short = "Tst" },
+      diagnostics = { icon = "", long = "Diagnostics", short = "Diag" },
     },
   },
 }
@@ -153,11 +165,18 @@ local function icon_key(source)
 end
 
 ---@internal
+---An explicit `family` ("nerd"/"codicons"/"common") always wins. Left unset
+---(the default), it resolves to "nerd" only when the user declared
+---`vim.g.have_nerd_font = true` -- Neovim cannot see the terminal's font
+---(see `lib.nvim.ui.nerd_font`'s own module doc) -- and to "common"
+---otherwise, so a tree with no declared Nerd Font gets the ASCII-bracket
+---icons instead of glyphs that render as tofu boxes.
 ---@param opts { family?: string, variant?: string, length?: string }|nil
 ---@return string family, string variant, string length
 local function icon_opts(opts)
   local o = opts or _cfg.icons or {}
-  local family = M.ICONS[o.family] and o.family or "nerd"
+  local family = o.family
+  if not (family and M.ICONS[family]) then family = nerd_font.available() and "nerd" or "common" end
   local variant = M.ICONS[family][o.variant] and o.variant or "v1"
   local length = (o.length == "short") and "short" or "long"
   return family, variant, length

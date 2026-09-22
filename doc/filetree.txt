@@ -1600,7 +1600,12 @@ LSP client, an uninstalled optional source).
 The pure half needs no `setup()`: `display_name(source, opts)` returns the `
 <icon> <Name>` string neo-tree's `source_selector` wants, in three icon
 families (`nerd`, `codicons`, `common` for a font without glyphs) and two name
-lengths — so a host builds neo-tree's own opts from it:
+lengths — so a host builds neo-tree's own opts from it. Leaving `family`
+unset resolves to `"nerd"` only when `vim.g.have_nerd_font = true` is
+declared, `"common"` otherwise; passing `family = "nerd"` explicitly (as
+below) always renders Nerd Font glyphs, tofu boxes included if the terminal
+font doesn't have them — the same convention `lib.nvim.ui.nerd_font` and
+`decoration_style` use.
 
 >lua
 local sw = require("filetree.features.nav.source_switcher")
