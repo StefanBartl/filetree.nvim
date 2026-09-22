@@ -42,6 +42,7 @@ local refs = require("filetree.refs")
 -- Optional: progress indicator for a multi-item paste. No-op (returns nil)
 -- when lib.nvim isn't installed.
 local progress = require("filetree.util.progress")
+local decoration_style = require("filetree.util.decoration_style")
 
 -- Central FS-mutation chokepoint (libuv-based, no shell). Retries transient
 -- Windows sharing errors (EPERM/EACCES/EBUSY) that a raw uv.fs_copyfile would
@@ -155,10 +156,10 @@ local function render_clipboard()
     if node then
       local op = staged[node.path]
       if op then
-        local text = op == "copy" and " C" or " X"
+        local text = op == "copy" and "C" or "X"
         local hl = op == "copy" and "DiagnosticHint" or "DiagnosticWarn"
         pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-          virt_text = { { text, hl } },
+          virt_text = decoration_style.chip("copy_move", text, hl, "eol"),
           virt_text_pos = "eol",
           priority = 80,
         })

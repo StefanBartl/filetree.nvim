@@ -5623,6 +5623,108 @@ do
   end
 end
 
+-- ── util.decoration_style ────────────────────────────────────────────────────
+do
+  local ds = require("filetree.util.decoration_style")
+
+  -- "plain" (the default before any setup() call) must reproduce exactly what
+  -- every marker built by hand before this module existed: one chunk, spaced
+  -- the same way eol/inline call sites always did -- the whole point of the
+  -- default being a true no-op.
+  ds.set_style("plain")
+  eq(
+    "decoration_style plain/eol: unchanged chunk",
+    #ds.chip("git_status", "M", "DiagnosticWarn", "eol"),
+    1
+  )
+  local eol_chunk = ds.chip("git_status", "M", "DiagnosticWarn", "eol")[1]
+  eq("decoration_style plain/eol: leading space preserved", eol_chunk[1], " M")
+  eq("decoration_style plain/eol: hl passed through", eol_chunk[2], "DiagnosticWarn")
+  local inline_chunk = ds.chip("link_marker", "⇢", "Special", "inline")[1]
+  eq("decoration_style plain/inline: trailing space preserved", inline_chunk[1], "⇢ ")
+
+  -- "rounded": every chunk carries a non-empty highlight group, and the caps
+  -- + body are present (padding differs by pos, so just check the shape and
+  -- that the derived groups are real, settable highlight groups).
+  ds.set_style("rounded")
+  local rounded = ds.chip("size_info", "4.2 KB", "Comment", "eol")
+  check("decoration_style rounded/eol: more than one chunk", #rounded > 1, tostring(#rounded))
+  local saw_text = false
+  for _, chunk in ipairs(rounded) do
+    if chunk[1]:find("4.2 KB", 1, true) then saw_text = true end
+    if chunk[2] then
+      check("decoration_style rounded: chunk hl exists", type(chunk[2]) == "string")
+    end
+  end
+  check("decoration_style rounded: body text present", saw_text)
+
+  -- "rounded_nerdfont": same shape, different (Powerline) caps -- just prove
+  -- it resolves to a distinct registry entry rather than silently aliasing
+  -- "rounded".
+  ds.set_style("rounded_nerdfont")
+  local nerd = ds.chip("size_info", "4.2 KB", "Comment", "eol")
+  check(
+    "decoration_style rounded_nerdfont: different caps than rounded",
+    nerd[2][1] ~= rounded[2][1]
+  )
+
+  -- Per-feature table style: an entry wins over "default"; a feature with no
+  -- entry falls back to "default", not to "plain" outright.
+  ds.set_style({ default = "plain", link_marker = "rounded" })
+  check("decoration_style table style: per-feature override active", ds.active("link_marker"))
+  check(
+    "decoration_style table style: unmentioned feature uses default",
+    not ds.active("git_status")
+  )
+
+  -- An unregistered name degrades to "plain" instead of erroring the render
+  -- loop that called it.
+  ds.set_style("no-such-skin")
+  local degraded = ds.chip("git_status", "M", "DiagnosticWarn", "eol")
+  eq("decoration_style unknown name: degrades to plain shape", #degraded, 1)
+  eq("decoration_style unknown name: text unchanged", degraded[1][1], " M")
+
+  -- Registry: register / exists / list / unregister round-trip.
+  local custom_calls = 0
+  ds.register("units-test-skin", function(text, base_hl, _pos)
+    custom_calls = custom_calls + 1
+    return { { text, base_hl } }
+  end)
+  check("decoration_style register: exists() true", ds.exists("units-test-skin"))
+  local found_in_list = false
+  for _, name in ipairs(ds.list()) do
+    if name == "units-test-skin" then found_in_list = true end
+  end
+  check("decoration_style register: list() includes it", found_in_list)
+  ds.set_style("units-test-skin")
+  ds.chip("git_status", "M", "DiagnosticWarn", "eol")
+  eq("decoration_style register: custom fn actually ran", custom_calls, 1)
+  ds.unregister("units-test-skin")
+  check("decoration_style unregister: exists() false", not ds.exists("units-test-skin"))
+
+  -- cwd_mode accent: the five known keys always resolve a "#rrggbb" hex
+  -- (ui.theme.palette.accent()'s own contract -- a fallback hex, never nil),
+  -- "follow" and nil do not (nothing to colour).
+  for _, key in ipairs({ "project", "nearest", "lock", "manual", "tree_leads" }) do
+    local hex = ds.accent(key)
+    check(
+      ("decoration_style accent(%s): resolves a hex"):format(key),
+      type(hex) == "string" and hex:match("^#%x%x%x%x%x%x$") ~= nil,
+      tostring(hex)
+    )
+  end
+  eq("decoration_style accent(follow): no policy, no colour", ds.accent("follow"), nil)
+  eq("decoration_style accent(nil): no colour", ds.accent(nil), nil)
+
+  local group = ds.accent_hl("project", "#112233")
+  local hl = vim.api.nvim_get_hl(0, { name = group, link = false })
+  eq("decoration_style accent_hl: fg matches the given hex", ("#%06x"):format(hl.fg), "#112233")
+
+  -- Reset so later sections (and a re-run in the same process) see the
+  -- documented default again.
+  ds.set_style("plain")
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then

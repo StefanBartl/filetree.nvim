@@ -1100,7 +1100,9 @@ Staged nodes are marked in the tree with a ` C`/` X` overlay. That marker is
 drawn on the node's own line, so it needs the adapter to resolve a line to a
 node (see Backends): it shows on neo-tree and nvim-tree, and is absent on
 netrw, oil and mini.files. The staging and the paste itself work on all five
-either way.
+either way. Skinnable via the top-level `decoration_style` option —
+`"plain"` (default) leaves the overlay as-is, `"rounded"`/`"rounded_nerdfont"`
+wrap it in a colored pill.
 
 Copying a symlink copies the link, not its target. A staged symlink — file
 or directory — pastes as a new symlink pointing at the same target, instead
@@ -1322,6 +1324,10 @@ events, so a branch switch or clearing the last conflict marker in a buffer
 updates the decorations immediately instead of waiting for the next write or
 focus change.
 
+Skinnable via the top-level `decoration_style` option — `"plain"` (default)
+leaves the signs as-is, `"rounded"`/ `"rounded_nerdfont"` wrap them in a
+colored pill.
+
 Module: lua/filetree/features/git/git_status/
 
 ------------------------------------------------------------------------------
@@ -1484,6 +1490,9 @@ Backend support. Drawn as extmarks on the node's own line, which needs the
 adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
 not, so this renders nothing there rather than misplacing anything.
+
+Skinnable via the top-level `decoration_style` option, same as Git Status
+above.
 
 Module: lua/filetree/features/lsp/lsp_diagnostics/
 
@@ -1955,6 +1964,11 @@ directly when it is not, so the two no longer overwrite each other and the
 plugin still works standalone. Use `mode = "float"` or `mode = "statusline"`
 to stay off the surface entirely.
 
+Root segment. Opt-in via the top-level `decoration_style` option — once it
+resolves to anything other than `"plain"` for `breadcrumbs`, a root label is
+prepended to the trail and colored by the active cwd_mode root policy. See
+"Decoration Style" above for the details.
+
 Module: lua/filetree/features/ui/breadcrumbs/
 
 ------------------------------------------------------------------------------
@@ -2023,6 +2037,10 @@ neo-tree already knows (it tried to resolve the link during its own scan);
 nvim-tree does not expose that, so there a symlink always gets the plain sign,
 working or not.
 
+Skinnable via the top-level `decoration_style` option — `"plain"` (default)
+leaves the sign as-is, `"rounded"`/`"rounded_nerdfont"` wrap it in a colored
+pill.
+
 Config: `opts.features.link_marker` — `show_target` (default false),
         `target_hl` (`"Comment"`), `signs.symlink` (`{text="⇢",
         hl="Special"}`), `signs.broken` (`{text="⇢!",
@@ -2089,6 +2107,10 @@ Backend support. Drawn as extmarks on the node's own line, which needs the
 adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
 not, so this renders nothing there rather than misplacing anything.
+
+Skinnable via the top-level `decoration_style` option — `"plain"` (default)
+leaves the size as-is, `"rounded"`/`"rounded_nerdfont"` wrap it in a colored
+pill.
 
 Config: `opts.features.size_info` — `enabled` (default false, opt-in),
         `show_files` (true), `show_dirs` (true), `dir_async` (true — async

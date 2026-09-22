@@ -43,7 +43,10 @@ Staged nodes are marked in the tree with a ` C`/` X` overlay. That marker
 is drawn on the node's own line, so it needs the adapter to resolve a line to
 a node (see [Backends](BACKENDS.md#line-resolved-decorations)): it shows on
 neo-tree and nvim-tree, and is absent on netrw, oil and mini.files. The
-staging and the paste itself work on all five either way.
+staging and the paste itself work on all five either way. Skinnable via the
+top-level [`decoration_style`](UI.md#decoration-style) option — `"plain"`
+(default) leaves the overlay as-is, `"rounded"`/`"rounded_nerdfont"` wrap it
+in a colored pill.
 
 **Copying a symlink copies the link, not its target.** A staged symlink —
 file or directory — pastes as a new symlink pointing at the same target,

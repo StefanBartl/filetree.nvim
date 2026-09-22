@@ -58,6 +58,12 @@ require("filetree").setup({
   -- "Progress indicators" below.
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
+  -- Skin for filetree's own line decorations (git_status, size_info,
+  -- link_marker, lsp_diagnostics, copy_move) and breadcrumbs' root segment —
+  -- see FEATURES/UI.md#decoration-style. May also be a table keyed by
+  -- feature name (plus "default") for a per-feature skin.
+  decoration_style = "plain",  -- "plain" | "rounded" | "rounded_nerdfont"
+
   -- Cap on how many nodes one walk of the rendered tree collects. Only a
   -- guard against a single directory expanded with tens of thousands of
   -- entries; the walk is already bounded by what is expanded.

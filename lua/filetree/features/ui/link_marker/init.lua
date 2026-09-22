@@ -36,6 +36,7 @@
 local au = require("filetree.util.autocmd")
 local bufevents = require("filetree.util.bufevents")
 local tree_attach = require("filetree.util.tree_attach")
+local decoration_style = require("filetree.util.decoration_style")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
@@ -98,7 +99,7 @@ function M._render()
         -- characters, right where the node's own icon begins.
         local col = (lines[linenr + 1]:find("%S") or 1) - 1
         pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, col, {
-          virt_text = { { sign.text .. " ", sign.hl } },
+          virt_text = decoration_style.chip("link_marker", sign.text, sign.hl, "inline"),
           virt_text_pos = "inline",
           priority = 45,
         })
