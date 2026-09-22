@@ -5658,15 +5658,31 @@ do
   end
   check("decoration_style rounded: body text present", saw_text)
 
-  -- "rounded_nerdfont": same shape, different (Powerline) caps -- just prove
-  -- it resolves to a distinct registry entry rather than silently aliasing
-  -- "rounded".
+  -- "rounded_nerdfont" without a declared Nerd Font (the default, and this
+  -- headless suite's own state -- nothing here ever sets
+  -- vim.g.have_nerd_font): Neovim cannot see the terminal's font, so this
+  -- must silently degrade to "rounded"'s own caps rather than emit glyphs
+  -- that render as tofu boxes.
+  local had_nerd_font_global = vim.g.have_nerd_font
+  vim.g.have_nerd_font = nil
   ds.set_style("rounded_nerdfont")
-  local nerd = ds.chip("size_info", "4.2 KB", "Comment", "eol")
-  check(
-    "decoration_style rounded_nerdfont: different caps than rounded",
-    nerd[2][1] ~= rounded[2][1]
+  local nerd_undeclared = ds.chip("size_info", "4.2 KB", "Comment", "eol")
+  eq(
+    "decoration_style rounded_nerdfont undeclared: degrades to rounded's caps",
+    nerd_undeclared[2][1],
+    rounded[2][1]
   )
+
+  -- Declared (vim.g.have_nerd_font = true, the kickstart.nvim convention
+  -- lib.nvim.ui.nerd_font itself reads): the true Powerline caps are used,
+  -- a distinct registry entry rather than silently aliasing "rounded".
+  vim.g.have_nerd_font = true
+  local nerd_declared = ds.chip("size_info", "4.2 KB", "Comment", "eol")
+  check(
+    "decoration_style rounded_nerdfont declared: different caps than rounded",
+    nerd_declared[2][1] ~= rounded[2][1]
+  )
+  vim.g.have_nerd_font = had_nerd_font_global
 
   -- Per-feature table style: an entry wins over "default"; a feature with no
   -- entry falls back to "default", not to "plain" outright.
@@ -5701,6 +5717,52 @@ do
   eq("decoration_style register: custom fn actually ran", custom_calls, 1)
   ds.unregister("units-test-skin")
   check("decoration_style unregister: exists() false", not ds.exists("units-test-skin"))
+
+  -- Overriding a built-in name. Order matters here: `unregister()` DELETES
+  -- an entry rather than restoring the shipped default underneath it (same
+  -- contract as `ui.tabline.styles.unregister()` -- registering a shipped
+  -- name is a deliberate, unguarded replacement, see M.register's own doc
+  -- comment), so the "rounded" override runs FIRST, while the built-in
+  -- "rounded_nerdfont" is still intact and can exercise it as its fallback
+  -- target; only then is "rounded_nerdfont" itself overridden, and nothing
+  -- after this block needs either name back to its shipped built-in.
+  had_nerd_font_global = vim.g.have_nerd_font
+  vim.g.have_nerd_font = nil
+
+  -- The built-in "rounded_nerdfont" wrapper's no-font fallback looks
+  -- `_registry.rounded` up BY NAME on every call, not a closure captured
+  -- once at module load -- so a host that later registers its own
+  -- "rounded" gets that replacement honoured here too.
+  local custom_rounded_calls = 0
+  ds.register("rounded", function(text, base_hl, _pos)
+    custom_rounded_calls = custom_rounded_calls + 1
+    return { { text, base_hl } }
+  end)
+  ds.set_style("rounded_nerdfont") -- still the shipped built-in at this point
+  ds.chip("git_status", "M", "DiagnosticWarn", "eol")
+  eq(
+    'decoration_style rounded_nerdfont fallback: uses the current "rounded" registration',
+    custom_rounded_calls,
+    1
+  )
+
+  -- Registering a custom "rounded_nerdfont" must fully replace the shipped
+  -- one, Nerd Font gate included -- not get silently downgraded to
+  -- "rounded" by a leftover name check elsewhere (the gate lives on the
+  -- registry entry itself, see decoration_style's own source).
+  local custom_nerdfont_calls = 0
+  ds.register("rounded_nerdfont", function(text, base_hl, _pos)
+    custom_nerdfont_calls = custom_nerdfont_calls + 1
+    return { { text, base_hl } }
+  end)
+  ds.chip("git_status", "M", "DiagnosticWarn", "eol")
+  eq(
+    "decoration_style override rounded_nerdfont: custom fn ran even without a declared font",
+    custom_nerdfont_calls,
+    1
+  )
+
+  vim.g.have_nerd_font = had_nerd_font_global
 
   -- cwd_mode accent: the five known keys always resolve a "#rrggbb" hex
   -- (ui.theme.palette.accent()'s own contract -- a fallback hex, never nil),

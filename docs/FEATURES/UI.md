@@ -53,7 +53,10 @@ by several features" shape as [`progress_style`](../configuration.md#full-option
   (`❨` `❩`) — no Nerd Font needed.
 - `"rounded_nerdfont"` — the same pill, capped with true Powerline rounded
   caps ( ) instead. Needs a terminal font patched with Nerd Font/Powerline
-  glyphs, or the caps render as tofu boxes; experimental, opt-in only.
+  glyphs — Neovim cannot see the terminal's font, so this degrades to
+  `"rounded"` (not tofu boxes) unless you declare `vim.g.have_nerd_font =
+  true`, the same convention `lib.nvim.ui.nerd_font` and the right-click
+  context menu already read. Experimental, opt-in only.
 
 ```lua
 require("filetree").setup({

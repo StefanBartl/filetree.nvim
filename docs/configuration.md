@@ -61,7 +61,8 @@ require("filetree").setup({
   -- Skin for filetree's own line decorations (git_status, size_info,
   -- link_marker, lsp_diagnostics, copy_move) and breadcrumbs' root segment —
   -- see FEATURES/UI.md#decoration-style. May also be a table keyed by
-  -- feature name (plus "default") for a per-feature skin.
+  -- feature name (plus "default") for a per-feature skin. "rounded_nerdfont"
+  -- degrades to "rounded" unless vim.g.have_nerd_font = true is declared.
   decoration_style = "plain",  -- "plain" | "rounded" | "rounded_nerdfont"
 
   -- Cap on how many nodes one walk of the rendered tree collects. Only a
