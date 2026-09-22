@@ -1412,6 +1412,71 @@ do
   end
 end
 
+-- ── git.git_status ── re-setup stops a still-in-flight query ───────────────
+-- Found in a bug/security/performance review of the commit that introduced
+-- _pending_query: run_git() stopped a query superseded by a NEW run_git()
+-- call, but setup() itself (a config reload while a query from the PREVIOUS
+-- setup is still in flight) did not -- that stale query's callback could
+-- still land and render into the buffer/state the new setup() just
+-- installed. No real git process: only that M.setup() calls .stop() on a
+-- pending handle is under test here, not the OS-level kill (a fake's `stop`
+-- cannot reproduce "the process was actually killed", which is what makes
+-- the real run_git()-supersedes-run_git() case safe -- see that module's
+-- own comment).
+do
+  local orig_system = vim.system
+  local stop_calls = 0
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function(_cmd, _opts, _cb)
+    -- Never calls back: this case only checks that setup() reaches for the
+    -- stop handle, not what happens once a stale answer arrives.
+    return {
+      kill = function()
+        stop_calls = stop_calls + 1
+      end,
+    }
+  end
+
+  local gitstat = require("filetree.features.git.git_status")
+  local tmp = (TMP_ROOT .. "/gaps-gitstatus-resetup"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/.git", "p")
+
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  local stub = {
+    name = "gaps-gitstatus-resetup-stub",
+    get_bufnr = function()
+      return tree_buf
+    end,
+    get_node_at_line = function()
+      return nil
+    end,
+  }
+
+  gitstat.setup({ enabled = true, debounce_ms = 10 }, stub)
+
+  local anchor = tmp .. "/anchor.lua"
+  vim.fn.writefile({ "-- anchor" }, anchor)
+  vim.cmd("edit " .. vim.fn.fnameescape(anchor))
+  local anchor_buf = vim.api.nvim_get_current_buf()
+
+  local prev_cwd = vim.fn.getcwd()
+  vim.fn.chdir(tmp)
+  gitstat.refresh()
+  vim.fn.chdir(prev_cwd)
+
+  check("git_status re-setup: the first refresh spawned a query", stop_calls == 0)
+
+  -- Re-setup (a config reload) while that query is still unanswered.
+  gitstat.setup({ enabled = true, debounce_ms = 10 }, stub)
+  check("git_status re-setup: setup() stopped the still-pending query", stop_calls == 1)
+
+  gitstat.teardown()
+  pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+  pcall(vim.api.nvim_buf_delete, anchor_buf, { force = true })
+  vim.system = orig_system
+end
+
 -- ── ui.link_marker ── symlink decoration, zero-cost per-line node read ──────
 do
   local link_marker = require("filetree.features.ui.link_marker")

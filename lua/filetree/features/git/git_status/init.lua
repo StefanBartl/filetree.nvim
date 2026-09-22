@@ -214,6 +214,15 @@ function M.setup(config, adapter)
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_git_status")
 
+  -- A re-setup (config reload) while a query from the PREVIOUS setup is
+  -- still in flight must not let its callback render into the new
+  -- _adapter/_status_map once it lands -- stop it the same way run_git()
+  -- stops a superseded query of its own.
+  if _pending_query then
+    _pending_query.stop()
+    _pending_query = nil
+  end
+
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(M.refresh, _cfg.debounce_ms)
 
