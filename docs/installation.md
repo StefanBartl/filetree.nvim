@@ -18,6 +18,7 @@ Optional, each detected at runtime and degrading to nothing when absent:
 | [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | `.pdf` nodes rendered into a buffer |
 | [which-key.nvim](https://github.com/folke/which-key.nvim) | Labels for the keymap set |
 | [nvzone/menu](https://github.com/nvzone/menu) | Renders the context menu if installed; `ui.kit.menu` draws it otherwise, so right-click works either way — see [Integrations](integrations.md) |
+| [gitsuite.nvim](https://github.com/StefanBartl/gitsuite.nvim) | Git Status decorations refresh immediately on a branch switch or conflict resolution instead of waiting for the next write/focus change — see [Integrations](FEATURES/INTEGRATIONS.md#git-status) |
 
 The CLI tools above are declared in [install.json](install.json) and read by
 lib.nvim's

@@ -16,7 +16,9 @@
 ---   !  ignored                    ·
 ---   C  conflict                   ✗
 ---
---- Updates on: BufEnter (tree buffer), BufWritePost (any buffer), FocusGained.
+--- Updates on: BufEnter (tree buffer), BufWritePost (any buffer),
+--- FocusGained, and gitsuite.nvim's `User GitsuiteBranchSwitched`/
+--- `GitsuiteConflictsResolved` events (optional, no dependency either way).
 
 local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
@@ -251,6 +253,21 @@ function M.setup(config, adapter)
   au.acmd({ "BufWritePost", "FocusGained" }, {
     group = _augroup,
     desc = "[filetree] Re-query git status after a write or on regaining focus",
+    callback = function()
+      debounce_refresh()
+    end,
+  })
+
+  -- React to gitsuite.nvim's post-action events (GS-25): no dependency
+  -- either way (D-2 in gitsuite's own design -- events, not a pcall
+  -- integration), this autocmd simply never fires without gitsuite.nvim
+  -- installed. A branch switch or clearing the last conflict marker in a
+  -- buffer both change what `git status` reports, and waiting for the next
+  -- BufWritePost/FocusGained would leave the decorations stale until then.
+  au.acmd("User", {
+    group = _augroup,
+    pattern = { "GitsuiteBranchSwitched", "GitsuiteConflictsResolved" },
+    desc = "[filetree] Re-query git status after a gitsuite.nvim branch switch or conflict resolution",
     callback = function()
       debounce_refresh()
     end,

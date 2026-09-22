@@ -1477,6 +1477,76 @@ do
   vim.system = orig_system
 end
 
+-- ── git.git_status ── gitsuite.nvim's User events trigger a refresh ────────
+-- GS-25: no dependency on gitsuite.nvim either way (D-2 in its own design --
+-- events, not a pcall integration) -- these two `User` events simply never
+-- fire without it installed. What is under test here is that when they DO
+-- fire, they debounce-refresh exactly like BufWritePost/FocusGained already
+-- do, instead of leaving the decorations stale until the next one.
+do
+  local orig_system = vim.system
+  local call_count = 0
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function(_cmd, _opts, on_done)
+    call_count = call_count + 1
+    vim.schedule(function()
+      on_done({ code = 0, stdout = "", stderr = "" })
+    end)
+    return { wait = function() end }
+  end
+
+  local gitstat = require("filetree.features.git.git_status")
+  local tmp = (TMP_ROOT .. "/gaps-gitstatus-events"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/.git", "p")
+
+  local tree_buf = vim.api.nvim_create_buf(false, true)
+  local stub = {
+    name = "gaps-gitstatus-events-stub",
+    get_bufnr = function()
+      return tree_buf
+    end,
+    get_node_at_line = function()
+      return nil
+    end,
+  }
+
+  local anchor = tmp .. "/anchor.lua"
+  vim.fn.writefile({ "-- anchor" }, anchor)
+  vim.cmd("edit " .. vim.fn.fnameescape(anchor))
+  local anchor_buf = vim.api.nvim_get_current_buf()
+
+  local prev_cwd = vim.fn.getcwd()
+  vim.fn.chdir(tmp)
+
+  gitstat.setup({ enabled = true, debounce_ms = 10 }, stub)
+  check("git_status events: setup() itself spawned one query", call_count == 1)
+
+  vim.api.nvim_exec_autocmds(
+    "User",
+    { pattern = "GitsuiteBranchSwitched", data = { dir = tmp, branch = "feature" } }
+  )
+  local ok_switch = vim.wait(1000, function()
+    return call_count >= 2
+  end, 10)
+  check("git_status events: GitsuiteBranchSwitched triggers a refresh", ok_switch)
+
+  vim.api.nvim_exec_autocmds(
+    "User",
+    { pattern = "GitsuiteConflictsResolved", data = { bufnr = tree_buf } }
+  )
+  local ok_resolved = vim.wait(1000, function()
+    return call_count >= 3
+  end, 10)
+  check("git_status events: GitsuiteConflictsResolved triggers a refresh too", ok_resolved)
+
+  vim.fn.chdir(prev_cwd)
+  gitstat.teardown()
+  pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+  pcall(vim.api.nvim_buf_delete, anchor_buf, { force = true })
+  vim.system = orig_system
+end
+
 -- ── ui.link_marker ── symlink decoration, zero-cost per-line node read ──────
 do
   local link_marker = require("filetree.features.ui.link_marker")
