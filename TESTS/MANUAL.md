@@ -532,16 +532,10 @@ bufferline.nvim, …).
 
 ## Known limits of this test environment
 
-- **No git blame**: needs `git log`, and only works inside a real git repository
-  — which is given here, as long as the test is started from the repo root.
-- **No harpoon**: not installed in this config, so harpoon_integration is not
-  exercised.
-- **POSIX features** (`file_permissions`): a no-op on Windows, and not enabled
-  in the test config.
-- **Telescope/fzf**: not installed, so find_or_grep_menu falls back to
+- **Telescope/fzf**: not installed, so `find_files`/`grep_in_dir` fall back to
   `vim.ui.select` — which is the expected behaviour.
-- **No persistence** between sessions: `marks`, `bookmarks`, `session` and the
-  rest write to `%TEMP%/filetree-test/data/nvim/filetree/`, which is emptied by
+- **No persistence** between sessions: `marks`, `session` and the rest write
+  to `%TEMP%/filetree-test/data/nvim/filetree/`, which is emptied by
   `rm -rf /tmp/filetree-test`.
 - **Windows symlinks need Developer Mode** (or an elevated Neovim) to create —
   without it, C.8-C.11 and D.6-D.8's `:Filetree link`/`ln -s`/`mklink` steps

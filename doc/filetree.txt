@@ -79,9 +79,9 @@ Turn things off (or override defaults) only where you want to: >lua
   require("filetree").setup({
     adapter = "neotree",
     features = {
-      shell_run   = { enabled = false },   -- disable a default-on feature
-      git_actions = { enabled = true },    -- enable a default-off feature
-      marks       = { keymap = "M" },      -- keep on, remap its key
+      shell_run  = { enabled = false },    -- disable a default-on feature
+      size_info  = { enabled = true },     -- enable a default-off feature
+      marks      = { keymap = "M" },       -- keep on, remap its key
     },
   })
 <
@@ -183,21 +183,17 @@ reason:
                          visible effect unless other code calls into it.
   auto_resize            Automatic width management fights the manual
                          window_size_cycler (on by default).
-  handle_guard            Patches a neo-tree internal (fs_watch) and closes
+  handle_guard           Patches a neo-tree internal (fs_watch) and closes
                          libuv handles it owns, to fix a sporadic Windows
                          file-lock at the source. neo-tree adapter +
                          Windows/WSL only; a no-op elsewhere. Inspect with
                          `:Filetree handles` or |filetree-health|.
-  git_actions            Default `gs` collides with live_search, and it mutates
-                         the git index (stage/unstage) from the tree.
-  path_utils             Redundant with path_copy (on by default); enabling
-                         both ships two overlapping path-copy keymap families.
-  harpoon_integration    Hard-requires the external harpoon plugin.
-  telescope_integration  Hard-requires telescope; redundant with the
-                         builtin-fallback find_or_grep_menu / find_files.
-  tree_open_keymaps      Binds global (not tree-local) normal-mode keys to toggle
-                         the tree left/right/float/current — too opinionated to
-                         enable without explicit opt-in.
+  size_info              Purely cosmetic — an eol extmark next to every node
+                         — and `dir_async = true` runs `du`/`Get-ChildItem`
+                         per directory node by default; better opted into
+                         than sprung on someone who just wanted a tree.
+  tree_toggle            Four global Alt keys; a claim on the keyboard the
+                         user makes, not the plugin.
 
 Everything else in the feature registry is on by default. For the full keymap
 reference see docs/BINDINGS/KEYMAPS.md.
