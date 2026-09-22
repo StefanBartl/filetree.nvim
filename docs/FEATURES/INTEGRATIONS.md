@@ -15,6 +15,14 @@ the adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
 not, so this renders nothing there rather than misplacing anything.
 
+**Refreshes on:** `BufEnter` (tree buffer), `BufWritePost` (any buffer),
+`FocusGained`, and — optionally, no dependency either way —
+[gitsuite.nvim](https://github.com/StefanBartl/gitsuite.nvim)'s `User
+GitsuiteBranchSwitched`/`GitsuiteConflictsResolved` events, so a branch
+switch or clearing the last conflict marker in a buffer updates the
+decorations immediately instead of waiting for the next write or focus
+change.
+
 - **Module:** `lua/filetree/features/git/git_status/`
 
 ## Marks
