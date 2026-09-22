@@ -1595,8 +1595,7 @@ lengths — so a host builds neo-tree's own opts from it. Leaving `family`
 unset resolves to `"nerd"` only when `vim.g.have_nerd_font = true` is
 declared, `"common"` otherwise; passing `family = "nerd"` explicitly (as
 below) always renders Nerd Font glyphs, tofu boxes included if the terminal
-font doesn't have them — the same convention `lib.nvim.ui.nerd_font` and
-`decoration_style` use.
+font doesn't have them — the same convention `lib.nvim.ui.nerd_font` uses.
 
 >lua
 local sw = require("filetree.features.nav.source_switcher")
