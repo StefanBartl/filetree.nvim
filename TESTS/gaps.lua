@@ -1194,13 +1194,15 @@ do
   pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
 end
 
--- ── git.git_status ── porcelain parsing, no real git process ────────────────
+-- ── git.git_status ── via lib.nvim.git.status_porcelain_async, no real git ──
 do
   local orig_system = vim.system
   local captured_argv
   ---@diagnostic disable-next-line: duplicate-set-field
   vim.system = function(cmd, _opts, on_done)
     captured_argv = cmd
+    -- -z form: NUL-separated, XY + " " + path per entry; a rename/copy is
+    -- "XY new" then a bare "old" field, per lib.nvim.git.parse_status.
     local stdout = table.concat({
       "M  modified.lua",
       "A  added.lua",
@@ -1208,8 +1210,10 @@ do
       "?? untracked.lua",
       "!! ignored.lua",
       "UU conflict.lua",
-      'R  "old name.lua" -> "new name.lua"',
-    }, "\n") .. "\n"
+      "R  new name.lua",
+      "old name.lua",
+      "",
+    }, "\0")
     vim.schedule(function()
       on_done({ code = 0, stdout = stdout, stderr = "" })
     end)
@@ -1266,11 +1270,13 @@ do
   vim.fn.chdir(prev_cwd)
 
   check(
-    "git_status: ran `git status --porcelain -u` with a -C root",
+    "git_status: ran `git status --porcelain -z -u` via lib.nvim.git, with -C root",
     captured_argv ~= nil
       and captured_argv[1] == "git"
-      and captured_argv[2] == "-C"
-      and type(captured_argv[3]) == "string"
+      and vim.tbl_contains(captured_argv, "-C")
+      and vim.tbl_contains(captured_argv, "--porcelain")
+      and vim.tbl_contains(captured_argv, "-z")
+      and vim.tbl_contains(captured_argv, "-u")
   )
   if captured_argv then
     check(
@@ -1315,6 +1321,95 @@ do
   pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
   pcall(vim.api.nvim_buf_delete, anchor_buf, { force = true })
   vim.system = orig_system
+end
+
+-- ── git.git_status ── real git, path quoting (space, non-ASCII byte) ───────
+-- The regression this guards: `git status --porcelain` WITHOUT `-z`
+-- C-quotes any path with a space or non-ASCII byte ("a b.txt", octal escapes
+-- for "ü.txt"), so a parser built on that form keys its map by a string that
+-- names no file on disk. lib.nvim.git.status_porcelain_async always asks for
+-- `-z`; this runs a REAL git process against REAL fixture files to prove the
+-- swap actually closed the gap, not just that the mock in the block above
+-- returns what was written into it.
+do
+  if vim.fn.executable("git") == 0 then
+    print("  skip  git_status (real git): `git` not on PATH")
+  else
+    local gitstat = require("filetree.features.git.git_status")
+    local tmp = (TMP_ROOT .. "/gaps-gitstatus-real"):gsub("\\", "/")
+    vim.fn.delete(tmp, "rf")
+    vim.fn.mkdir(tmp, "p")
+    vim.system({ "git", "-C", tmp, "init", "-q", "-b", "main" }, { text = true }):wait()
+    vim.fn.writefile({ "x" }, tmp .. "/a b.txt")
+    vim.fn.writefile({ "x" }, tmp .. "/ü.txt")
+    vim.fn.writefile({ "x" }, tmp .. "/plain.txt")
+
+    local tree_buf = vim.api.nvim_create_buf(false, true)
+    local NODE_AT = {
+      [0] = { path = tmp .. "/a b.txt" },
+      [1] = { path = tmp .. "/ü.txt" },
+      [2] = { path = tmp .. "/plain.txt" },
+    }
+    vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "a b.txt", "ü.txt", "plain.txt" })
+    local stub = {
+      name = "gaps-gitstatus-real-stub",
+      get_bufnr = function()
+        return tree_buf
+      end,
+      get_node_at_line = function(_, linenr)
+        return NODE_AT[linenr]
+      end,
+    }
+
+    gitstat.setup({ enabled = true, debounce_ms = 10 }, stub)
+
+    local anchor = tmp .. "/anchor.lua"
+    vim.fn.writefile({ "-- anchor" }, anchor)
+    vim.cmd("edit " .. vim.fn.fnameescape(anchor))
+    local anchor_buf = vim.api.nvim_get_current_buf()
+
+    local prev_cwd = vim.fn.getcwd()
+    vim.fn.chdir(tmp)
+    gitstat.refresh()
+    vim.fn.chdir(prev_cwd)
+
+    local function extmarks_of(line)
+      return vim.api.nvim_buf_get_extmarks(
+        tree_buf,
+        -1,
+        { line, 0 },
+        { line, -1 },
+        { details = true }
+      )
+    end
+    local ok_wait = vim.wait(2000, function()
+      return #extmarks_of(0) > 0 and #extmarks_of(1) > 0 and #extmarks_of(2) > 0
+    end, 20)
+    check("git_status (real git): the async query against a real repo completed", ok_wait)
+
+    local function sign_of(line)
+      local m = extmarks_of(line)
+      if #m == 0 then return nil end
+      return m[1][4].virt_text[1][1]
+    end
+
+    eq(
+      "git_status (real git): 'a b.txt' (space in the name) renders as untracked",
+      sign_of(0),
+      " ?"
+    )
+    eq(
+      "git_status (real git): 'ü.txt' (non-ASCII byte in the name) renders as untracked",
+      sign_of(1),
+      " ?"
+    )
+    eq("git_status (real git): 'plain.txt' renders as untracked too", sign_of(2), " ?")
+
+    gitstat.teardown()
+    pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })
+    pcall(vim.api.nvim_buf_delete, anchor_buf, { force = true })
+    vim.fn.delete(tmp, "rf")
+  end
 end
 
 -- ── ui.link_marker ── symlink decoration, zero-cost per-line node read ──────
