@@ -113,7 +113,11 @@ local function chip_groups(base_hl)
 
   local chip_group = "FiletreeChip_" .. base_hl:gsub("[^%w]", "_")
   local cap_group = chip_group .. "_Cap"
-  vim.api.nvim_set_hl(0, chip_group, { bg = hex, fg = palette.contrast_fg(hex), bold = true })
+  -- No `bold`: a sign is a single glyph already sized to sit inline with the
+  -- node name, and a bold cell reads visibly larger/heavier next to it --
+  -- exactly the "way too big" a real-terminal comparison against the
+  -- adapter's own (un-skinned) markers turned up.
+  vim.api.nvim_set_hl(0, chip_group, { bg = hex, fg = palette.contrast_fg(hex) })
   vim.api.nvim_set_hl(0, cap_group, { fg = hex })
 
   _chip_cache[base_hl] = chip_group
@@ -138,7 +142,11 @@ local function pill(left, right)
   return function(text, base_hl, pos)
     local chip_group, cap_group = chip_groups(base_hl)
     local head = { left, cap_group }
-    local body = { " " .. text .. " ", chip_group }
+    -- No padding around `text` itself: the caps already read as the pill's
+    -- boundary, and a sign is one glyph -- extra inner spaces on top of a
+    -- coloured `bg` block are what made a real-terminal comparison against
+    -- the adapter's own markers read as "way too big".
+    local body = { text, chip_group }
     local tail = { right, cap_group }
     if pos == "inline" then return { head, body, tail, { " " } } end
     return { { " " }, head, body, tail }
