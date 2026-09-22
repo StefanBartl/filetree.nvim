@@ -23,7 +23,6 @@ local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local bufutil = require("filetree.util.buffer")
 local pathutil = require("filetree.util.path")
-local decoration_style = require("filetree.util.decoration_style")
 local M = {}
 
 ---@type FiletreeSizeInfoConfig
@@ -213,7 +212,7 @@ function M._render()
 
       if size_str then
         pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-          virt_text = decoration_style.chip("size_info", size_str, _cfg.hl_group, "eol"),
+          virt_text = { { " " .. size_str, _cfg.hl_group } },
           virt_text_pos = "eol",
           priority = 40,
         })

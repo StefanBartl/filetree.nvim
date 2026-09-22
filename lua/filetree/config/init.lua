@@ -58,7 +58,6 @@ local KNOWN_TOP = {
   deps_popup = true,
   refs = true,
   progress_style = true,
-  decoration_style = true,
   max_visible_nodes = true,
 }
 
@@ -107,10 +106,6 @@ local function sanitize(opts)
       found_issues[#found_issues + 1] = describe_unknown(key, KNOWN_TOP, "")
     elseif key == "adapter" and type(value) ~= "string" then
       found_issues[#found_issues + 1] = ("option 'adapter' must be a string, got %s -- using the default"):format(
-        type(value)
-      )
-    elseif key == "decoration_style" and type(value) ~= "string" and type(value) ~= "table" then
-      found_issues[#found_issues + 1] = ("option 'decoration_style' must be a string or a table, got %s -- using the default"):format(
         type(value)
       )
     elseif key == "features" then

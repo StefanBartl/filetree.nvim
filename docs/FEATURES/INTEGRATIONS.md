@@ -23,10 +23,6 @@ switch or clearing the last conflict marker in a buffer updates the
 decorations immediately instead of waiting for the next write or focus
 change.
 
-Skinnable via the top-level [`decoration_style`](UI.md#decoration-style)
-option — `"plain"` (default) leaves the signs as-is, `"rounded"`/
-`"rounded_nerdfont"` wrap them in a colored pill.
-
 - **Module:** `lua/filetree/features/git/git_status/`
 
 ## Marks
@@ -114,9 +110,6 @@ it is visible without expanding into it first.
 the adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
 not, so this renders nothing there rather than misplacing anything.
-
-Skinnable via the top-level [`decoration_style`](UI.md#decoration-style)
-option, same as Git Status above.
 
 - **Module:** `lua/filetree/features/lsp/lsp_diagnostics/`
 

@@ -22,7 +22,6 @@
 
 local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
-local decoration_style = require("filetree.util.decoration_style")
 local lib_debounce = require("lib.nvim.debounce")
 local lib_git = require("lib.nvim.git")
 local M = {}
@@ -161,7 +160,7 @@ function M._render()
         local sign = sign_key and _cfg.signs[sign_key]
         if sign then
           pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-            virt_text = decoration_style.chip("git_status", sign.text, sign.hl, "eol"),
+            virt_text = { { " " .. sign.text, sign.hl } },
             virt_text_pos = "eol",
             priority = 50,
           })
