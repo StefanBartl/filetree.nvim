@@ -76,7 +76,9 @@
 ---@alias FiletreeDecorationStyleName
 ---| "plain"              No visual change (default).
 ---| "rounded"             Colored pill, plain-Unicode caps (no Nerd Font).
----| "rounded_nerdfont"    Same pill, true Powerline caps (needs a Nerd Font).
+---| "rounded_nerdfont"    Same pill, true Powerline caps. Degrades to
+---                        "rounded" unless `vim.g.have_nerd_font = true` is
+---                        declared (see `lib.nvim.ui.nerd_font`).
 ---| string                Any name registered via `decoration_style.register()`.
 
 ---A global skin name, or a table keyed by feature name (`git_status`,
@@ -500,7 +502,11 @@
 ---@field enabled?   boolean
 ---@field mode?      "winbar"|"float"|"statusline"  Display mode (default "winbar").
 ---@field separator? string   Part separator (default "  ").
----@field max_depth? integer  Max number of path segments (default 5).
+---@field max_depth? integer  Max number of path segments under the root (default 5).
+---                            Not counting the `decoration_style`-gated root
+---                            label itself, when one is shown -- that is a
+---                            separate element (see UI.md#decoration-style),
+---                            not one more level of depth under the root.
 ---@field hl_dir?    string   Highlight group for directory parts (default "Comment").
 ---@field hl_file?   string   Highlight group for the file/leaf part (default "Normal").
 ---@field hl_sep?    string   Highlight group for separators (default "NonText").

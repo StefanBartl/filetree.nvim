@@ -19,9 +19,13 @@
 ---   "rounded_nerdfont"   Same pill, capped with true Powerline rounded caps
 ---                        (U+E0B6/U+E0B4, the same glyphs ui.nvim's tabline
 ---                        `rounded` style uses) instead -- needs a terminal
----                        font patched with Nerd Font/Powerline glyphs, or
----                        the caps render as tofu boxes. Experimental;
----                        opt-in only, see docs/FEATURES/UI.md.
+---                        font patched with Nerd Font/Powerline glyphs.
+---                        Neovim cannot see the terminal's font (see
+---                        `lib.nvim.ui.nerd_font`'s own module doc), so this
+---                        degrades to "rounded" -- not tofu boxes -- unless
+---                        the user declared `vim.g.have_nerd_font = true`,
+---                        the same convention `lib.nvim.ui.nerd_font` and
+---                        `filetree.integrations.menu` already read.
 ---
 --- Global style, set once from `setup({ decoration_style = ... })` (mirrors
 --- `filetree.util.progress`'s `progress_style`). May also be a table keyed by
@@ -41,6 +45,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.decoration_style]")
 local palette = require("ui.theme.palette")
+local nerd_font = require("lib.nvim.ui.nerd_font")
 
 local M = {}
 
@@ -67,34 +72,51 @@ end
 
 -- ── "rounded" / "rounded_nerdfont" ───────────────────────────────────────────
 
----@type table<string, { hex: string, group: string }>  base_hl -> derived chip color/group
+---@type table<string, string>  base_hl -> derived chip group name
 local _chip_cache = {}
 ---@type table<string, string>  base_hl -> derived cap group name
 local _cap_cache = {}
+
+---Both caches hold nothing but highlight-group NAMES (stable per `base_hl`);
+---the colour each name points at is only ever wrong after a `:colorscheme`
+---switch, so a single ColorScheme autocmd -- installed once, here, at
+---module load -- invalidates both wholesale instead of every `chip_groups()`
+---call re-deriving `base_hl`'s live `fg` just to compare it against what was
+---cached last time. `chip_groups()` itself then trusts a cache hit outright.
+vim.api.nvim_create_autocmd("ColorScheme", {
+  group = vim.api.nvim_create_augroup("filetree_decoration_style", { clear = true }),
+  desc = "[filetree] Invalidate decoration_style's derived chip/cap highlight groups",
+  callback = function()
+    _chip_cache = {}
+    _cap_cache = {}
+  end,
+})
 
 ---(Re-)derive the chip highlight group from `base_hl`'s own `fg`, promoted
 ---to the pill's `bg`, with a contrasting `fg` for the text inside it -- plus
 ---a cap group of the same colour with no `bg` of its own, so the cap glyph
 ---blends into whatever sits behind the row instead of squaring off the
----pill's rounded edge. Cheap and idempotent, so it is re-derived (not
----cached forever) whenever `base_hl`'s own `fg` has changed since the last
----call -- picks up a `:colorscheme` switch on the very next render, with no
----ColorScheme autocmd of its own needed.
+---pill's rounded edge. Cached by `base_hl` name alone (see the ColorScheme
+---autocmd above for invalidation) -- a cache hit costs one table lookup, no
+---`nvim_get_hl`/`nvim_set_hl` call, which matters here: unlike `accent_hl`
+---below (once per breadcrumb rebuild), this runs once per *decorated tree
+---line*, on every debounced CursorMoved redraw of git_status/size_info/
+---link_marker/lsp_diagnostics/copy_move.
 ---@param base_hl string
 ---@return string chip_group, string cap_group
 local function chip_groups(base_hl)
+  local cached = _chip_cache[base_hl]
+  if cached then return cached, _cap_cache[base_hl] end
+
   local ok, hl = pcall(vim.api.nvim_get_hl, 0, { name = base_hl, link = false })
   local hex = (ok and hl.fg) and ("#%06x"):format(hl.fg) or "#a0a8b7"
-
-  local cached = _chip_cache[base_hl]
-  if cached and cached.hex == hex then return cached.group, _cap_cache[base_hl] end
 
   local chip_group = "FiletreeChip_" .. base_hl:gsub("[^%w]", "_")
   local cap_group = chip_group .. "_Cap"
   vim.api.nvim_set_hl(0, chip_group, { bg = hex, fg = palette.contrast_fg(hex), bold = true })
   vim.api.nvim_set_hl(0, cap_group, { fg = hex })
 
-  _chip_cache[base_hl] = { hex = hex, group = chip_group }
+  _chip_cache[base_hl] = chip_group
   _cap_cache[base_hl] = cap_group
   return chip_group, cap_group
 end
@@ -123,9 +145,36 @@ local function pill(left, right)
   end
 end
 
+---Warned about the missing Nerd Font declaration already this session, so
+---the notify fires once, not once per render.
+---@type boolean
+local _warned_no_nerdfont = false
+
+local rounded_pill = pill(CAP_ROUNDED_LEFT, CAP_ROUNDED_RIGHT)
+local rounded_nerdfont_pill = pill(CAP_NERDFONT_LEFT, CAP_NERDFONT_RIGHT)
+
 _registry.plain = plain
-_registry.rounded = pill(CAP_ROUNDED_LEFT, CAP_ROUNDED_RIGHT)
-_registry.rounded_nerdfont = pill(CAP_NERDFONT_LEFT, CAP_NERDFONT_RIGHT)
+_registry.rounded = rounded_pill
+-- Neovim cannot see the terminal's font (see `lib.nvim.ui.nerd_font`'s own
+-- module doc), so without an explicit `vim.g.have_nerd_font = true`
+-- declaration this degrades to `_registry.rounded` -- looked up by name, not
+-- captured as `rounded_pill` above, so a host that later calls
+-- `M.register("rounded", ...)` gets its replacement honoured here too --
+-- rather than emitting caps that render as tofu boxes. The gate lives on
+-- the registry ENTRY itself (not as a name check in `resolve_name()`) so a
+-- host that registers its own "rounded_nerdfont" replaces this gate along
+-- with the rendering, exactly like registering any other built-in name.
+_registry.rounded_nerdfont = function(text, base_hl, pos)
+  if nerd_font.available() then return rounded_nerdfont_pill(text, base_hl, pos) end
+  if not _warned_no_nerdfont then
+    _warned_no_nerdfont = true
+    notify.warn(
+      'decoration_style "rounded_nerdfont" needs vim.g.have_nerd_font = true'
+        .. ' -- falling back to "rounded"'
+    )
+  end
+  return _registry.rounded(text, base_hl, pos)
+end
 
 -- ── Registry ──────────────────────────────────────────────────────────────────
 
@@ -179,7 +228,10 @@ end
 
 ---Which skin name resolves for `feature` right now: the per-feature entry
 ---in a table style, else that table's `default`, else a plain string style
----applied to everything, else "plain".
+---applied to everything, else "plain". A resolved "rounded_nerdfont" is
+---returned as-is here -- whether it actually renders Powerline caps or
+---degrades to "rounded" is that registry entry's own call (see its
+---definition above), not this function's.
 ---@param feature string
 ---@return string
 local function resolve_name(feature)
