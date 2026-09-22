@@ -42,12 +42,13 @@ single out that way.
 
 Marks a symlinked node in the tree listing so it reads differently from an
 ordinary file/directory at a glance: a small `⇢` sign right before the
-node's own icon (`⇢!` for a symlink whose target could not be resolved),
+node's own name (`⇢!` for a symlink whose target could not be resolved),
 optionally followed by its target at the end of the line when
 `show_target = true`. The sign's position is found fresh per render, as the
-first non-blank column on the line — past whatever indent/tree-guide
-characters the backend drew, not a fixed offset — so it lines up correctly
-regardless of nesting depth or indent width.
+byte offset of the node's own name on the line — past whatever indent,
+tree-guide characters and icon the backend drew, not a fixed offset — so it
+lines up correctly regardless of nesting depth or indent width, and never
+splices into the middle of a guide line.
 
 **On by default**, unlike most decorators here — it costs nothing extra per
 render: it reads `is_link`/`link_to`/`link_broken` straight off data the
