@@ -49,7 +49,6 @@
 ---@field deps_popup        boolean                          Show the lib.nvim.deps "declared tools" popup once, ever, on first setup() after install (default true; needs lib.nvim.deps -- a no-op without it).
 ---@field refs              FiletreeRefsConfig               Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style    Lib.Progress.Style               Style for batch-operation progress indicators (trash, paste, ...): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress -- a no-op without it.
----@field decoration_style  FiletreeDecorationStyleOpt        Skin for line decorations (git_status/size_info/link_marker/lsp_diagnostics/copy_move) and the breadcrumbs' root segment: "plain" (default) | "rounded" | "rounded_nerdfont", or a table keyed by feature name (plus "default") for a per-feature skin. See lua/filetree/util/decoration_style.
 ---@field max_visible_nodes integer                          Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
 
 --- What `require("filetree").setup({})` accepts: any subset of the above.
@@ -67,24 +66,7 @@
 ---@field deps_popup        boolean?                         Show the lib.nvim.deps "declared tools" popup once, ever, on first setup() after install (default true; needs lib.nvim.deps — a no-op without it).
 ---@field refs              FiletreeRefsConfig?              Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style    Lib.Progress.Style?              Style for batch-operation progress indicators (trash, paste, …): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress — a no-op without it.
----@field decoration_style  FiletreeDecorationStyleOpt?      Skin for line decorations (git_status/size_info/link_marker/lsp_diagnostics/copy_move) and the breadcrumbs' root segment: "plain" (default) | "rounded" | "rounded_nerdfont", or a table keyed by feature name (plus "default") for a per-feature skin. See lua/filetree/util/decoration_style.
 ---@field max_visible_nodes integer?                        Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
-
----Which skin `decoration_style` (or one of its per-feature entries) names.
----Registering a custom name via `filetree.util.decoration_style.register()`
----makes that name valid here too — this alias only documents the built-ins.
----@alias FiletreeDecorationStyleName
----| "plain"              No visual change (default).
----| "rounded"             Colored pill, plain-Unicode caps (no Nerd Font).
----| "rounded_nerdfont"    Same pill, true Powerline caps. Degrades to
----                        "rounded" unless `vim.g.have_nerd_font = true` is
----                        declared (see `lib.nvim.ui.nerd_font`).
----| string                Any name registered via `decoration_style.register()`.
-
----A global skin name, or a table keyed by feature name (`git_status`,
----`size_info`, `link_marker`, `lsp_diagnostics`, `copy_move`, `breadcrumbs`)
----plus `default`, for a per-feature skin.
----@alias FiletreeDecorationStyleOpt FiletreeDecorationStyleName|table<string, FiletreeDecorationStyleName>
 
 ---@class FiletreeConfirmationsConfig
 ---@field paste        boolean?  copy_move's paste-staged-nodes prompt (default false).
@@ -502,11 +484,7 @@
 ---@field enabled?   boolean
 ---@field mode?      "winbar"|"float"|"statusline"  Display mode (default "winbar").
 ---@field separator? string   Part separator (default "  ").
----@field max_depth? integer  Max number of path segments under the root (default 5).
----                            Not counting the `decoration_style`-gated root
----                            label itself, when one is shown -- that is a
----                            separate element (see UI.md#decoration-style),
----                            not one more level of depth under the root.
+---@field max_depth? integer  Max number of path segments (default 5).
 ---@field hl_dir?    string   Highlight group for directory parts (default "Comment").
 ---@field hl_file?   string   Highlight group for the file/leaf part (default "Normal").
 ---@field hl_sep?    string   Highlight group for separators (default "NonText").

@@ -120,11 +120,6 @@ function M.setup(user_config)
   -- own progress_style option.
   require("filetree.util.progress").set_style(cfg.progress_style)
 
-  -- Apply the global decoration skin (git_status/size_info/link_marker/
-  -- lsp_diagnostics/copy_move signs + breadcrumbs' root segment) so those
-  -- features render through it without each one needing its own option.
-  require("filetree.util.decoration_style").set_style(cfg.decoration_style)
-
   -- Configure the reference engine before any feature sets up: every fileops
   -- feature that mutates paths reads its scan/ask/apply policy from here
   -- rather than carrying its own copy (see filetree/refs/init.lua).

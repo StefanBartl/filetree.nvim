@@ -208,18 +208,6 @@ Exercises: `nvim_buf_set_extmark`, end-of-line virtual text.
 | C.10 | Set `features.link_marker = { show_target = true }`, restart, look at a symlink's line | The sign is followed by `-> <target path>` |
 | C.11 | A plain (non-symlink) file or directory | No sign at all |
 
-**decoration_style** (opt-in top-level option; needs a headed terminal — a
-headless run can only check the extmark *shape*, not what it actually looks
-like):
-
-| # | Test | Expected |
-|---|------|----------|
-| C.12 | `decoration_style = "rounded"`, restart, look at a git_status/size_info/link_marker/lsp_diagnostics sign and a staged copy_move `C`/`X` overlay | Each renders as a colored pill (parenthesis-style caps `❨ ❩`, no tofu boxes even without a Nerd Font) instead of the plain sign |
-| C.13 | `decoration_style = "rounded_nerdfont"` + `vim.g.have_nerd_font = true` in a terminal with a Nerd Font-patched font, same signs | Same pill, but capped with real Powerline rounded glyphs |
-| C.13b | `decoration_style = "rounded_nerdfont"` WITHOUT declaring `vim.g.have_nerd_font = true` (the out-of-the-box case) | Silently degrades to the plain-Unicode `"rounded"` caps (`❨ ❩`), not tofu boxes — plus a one-time `[filetree.decoration_style]` notify naming the missing declaration |
-| C.14 | `decoration_style = { default = "plain", link_marker = "rounded" }` | Only the symlink sign gets the pill treatment; git_status/size_info/lsp_diagnostics/copy_move stay plain |
-| C.15 | Enable `features.cwd_mode` and `features.breadcrumbs`, set `decoration_style = "rounded"`, cycle cwd_mode through `project`/`nearest`/`lock`/`manual`/`tree_leads` (`:Filetree cwd mode <name>`) | The breadcrumb trail gains a colored root-name segment at the front, its color changing per mode; switching to `follow` (or `decoration_style = "plain"`) removes the segment again |
-
 ---
 
 ### D. Floating windows — node_info + preview

@@ -26,16 +26,6 @@ return {
   -- lib.nvim.progress installed.
   progress_style = "auto",
 
-  -- Skin for filetree's own line decorations (git_status, size_info,
-  -- link_marker, lsp_diagnostics, copy_move) and the breadcrumbs' root
-  -- segment. "plain" (default) changes nothing; "rounded" wraps signs in a
-  -- colored pill (plain Unicode caps, no Nerd Font needed); "rounded_nerdfont"
-  -- is the same pill with true Powerline caps (needs a patched terminal
-  -- font). May also be a table keyed by feature name (plus "default") for a
-  -- per-feature skin. See lua/filetree/util/decoration_style and
-  -- docs/FEATURES/UI.md#decoration-style.
-  decoration_style = "plain",
-
   -- Cap on how many nodes one walk of the rendered tree collects. Only a
   -- guard against a single directory expanded with tens of thousands of
   -- entries; the walk is already bounded by what is expanded.
