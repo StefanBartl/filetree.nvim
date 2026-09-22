@@ -12,6 +12,7 @@
 
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
+local decoration_style = require("filetree.util.decoration_style")
 local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
@@ -163,7 +164,7 @@ function M._render()
             )
           if fmt then
             pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-              virt_text = { { " " .. fmt, sev_hl(filtered) } },
+              virt_text = decoration_style.chip("lsp_diagnostics", fmt, sev_hl(filtered), "eol"),
               virt_text_pos = "eol",
               priority = 60,
             })

@@ -38,6 +38,61 @@ single out that way.
 - **Module:** `lua/filetree/features/ui/node_info/`
 - **Keymaps:** `I`
 
+## Decoration Style
+
+A single top-level `decoration_style` option skins five line-based markers
+(`git_status`, `size_info`, `link_marker`, `lsp_diagnostics`, `copy_move`'s
+clipboard overlay) plus Breadcrumbs' root segment, the same "one option read
+by several features" shape as [`progress_style`](../configuration.md#full-option-reference).
+
+- `"plain"` (**default**) — today's rendering, byte-for-byte unchanged. Every
+  skin below is opt-in.
+- `"rounded"` — wraps each sign/label in a colored pill: the marker's own
+  highlight group's `fg` becomes the pill's background, with black/white text
+  for contrast. Capped with plain Unicode parenthesis-ornament glyphs
+  (`❨` `❩`) — no Nerd Font needed.
+- `"rounded_nerdfont"` — the same pill, capped with true Powerline rounded
+  caps ( ) instead. Needs a terminal font patched with Nerd Font/Powerline
+  glyphs, or the caps render as tofu boxes; experimental, opt-in only.
+
+```lua
+require("filetree").setup({
+  decoration_style = "rounded",
+})
+```
+
+**Per-feature skins.** `decoration_style` may also be a table keyed by
+feature name (`git_status`, `size_info`, `link_marker`, `lsp_diagnostics`,
+`copy_move`, `breadcrumbs`) plus `default`, so one feature can run a
+different skin than the rest:
+
+```lua
+require("filetree").setup({
+  decoration_style = {
+    default = "plain",
+    link_marker = "rounded", -- only symlinks get the pill treatment
+  },
+})
+```
+
+**Breadcrumbs' root segment.** When Breadcrumbs' resolved skin is not
+`"plain"`, a root label (the directory [cwd_mode](CORE.md#cwd-mode) actually
+picked) is prepended to the trail, colored by which root policy is active —
+`project`/`nearest`/`lock`/`manual`/`tree_leads`, read live from the active
+colorscheme via `ui.theme.palette.accent()` (ui.nvim is a hard dependency of
+this plugin already — see [installation.md](../installation.md)). `follow`
+mode (no policy) or cwd_mode disabled falls back to the root label in plain
+`hl_dir`, with no color — there is no policy to show.
+
+**Custom skins.** `lua/filetree/util/decoration_style` exposes the same
+small registry shape as `ui.tabline.styles`: `require("filetree.util.decoration_style").register(name, fn)`
+adds a skin of your own (a host's own look, or a variant with different
+caps/colors) that `decoration_style = "<name>"` can then select, the same
+way you would register a custom `progress_style`-adjacent extension point.
+
+- **Module:** `lua/filetree/util/decoration_style/`
+- **Config:** top-level `decoration_style` (default **`"plain"`**)
+
 ## Link Marker
 
 Marks a symlinked node in the tree listing so it reads differently from an
@@ -68,6 +123,10 @@ backend: neo-tree already knows (it tried to resolve the link during its
 own scan); nvim-tree does not expose that, so there a symlink always gets
 the plain sign, working or not.
 
+Skinnable via the top-level [`decoration_style`](#decoration-style) option
+— `"plain"` (default) leaves the sign as-is, `"rounded"`/`"rounded_nerdfont"`
+wrap it in a colored pill.
+
 - **Module:** `lua/filetree/features/ui/link_marker/`
 - **Config:** `opts.features.link_marker` — `show_target` (default **false**), `target_hl` (`"Comment"`), `signs.symlink` (`{text="⇢", hl="Special"}`), `signs.broken` (`{text="⇢!", hl="DiagnosticError"}`)
 
@@ -86,6 +145,12 @@ writes the option directly when it is not, so the two no longer overwrite
 each other and the plugin still works standalone. Use `mode = "float"` or
 `mode = "statusline"` to stay off the surface entirely.
 
+**Root segment.** Opt-in via the top-level
+[`decoration_style`](#decoration-style) option — once it resolves to
+anything other than `"plain"` for `breadcrumbs`, a root label is prepended
+to the trail and colored by the active [cwd_mode](CORE.md#cwd-mode) root
+policy. See "Decoration Style" above for the details.
+
 - **Module:** `lua/filetree/features/ui/breadcrumbs/`
 
 ## Size Info
@@ -100,6 +165,10 @@ something to spring on someone who just wanted a tree.
 the adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do
 not, so this renders nothing there rather than misplacing anything.
+
+Skinnable via the top-level [`decoration_style`](#decoration-style) option
+— `"plain"` (default) leaves the size as-is, `"rounded"`/`"rounded_nerdfont"`
+wrap it in a colored pill.
 
 - **Module:** `lua/filetree/features/ui/size_info/`
 - **Config:** `opts.features.size_info` — `enabled` (default **false**, opt-in), `show_files` (true), `show_dirs` (true), `dir_async` (true — async `du -sb`/`Get-ChildItem` for directories; `false` skips directory sizes entirely rather than blocking), `hl_group` (`"Comment"`)

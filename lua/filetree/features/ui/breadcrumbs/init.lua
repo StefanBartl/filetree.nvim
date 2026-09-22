@@ -18,6 +18,7 @@ local notify = require("filetree.util.notify").create("[filetree.breadcrumbs]")
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local ui_statusline = require("lib.nvim.ui.statusline")
+local decoration_style = require("filetree.util.decoration_style")
 local M = {}
 
 ---@type FiletreeBreadcrumbsConfig
@@ -101,13 +102,30 @@ local function build(path)
 
   if #parts == 0 then return vim.fn.fnamemodify(root or path, ":t"), "" end
 
+  -- Opt-in "new element" (design report, filetree-rounded §2): prepend a
+  -- root label naming the directory cwd_mode's root policy actually chose,
+  -- coloured by which policy that is (project/nearest/lock/manual/
+  -- tree_leads -- exactly `ui.theme.palette.accent()`'s key set). Gated on
+  -- `decoration_style` so the default "plain" skin leaves this whole
+  -- function's output identical to before this existed; "follow" (no
+  -- policy) or cwd_mode disabled resolve no accent, and the root label then
+  -- falls back to plain `hl_dir` like every other segment.
+  local root_hl = nil
+  if root and decoration_style.active("breadcrumbs") then
+    local mode = require("filetree.features.nav.cwd_mode").mode()
+    local accent = decoration_style.accent(mode)
+    if accent then root_hl = decoration_style.accent_hl(mode, accent) end
+    table.insert(parts, 1, vim.fn.fnamemodify(root, ":t"))
+  end
+
   local plain = table.concat(parts, _cfg.separator)
 
   -- Build highlighted string for winbar (%#HlGroup#text resets at end)
   local hl_parts = {}
   for i, p in ipairs(parts) do
     local is_last = (i == #parts)
-    local hl = is_last and _cfg.hl_file or _cfg.hl_dir
+    local is_root = (i == 1) and root_hl ~= nil
+    local hl = is_root and root_hl or (is_last and _cfg.hl_file or _cfg.hl_dir)
     hl_parts[#hl_parts + 1] = "%#" .. hl .. "#" .. p
     if not is_last then hl_parts[#hl_parts + 1] = "%#" .. _cfg.hl_sep .. "#" .. _cfg.separator end
   end
