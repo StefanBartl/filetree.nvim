@@ -1,10 +1,11 @@
 ---@module 'filetree.features.git.git_status'
 ---@brief Decorate tree nodes with git status indicators via extmarks.
 ---@description
---- Runs `git status --porcelain` in the nearest project root and maps each
---- changed path to its status code. The adapter's highlight_node() is NOT
---- used here — instead we render directly into the tree buffer via extmarks
---- (virtual text at end-of-line) so we stay adapter-agnostic.
+--- Queries git status for the nearest project root via
+--- lib.nvim.git.status_porcelain_async and maps each changed path to its
+--- status code. The adapter's highlight_node() is NOT used here -- instead
+--- we render directly into the tree buffer via extmarks (virtual text at
+--- end-of-line) so we stay adapter-agnostic.
 ---
 --- Indicators:
 ---   M  modified (working tree)   ●
@@ -20,6 +21,7 @@
 local au = require("filetree.util.autocmd")
 local tree_attach = require("filetree.util.tree_attach")
 local lib_debounce = require("lib.nvim.debounce")
+local lib_git = require("lib.nvim.git")
 local M = {}
 
 ---@type FiletreeGitStatusConfig
@@ -70,51 +72,59 @@ local _debounce = nil
 ---@type table?
 local _render_debounce = nil
 
+---In-flight `status_porcelain_async` job, if any. Stopping it on a new
+---`run_git()` call means a slow, superseded response can only ever arrive as
+---a killed-process failure (map = nil, ignored below), never overwrite a
+---newer, already-rendered `_status_map` with stale data.
+---@type { stop: fun() }?
+local _pending_query = nil
+
 -- ── Git query ─────────────────────────────────────────────────────────────────
+
+---One path's XY status code -> the single-letter code this module renders.
+---@param xy string  two-character XY status, e.g. " M", "??", "R ", "UU"
+---@return string
+local function classify(xy)
+  if xy:find("U") or xy == "AA" or xy == "DD" then
+    return "C"
+  elseif xy:sub(1, 1) == "?" then
+    return "?"
+  elseif xy:sub(1, 1) == "!" then
+    return "!"
+  elseif xy:sub(1, 1) == "R" or xy:sub(2, 2) == "R" then
+    return "R"
+  elseif xy:sub(1, 1) == "A" or xy:sub(2, 2) == "A" then
+    return "A"
+  elseif xy:sub(1, 1) == "D" or xy:sub(2, 2) == "D" then
+    return "D"
+  else
+    return "M"
+  end
+end
 
 ---@param root string  git repo root directory
 local function run_git(root)
-  local args = { "git", "-C", root, "status", "--porcelain", "-u" }
-  if _cfg.show_ignored then args[#args + 1] = "--ignored" end
+  if _pending_query then _pending_query.stop() end
 
-  vim.system(
-    args,
-    { text = true },
-    vim.schedule_wrap(function(result)
-      if result.code ~= 0 then return end
+  _pending_query = lib_git.status_porcelain_async(
+    { dir = root, ignored = _cfg.show_ignored },
+    function(map)
+      _pending_query = nil
+      if not map then return end
+
       local new_map = {}
-      for line in (result.stdout or ""):gmatch("[^\n]+") do
-        if #line >= 4 then
-          local xy = line:sub(1, 2)
-          local path = line:sub(4):gsub('"', "")
-          -- handle rename "old -> new"
-          local rename_target = path:match("^.+ %-> (.+)$")
-          if rename_target then path = rename_target end
-          local abs = root .. "/" .. path
-          abs = abs:gsub("\\", "/")
-
-          local code
-          if xy:find("U") or xy == "AA" or xy == "DD" then
-            code = "C"
-          elseif xy:sub(1, 1) == "?" then
-            code = "?"
-          elseif xy:sub(1, 1) == "!" then
-            code = "!"
-          elseif xy:sub(1, 1) == "R" or xy:sub(2, 2) == "R" then
-            code = "R"
-          elseif xy:sub(1, 1) == "A" or xy:sub(2, 2) == "A" then
-            code = "A"
-          elseif xy:sub(1, 1) == "D" or xy:sub(2, 2) == "D" then
-            code = "D"
-          else
-            code = "M"
-          end
-          new_map[abs] = code
-        end
+      for path, entry in pairs(map) do
+        -- `map` keys are repo-root relative (lib.nvim.git's -z parser, exact
+        -- for paths with spaces/non-ASCII bytes -- unlike the old `-> "` string
+        -- match this replaced, a literal " -> " inside a path is never
+        -- mistaken for a rename: renames arrive pre-resolved, keyed by the new
+        -- path, with the old one in entry.orig_path.
+        local abs = (root .. "/" .. path):gsub("\\", "/")
+        new_map[abs] = classify(entry.code)
       end
       _status_map = new_map
       M._render()
-    end)
+    end
   )
 end
 
@@ -243,6 +253,10 @@ end
 function M.teardown()
   M.clear()
   _adapter = nil
+  if _pending_query then
+    _pending_query.stop()
+    _pending_query = nil
+  end
   if _debounce then
     if _debounce then _debounce.cancel() end
     _debounce = nil
