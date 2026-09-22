@@ -1357,24 +1357,50 @@ do
       { details = true }
     )
   end
-  local function virt_text_of(line)
-    local m = extmarks_of(line)
-    if #m == 0 then return nil end
-    local parts = {}
-    for _, chunk in ipairs(m[1][4].virt_text) do
-      parts[#parts + 1] = chunk[1]
+  ---Inline sign text (col 0, "inline" pos) and eol target text (or nil for
+  ---each) on `line`, found by `virt_text_pos` rather than array order.
+  local function marks_of(line)
+    local inline, eol
+    for _, m in ipairs(extmarks_of(line)) do
+      local d = m[4]
+      local text = d.virt_text and d.virt_text[1] and d.virt_text[1][1]
+      if d.virt_text_pos == "inline" then
+        inline = { text = text, col = m[3] }
+      elseif d.virt_text_pos == "eol" then
+        eol = text
+      end
     end
-    return table.concat(parts)
+    return inline, eol
   end
 
-  eq("link_marker: an ordinary file gets no marker", virt_text_of(0), nil)
+  local inline0, eol0 = marks_of(0)
+  eq("link_marker: an ordinary file gets no marker", inline0, nil)
+  eq("link_marker: an ordinary file gets no target either", eol0, nil)
+
+  local inline1, eol1 = marks_of(1)
   eq(
-    "link_marker: a resolvable symlink gets the symlink sign + target (show_target=true)",
-    virt_text_of(1),
-    " ⇢ -> /x/plain.txt"
+    "link_marker: a resolvable symlink gets the symlink sign, inline at the line's start",
+    inline1 and inline1.text,
+    "⇢ "
   )
-  eq("link_marker: a dangling symlink gets the broken sign", virt_text_of(2), " ⇢!")
-  eq("link_marker: an ordinary directory gets no marker", virt_text_of(3), nil)
+  eq("link_marker: the inline sign sits at the first non-blank column", inline1 and inline1.col, 0)
+  eq(
+    "link_marker: show_target=true adds the target as a separate eol marker",
+    eol1,
+    " -> /x/plain.txt"
+  )
+
+  local inline2, eol2 = marks_of(2)
+  eq(
+    "link_marker: a dangling symlink gets the broken sign, inline",
+    inline2 and inline2.text,
+    "⇢! "
+  )
+  eq("link_marker: no link_to in the stub, so no eol target", eol2, nil)
+
+  local inline3, eol3 = marks_of(3)
+  eq("link_marker: an ordinary directory gets no marker", inline3, nil)
+  eq("link_marker: an ordinary directory gets no target either", eol3, nil)
 
   link_marker.teardown()
   pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })

@@ -203,7 +203,7 @@ Exercises: `nvim_buf_set_extmark`, end-of-line virtual text.
 
 | # | Test | Expected |
 |---|------|----------|
-| C.8 | Create a symlink in the tree's directory (`:Filetree link`, or `ln -s`/`mklink` outside Neovim) and reveal it | A `⇢` sign appears at the end of its line |
+| C.8 | Create a symlink in the tree's directory (`:Filetree link`, or `ln -s`/`mklink` outside Neovim) and reveal it | A `⇢` sign appears right before its icon/name, not at the end of the line |
 | C.9 | Point a symlink at a path that does not exist (or delete/move the target after linking) | The sign becomes `⇢!`, in a different (error) highlight |
 | C.10 | Set `features.link_marker = { show_target = true }`, restart, look at a symlink's line | The sign is followed by `-> <target path>` |
 | C.11 | A plain (non-symlink) file or directory | No sign at all |

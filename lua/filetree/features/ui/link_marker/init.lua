@@ -1,11 +1,18 @@
 ---@module 'filetree.features.ui.link_marker'
----@brief Decorate symlinked tree nodes with an eol extmark, so a symlink
----reads differently from a plain file/directory at a glance.
+---@brief Decorate symlinked tree nodes with an inline sign right before their
+---own icon, so a symlink reads differently from a plain file/directory at a
+---glance -- and an optional eol marker naming the target.
 ---@description
 --- Adapter-agnostic, same shape as `git_status`/`size_info`: walks the
 --- rendered tree buffer line by line and asks the adapter for the node on
---- each line, then draws a small end-of-line marker for any node the adapter
---- reports as a link.
+--- each line, then draws a small sign for any node the adapter reports as a
+--- link. The sign itself is placed as an *inline* extmark right past the
+--- line's leading indent/guide characters -- i.e. exactly where the node's
+--- own icon starts -- found fresh per render as the first non-blank byte on
+--- the line, since indent width and guide glyphs are backend/config-
+--- dependent and not otherwise exposed to this adapter-agnostic feature.
+--- (`show_target`'s "-> target" text, when on, stays an eol marker -- an
+--- inline path in front of the name would push the name itself around.)
 ---
 --- Costs nothing extra per render: it reads `node.is_link`/`node.link_to`/
 --- `node.link_broken`, fields the neo-tree and nvim-tree adapters already
@@ -81,21 +88,27 @@ function M._render()
   vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)
   if not _adapter.get_node_at_line then return end
 
-  local line_count = vim.api.nvim_buf_line_count(bufnr)
-  for linenr = 0, line_count - 1 do
+  local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+  for linenr = 0, #lines - 1 do
     local node = _adapter.get_node_at_line(bufnr, linenr)
     if node and node.is_link then
       local sign = (node.link_broken and _cfg.signs.broken) or _cfg.signs.symlink
       if sign then
-        local parts = { { " " .. sign.text, sign.hl } }
-        if _cfg.show_target and type(node.link_to) == "string" and node.link_to ~= "" then
-          parts[#parts + 1] = { " -> " .. node.link_to, _cfg.target_hl }
-        end
-        pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-          virt_text = parts,
-          virt_text_pos = "eol",
+        -- First non-blank byte on the line -- past any indent/tree-guide
+        -- characters, right where the node's own icon begins.
+        local col = (lines[linenr + 1]:find("%S") or 1) - 1
+        pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, col, {
+          virt_text = { { sign.text .. " ", sign.hl } },
+          virt_text_pos = "inline",
           priority = 45,
         })
+        if _cfg.show_target and type(node.link_to) == "string" and node.link_to ~= "" then
+          pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
+            virt_text = { { " -> " .. node.link_to, _cfg.target_hl } },
+            virt_text_pos = "eol",
+            priority = 45,
+          })
+        end
       end
     end
   end
