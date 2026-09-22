@@ -1551,19 +1551,44 @@ end
 do
   local link_marker = require("filetree.features.ui.link_marker")
   local tree_buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(
-    tree_buf,
-    0,
-    -1,
-    false,
-    { "plain.txt", "a_symlink", "broken_symlink", "a_dir" }
-  )
+  -- Line 4 mimics a real backend's guide-drawn indent -- a still-open
+  -- ancestor's "│" followed by this node's own "├─" connector and icon --
+  -- to catch the regression where an inline sign landed ON that "│" (the
+  -- first non-blank byte) instead of past the whole guide+icon run, which
+  -- visually detached the ancestor's guide line from its column and made
+  -- the symlink read as nested one level deeper than it actually is.
+  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, {
+    "plain.txt",
+    "a_symlink",
+    "broken_symlink",
+    "a_dir",
+    "│  ├─  nested_symlink",
+  })
 
   local NODE_AT = {
-    [0] = { path = "/x/plain.txt", type = "file" },
-    [1] = { path = "/x/a_symlink", type = "file", is_link = true, link_to = "/x/plain.txt" },
-    [2] = { path = "/x/broken_symlink", type = "file", is_link = true, link_broken = true },
-    [3] = { path = "/x/a_dir", type = "directory" },
+    [0] = { name = "plain.txt", path = "/x/plain.txt", type = "file" },
+    [1] = {
+      name = "a_symlink",
+      path = "/x/a_symlink",
+      type = "file",
+      is_link = true,
+      link_to = "/x/plain.txt",
+    },
+    [2] = {
+      name = "broken_symlink",
+      path = "/x/broken_symlink",
+      type = "file",
+      is_link = true,
+      link_broken = true,
+    },
+    [3] = { name = "a_dir", path = "/x/a_dir", type = "directory" },
+    [4] = {
+      name = "nested_symlink",
+      path = "/x/nested_symlink",
+      type = "file",
+      is_link = true,
+      link_to = "/x/plain.txt",
+    },
   }
   local stub = {
     name = "gaps-linkmarker-stub",
@@ -1613,7 +1638,11 @@ do
     inline1 and inline1.text,
     "⇢ "
   )
-  eq("link_marker: the inline sign sits at the first non-blank column", inline1 and inline1.col, 0)
+  eq(
+    "link_marker: with no indent, the inline sign sits at the name's column (0)",
+    inline1 and inline1.col,
+    0
+  )
   eq(
     "link_marker: show_target=true adds the target as a separate eol marker",
     eol1,
@@ -1631,6 +1660,17 @@ do
   local inline3, eol3 = marks_of(3)
   eq("link_marker: an ordinary directory gets no marker", inline3, nil)
   eq("link_marker: an ordinary directory gets no target either", eol3, nil)
+
+  local line4 = vim.api.nvim_buf_get_lines(tree_buf, 4, 5, false)[1]
+  local name_col = line4:find("nested_symlink", 1, true) - 1
+  local inline4 = marks_of(4)
+  eq(
+    "link_marker: with guide characters ahead of it, the sign still sits right "
+      .. "before the name -- not spliced into the guide run at the first non-blank byte",
+    inline4 and inline4.col,
+    name_col
+  )
+  check("link_marker: that name column is past the guide/icon prefix, not at it", name_col > 0)
 
   link_marker.teardown()
   pcall(vim.api.nvim_buf_delete, tree_buf, { force = true })

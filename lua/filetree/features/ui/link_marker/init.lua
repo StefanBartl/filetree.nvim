@@ -1,16 +1,26 @@
 ---@module 'filetree.features.ui.link_marker'
 ---@brief Decorate symlinked tree nodes with an inline sign right before their
----own icon, so a symlink reads differently from a plain file/directory at a
+---own name, so a symlink reads differently from a plain file/directory at a
 ---glance -- and an optional eol marker naming the target.
 ---@description
 --- Adapter-agnostic, same shape as `git_status`/`size_info`: walks the
 --- rendered tree buffer line by line and asks the adapter for the node on
 --- each line, then draws a small sign for any node the adapter reports as a
---- link. The sign itself is placed as an *inline* extmark right past the
---- line's leading indent/guide characters -- i.e. exactly where the node's
---- own icon starts -- found fresh per render as the first non-blank byte on
---- the line, since indent width and guide glyphs are backend/config-
---- dependent and not otherwise exposed to this adapter-agnostic feature.
+--- link. The sign itself is placed as an *inline* extmark right before the
+--- node's own display name -- found fresh per render as the byte offset of
+--- `node.name` on the line, since indent width and guide glyphs (box-drawing
+--- guide lines, expand/collapse chevrons, devicons, ...) are backend/config-
+--- dependent and not otherwise exposed to this adapter-agnostic feature: a
+--- naive "first non-blank byte" used to land ON a guide character (e.g. the
+--- "│" of a still-open ancestor) whenever one preceded the node's own icon,
+--- splicing the sign into the *middle* of the guide run instead of past it
+--- -- which visually detached that ancestor's guide line from its column and
+--- made the symlink read as nested one level deeper than it actually is.
+--- Anchoring on the name itself sidesteps guessing the guide/icon charset
+--- entirely: whatever precedes the name (indent, guides, chevrons, icon)
+--- stays exactly as the adapter drew it. Falls back to the old
+--- first-non-blank heuristic on the rare line where `node.name` can't be
+--- found verbatim (e.g. an adapter that truncates or decorates the name).
 --- (`show_target`'s "-> target" text, when on, stays an eol marker -- an
 --- inline path in front of the name would push the name itself around.)
 ---
@@ -94,9 +104,16 @@ function M._render()
     if node and node.is_link then
       local sign = (node.link_broken and _cfg.signs.broken) or _cfg.signs.symlink
       if sign then
-        -- First non-blank byte on the line -- past any indent/tree-guide
-        -- characters, right where the node's own icon begins.
-        local col = (lines[linenr + 1]:find("%S") or 1) - 1
+        -- Byte offset of the node's own display name -- past indent,
+        -- tree-guide characters, any expand/collapse chevron and the node's
+        -- icon, all of which stay untouched and correctly aligned this way.
+        -- Falls back to the first non-blank byte when the name can't be
+        -- found verbatim (see module comment above).
+        local line = lines[linenr + 1]
+        local name_start = type(node.name) == "string"
+          and node.name ~= ""
+          and line:find(node.name, 1, true)
+        local col = (name_start or line:find("%S") or 1) - 1
         pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, col, {
           virt_text = { { sign.text .. " ", sign.hl } },
           virt_text_pos = "inline",
