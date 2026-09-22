@@ -140,10 +140,9 @@ parent directory.
 written to every non-tree, non-floating window — and `vim.wo.winbar` is a
 surface with no notion of an owner. `my.nvim`'s breadcrumbs put a symbol
 trail in the same place, and ui.nvim's `ui.winbar.set()` exists to arbitrate
-exactly that. This feature goes through it when ui.nvim is installed and
-writes the option directly when it is not, so the two no longer overwrite
-each other and the plugin still works standalone. Use `mode = "float"` or
-`mode = "statusline"` to stay off the surface entirely.
+exactly that. This feature always goes through it, so the two no longer
+overwrite each other. Use `mode = "float"` or `mode = "statusline"` to stay
+off the surface entirely.
 
 **Root segment.** Opt-in via the top-level
 [`decoration_style`](#decoration-style) option — once it resolves to
