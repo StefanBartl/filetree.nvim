@@ -2,8 +2,9 @@
 --- Alternate ways to open the current node besides the adapter's default <CR>.
 ---
 --- Covers the handful of "open elsewhere" actions that don't fit any other
---- feature: split/vsplit/new-tab, and silently adding the file to the buffer
---- list without moving focus off the tree.
+--- feature: split/vsplit/new-tab, silently adding the file to the buffer
+--- list without moving focus off the tree, and collapsing a directory that
+--- the adapter's own <CR> can only ever expand.
 ---
 --- Splits/tabs never touch the tree window itself -- they resolve (or open)
 --- a real editor window first, the same way smart_create avoids hijacking
@@ -14,7 +15,8 @@
 ---   sv      Open in a horizontal split
 ---   st      Open in a new tab
 ---   gb      Add to buffer list without switching focus (badd)
----   <S-CR>  Same as gb
+---   <S-CR>  On a directory: collapse it (adapter.collapse_node). On a file:
+---           same as gb.
 
 local notify = require("filetree.util.notify").create("[filetree.open_variants]")
 
@@ -104,6 +106,20 @@ function M.open_badd()
   notify.info("Added to buffer list: " .. vim.fn.fnamemodify(path, ":~:."))
 end
 
+---`<S-CR>`: `open_badd` for a file. For a directory there is nothing to add
+---to the buffer list, and the adapter's own `<CR>` -- expand-only on every
+---backend here -- has no way back down a chain once it is open; this is that
+---way back, via `adapter.collapse_node()`.
+function M.open_badd_or_collapse()
+  if not _adapter then return end
+  local node = _adapter.get_current_node and _adapter.get_current_node()
+  if node and node.type == "directory" then
+    _adapter.collapse_node(node)
+    return
+  end
+  M.open_badd()
+end
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---@param config FiletreeOpenVariantsConfig
@@ -136,8 +152,8 @@ function M.setup(config, adapter)
     {
       name = "badd_alt",
       field = "keymap_badd_alt",
-      rhs = M.open_badd,
-      desc = "add to buffer list (no focus switch)",
+      rhs = M.open_badd_or_collapse,
+      desc = "collapse directory, else add to buffer list (no focus switch)",
     },
   })
 end

@@ -196,7 +196,7 @@ return {
     },
     {
       lhs = "<S-CR>",
-      desc = "Add to buffer list (no focus switch)",
+      desc = "Collapse directory (else add to buffer list, no focus switch)",
       feature = "open_variants",
       scope = "tree",
     },

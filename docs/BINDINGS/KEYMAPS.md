@@ -95,7 +95,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `sv` | open_variants | `keymap_split` | Open current node in a horizontal split |
 | `st` | open_variants | `keymap_tabnew` | Open current node in a new tab |
 | `gb` | open_variants | `keymap_badd` | Add current node to buffer list (no focus switch) |
-| `<S-CR>` | open_variants | `keymap_badd_alt` | Same as `gb` |
+| `<S-CR>` | open_variants | `keymap_badd_alt` | On a directory: collapse it. Otherwise same as `gb` |
 | `O` | open_replace | `keymap` | Open current node over the editor window; the buffer that was there stays listed |
 | `<M-CR>` | open_replace | `keymap_swap` | Open current node in place of the focused buffer: closes it and takes its bufferline slot |
 | `<C-CR>` | open_replace | `keymap_swap_alt` | Same as `<M-CR>`, for terminals that deliver `<C-CR>` distinctly from `<CR>` |

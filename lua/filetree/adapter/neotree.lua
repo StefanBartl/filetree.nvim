@@ -430,6 +430,61 @@ function M.expand_node(node)
   return true
 end
 
+---@internal
+---Nearest ancestor of `tree_node` that is itself collapsible (has children),
+---stopping before the tree root -- collapsing the root would hide the whole
+---tree, not just back out one level.
+---@param state neotree.State
+---@param tree_node table
+---@return table? parent
+local function collapsible_parent(state, tree_node)
+  local ok_id, parent_id = pcall(function()
+    return tree_node.get_parent_id and tree_node:get_parent_id()
+  end)
+  if not ok_id or not parent_id then return nil end
+
+  local ok_parent, parent = pcall(function()
+    return state.tree:get_node(parent_id)
+  end)
+  if not ok_parent or not parent then return nil end
+
+  local ok_root, root = pcall(function()
+    return state.tree:get_nodes()[1]
+  end)
+  local is_root = ok_root and root and parent.get_id and parent:get_id() == root:get_id()
+  if is_root then return nil end
+
+  if parent.has_children and parent:has_children() then return parent end
+  return nil
+end
+
+---Collapse `node`, falling back to its nearest collapsible ancestor when the
+---node itself isn't expanded.
+---
+---That fallback is not cosmetic: `group_empty_dirs` (neo-tree's merged
+---display for a chain of directories holding nothing but another single
+---directory, e.g. "personal/All/Finish" on one line) rebuilds the node from
+---scratch on every lazy-loaded level -- see neo-tree's
+---`ui/renderer.lua:show_nodes`, the `state.group_empty_dirs` branch. That
+---replacement is spliced in via `tree:set_nodes()` directly, bypassing the
+---`node:expand()` call that normally flips `is_expanded` -- so the merged
+---node's `is_expanded()` reads false right after the very "expand" that
+---produced it, and `<CR>` never recognizes it as open: every further press
+---just drills one level deeper with no way back. Collapsing the parent
+---instead is the same fallback neo-tree's own `close_node` command (bound to
+---`C` by default) uses, and reliably gets the merged node off screen since it
+---is that parent's only child.
+---
+---Each merge step also re-parents the replacement onto the *grandparent* of
+---the directory it just absorbed (see `show_nodes`: `parentId =
+---parent:get_parent_id()`), not onto anything still visible in between -- so
+---a chain merged all the way from a top-level directory ends up parented
+---directly on the tree root, where `collapsible_parent` refuses to help (root
+---itself is not a level to "back out" to). `M.refresh()` is the fallback for
+---exactly that case: it re-scans from disk and rebuilds the top level fresh,
+---which is unmerged and collapsed because the merged node was never actually
+---marked expanded to begin with -- same end result as a structural collapse,
+---reached by rebuilding instead of folding.
 ---@param node FiletreeNode
 ---@return boolean
 function M.collapse_node(node)
@@ -439,12 +494,33 @@ function M.collapse_node(node)
     return state.tree:get_node(node.id)
   end)
   if not ok2 or not tree_node then return false end
-  if tree_node.is_expanded and tree_node:is_expanded() and tree_node.collapse then
-    tree_node:collapse()
-    local ok3, renderer = pcall(require, "neo-tree.ui.renderer")
-    if ok3 and renderer and renderer.redraw then pcall(renderer.redraw, state) end
+
+  local target
+  if
+    tree_node.is_expanded
+    and tree_node:is_expanded()
+    and tree_node.has_children
+    and tree_node:has_children()
+  then
+    target = tree_node
+  else
+    target = collapsible_parent(state, tree_node)
   end
-  return true
+
+  if target and target.collapse then
+    target:collapse()
+    local ok3, renderer = pcall(require, "neo-tree.ui.renderer")
+    if ok3 and renderer then
+      if renderer.redraw then pcall(renderer.redraw, state) end
+      if renderer.focus_node and target.get_id then
+        pcall(renderer.focus_node, state, target:get_id())
+      end
+    end
+    return true
+  end
+
+  if node.type == "directory" then return M.refresh() end
+  return false
 end
 
 ---@param path string

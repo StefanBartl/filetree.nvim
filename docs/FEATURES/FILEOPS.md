@@ -500,8 +500,38 @@ Open a node in a split (`sg`), vsplit (`sv`), tab (`st`), or add it to
 the buffer list without switching focus (`gb`/`<S-CR>`) — every common
 "open, but not by replacing my current window" shape in one feature.
 
+On a **directory**, `<S-CR>` does something else entirely: it collapses the
+node via `adapter.collapse_node()`, since the adapter's own `<CR>` only ever
+expands (there's no toggle to undo it — see the note below). `gb` stays
+file-only; only `<S-CR>` picks up the directory case.
+
 - **Module:** `lua/filetree/features/fileops/open_variants/`
 - **Keymaps:** `sg`, `sv`, `st`, `gb`/`<S-CR>`
+
+### Collapsing a drilled-into directory (neo-tree)
+
+neo-tree's `filesystem.group_empty_dirs` merges a chain of directories that
+hold nothing but another single directory into one display line —
+`personal` containing only `All` containing only `Finish` renders as
+`personal/All/Finish`. Each `<CR>` lazily loads one more level and rebuilds
+that merged node from scratch, which can leave it reporting
+`is_expanded() == false` right after the very expand that just opened it —
+so `<CR>` never recognizes it as open, and every further press just drills
+one level deeper with no way back to `personal`.
+
+`<S-CR>` collapses the node when it is expanded, and falls back to its
+nearest collapsible ancestor when it isn't (the same fallback neo-tree's own
+`close_node` command — bound to `C` by default — uses). Each merge step
+re-parents the replacement node onto the *grandparent* of whatever it just
+absorbed, so a chain merged all the way from a top-level directory ends up
+parented directly on the tree root — nothing left to structurally collapse
+without hiding the whole tree. For that case `<S-CR>` falls back once more,
+to a plain refresh: a re-scan rebuilds the top level fresh from disk, which
+is unmerged and collapsed because the node was never actually marked
+expanded to begin with.
+
+- **Module (adapter side):** `M.collapse_node()` in
+  `lua/filetree/adapter/neotree.lua`
 
 ## Buffer Save
 

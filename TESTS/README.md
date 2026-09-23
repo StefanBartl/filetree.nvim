@@ -13,16 +13,20 @@ Everything CI runs, plus the manual pass it cannot.
 | [`config_schema.lua`](config_schema.lua) | unit: the per-feature option schemas (`filetree.config.schema`) — the engine, the `setup()` paths (typo, wrong type, out-of-range, non-table body, the deprecated `refs` options), and a drift check that every feature module exports a `SCHEMA` accepting its own defaults and declaring every option it reads |
 | [`gaps.lua`](gaps.lua) | unit: fs-heavy and lifecycle modules `units.lua`/`smoke.lua` had not reached yet — see "gaps.lua" below |
 | [`adapter_lines.lua`](adapter_lines.lua) | integration: the adapter's line→node mapping, against a **real neo-tree and a real nvim-tree** — the only suite that needs a tree plugin |
+| [`group_empty_dirs_collapse.lua`](group_empty_dirs_collapse.lua) | integration: `<S-CR>` (`open_variants.open_badd_or_collapse`) collapsing a neo-tree `group_empty_dirs` merged directory line, against a **real neo-tree** — drives the actual `<CR>`/`<S-CR>` buffer keymaps, not the adapter function directly |
 | [`refs/`](refs/) | fixture-based: real on-disk multi-file projects, described below |
 | [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
 
 All of them are headless and exit 0 on a pass, and CI gates on every one.
-All but `adapter_lines.lua` run against a stub adapter and need no tree
-plugin; that one needs neo-tree (plus nui/plenary/devicons) and prints a skip
-instead of failing when they are absent, because what it tests — the mapping
-between the lines a backend DREW and the nodes it reports for them — is
-precisely what a stub cannot have. `MANUAL.md` describes each in more detail
-and carries the lib.nvim resolution notes.
+All but `adapter_lines.lua` and `group_empty_dirs_collapse.lua` run against a
+stub adapter and need no tree plugin; those two need neo-tree (plus
+nui/plenary/devicons, and lib.nvim for the latter) and print a skip instead
+of failing when they are absent, because what they test needs a real
+backend: `adapter_lines.lua`'s line→node mapping is precisely what a stub
+cannot have, and `group_empty_dirs_collapse.lua` exercises neo-tree's own
+merge/replace machinery (`ui/renderer.lua`'s `group_empty_dirs` branch), not
+just a hand-built node shape. `MANUAL.md` describes each in more detail and
+carries the lib.nvim resolution notes.
 
 ## gaps.lua
 

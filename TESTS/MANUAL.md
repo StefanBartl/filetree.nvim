@@ -43,6 +43,24 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   `$FILETREE_NVIMTREE` point at checkouts; `$FILETREE_ADAPTER_LINES=nvimtree`
   limits a run to one backend.
 
+- **[group_empty_dirs_collapse.lua](group_empty_dirs_collapse.lua)** —
+  integration: `<S-CR>` (`open_variants.open_badd_or_collapse`, dispatching to
+  `adapter/neotree.lua`'s `collapse_node`) collapsing a neo-tree
+  `group_empty_dirs` merged directory line — the "personal/All/Finish on one
+  row" display for a chain of directories holding nothing but another single
+  directory. Drives the real `<CR>`/`<S-CR>` buffer keymaps against a real
+  neo-tree (not the adapter function directly, and not `fscommands.open()`
+  either — confirmed by hand that call no-ops from a scripted context; only
+  the actual bound keymap goes through neo-tree's real dispatch), over a real
+  fixture tree, and asserts three things: `<CR>` merging one level at a time
+  (`personal` → `personal\All` → `personal\All\Finish`), that a further `<CR>`
+  on the merged line only ever drills deeper (the bug — no toggle back), and
+  that `<S-CR>` gets it back to a plain collapsed `personal` line either way.
+  The real merge/replace goes through an async fs scan that can noticeably
+  outlast a short fixed sleep, so every step polls (up to 8s) instead.
+  Needs neo-tree, nui, plenary, nvim-web-devicons and lib.nvim — same
+  resolution rules as `adapter_lines.lua`, skips (exit 0) without them.
+
 - **[sidebar_guard.lua](sidebar_guard.lua)** — unit: the `nav/sidebar_guard`
   feature. A window carrying a `neo-tree` filetype buffer plus a stub adapter
   and a stubbed `neo-tree.events` exercise the default redirect (a foreign
