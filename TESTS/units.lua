@@ -4226,6 +4226,60 @@ do
   )
 end
 
+-- ── open_variants: <S-CR> on a directory collapses instead of badd ──────────
+do
+  local dir_node =
+    { path = (TMP_ROOT .. "/units-openvariants-dir"):gsub("\\", "/"), type = "directory" }
+  vim.fn.mkdir(dir_node.path, "p")
+  local collapse_calls = {}
+  local stub = setmetatable({
+    name = "units-stub4b",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return dir_node
+    end,
+    collapse_node = function(node)
+      collapse_calls[#collapse_calls + 1] = node
+      return true
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub4b",
+    features = {
+      open_variants = { enabled = true },
+      no_name_guard = { enabled = false },
+    },
+  })
+
+  local ov = ft.feature("open_variants")
+  ov.open_badd_or_collapse()
+  check(
+    "open_variants: <S-CR> on a directory calls adapter.collapse_node()",
+    #collapse_calls == 1 and collapse_calls[1].path == dir_node.path
+  )
+  check(
+    "open_variants: <S-CR> on a directory does not add it to the buffer list",
+    vim.fn.bufnr(dir_node.path) == -1
+  )
+end
+
 -- ── markdown_links: current/recursive/marked all produce "[name](path)" ─────
 do
   local tmp = (TMP_ROOT .. "/units-mdlinks"):gsub("\\", "/")

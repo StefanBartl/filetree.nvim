@@ -798,6 +798,7 @@
 
 ---@class FiletreeCursorHideConfig
 ---@field enabled  boolean  Hide block cursor while tree window is focused (uses winhighlight, not global Cursor hl).
+---@field force_cursorline  boolean?  Force `'cursorline'` on for as long as the block cursor is hidden, restoring whatever it was on leave (default true). Without this, anything that turns `'cursorline'` off while the real cursor is hidden -- another plugin's own focus-tracking autocmd, a colorscheme reset, `:e`/`:bd` racing the hide -- leaves the tree with no visible position indicator at all until the window is closed and reopened.
 
 -- ── tree_reset ────────────────────────────────────────────────────────────────
 

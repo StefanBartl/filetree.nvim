@@ -128,7 +128,19 @@ Hides the block cursor inside the tree window, resolved adapter-agnostic
 via each adapter's own `filetypes` list rather than a single hardcoded
 filetype check.
 
+Hiding the real cursor only makes sense as long as something else marks the
+current line — normally `'cursorline'`. `force_cursorline` (default `true`)
+force-enables it on the tree window for exactly as long as the cursor stays
+hidden, and restores whatever it was on leave, so the tree can never end up
+with **no** visible position indicator at all (a plugin's own
+cursorline-management autocmd racing this one, a colorscheme reset, …) —
+that combination looks exactly like a lost cursor: movement, opening nodes
+and closing the window all keep working, there is just nothing on screen
+marking where you are. Set `force_cursorline = false` to go back to leaving
+`'cursorline'` alone.
+
 - **Module:** `lua/filetree/features/ui/cursor_hide/`
+- **Config:** `enabled` (default `true`), `force_cursorline` (default `true`)
 
 ## Tree Reset
 

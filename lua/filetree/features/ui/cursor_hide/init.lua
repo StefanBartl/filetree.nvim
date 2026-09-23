@@ -16,8 +16,31 @@
 --- whether the tree plugin's own winhighlight (e.g. neo-tree's Normal/
 --- NormalNC/... mapping) was applied before or after this handler runs.
 ---
+--- ### The `'cursorline'` guard
+---
+--- Hiding the real block cursor only makes sense as long as SOMETHING else
+--- marks where the cursor is -- normally the tree plugin's own `'cursorline'`
+--- highlight. Nothing here controls that option; it is entirely up to the
+--- adapter/colorscheme/user config to leave it on. If it ever ends up off
+--- while the real cursor is hidden -- another plugin's own "cursorline only
+--- in the active window" autocmd racing this one, a colorscheme reset, a
+--- config change -- the tree window shows literally no position indicator at
+--- all: not a redraw glitch, just nothing, indistinguishable from having lost
+--- the cursor. Movement (`j`/`k`, opening nodes, closing the window) still
+--- works throughout, since the cursor is very much still there -- just
+--- invisible. Reported 2026-09-23: after some unidentified sequence in real
+--- use, the block cursor came back on leaving the tree, as always, but never
+--- reappeared IN the tree afterwards -- restarting Neovim was the only fix
+--- found. `force_cursorline` (default true) is the guard: whenever this
+--- hides the block cursor, it also force-enables `'cursorline'` on that
+--- window, remembering whatever it was so `apply_show` can restore the exact
+--- previous value on leave (not just re-enable/re-disable blindly, in case
+--- the user had it deliberately off in a given window). Set false to go back
+--- to leaving `'cursorline'` alone.
+---
 --- Config:
----   enabled  boolean (default true)
+---   enabled           boolean (default true)
+---   force_cursorline  boolean (default true) -- see above
 ---
 --- Note: could not be confirmed via headless Neovim testing (no UIEnter
 --- without a real UI attached makes VeryLazy fire unpredictably relative to
@@ -31,7 +54,9 @@ local M = {}
 ---`features.cursor_hide` accepts. Keep it in step with the keys this module reads;
 ---`TESTS/config_schema.lua` fails when it drifts.
 ---@type FiletreeSchema
-M.SCHEMA = {}
+M.SCHEMA = {
+  force_cursorline = "boolean",
+}
 
 local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles" }
 
@@ -39,6 +64,10 @@ local DEFAULT_FILETYPES = { "neo-tree", "NvimTree", "netrw", "oil", "minifiles" 
 local _augroup = nil
 ---@type FiletreeAdapter?
 local _adapter = nil
+---Per-window `'cursorline'` value from just before this hid the cursor there,
+---so `apply_show` restores the exact prior state instead of assuming "on".
+---@type table<integer, boolean>
+local _prev_cursorline = {}
 
 ---Tree filetypes to target — the adapter's if declared, else the superset.
 ---@return table<string, boolean>
@@ -56,11 +85,13 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
   _adapter = adapter
+  local force_cursorline = config.force_cursorline ~= false
 
   vim.api.nvim_set_hl(0, "FiletreeCursorHidden", { blend = 100, nocombine = true })
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_cursor_hide", true)
+  _prev_cursorline = {}
 
   -- `lib.nvim.ui.winhighlight` rather than string concatenation and a
   -- gsub. It is the same merge-and-strip this used to do by hand, minus
@@ -73,6 +104,14 @@ function M.setup(config, adapter)
     if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then return end
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
     wh.update(win, { Cursor = "FiletreeCursorHidden" })
+    if force_cursorline then
+      -- Only remember on the FIRST hide of a hide/show pair -- a second
+      -- BufEnter/WinEnter for the same window before any WinLeave (both
+      -- events routinely fire together) must not overwrite the real prior
+      -- value with the `true` this itself just set.
+      if _prev_cursorline[win] == nil then _prev_cursorline[win] = vim.wo[win].cursorline end
+      vim.wo[win].cursorline = true
+    end
   end
 
   local function apply_show(win, buf)
@@ -80,6 +119,11 @@ function M.setup(config, adapter)
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
     -- Strips our override only; every other entry on the window stays.
     wh.remove(win, "Cursor")
+    local prev = _prev_cursorline[win]
+    if prev ~= nil then
+      vim.wo[win].cursorline = prev
+      _prev_cursorline[win] = nil
+    end
   end
 
   -- Deferred via vim.schedule: the tree plugin's own window/renderer setup
@@ -108,6 +152,20 @@ function M.setup(config, adapter)
       end)
     end,
   })
+
+  -- Belt-and-suspenders: a window can go away without WinLeave firing first
+  -- (e.g. `:only` from elsewhere, a plugin closing it directly), which would
+  -- otherwise leave a stale entry in `_prev_cursorline` forever. Harmless on
+  -- its own (the winid is simply never looked up again), but there is no
+  -- reason to keep it either.
+  au.acmd("WinClosed", {
+    group = _augroup,
+    desc = "[filetree] Drop any remembered cursorline state for a closed window",
+    callback = function(ev)
+      local win = tonumber(ev.match)
+      if win then _prev_cursorline[win] = nil end
+    end,
+  })
 end
 
 function M.teardown()
@@ -117,6 +175,7 @@ function M.teardown()
     _augroup = nil
   end
   _adapter = nil
+  _prev_cursorline = {}
 end
 
 return M
