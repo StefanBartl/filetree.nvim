@@ -1134,7 +1134,7 @@ Module: lua/filetree/features/fileops/copy_move/
 ------------------------------------------------------------------------------
 LINK CREATE                                             *filetree-link-create*
 
-`:Filetree link` creates a symlink or hardlink inside the current tree
+`:Filetree symlink` creates a symlink or hardlink inside the current tree
 directory, pointing at a path you type into a prompt. The link is named after
 the target's basename, and lands in the node under the cursor — its own
 directory if it is one, otherwise its parent, the same resolution Smart Create
@@ -1144,15 +1144,16 @@ A directory target only ever gets a symlink: neither Windows nor POSIX lets an
 unprivileged process hard-link a directory. A file target is offered the
 Symlink / Hardlink choice.
 
-`:Filetree link mark [path]` / `:Filetree link paste` are a faster mark-once,
-paste-many pair for the same job. Marking with no path uses the node under the
-cursor when the tree is focused, else the focused editor buffer's file; an
-explicit path (relative or absolute) always wins. Pasting inserts the marked
-source into the node under the cursor and picks the link kind itself instead
-of asking: directories always get a symlink; files get a hardlink on Windows
-(needs no elevation or Developer Mode, unlike a Windows symlink) and a symlink
-elsewhere. Marking again replaces the previous source; pasting does not clear
-it, so one marked source can be linked into several places in a row.
+`:Filetree symlink mark [path]` / `:Filetree symlink paste` are a faster
+mark-once, paste-many pair for the same job. Marking with no path uses the
+node under the cursor when the tree is focused, else the focused editor
+buffer's file; an explicit path (relative or absolute) always wins. Pasting
+inserts the marked source into the node under the cursor and picks the link
+kind itself instead of asking: directories always get a symlink; files get a
+hardlink on Windows (needs no elevation or Developer Mode, unlike a Windows
+symlink) and a symlink elsewhere. Marking again replaces the previous source;
+pasting does not clear it, so one marked source can be linked into several
+places in a row.
 
 Usercmd-first, like Path Copy's format picker: no key is bound by default, so
 set `features.link_create.keymap` (or `.keymap_mark` / `.keymap_paste`) if you
@@ -1165,8 +1166,8 @@ window for the `Link to:` / hard-link detail.
 Config: `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all
         unset by default)
 
-Commands: `:Filetree link`, `:Filetree link mark [path]`, `:Filetree link
-          paste`
+Commands: `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree
+          symlink paste`
 
 Module: lua/filetree/features/fileops/link_create/
 

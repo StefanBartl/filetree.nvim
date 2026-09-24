@@ -543,7 +543,7 @@ buffer if it's open elsewhere (`<M-s>`), without leaving the tree window.
 
 ## Link Create
 
-`:Filetree link` creates a symlink or hardlink inside the current tree
+`:Filetree symlink` creates a symlink or hardlink inside the current tree
 directory, pointing at a path you type into a prompt. The link is named
 after the target's basename, and lands in the node under the cursor — its
 own directory if it is one, otherwise its parent, the same resolution
@@ -553,7 +553,7 @@ A directory target only ever gets a symlink: neither Windows nor POSIX
 lets an unprivileged process hard-link a directory. A file target is
 offered the Symlink / Hardlink choice.
 
-`:Filetree link mark [path]` / `:Filetree link paste` are a faster
+`:Filetree symlink mark [path]` / `:Filetree symlink paste` are a faster
 mark-once, paste-many pair for the same job. Marking with no path uses the
 node under the cursor when the tree is focused, else the focused editor
 buffer's file; an explicit path (relative or absolute) always wins.
@@ -573,5 +573,5 @@ A link created this way is not just another entry in the listing — see
 tree, and Node Info's `I` window for the `Link to:` / hard-link detail.
 
 - **Module:** `lua/filetree/features/fileops/link_create/`
-- **Commands:** `:Filetree link`, `:Filetree link mark [path]`, `:Filetree link paste`
+- **Commands:** `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree symlink paste`
 - **Config:** `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all unset by default)

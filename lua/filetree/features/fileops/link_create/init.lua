@@ -2,7 +2,7 @@
 --- Create a symlink or hardlink inside the current tree directory, pointing
 --- at a path entered via prompt, or via a two-step mark/paste usercmd pair.
 ---
---- `:Filetree link` (no default keymap — usercmd-first, like path_copy's
+--- `:Filetree symlink` (no default keymap — usercmd-first, like path_copy's
 --- format picker) asks for a target path, then creates the link named after
 --- the target's basename inside the node under the cursor (its own directory
 --- if it's a directory, else its parent — same resolution as smart_create).
@@ -10,7 +10,7 @@
 --- allows an unprivileged hard link to a directory); a file target is offered
 --- a Symlink/Hardlink choice via kit.confirm.
 ---
---- `:Filetree link mark [path]` / `:Filetree link paste` are the fast-path
+--- `:Filetree symlink mark [path]` / `:Filetree symlink paste` are the fast-path
 --- pair: mark a source once (the node under the cursor, the focused editor
 --- buffer's file, or an explicit path), then paste it as a link into any
 --- number of nodes without retyping the source or being asked to choose a
@@ -229,7 +229,7 @@ end
 ---Paste the marked source as a link into the node under the cursor (its own
 ---directory if it's a directory, else its parent — same resolution as
 ---`M.create`). The link kind is picked automatically rather than prompted,
----since this pair is the fast path; `:Filetree link` still offers the
+---since this pair is the fast path; `:Filetree symlink` still offers the
 ---Symlink/Hardlink choice for anyone who wants to override it.
 ---
 ---Directories only ever get a symlink (neither OS allows an unprivileged hard
@@ -240,7 +240,7 @@ end
 ---`do_create` falls back to a symlink automatically in that case.
 function M.paste()
   if not _marked then
-    notify.warn("No link source marked — use `:Filetree link mark` first")
+    notify.warn("No link source marked — use `:Filetree symlink mark` first")
     return
   end
   if not vim.uv.fs_stat(_marked.path) then

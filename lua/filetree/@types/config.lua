@@ -783,13 +783,13 @@
 ---@class FiletreeLinkCreateConfig
 ---@field enabled       boolean
 ---@field keymap        string?   Key inside tree to prompt for a link target (default nil, off —
----                                use `:Filetree link`). Symlink vs. hardlink is chosen at prompt
+---                                use `:Filetree symlink`). Symlink vs. hardlink is chosen at prompt
 ---                                time via kit.confirm (directories only ever get a symlink).
 ---@field keymap_mark    string?  Key to mark a link source: the node under the cursor, else the
 ---                                focused editor buffer's file (default nil, off — use
----                                `:Filetree link mark [path]`).
+---                                `:Filetree symlink mark [path]`).
 ---@field keymap_paste   string?  Key to paste the marked source as a link into the node under
----                                the cursor (default nil, off — use `:Filetree link paste`).
+---                                the cursor (default nil, off — use `:Filetree symlink paste`).
 ---                                Link kind is picked automatically, not prompted: directories
 ---                                always get a symlink; files get a hardlink on Windows (no
 ---                                elevation needed) and a symlink elsewhere.
