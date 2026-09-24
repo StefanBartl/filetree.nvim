@@ -61,6 +61,24 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   Needs neo-tree, nui, plenary, nvim-web-devicons and lib.nvim — same
   resolution rules as `adapter_lines.lua`, skips (exit 0) without them.
 
+- **[neotree_redraw_hook.lua](neotree_redraw_hook.lua)** — integration: the
+  `renderer.redraw` monkeypatch in `adapter/neotree.lua` (`install_redraw_hook`/
+  `hoist_redraw_hook`), against a real neo-tree, run in its OWN `nvim -l`
+  process (it deliberately reloads/controls the `require()` order of core
+  neo-tree modules, which no other suite here may safely do once sharing a
+  process with other neo-tree-backed checks). Part A pins the hardest case:
+  neo-tree's own `sources/filesystem/commands.lua` captures `renderer.redraw`
+  into a plain Lua local at ITS OWN module-load time, so `copy_to_clipboard`/
+  `cut_to_clipboard` (`y`/`x` by default) bypass a field-only patch entirely —
+  reproduced with the same relative load order a lazily-loaded neo-tree.nvim
+  gives (filetree loads and installs its `package.preload` hoist first, neo-tree's
+  own `setup()` — which is what captures the local — runs second), then calls
+  the real commands and asserts link_marker's/marks' decorations survive.
+  Part B pins that `get_state()`'s last-resort tab probe never leaves a
+  permanent ghost `filesystem` state behind for a tab it only checked.
+  Needs neo-tree, nui, plenary, nvim-web-devicons and lib.nvim — same
+  resolution rules as `adapter_lines.lua`, skips (exit 0) without them.
+
 - **[sidebar_guard.lua](sidebar_guard.lua)** — unit: the `nav/sidebar_guard`
   feature. A window carrying a `neo-tree` filetype buffer plus a stub adapter
   and a stubbed `neo-tree.events` exercise the default redirect (a foreign
