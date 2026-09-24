@@ -68,14 +68,28 @@ end
 
 -- ── Internal ──────────────────────────────────────────────────────────────────
 
-local function redraw()
+---`bufnr`, when given, is the tree buffer to redraw -- passed by the
+---adapter's `on_render` bridge with the bufnr of whichever tree pass just
+---rendered, so this redraws that one specifically instead of falling back to
+---the ambient `_adapter.is_open()`/`get_visible_nodes()` "current tab" tree,
+---which, with a second tree simultaneously live on another tab, can silently
+---be the wrong one (see `adapter/neotree.lua`'s `on_render` doc comment).
+---Omitted (the BufEnter/BufWritePost-driven call below, and every keymap-
+---driven caller of `redraw()` elsewhere in this file), the ambient lookup is
+---already correct -- those only ever run while actually on the tree's own tab.
+---@param bufnr? integer
+local function redraw(bufnr)
   if not _adapter then return end
-  local is_open, bufnr = _adapter.is_open()
-  if not is_open or not bufnr then return end
+  if not bufnr then
+    local is_open, ambient_bufnr = _adapter.is_open()
+    if not is_open then return end
+    bufnr = ambient_bufnr
+  end
+  if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then return end
 
   vim.api.nvim_buf_clear_namespace(bufnr, ns(), 0, -1)
 
-  local nodes = _adapter.get_visible_nodes()
+  local nodes = _adapter.get_visible_nodes(nil, bufnr)
   for _, node in ipairs(nodes) do
     if _marks[node.path] then
       local line = node.line_number - 1

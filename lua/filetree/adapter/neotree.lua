@@ -28,13 +28,127 @@ local function get_manager()
   return manager
 end
 
+-- Tab a tree's live window was last resolved on -- a BACKGROUND-tab fallback
+-- for `get_state()`'s ambient (no-bufnr-in-hand) resolution only; see that
+-- function below for the priority this is checked at and why.
+--
+-- Neo-tree's `manager.get_state(source_name, tabid)` defaults `tabid` to
+-- `vim.api.nvim_get_current_tabpage()` when the argument is omitted -- i.e.
+-- whichever tab is current AT CALL TIME, not necessarily the tab a tree
+-- sidebar actually lives in. A redraw driven by neo-tree's own AFTER_RENDER
+-- event or an async git-status/fs-watcher job completion can run while a
+-- DIFFERENT tab happens to be current -- an adapter function that only ever
+-- asked for "the current tab's state" would then silently resolve an
+-- empty/wrong per-tab state and no-op instead of touching the real tree
+-- buffer, so whatever the real redraw just wiped (e.g. a symlink sign) stayed
+-- undrawn until the tree's own tab became current again. This cache lets an
+-- ambient caller from any tab still find a tree that lives entirely in the
+-- background.
+--
+-- NOT consulted at all by callers that already have a concrete bufnr in hand
+-- (`get_node_at_line`, and anything the render-hook below hands a bufnr to) --
+-- those resolve straight from that bufnr's own window via `state_for_bufnr`,
+-- which needs no cache and is never ambiguous, even with two trees live on
+-- two different tabs at once (this cache, being a single global slot, could
+-- only ever remember one of them).
+---@type integer?
+local _tree_tabid = nil
+
 ---@internal
+---@param manager table
+---@param tabid integer
+---@return table? state  Only when its window is a live, real window.
+local function state_with_live_window(manager, tabid)
+  local ok, state = pcall(manager.get_state, "filesystem", tabid)
+  if ok and state and state.winid and vim.api.nvim_win_is_valid(state.winid) then return state end
+  return nil
+end
+
+---@internal
+---Resolve the neo-tree state whose window is showing `bufnr` right now --
+---independent of which tab is current and of `_tree_tabid`'s single-slot
+---cache. A caller that already knows the specific tree buffer it cares about
+---should always prefer this over the ambient `get_state()` below: with two
+---trees simultaneously live on two different tabs, ambient resolution can
+---only guess which one a caller means (and, worse, a single-slot cache can
+---only ever remember one of them, so it would keep guessing the SAME one).
+---Given a concrete bufnr there is nothing to guess -- the bufnr's own window
+---names its own tab, and that tab's state is unambiguously the right one.
+---@param bufnr integer
+---@return table? state
+local function state_for_bufnr(bufnr)
+  local manager = get_manager()
+  if not manager or not vim.api.nvim_buf_is_valid(bufnr) then return nil end
+  for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+    if vim.api.nvim_win_is_valid(winid) and vim.api.nvim_win_get_buf(winid) == bufnr then
+      local ok, tabid = pcall(vim.api.nvim_win_get_tabpage, winid)
+      if ok then
+        local state = state_with_live_window(manager, tabid)
+        if state and state.winid == winid then return state end
+      end
+    end
+  end
+  return nil
+end
+
+---@internal
+---Ambient resolution -- "the tree", with no bufnr or tab given to disambiguate
+---by. Used by every adapter function that has nothing more specific to go on
+---(get_bufnr, get_winid, get_current_node, expand/collapse_node, ...), most of
+---which are reached from a keymap or command run WHILE the tree window itself
+---has focus -- so simply preferring the current tab already resolves those
+---correctly, including with a second, unrelated tree live on some other tab.
+---@return table? state
 local function get_state()
   local manager = get_manager()
   if not manager then return nil end
-  local ok, state = pcall(manager.get_state, "filesystem")
-  if not ok then return nil end
-  return state
+
+  -- Checked FIRST, ahead of the background-tab cache below: the tree open on
+  -- the tab that is current right now. This is not just the common case --
+  -- with more than one tree simultaneously live, it is the ONLY generally
+  -- correct answer an ambient caller can give. Checking the cache first here
+  -- (as this function once did) made it win unconditionally over a second,
+  -- genuinely-current tree: whichever tab got cached first stayed "the" tree
+  -- for every ambient caller everywhere, even one running from inside the
+  -- second tree's own window.
+  local ok, current = pcall(manager.get_state, "filesystem")
+  if ok and current and current.winid and vim.api.nvim_win_is_valid(current.winid) then
+    _tree_tabid = current.tabid
+    return current
+  end
+
+  -- Background-tab fallback: the tab a live window was last resolved on --
+  -- covers a tree that lives entirely on some OTHER tab while this call
+  -- happens to run with a different (treeless) tab current. See the
+  -- `_tree_tabid` comment above.
+  if _tree_tabid and vim.api.nvim_tabpage_is_valid(_tree_tabid) then
+    local state = state_with_live_window(manager, _tree_tabid)
+    if state then return state end
+  end
+
+  -- Last resort: the tree may live on some other, background tab that was
+  -- never cached (or whose cache went stale). Only worth trying with more
+  -- than one tab open -- with a single tab, the current-tab call above
+  -- already covered the only tab there is. `manager.get_state` lazily
+  -- creates a harmless empty placeholder for a tabid that never had one, so
+  -- probing every tab is safe.
+  local tabpages = vim.api.nvim_list_tabpages()
+  if #tabpages > 1 then
+    for _, tabid in ipairs(tabpages) do
+      if tabid ~= _tree_tabid then
+        local state = state_with_live_window(manager, tabid)
+        if state then
+          _tree_tabid = tabid
+          return state
+        end
+      end
+    end
+  end
+
+  -- Nothing live anywhere -- same fallback this function always had, e.g.
+  -- get_current_position()'s "no prior state yet" default before the tree
+  -- has ever been shown.
+  return ok and current or nil
 end
 
 ---@internal
@@ -250,20 +364,22 @@ end
 ---`(N hidden items)`/`(empty folder)` notices are the lines that come back
 ---nil.
 ---
----`bufnr` is checked against the live tree buffer instead of being ignored: a
----caller holding a stale bufnr (its tree closed and reopened between render
----and callback) would otherwise get nodes decorated onto the wrong buffer.
----The check reads `state.winid` directly rather than calling `M.is_open()`,
----which would resolve the source state a second time for the same answer —
----cheap once, not free once per rendered line per feature.
+---Resolved via `state_for_bufnr(bufnr)`, NOT the ambient `get_state()`: this
+---function is always called with a specific bufnr already in hand (a caller's
+---own `get_bufnr()`, or -- for link_marker/git_status/size_info's redraws --
+---one tied to one particular render pass), and with two trees simultaneously
+---live on two different tabs, ambient resolution has no way to know which of
+---them `bufnr` even refers to. Resolving from the bufnr's own window sidesteps
+---the question entirely — see that function's doc comment. A stale bufnr (its
+---tree closed and reopened between render and callback) resolves to no window
+---at all and correctly returns nil here, same as the old direct `state.winid`
+---check this replaced.
 ---@param bufnr integer
 ---@param linenr integer  0-based buffer line
 ---@return FiletreeNode?
 function M.get_node_at_line(bufnr, linenr)
-  local state = get_state()
+  local state = state_for_bufnr(bufnr)
   if not state or not state.tree then return nil end
-  if not state.winid or not vim.api.nvim_win_is_valid(state.winid) then return nil end
-  if vim.api.nvim_win_get_buf(state.winid) ~= bufnr then return nil end
 
   local ok, node = pcall(function()
     return state.tree:get_node(linenr + 1)
@@ -293,10 +409,17 @@ local function max_visible()
   return (type(n) == "number" and n > 0) and n or 5000
 end
 
+---`bufnr`, when given, resolves the SAME tree a specific render pass belongs
+---to (via `state_for_bufnr`) instead of the ambient "current tab" tree --
+---needed by marks' on_render-driven redraw, for the identical two-simultaneous
+----trees reason `get_node_at_line`'s doc comment explains. Omitted (the
+---common case — a keymap/command run with the tree itself focused), this
+---falls back to the ambient `get_state()`, which is already correct there.
 ---@param filter? FiletreeFilterMode
+---@param bufnr? integer
 ---@return FiletreeNode[]
-function M.get_visible_nodes(filter)
-  local state = get_state()
+function M.get_visible_nodes(filter, bufnr)
+  local state = bufnr and state_for_bufnr(bufnr) or get_state()
   if not state or not state.tree then return {} end
 
   local nodes = {}
@@ -825,10 +948,29 @@ end
 -- gets wiped along with it. Callers that need to redraw a decoration in sync
 -- with neo-tree's OWN render cycle -- not just filetree's BufEnter/BufWritePost
 -- dispatch -- subscribe here instead of guessing at a poll interval.
----@type table<fun(), true>
+---@type table<fun(integer?), true>
 local _render_listeners = {}
 ---@type boolean
 local _render_hook_installed = false
+
+---@internal
+---Neo-tree's `ui/renderer.lua` fires AFTER_RENDER as
+---`events.fire_event(events.AFTER_RENDER, state)` -- passing the REAL state
+---for whichever tree just (re)rendered, which is exactly the tab/window that
+---rendering happened on, regardless of which tab is nominally current when
+---the handler runs (a background tab's async git-status/watcher-driven redraw
+---does not switch tabs to get there). Reducing that down to a bufnr here,
+---once, is what lets every subscriber below resolve ITS OWN render pass
+---directly (`state_for_bufnr`/`get_node_at_line(bufnr, ...)`) instead of
+---falling back on the ambient, tab-guessing `get_state()` -- which, with two
+---trees simultaneously live on two different tabs, cannot always tell the two
+---apart (see `state_for_bufnr`'s doc comment).
+---@param state table?
+---@return integer? bufnr
+local function bufnr_of(state)
+  if not state or not state.winid or not vim.api.nvim_win_is_valid(state.winid) then return nil end
+  return vim.api.nvim_win_get_buf(state.winid)
+end
 
 ---@internal
 ---@return boolean installed
@@ -839,9 +981,10 @@ local function install_render_hook()
   local handler = {
     event = events.AFTER_RENDER,
     id = "filetree_neotree_after_render",
-    handler = function()
+    handler = function(state)
+      local bufnr = bufnr_of(state)
       for callback in pairs(_render_listeners) do
-        pcall(callback)
+        pcall(callback, bufnr)
       end
     end,
   }
@@ -857,7 +1000,15 @@ end
 ---Subscribe `callback` to fire every time neo-tree finishes (re)rendering the
 ---filesystem tree. Neo-tree may not be loaded yet (cmd-lazy), so installation
 ---is retried a few times, mirroring sidebar_guard's deferred install.
----@param callback fun()
+---
+---`callback` receives the bufnr of the tree that just rendered (nil if it
+---could not be resolved, e.g. the window closed between the render and this
+---handler running) -- resolve any per-line/per-node state from THAT bufnr
+---(`get_node_at_line`/`get_visible_nodes(filter, bufnr)`), not from a fresh
+---ambient `get_bufnr()` call, so a redraw of one tree can never be decorated
+---using -- or silently dropped for -- a second, unrelated tree simultaneously
+---live on another tab.
+---@param callback fun(bufnr: integer?)
 ---@return fun() unsubscribe
 function M.on_render(callback)
   local cancelled = false

@@ -19,6 +19,35 @@ through the nui tree's own line mapping, which is what lets git status, LSP
 diagnostics, file sizes and the cut/copy clipboard marker decorate this
 backend — see [Line-resolved decorations](#line-resolved-decorations).
 
+Every adapter function funnels through neo-tree's own **per-tab** state —
+neo-tree keeps a separate state per tabpage, and its `manager.get_state()`
+defaults to whichever tab is current *when it is called*. Two related but
+distinct problems fall out of that, resolved two different ways:
+
+- **A tree resolved with nothing more specific to go on** (`get_bufnr`,
+  `get_winid`, `get_current_node`, `expand_node`/`collapse_node`, …) goes
+  through an internal `get_state()` helper that prefers the tab that is
+  actually current, then falls back to a small cache of the last tab a live
+  window was resolved on, then as a last resort probes every open tab. The
+  cache exists for a redraw that happens to run while a *different, treeless*
+  tab is current (neo-tree's own async render or a git-status/fs-watcher job
+  landing while another tab is current) — without it, that call would resolve
+  an empty per-tab state and silently no-op, leaving whatever the real redraw
+  just wiped (the symlink sign, most visibly) undrawn until the tree's own tab
+  was focused again. Preferring the current tab first, rather than the cache,
+  matters once a **second** tree is simultaneously live on a second tab: a
+  cache that always won unconditionally would keep resolving the first tab
+  that got cached, everywhere, even from inside the second tree's own window.
+- **A caller that already has a concrete tree bufnr in hand** — `get_node_at_line`,
+  and the bufnr the adapter's `on_render` bridge hands each redraw callback —
+  resolves straight from that bufnr's own window (`state_for_bufnr`) instead,
+  which is unambiguous even with two trees simultaneously live: neo-tree
+  itself fires its `AFTER_RENDER` event with the real state for whichever
+  tree just (re)rendered, and the adapter reduces that to a bufnr and passes
+  it through, so link_marker/marks decorate the SPECIFIC tree that just
+  redrew rather than re-deriving an ambient "current tab" bufnr that could
+  silently be a different, unrelated tree.
+
 - **Module:** [`adapter/neotree.lua`](../../lua/filetree/adapter/neotree.lua) — `filetypes = {"neo-tree"}`
 - **Config:** `opts.adapter = "neotree"`
 
