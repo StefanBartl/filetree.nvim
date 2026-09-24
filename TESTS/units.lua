@@ -5526,6 +5526,50 @@ do
   )
   vim.env.FILETREE_UNITS_HOME = saved_home
   vim.env.FILETREE_UNITS_ROOT = saved
+
+  -- `extra`: already-resolved roots (e.g. vim.fn.stdpath("config")) tried
+  -- alongside the env-var `names`, without needing an actual environment
+  -- variable of that name -- see path_copy's `nvim_config_root`.
+  check(
+    "path.env_rooted: extra root (no matching env var) is rewritten",
+    path.env_rooted(
+      R .. "/config/lua/x.lua",
+      { "FILETREE_UNITS_NOT_SET" },
+      { { name = "NVIM_CONFIG_DIR", root = R .. "/config" } }
+    ) == "$NVIM_CONFIG_DIR/lua/x.lua"
+  )
+  check(
+    "path.env_rooted: extra root is skipped when it does not match",
+    path.env_rooted(
+      R .. "/elsewhere/x.lua",
+      {},
+      { { name = "NVIM_CONFIG_DIR", root = R .. "/config" } }
+    ) == R .. "/elsewhere/x.lua"
+  )
+  -- Longest match wins across names AND extra roots together, whichever side
+  -- the more specific one is on.
+  vim.env.FILETREE_UNITS_ROOT = R
+  check(
+    "path.env_rooted: extra root wins over a shorter env-var match",
+    path.env_rooted(
+      R .. "/config/lua/x.lua",
+      { "FILETREE_UNITS_ROOT" },
+      { { name = "NVIM_CONFIG_DIR", root = R .. "/config" } }
+    ) == "$NVIM_CONFIG_DIR/lua/x.lua"
+  )
+  check(
+    "path.env_rooted: env-var name wins over a shorter extra root",
+    path.env_rooted(
+      R .. "/config/lua/x.lua",
+      { "FILETREE_UNITS_ROOT" },
+      { { name = "NVIM_CONFIG_DIR", root = R } }
+    ) == "$FILETREE_UNITS_ROOT/config/lua/x.lua"
+  )
+  vim.env.FILETREE_UNITS_ROOT = saved
+  check(
+    "path.env_rooted: nil extra behaves exactly like the old 2-arg call",
+    path.env_rooted(R .. "/repos/x.lua", { "FILETREE_UNITS_NOT_SET" }) == R .. "/repos/x.lua"
+  )
 end
 
 -- ── path_copy: every format copies in the canonical separator ──────────────
@@ -5672,6 +5716,36 @@ do
     check(
       "path_copy: `relative` is cwd-relative, so that check could have failed",
       vim.fn.getreg("+") == "sub/b.lua",
+      vim.fn.getreg("+")
+    )
+
+    -- `env_rooted`'s nvim_config_root (default true): a node under
+    -- vim.fn.stdpath("config") folds to $NVIM_CONFIG_DIR even though no
+    -- env_roots entry (REPOS_DIR by default) would ever match it -- that
+    -- dir typically lives nowhere near a repos checkout.
+    local cfg_dir = (vim.fn.stdpath("config") --[[@as string]]):gsub("\\", "/")
+    local probe_path = cfg_dir .. "/lua/units_nvim_config_root_probe.lua"
+    cur_node = { path = probe_path, type = "file" }
+    vim.fn.setreg("+", "<<sentinel>>")
+    pcall(pc.copy_env_rooted)
+    check(
+      "path_copy: env_rooted folds $NVIM_CONFIG_DIR for a node under stdpath('config')",
+      vim.fn.getreg("+") == "$NVIM_CONFIG_DIR/lua/units_nvim_config_root_probe.lua",
+      vim.fn.getreg("+")
+    )
+
+    -- nvim_config_root = false turns the fold back off -- falls back to the
+    -- plain absolute path, same as before this option existed.
+    ft.setup({
+      adapter = "units-stub-pathcopy",
+      features = { path_copy = { enabled = true, notify = false, nvim_config_root = false } },
+    })
+    local pc_off = ft.feature("path_copy")
+    vim.fn.setreg("+", "<<sentinel>>")
+    pcall(pc_off.copy_env_rooted)
+    check(
+      "path_copy: nvim_config_root=false disables the $NVIM_CONFIG_DIR fold",
+      vim.fn.getreg("+") == probe_path,
       vim.fn.getreg("+")
     )
   end

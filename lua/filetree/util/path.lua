@@ -149,18 +149,23 @@ function M.dot_relative(p, base)
 end
 
 ---Rewrite `p` as `$VAR/rest` when it lives under the directory one of `names`
----points at. The longest match wins, so `$REPOS_DIR` beats a `$HOME` that
----contains it. Unset, empty and non-matching variables are skipped; when none
----matches, the plain absolute path comes back.
+---points at, or under one of `extra`'s already-resolved roots. The longest
+---match wins, so `$REPOS_DIR` beats a `$HOME` that contains it. Unset, empty
+---and non-matching variables are skipped; when none matches, the plain
+---absolute path comes back.
 ---
 ---The point is a path that survives being pasted into a note read on another
 ---machine, where the repo checkout sits on a different drive: `$REPOS_DIR/x`
 ---means the same thing on both, `E:/repos/x` does not.
----@param p     string
----@param names string[]  Environment variable names, written without the `$`.
+---@param p      string
+---@param names  string[]  Environment variable names, written without the `$`.
+---@param extra? { name: string, root: string }[]  Already-resolved roots to
+---   try alongside `names`, bypassing `vim.env` -- e.g. `keymap_env_root`'s
+---   `$NVIM_CONFIG_DIR` candidate, backed by `vim.fn.stdpath("config")`
+---   rather than an environment variable of that name.
 ---@return string path
----@return string? name  The variable that matched, if any.
-function M.env_rooted(p, names)
+---@return string? name  The variable/root that matched, if any.
+function M.env_rooted(p, names, extra)
   local abs = M.to_unix(p):gsub("/+$", "")
   -- Windows compares paths case-insensitively, and the drive letter alone can
   -- differ in case between `$REPOS_DIR` and what the tree reports for a file
@@ -171,16 +176,22 @@ function M.env_rooted(p, names)
   local folded = fold(abs)
 
   local best_name, best_len
-  for _, name in ipairs(names or {}) do
-    local root = vim.env[name]
-    if type(root) == "string" and root ~= "" then
-      local abs_root = M.to_unix(root):gsub("/+$", "")
-      local folded_root = fold(abs_root)
-      local under = folded == folded_root or folded:sub(1, #folded_root + 1) == folded_root .. "/"
-      if abs_root ~= "" and under and (not best_len or #abs_root > best_len) then
-        best_name, best_len = name, #abs_root
-      end
+  local function consider(name, root)
+    if type(root) ~= "string" or root == "" then return end
+    local abs_root = M.to_unix(root):gsub("/+$", "")
+    if abs_root == "" then return end
+    local folded_root = fold(abs_root)
+    local under = folded == folded_root or folded:sub(1, #folded_root + 1) == folded_root .. "/"
+    if under and (not best_len or #abs_root > best_len) then
+      best_name, best_len = name, #abs_root
     end
+  end
+
+  for _, name in ipairs(names or {}) do
+    consider(name, vim.env[name])
+  end
+  for _, e in ipairs(extra or {}) do
+    consider(e.name, e.root)
   end
 
   if not best_name then return abs end
