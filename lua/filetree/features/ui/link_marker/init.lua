@@ -90,9 +90,18 @@ local _unsubscribe_render = nil
 
 -- ── Rendering ─────────────────────────────────────────────────────────────────
 
-function M._render()
+---`bufnr`, when given, is the tree buffer to redraw -- passed by the
+---adapter's `on_render` bridge with the bufnr of whichever tree pass just
+---rendered, so THIS call decorates that one specifically instead of falling
+---back to `_adapter.get_bufnr()`'s ambient "current tab" tree, which, with a
+---second tree simultaneously live on another tab, can silently be the wrong
+---one (see `adapter/neotree.lua`'s `on_render` doc comment). Omitted (the
+---BufEnter/CursorMoved-driven calls below), the ambient lookup is already
+---correct -- those only ever fire while actually on the tree's own tab.
+---@param bufnr? integer
+function M._render(bufnr)
   if not _adapter then return end
-  local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
+  bufnr = bufnr or (_adapter.get_bufnr and _adapter.get_bufnr()) or -1
   if bufnr < 0 or not vim.api.nvim_buf_is_valid(bufnr) then return end
 
   vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)

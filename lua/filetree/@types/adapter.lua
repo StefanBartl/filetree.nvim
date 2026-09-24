@@ -21,7 +21,7 @@
 ---@field get_winid     fun(): integer?            Window id of the tree panel, or nil.
 ---@field get_root_path fun(): string?             Absolute path of the current tree root.
 ---@field get_current_node fun(): FiletreeNode?    Node under the cursor, or nil.
----@field get_visible_nodes fun(filter?: FiletreeFilterMode): FiletreeNode[]   All currently rendered nodes.
+---@field get_visible_nodes fun(filter?: FiletreeFilterMode, bufnr?: integer): FiletreeNode[]   All currently rendered nodes. Optional `bufnr` resolves that SPECIFIC tree instead of the ambient "current tab" one — see `on_render` below; adapters that don't need the distinction (no `on_render` of their own) may ignore it.
 ---@field get_node_line    fun(path: string): integer?   1-based line number of `path` in the tree buffer, or nil.
 ---@field get_bufnr      fun(): integer?               Buffer id of the tree panel, or nil. Every backend in this repo implements it.
 ---@field expand_node      fun(node: FiletreeNode): boolean
@@ -65,7 +65,7 @@
 ---@field get_expanded_paths? fun(): string[]|nil  Absolute paths of the currently expanded directories. Implemented by no backend yet.
 ---@field expand_paths? fun(paths: string[]): boolean  Re-expand the given directories. Implemented by no backend yet.
 ---@field install_reveal_guard? fun(): nil  Backend-specific guard against a reveal fighting the user's cursor; only the neo-tree adapter has one.
----@field on_render? fun(callback: fun()): fun()  Subscribe `callback` to fire whenever the backend (re)renders its tree on its OWN schedule (not just filetree's BufEnter/BufWritePost dispatch) -- e.g. an async git-status fetch or a filesystem-watcher event. Returns an unsubscribe function. Needed by decorations drawn as extmarks (marks' checkmarks), which a backend-initiated redraw wipes silently. Only the neo-tree adapter implements it; others degrade to redrawing on the buffer-lifecycle events only.
+---@field on_render? fun(callback: fun(bufnr: integer?)): fun()  Subscribe `callback` to fire whenever the backend (re)renders its tree on its OWN schedule (not just filetree's BufEnter/BufWritePost dispatch) -- e.g. an async git-status fetch or a filesystem-watcher event. `callback` receives the bufnr of the tree that just rendered (nil if unresolvable); a subscriber should resolve per-node state from THAT bufnr (e.g. `get_node_at_line(bufnr, ...)`), not from a fresh ambient `get_bufnr()`, so a redraw of one tree is never decorated onto -- or silently dropped for -- a second tree simultaneously live on another tab. Returns an unsubscribe function. Needed by decorations drawn as extmarks (marks' checkmarks, link_marker's symlink signs), which a backend-initiated redraw wipes silently. Only the neo-tree adapter implements it; others degrade to redrawing on the buffer-lifecycle events only.
 
 ---@alias FiletreeAdapterName "neotree"|"nvimtree"|string
 

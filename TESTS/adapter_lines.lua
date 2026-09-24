@@ -920,6 +920,551 @@ local function run_neotree_link_marker_check()
   end, 50)
 end
 
+-- ── neo-tree only: a background-tab redraw must still hit the tree's own,
+-- real per-tab state -- not whichever tab happens to be current ────────────
+-- Root cause: `adapter/neotree.lua`'s internal `get_state()` used to call
+-- neo-tree's own `manager.get_state("filesystem")` with no `tabid`, which
+-- neo-tree itself defaults to `vim.api.nvim_get_current_tabpage()` -- the
+-- tab that is current WHEN THE CALL HAPPENS, not necessarily the tab the
+-- tree sidebar lives on. Every adapter function funnels through that one
+-- helper, so a redraw driven by neo-tree's own AFTER_RENDER event (exactly
+-- how link_marker keeps its symlink sign in sync -- see that feature's
+-- on_render subscription) or an async git-status/fs-watcher completion
+-- firing while a DIFFERENT tab is current used to resolve the wrong tab's
+-- (empty) state and silently no-op, leaving whatever the real redraw had
+-- just wiped on the tree's OWN tab undrawn -- reappearing only once the tree
+-- was focused again (which makes its tab current too). Only a real neo-tree
+-- with a real second tabpage reproduces this; a stub adapter has no per-tab
+-- state to get wrong.
+local function run_neotree_multitab_redraw_check()
+  print("\n== neo-tree: a background-tab redraw still finds the tree's own tab ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-multitab")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "hi" }, work .. "/plain.txt")
+
+  local link_ok = (vim.uv or vim.loop).fs_symlink(work .. "/plain.txt", work .. "/a_link.txt")
+  if not link_ok then
+    print("  note no permission to create a real symlink here -- skipping")
+    return
+  end
+
+  vim.cmd("tabonly")
+  vim.cmd("cd " .. vim.fn.fnameescape(work))
+
+  require("filetree").setup({
+    adapter = "neotree",
+    features = { link_marker = { enabled = true } },
+  })
+
+  local adapter = require("filetree.adapter.neotree")
+  local tabid_a = vim.api.nvim_get_current_tabpage()
+
+  -- A real editor window alongside the sidebar, like an ordinary session --
+  -- the reported symptom is a tree sitting in the BACKGROUND, with an
+  -- editor window (not the tree) as the tab's actual focus.
+  vim.cmd("edit " .. vim.fn.fnameescape(work .. "/plain.txt"))
+  local editor_win = vim.api.nvim_get_current_win()
+  -- action = "show" (not "focus") leaves the current window alone.
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  vim.wait(4000, function()
+    local b = adapter.get_bufnr()
+    if not b then return false end
+    local text = table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n")
+    return text:find("a_link.txt", 1, true) ~= nil
+  end, 50)
+  check(
+    "multitab: opening the tree left the editor window current",
+    vim.api.nvim_get_current_win() == editor_win
+  )
+
+  local bufnr = adapter.get_bufnr()
+  check("multitab: the tree buffer exists", bufnr ~= nil, tostring(bufnr))
+  if not bufnr then
+    vim.cmd("tabonly")
+    return
+  end
+
+  -- Neo-tree's OWN state object for tab A, fetched directly -- exactly what
+  -- an async git-status/watcher completion callback would still be holding,
+  -- regardless of which tab happens to be current by the time it runs.
+  local mgr = require("neo-tree.sources.manager")
+  local events = require("neo-tree.events")
+  local state_a = mgr.get_state("filesystem", tabid_a)
+
+  -- Give the async scan's own follow-up redraw time to happen, same as the
+  -- sibling link_marker check above -- the icon must genuinely be there
+  -- before this check starts tampering with it. Then settle it
+  -- deterministically by (re-)firing tab A's own REAL AFTER_RENDER state
+  -- once, explicitly: neo-tree has an entirely separate redraw path of its
+  -- own (`sources/manager.lua`'s `opened_buffers_changed`, wired to
+  -- `enable_opened_markers`/`enable_modified_markers`'s default-on buffer-
+  -- tracking) that calls `renderer.redraw(state)` DIRECTLY -- bypassing
+  -- `show_nodes` and so never firing AFTER_RENDER at all -- every time a
+  -- buffer opens or closes anywhere, which can silently shift/wipe an
+  -- extmark placed by this tree's most recent AFTER_RENDER-driven redraw
+  -- without this test's own doing. That is a real neo-tree behavior, wholly
+  -- outside the on_render bridge this test pins, so re-firing once here
+  -- proves the SAME thing the settling wait above already waits for, minus
+  -- an occasional race against that unrelated redraw.
+  vim.wait(1000, function()
+    return false
+  end, 50)
+  events.fire_event(events.AFTER_RENDER, state_a)
+
+  local ns = vim.api.nvim_get_namespaces()["filetree_link_marker"]
+  check("multitab: link_marker's namespace exists", ns ~= nil)
+  if not ns then
+    vim.cmd("tabonly")
+    return
+  end
+
+  local function marker_line()
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    for i = 0, #lines - 1 do
+      local n = adapter.get_node_at_line(bufnr, i)
+      if n and n.name == "a_link.txt" then return i end
+    end
+    return nil
+  end
+
+  local function marker_text_on(line)
+    -- `line` is nil when `marker_line()` couldn't resolve the node at all
+    -- (exactly the pre-fix failure mode) -- report "no icon" rather than
+    -- crashing on a bad extmark range, so the rest of this file still runs.
+    if line == nil then return "" end
+    local ms = vim.api.nvim_buf_get_extmarks(
+      bufnr,
+      ns,
+      { line, 0 },
+      { line, -1 },
+      { details = true }
+    )
+    local vt = ""
+    for _, m in ipairs(ms) do
+      for _, chunk in ipairs(m[4].virt_text or {}) do
+        vt = vt .. chunk[1]
+      end
+    end
+    return vt
+  end
+
+  local line = marker_line()
+  check("multitab: the symlinked file is in the rendered tree", line ~= nil)
+  if not line then
+    vim.cmd("tabonly")
+    return
+  end
+  check(
+    "multitab: the icon is there before the test touches anything",
+    marker_text_on(line):find("⇢", 1, true) ~= nil,
+    marker_text_on(line)
+  )
+
+  -- Tab B: a fresh, unrelated tab becomes current -- tab A (the tree's real
+  -- tab) is now the background one.
+  vim.cmd("tabnew")
+  local tabid_b = vim.api.nvim_get_current_tabpage()
+  check("multitab: tab B is a genuinely different, current tab", tabid_b ~= tabid_a)
+
+  -- The adapter, called from tab B's context, must still resolve tab A's
+  -- real window/buffer/node -- this is the root cause itself, independent
+  -- of link_marker: every one of get_bufnr/get_winid/get_node_at_line funnels
+  -- through the same `get_state()` helper that git_status and size_info use
+  -- too.
+  check(
+    "multitab: [FROM TAB B] adapter.get_winid() still resolves tab A's window",
+    adapter.get_winid() == state_a.winid,
+    string.format("got %s, want %s", tostring(adapter.get_winid()), tostring(state_a.winid))
+  )
+  check(
+    "multitab: [FROM TAB B] adapter.get_bufnr() still resolves tab A's buffer",
+    adapter.get_bufnr() == bufnr,
+    tostring(adapter.get_bufnr())
+  )
+  local node_from_b = adapter.get_node_at_line(bufnr, line)
+  check(
+    "multitab: [FROM TAB B] get_node_at_line still resolves the right node",
+    node_from_b ~= nil and node_from_b.name == "a_link.txt",
+    node_from_b and node_from_b.name or "nil"
+  )
+
+  -- Now the full end-to-end symptom: simulate the redraw that is *about to*
+  -- wipe the sign -- neo-tree's own full-content replace does not carry
+  -- extmarks over, so clearing here stands in for that -- then fire the REAL
+  -- neo-tree event that a real redraw fires when it finishes (`events.
+  -- AFTER_RENDER`, from `ui/renderer.lua`'s `show_nodes`), from tab B's
+  -- context, exactly like an async job's completion callback would. Checked
+  -- immediately: `fire_event` dispatches its handlers synchronously (no
+  -- `debounce_frequency` is configured for this event), so link_marker's
+  -- on_render handler -- `M._render()` itself, undebounced on this path --
+  -- has already run by the time `fire_event` returns. (Waiting here instead
+  -- would be both unnecessary and flaky: neo-tree's own periodic upkeep --
+  -- e.g. `resize_timer_interval` -- can replace the buffer's content again
+  -- later, on its own schedule, which is a real but separate, pre-existing
+  -- behavior this test has no business pinning.)
+  vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+  check("multitab: the sign really is cleared now", marker_text_on(line) == "")
+  events.fire_event(events.AFTER_RENDER, state_a)
+  check(
+    "multitab: [FROM TAB B] tab A's icon is redrawn even though tab B is current",
+    marker_text_on(marker_line()):find("⇢", 1, true) ~= nil,
+    marker_text_on(marker_line())
+  )
+
+  -- Back to tab A -- landing on the editor window, not the tree, exactly
+  -- like a real tab switch (the tree was never focused to begin with).
+  vim.api.nvim_set_current_tabpage(tabid_a)
+  check(
+    "multitab: [BACK ON TAB A, tree still unfocused] the current window is the editor, not the tree",
+    vim.api.nvim_get_current_win() == editor_win
+  )
+  check(
+    "multitab: [BACK ON TAB A, tree still unfocused] icon still present",
+    marker_text_on(marker_line()):find("⇢", 1, true) ~= nil,
+    marker_text_on(marker_line())
+  )
+
+  -- Finally, focusing the tree window itself -- this path already worked
+  -- before the fix (focusing makes the tree's own tab current too), so it is
+  -- a sanity check, not the regression this test pins.
+  local winid = adapter.get_winid()
+  if winid then vim.api.nvim_set_current_win(winid) end
+  check(
+    "multitab: [TREE WINDOW FOCUSED] icon present",
+    marker_text_on(marker_line()):find("⇢", 1, true) ~= nil,
+    marker_text_on(marker_line())
+  )
+
+  require("filetree.features.ui.link_marker").teardown()
+  pcall(adapter.close)
+  vim.cmd("tabonly")
+  vim.wait(500, function()
+    return false
+  end, 50)
+end
+
+-- ── neo-tree only: TWO independently, simultaneously live trees on two
+-- different tabs must each resolve and decorate their OWN tree -- never
+-- bleeding into each other, including on each tree's own FIRST render ──────
+-- Regression introduced by the fix above (`run_neotree_multitab_redraw_check`):
+-- its background-tab fallback (`_tree_tabid`, a single global slot caching
+-- whichever tab a live window was last resolved on) was checked BEFORE the
+-- tab that is actually current, so it unconditionally won over a SECOND,
+-- genuinely current tree -- every ambient adapter call, and every
+-- render-driven redraw that re-derived its bufnr ambiently instead of using
+-- the one its own render pass was actually about, kept resolving back to
+-- whichever tab got cached first. For link_marker/marks (both driven by the
+-- adapter's `on_render` bridge) that meant a second tree's symlink icon
+-- never drew AT ALL -- not even on that tree's own first real render, since
+-- neo-tree fires AFTER_RENDER with the real per-render state, but the old
+-- bridge discarded it and every subscriber re-derived an ambient bufnr
+-- instead.
+--
+-- Fixed in `adapter/neotree.lua` by (1) `get_state()` preferring the tab
+-- that is actually current over the background-tab cache, so an ambient
+-- caller run from inside a tree's own window (a keymap, or a redraw fired
+-- while that tab happens to be current) resolves ITS OWN tree; and (2)
+-- threading the real per-render bufnr neo-tree's AFTER_RENDER handler
+-- receives through `on_render` to link_marker/marks, so a render-driven
+-- redraw resolves the SPECIFIC tree it was actually about via
+-- `state_for_bufnr` -- correct regardless of which tab is nominally current
+-- when that redraw happens, which (1) alone cannot guarantee (a background
+-- tab's own async-scan-driven redraw does not make its tab current). Only a
+-- real neo-tree with two real tabpages, each with its own live tree,
+-- reproduces this; a stub adapter has no per-tab state to get wrong.
+local function run_neotree_two_live_trees_check()
+  print("\n== neo-tree: two simultaneously live per-tab trees never bleed into each other ==")
+
+  local work_a = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-two-live-a")
+  local work_b = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-two-live-b")
+  for _, w in ipairs({ work_a, work_b }) do
+    vim.fn.delete(w, "rf")
+    vim.fn.mkdir(w, "p")
+  end
+  vim.fn.writefile({ "hi" }, work_a .. "/plain_a.txt")
+  vim.fn.writefile({ "hi" }, work_b .. "/plain_b.txt")
+
+  local uv = vim.uv or vim.loop
+  local link_a_ok = uv.fs_symlink(work_a .. "/plain_a.txt", work_a .. "/link_a.txt")
+  local link_b_ok = uv.fs_symlink(work_b .. "/plain_b.txt", work_b .. "/link_b.txt")
+  if not (link_a_ok and link_b_ok) then
+    print("  note no permission to create a real symlink here -- skipping")
+    return
+  end
+
+  vim.cmd("tabonly")
+
+  require("filetree").setup({
+    adapter = "neotree",
+    features = {
+      link_marker = { enabled = true },
+      marks = { enabled = true },
+    },
+  })
+
+  local adapter = require("filetree.adapter.neotree")
+  local marks = require("filetree.features.org.marks")
+  local mgr = require("neo-tree.sources.manager")
+  local events = require("neo-tree.events")
+  local commands = require("neo-tree.command")
+
+  local link_ns = vim.api.nvim_get_namespaces()["filetree_link_marker"]
+  local marks_ns = vim.api.nvim_get_namespaces()["filetree_marks"]
+  check("two-live: link_marker's namespace exists", link_ns ~= nil)
+  check("two-live: marks' namespace exists", marks_ns ~= nil)
+  if not (link_ns and marks_ns) then
+    vim.cmd("tabonly")
+    return
+  end
+
+  ---@param bufnr integer
+  ---@param ns integer
+  ---@param line integer?
+  local function icon_text(bufnr, ns, line)
+    if line == nil then return "" end
+    local ms = vim.api.nvim_buf_get_extmarks(
+      bufnr,
+      ns,
+      { line, 0 },
+      { line, -1 },
+      { details = true }
+    )
+    local vt = ""
+    for _, m in ipairs(ms) do
+      for _, chunk in ipairs(m[4].virt_text or {}) do
+        vt = vt .. chunk[1]
+      end
+    end
+    return vt
+  end
+
+  ---@param bufnr integer
+  ---@param name string
+  local function line_of(bufnr, name)
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    for i = 0, #lines - 1 do
+      local n = adapter.get_node_at_line(bufnr, i)
+      if n and n.name == name then return i end
+    end
+    return nil
+  end
+
+  -- Tab A: open its own tree, rooted at work_a, and wait for the real
+  -- symlink text to actually be on screen (the async scan's own settling
+  -- redraw -- reproducing it, not dodging it, is the point, same as the
+  -- sibling `run_neotree_link_marker_check`).
+  local tabid_a = vim.api.nvim_get_current_tabpage()
+  commands.execute({ action = "show", source = "filesystem", dir = work_a })
+  vim.wait(4000, function()
+    local state = mgr.get_state("filesystem", tabid_a)
+    local win = state and state.winid
+    if not (win and vim.api.nvim_win_is_valid(win)) then return false end
+    local text =
+      table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), "\n")
+    return text:find("link_a.txt", 1, true) ~= nil
+  end, 50)
+
+  local state_a = mgr.get_state("filesystem", tabid_a)
+  local bufnr_a = state_a.winid
+      and vim.api.nvim_win_is_valid(state_a.winid)
+      and vim.api.nvim_win_get_buf(state_a.winid)
+    or nil
+  check("two-live: tab A's tree buffer exists", bufnr_a ~= nil)
+  if not bufnr_a then
+    vim.cmd("tabonly")
+    return
+  end
+
+  -- Tab B: a second, independently live tree rooted at work_b, opened and
+  -- settled the SAME reliable way tab A was above -- genuinely current on
+  -- tab B throughout its own setup, no racing against neo-tree's own window/
+  -- buffer churn. (See below for how this test drives the actual
+  -- cross-tab -- "rendered while a DIFFERENT tab is current" -- scenario
+  -- deterministically, rather than by trying to catch a real async scan at
+  -- exactly the right instant.)
+  vim.cmd("tabnew")
+  local tabid_b = vim.api.nvim_get_current_tabpage()
+  check("two-live: tab B is a genuinely different, new tab", tabid_b ~= tabid_a)
+  commands.execute({ action = "focus", source = "filesystem", dir = work_b })
+  vim.wait(4000, function()
+    local state = mgr.get_state("filesystem", tabid_b)
+    local win = state and state.winid
+    if not (win and vim.api.nvim_win_is_valid(win)) then return false end
+    local text =
+      table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), "\n")
+    return text:find("link_b.txt", 1, true) ~= nil
+  end, 50)
+
+  local state_b = mgr.get_state("filesystem", tabid_b)
+  local bufnr_b = state_b.winid
+      and vim.api.nvim_win_is_valid(state_b.winid)
+      and vim.api.nvim_win_get_buf(state_b.winid)
+    or nil
+  check("two-live: tab B's tree buffer exists", bufnr_b ~= nil)
+  if not bufnr_b then
+    vim.cmd("tabonly")
+    return
+  end
+
+  local line_a = line_of(bufnr_a, "link_a.txt")
+  local line_b = line_of(bufnr_b, "link_b.txt")
+  check("two-live: link_a.txt resolves in tab A's tree", line_a ~= nil, tostring(line_a))
+  check("two-live: link_b.txt resolves in tab B's tree", line_b ~= nil, tostring(line_b))
+  check(
+    "two-live: [TAB B SETTLED, TAB B CURRENT] tab B's own icon is there on its own first render",
+    icon_text(bufnr_b, link_ns, line_b):find("⇢", 1, true) ~= nil,
+    icon_text(bufnr_b, link_ns, line_b)
+  )
+  check(
+    "two-live: [TAB B SETTLED] tab A's icon is unaffected by tab B's own tree existing",
+    icon_text(bufnr_a, link_ns, line_a):find("⇢", 1, true) ~= nil,
+    icon_text(bufnr_a, link_ns, line_a)
+  )
+
+  -- The critical, previously-broken check. Neo-tree's own async filesystem
+  -- scan (or a background git-status/fs-watcher completion) can redraw a
+  -- tree that lives on some OTHER, non-current tab at any time -- that is
+  -- the whole premise `run_neotree_multitab_redraw_check` above already pins
+  -- for a SINGLE tree. Reproduced here directly and deterministically for
+  -- tab B specifically (rather than racing this test's own tab-switch
+  -- against neo-tree's real async scan timing, which -- independently of
+  -- this fix -- also collides with an entirely separate neo-tree redraw
+  -- path, `sources/manager.lua`'s `opened_buffers_changed`; see
+  -- `run_neotree_multitab_redraw_check`'s own "this test has no business
+  -- pinning [neo-tree's] own periodic upkeep" comment for the same
+  -- principle applied there): clear tab B's icon (standing in for whatever
+  -- real redraw is about to wipe it, same technique as that sibling test),
+  -- switch to tab A so tab B is now the ONLY-background tab, and fire tab
+  -- B's REAL, node-carrying AFTER_RENDER state from tab A's context. Tab B's
+  -- own icon must still be drawn correctly -- resolved via the bufnr
+  -- neo-tree's own event handed the render-hook, never having ambiently
+  -- guessed at "the current tab" -- and tab A's own icon must be completely
+  -- unaffected.
+  vim.api.nvim_buf_clear_namespace(bufnr_b, link_ns, 0, -1)
+  check("two-live: tab B's icon is really cleared now", icon_text(bufnr_b, link_ns, line_b) == "")
+  vim.api.nvim_set_current_tabpage(tabid_a)
+  events.fire_event(events.AFTER_RENDER, state_b)
+  check(
+    "two-live: [FROM TAB A, TAB B's REAL RENDER] tab B's icon is drawn correctly",
+    icon_text(bufnr_b, link_ns, line_b):find("⇢", 1, true) ~= nil,
+    icon_text(bufnr_b, link_ns, line_b)
+  )
+  check(
+    "two-live: [FROM TAB A] tab A's icon is unaffected by resolving tab B's render",
+    icon_text(bufnr_a, link_ns, line_a):find("⇢", 1, true) ~= nil,
+    icon_text(bufnr_a, link_ns, line_a)
+  )
+
+  -- Mark each node via the real API while its OWN tab is actually current --
+  -- an ambient, keymap-shaped call that must resolve correctly on its own
+  -- (task item 1: these are NOT render-callback-driven, and must keep
+  -- working by simply being run on the correct tab already).
+  local node_a = adapter.get_node_at_line(bufnr_a, line_a)
+  if node_a then marks.toggle(node_a.path) end
+  check(
+    "two-live: [TAB A CURRENT] tab A's mark indicator is drawn",
+    icon_text(bufnr_a, marks_ns, line_a) ~= ""
+  )
+
+  -- Bug (1) from the round-1 verify findings: ambient calls made FROM tab B
+  -- while tab B's own tree is focused must resolve tab B's OWN window/buffer
+  -- -- not tab A's, which is what the sticky single-slot cache used to
+  -- return unconditionally.
+  vim.api.nvim_set_current_tabpage(tabid_b)
+  check(
+    "two-live: [FROM TAB B, FOCUSED] adapter.get_winid() resolves tab B's own window",
+    adapter.get_winid() == state_b.winid,
+    string.format("got %s, want %s", tostring(adapter.get_winid()), tostring(state_b.winid))
+  )
+  check(
+    "two-live: [FROM TAB B, FOCUSED] adapter.get_bufnr() resolves tab B's own buffer",
+    adapter.get_bufnr() == bufnr_b,
+    tostring(adapter.get_bufnr())
+  )
+
+  -- Mark link_b.txt the natural, keymap-shaped way -- while tab B is
+  -- actually current -- and confirm it lands on tab B, not tab A.
+  local node_b = adapter.get_node_at_line(bufnr_b, line_b)
+  if node_b then marks.toggle(node_b.path) end
+  check(
+    "two-live: [TAB B CURRENT] tab B's mark indicator is drawn",
+    icon_text(bufnr_b, marks_ns, line_b) ~= ""
+  )
+  check(
+    "two-live: [TAB B CURRENT] tab A's mark did not gain a second mark from tab B's toggle",
+    icon_text(bufnr_a, marks_ns, line_a) ~= ""
+  )
+
+  -- Back to tab A: ambient calls must resolve back to tab A's OWN
+  -- window/buffer -- not stay stuck on tab B.
+  vim.api.nvim_set_current_tabpage(tabid_a)
+  check(
+    "two-live: [BACK ON TAB A, FOCUSED] adapter.get_winid() resolves tab A's own window",
+    adapter.get_winid() == state_a.winid,
+    string.format("got %s, want %s", tostring(adapter.get_winid()), tostring(state_a.winid))
+  )
+  check(
+    "two-live: [BACK ON TAB A, FOCUSED] adapter.get_bufnr() resolves tab A's own buffer",
+    adapter.get_bufnr() == bufnr_a,
+    tostring(adapter.get_bufnr())
+  )
+  check(
+    "two-live: [BACK ON TAB A] tab A's icon and mark are both still exactly as they were",
+    icon_text(bufnr_a, link_ns, line_a):find("⇢", 1, true) ~= nil
+      and icon_text(bufnr_a, marks_ns, line_a) ~= ""
+  )
+
+  -- Finally, the full end-to-end symptom in both directions at once: clear
+  -- both trees' decorations (standing in for neo-tree's own full-content
+  -- replace on a real redraw, which does not carry extmarks over -- same
+  -- technique as `run_neotree_multitab_redraw_check`), then fire each
+  -- tree's REAL AFTER_RENDER event from the OTHER tab's context and confirm
+  -- each tree redraws its OWN icon without touching the other's.
+  vim.api.nvim_buf_clear_namespace(bufnr_a, link_ns, 0, -1)
+  vim.api.nvim_buf_clear_namespace(bufnr_b, link_ns, 0, -1)
+  check(
+    "two-live: both trees' decorations are really cleared now",
+    icon_text(bufnr_a, link_ns, line_a) == "" and icon_text(bufnr_b, link_ns, line_b) == ""
+  )
+
+  -- Tab B is current; the event fired is tab A's -- only tab A may redraw.
+  events.fire_event(events.AFTER_RENDER, state_a)
+  check(
+    "two-live: [TAB B CURRENT, TAB A's EVENT FIRED] tab A's icon redraws",
+    icon_text(bufnr_a, link_ns, line_a):find("⇢", 1, true) ~= nil,
+    icon_text(bufnr_a, link_ns, line_a)
+  )
+  check(
+    "two-live: [TAB B CURRENT, TAB A's EVENT FIRED] tab B's icon stays cleared (no bleed)",
+    icon_text(bufnr_b, link_ns, line_b) == "",
+    icon_text(bufnr_b, link_ns, line_b)
+  )
+
+  -- Tab A is current; the event fired is tab B's -- only tab B may redraw.
+  vim.api.nvim_set_current_tabpage(tabid_a)
+  events.fire_event(events.AFTER_RENDER, state_b)
+  check(
+    "two-live: [TAB A CURRENT, TAB B's EVENT FIRED] tab B's icon redraws",
+    icon_text(bufnr_b, link_ns, line_b):find("⇢", 1, true) ~= nil,
+    icon_text(bufnr_b, link_ns, line_b)
+  )
+  check(
+    "two-live: [TAB A CURRENT, TAB B's EVENT FIRED] tab A's icon is untouched by tab B's redraw",
+    icon_text(bufnr_a, link_ns, line_a):find("⇢", 1, true) ~= nil,
+    icon_text(bufnr_a, link_ns, line_a)
+  )
+
+  require("filetree.features.org.marks").teardown()
+  require("filetree.features.ui.link_marker").teardown()
+  pcall(adapter.close)
+  vim.cmd("tabonly")
+  vim.wait(500, function()
+    return false
+  end, 50)
+end
+
 -- ── Run ──────────────────────────────────────────────────────────────────────
 
 local wanted = vim.env.FILETREE_ADAPTER_LINES
@@ -945,6 +1490,8 @@ if has_neotree and has_nui and want("neotree") then
   })
   run_neotree_filter_race_check()
   run_neotree_link_marker_check()
+  run_neotree_multitab_redraw_check()
+  run_neotree_two_live_trees_check()
   ran = ran + 1
 else
   print("\nneo-tree: not installed (or excluded) -- skipping that pass.")

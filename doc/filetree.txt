@@ -1228,6 +1228,37 @@ Open a node in a split (`sg`), vsplit (`sv`), tab (`st`), or add it to the
 buffer list without switching focus (`gb`/`<S-CR>`) — every common "open,
 but not by replacing my current window" shape in one feature.
 
+On a directory, `<S-CR>` does something else entirely: it collapses the node
+via `adapter.collapse_node()`, since the adapter's own `<CR>` only ever
+expands (there's no toggle to undo it — see the note below). `gb` stays
+file-only; only `<S-CR>` picks up the directory case.
+
+Collapsing a drilled-into directory (neo-tree)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+neo-tree's `filesystem.group_empty_dirs` merges a chain of directories that
+hold nothing but another single directory into one display line — `personal`
+containing only `All` containing only `Finish` renders as
+`personal/All/Finish`. Each `<CR>` lazily loads one more level and rebuilds
+that merged node from scratch, which can leave it reporting `is_expanded() ==
+false` right after the very expand that just opened it — so `<CR>` never
+recognizes it as open, and every further press just drills one level deeper
+with no way back to `personal`.
+
+`<S-CR>` collapses the node when it is expanded, and falls back to its nearest
+collapsible ancestor when it isn't (the same fallback neo-tree's own
+`close_node` command — bound to `C` by default — uses). Each merge step
+re-parents the replacement node onto the *grandparent* of whatever it just
+absorbed, so a chain merged all the way from a top-level directory ends up
+parented directly on the tree root — nothing left to structurally collapse
+without hiding the whole tree. For that case `<S-CR>` falls back once more, to
+a plain refresh: a re-scan rebuilds the top level fresh from disk, which is
+unmerged and collapsed because the node was never actually marked expanded to
+begin with.
+
+• Module (adapter side): `M.collapse_node()` in
+`lua/filetree/adapter/neotree.lua`
+
 Keymaps: sg sv st gb <S-CR>
 
 Module: lua/filetree/features/fileops/open_variants/
@@ -2009,6 +2040,19 @@ Hides the block cursor inside the tree window, resolved adapter-agnostic via
 each adapter's own `filetypes` list rather than a single hardcoded filetype
 check.
 
+Hiding the real cursor only makes sense as long as something else marks the
+current line — normally `'cursorline'`. `force_cursorline` (default `true`)
+force-enables it on the tree window for exactly as long as the cursor stays
+hidden, and restores whatever it was on leave, so the tree can never end up
+with no visible position indicator at all (a plugin's own
+cursorline-management autocmd racing this one, a colorscheme reset, …) —
+that combination looks exactly like a lost cursor: movement, opening nodes and
+closing the window all keep working, there is just nothing on screen marking
+where you are. Set `force_cursorline = false` to go back to leaving
+`'cursorline'` alone.
+
+Config: `enabled` (default `true`), `force_cursorline` (default `true`)
+
 Module: lua/filetree/features/ui/cursor_hide/
 
 ------------------------------------------------------------------------------
@@ -2016,12 +2060,13 @@ LINK MARKER                                             *filetree-link-marker*
 
 Marks a symlinked node in the tree listing so it reads differently from an
 ordinary file/directory at a glance: a small `⇢` sign right before the
-node's own icon (`⇢!` for a symlink whose target could not be resolved),
+node's own name (`⇢!` for a symlink whose target could not be resolved),
 optionally followed by its target at the end of the line when `show_target =
-true`. The sign's position is found fresh per render, as the first non-blank
-column on the line — past whatever indent/tree-guide characters the backend
-drew, not a fixed offset — so it lines up correctly regardless of nesting
-depth or indent width.
+true`. The sign's position is found fresh per render, as the byte offset of
+the node's own name on the line — past whatever indent, tree-guide
+characters and icon the backend drew, not a fixed offset — so it lines up
+correctly regardless of nesting depth or indent width, and never splices into
+the middle of a guide line.
 
 On by default, unlike most decorators here — it costs nothing extra per
 render: it reads `is_link`/`link_to`/`link_broken` straight off data the
