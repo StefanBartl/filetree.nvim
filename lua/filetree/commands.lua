@@ -197,10 +197,14 @@ local TREE = {
   end,
 
   -- ── link_create ─────────────────────────────────────────────────────────────
-  -- :Filetree link              → prompt for a target, choose Symlink/Hardlink
-  -- :Filetree link mark [path]  → mark a source (node/buffer/path, no prompt)
-  -- :Filetree link paste        → paste the marked source, link kind by OS
-  link = {
+  -- :Filetree symlink              → prompt for a target, choose Symlink/Hardlink
+  -- :Filetree symlink mark [path]  → mark a source (node/buffer/path, no prompt)
+  -- :Filetree symlink paste        → paste the marked source, link kind by OS
+  --
+  -- Named `symlink`, not `link`: `link` collided with the unrelated `mdlink`
+  -- (Markdown-link-string) command under the same :Filetree verb — one is a
+  -- filesystem operation, the other text generation.
+  symlink = {
     [""] = function(_)
       local f = ft("link_create")
       if f then f.create() end

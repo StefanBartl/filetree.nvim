@@ -143,7 +143,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 ### Link create
 | Command | Action |
 |---------|--------|
-| `:Filetree link` | Prompt for a target path, create a symlink/hardlink to it in the current tree directory |
+| `:Filetree symlink` | Prompt for a target path, create a symlink/hardlink to it in the current tree directory |
 
 ### Rename
 | Command | Action |

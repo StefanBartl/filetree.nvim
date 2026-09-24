@@ -221,7 +221,7 @@ Exercises: `nvim_buf_set_extmark`, end-of-line virtual text.
 
 | # | Test | Expected |
 |---|------|----------|
-| C.8 | Create a symlink in the tree's directory (`:Filetree link`, or `ln -s`/`mklink` outside Neovim) and reveal it | A `⇢` sign appears right before its icon/name, not at the end of the line |
+| C.8 | Create a symlink in the tree's directory (`:Filetree symlink`, or `ln -s`/`mklink` outside Neovim) and reveal it | A `⇢` sign appears right before its icon/name, not at the end of the line |
 | C.9 | Point a symlink at a path that does not exist (or delete/move the target after linking) | The sign becomes `⇢!`, in a different (error) highlight |
 | C.10 | Set `features.link_marker = { show_target = true }`, restart, look at a symlink's line | The sign is followed by `-> <target path>` |
 | C.11 | A plain (non-symlink) file or directory | No sign at all |
@@ -243,7 +243,7 @@ Exercises: `nvim_open_win`, buffer-local keymaps, close-on-`q`.
 | D.5 | `I` on a very large file (>5 MB) | The line count reads `(skipped — file too large)` |
 | D.6 | `I` on a symlink | `Type:` reads `... (symlink)`, and a `Link to:` line names the target |
 | D.7 | `I` on a symlink whose target does not exist | The `Link to:` line adds `(broken — target missing)` |
-| D.8 | `I` on a file with a second hard-linked name (`:Filetree link` → Hardlink, or `mklink /H` / `ln`) | `Type:` reads `... (hardlink, 2 names)` |
+| D.8 | `I` on a file with a second hard-linked name (`:Filetree symlink` → Hardlink, or `mklink /H` / `ln`) | `Type:` reads `... (hardlink, 2 names)` |
 
 **preview** (keymap `<Tab>` in the tree — the default since phase 4):
 
@@ -556,7 +556,7 @@ bufferline.nvim, …).
   to `%TEMP%/filetree-test/data/nvim/filetree/`, which is emptied by
   `rm -rf /tmp/filetree-test`.
 - **Windows symlinks need Developer Mode** (or an elevated Neovim) to create —
-  without it, C.8-C.11 and D.6-D.8's `:Filetree link`/`ln -s`/`mklink` steps
+  without it, C.8-C.11 and D.6-D.8's `:Filetree symlink`/`ln -s`/`mklink` steps
   fail with `EPERM` and there is nothing to reveal in the tree. A hard link
   (`mklink /H`, D.8) needs neither.
 
