@@ -270,9 +270,11 @@ gets its `chdir`.
 
 auto_reveal (|filetree-auto-reveal|, on by default) handles the common case —
 scrolling/expanding to reveal a file that is already under the current root —
-on every buffer switch, cheaply and without touching the cwd. cwd_sync only
-needs to act (chdir + reveal/reroot) when the file is OUTSIDE the current root,
-i.e. when you switch to a file in a different project.
+on every buffer switch, cheaply and without touching the cwd. It also
+re-roots the tree itself (not the cwd) when the file is OUTSIDE the current
+root, by default — see its own `follow_root` option. cwd_sync (opt-in) is what
+also moves Neovim's own cwd there; enable it when you want the cwd itself to
+follow, not just the tree's display.
 
 The project root is resolved in this order:
   1. `root_markers` (default { ".git" }) — nearest ancestor directory holding
@@ -656,24 +658,36 @@ Methods:
 ------------------------------------------------------------------------------
 5.7 AUTO REVEAL                                        *filetree-auto-reveal*
 
-On BufEnter, scrolls or expands the tree to reveal the current file — but
-NEVER changes the cwd or the tree's root (that is cwd_sync's job; see
-|filetree-cwd-sync|). Debounced; auto-pauses for 500ms after the cursor enters
-the tree window so it doesn't fight manual navigation.
+On BufEnter, scrolls or expands the tree to reveal the current file — and
+NEVER changes the cwd itself (that is cwd_sync's job; see |filetree-cwd-sync|).
+Debounced; auto-pauses for 500ms after the cursor enters the tree window so it
+doesn't fight manual navigation.
 
-Two-step reveal per buffer switch:
+Reveal per buffer switch:
   1. If the file is already rendered (its parent dirs are expanded), just
      scroll the tree cursor to it — cheap, uses the adapter's cached
      path→line map.
-  2. Otherwise expand collapsed parent directories to reveal it, but ONLY
-     within the tree's CURRENT root (`adapter.open_reveal` is called with
-     that root pinned) — it can never re-root the tree itself. When the file
-     lives outside the current root, this step is skipped silently; getting
-     the root there first is cwd_sync's job (or the tree plugin's own
-     cwd-follow, e.g. neo-tree's `bind_to_cwd` + `follow_current_file`).
+  2. Otherwise, if the file IS under the tree's CURRENT root, expand collapsed
+     parent directories to reveal it (`adapter.open_reveal` is called with
+     that same root pinned) — the root itself stays put.
+  3. If the file lives OUTSIDE the current root: re-roots the tree to
+     wherever it resolves via the same directory logic cwd_sync uses (see
+     |filetree-cwd-sync|'s "project root is resolved in this order" list),
+     unless `follow_root = false`. Skipped when cwd_sync is already doing its
+     own reveal for this switch — the two resolve the identical directory, so
+     either or both running is redundant work at worst, never a conflict.
+     This step never touches the cwd itself; getting Neovim's own cwd there
+     too is still cwd_sync's job (or the tree plugin's native cwd-follow,
+     e.g. neo-tree's `bind_to_cwd` + `follow_current_file`).
+
+`follow_root` defaults to true, so the tree follows the current buffer on
+every switch out of the box — regardless of what triggered it (a keymap from
+another plugin, a picker, `:edit`, …) — even into a different project, without
+needing cwd_sync enabled at all. Set it to false to restore the old behaviour
+of silently doing nothing for a file outside the current root.
 
 Entering the tree window (|CTRL-W_w|, a `<C-h>` mapping, a mouse click) puts
-the tree cursor on the current file's node as a third, separate step. It runs
+the tree cursor on the current file's node as a separate step. It runs
 outside the debounce on purpose: otherwise where the cursor landed depended on
 whether the debounced BufEnter reveal had fired yet, and a quick window switch
 lost the race — the reveal arrived to find the cursor already in the tree and
@@ -689,6 +703,8 @@ Config:
   `sync_on_enter`  boolean   Move the tree cursor onto the current file's
                              node when the tree window is entered
                              (default true).
+  `follow_root`    boolean   Re-root the tree for a file outside its current
+                             root instead of doing nothing (default true).
 
 Commands: >
   :FiletreeAutoRevealPause [ms]   Pause for N ms (default 2000).

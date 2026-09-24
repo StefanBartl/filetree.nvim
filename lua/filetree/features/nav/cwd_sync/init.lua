@@ -5,7 +5,9 @@
 ---
 ---   1. Resolves the target root, in order: `root_markers` (default { ".git" },
 ---      cached via lib.nvim's find_root) → `use_project_root` (the broader
----      project_root marker set) → the file's own parent directory.
+---      project_root marker set) → the file's own parent directory. Shared
+---      with auto_reveal's out-of-root fallback via `filetree.util.target_dir`
+---      (see that module).
 ---   2. change_dir (default true): if that root differs from the current cwd,
 ---      silently `chdir` to it — never prompts.
 ---   3. reveal (default true): also root the tree at the SAME resolved
@@ -19,6 +21,12 @@
 ---      reveal is the only thing that does this job for them. See
 ---      doc/filetree.txt §5.3 for the full per-adapter table.
 ---
+---      This feature (cwd_sync) is itself opt-in (disabled by default). If it
+---      is off, or on with `reveal = false` because the adapter's native
+---      follow turns out not to fire reliably for a given buffer switch,
+---      auto_reveal's `follow_root` (on by default) is the safety net that
+---      still reveals the file — see that module.
+---
 --- No full tree refresh/rescan is issued — the reveal (or the tree plugin's own
 --- cwd-follow) re-renders anyway, so a separate rescan would be redundant work.
 ---
@@ -29,7 +37,7 @@ local notify = require("filetree.util.notify").create("[filetree.cwd_sync]")
 local path = require("filetree.util.path")
 local lib_debounce = require("lib.nvim.debounce")
 local chdir = require("lib.nvim.fs.chdir")
-local find_root = require("lib.nvim.fs.find_root")
+local target_dir_util = require("filetree.util.target_dir")
 
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
@@ -69,15 +77,22 @@ local _augroup = nil
 ---@type FiletreeCwdSyncConfig
 local _cfg = {}
 
+---Whether M.setup() actually ran (the feature is enabled and active) -- unlike
+---checking `_cfg.reveal` alone, this is false before any setup() and after
+---teardown(), so `M.reveal_active()` cannot mistake "never configured" for
+---"reveal explicitly enabled" (an unset field reads as `~= false`, i.e. true).
+---@type boolean
+local _active = false
+
 ---@type FiletreeAdapter?
 local _adapter = nil
 
----Cached marker-based root finder. The shape was hand-copied here as
----`FiletreeRootFinder` before lib.nvim shipped `Lib.Fs.FindRoot` for it; the
----copy is what made every assignment from `find_root()` a type mismatch.
----nil when disabled via root_markers=false.
----@type Lib.Fs.FindRoot?
-local _root_finder = nil
+---Built in M.setup() from `_cfg.root_markers`/`use_project_root` via
+---`filetree.util.target_dir` -- shared with auto_reveal's `follow_root`
+---fallback so both features resolve the identical directory for the same
+---file (see that module's header for why that makes redundant work safe).
+---@type fun(file: string): string
+local _resolve_target_dir
 
 ---@internal
 ---@return boolean
@@ -103,43 +118,6 @@ local function same_dir(a, b)
   local na = path.slashify(a):gsub("/$", "")
   local nb = path.slashify(b):gsub("/$", "")
   return na == nb
-end
-
----Resolve the directory `file` should put Neovim's cwd in.
----Resolution order:
----  1. cwd_mode's marker walk — the plugin's one root walk, shared with
----     `util.root` so the cwd and anything project-scoped (find_files, grep,
----     git_status) cannot disagree about which directory is "the project".
----     Skipped when cwd_mode is disabled or torn down.
----  2. Nearest ancestor containing a configured stable marker (default `.git`),
----     via the cached lib.nvim finder. This is now the fallback for a cwd_mode-
----     less setup; it keeps the cwd anchored to a stable high-level root so
----     opening files across a project doesn't cause frequent cwd jumps.
----     Disabled with `root_markers = false`.
----  3. The project_root feature's broader marker set (when use_project_root).
----  4. The file's own parent directory.
----@param file string
----@return string
----@internal
-local function target_dir(file)
-  local mode = require("filetree.features").require("cwd_mode")
-  if mode and type(mode.resolve) == "function" then
-    local ok, root = pcall(mode.resolve, file)
-    if ok and root and root ~= "" then return root end
-  end
-  if _root_finder then
-    local ok, root = pcall(_root_finder.find, file)
-    if ok and root and root ~= "" then return root end
-  end
-  if _cfg.use_project_root ~= false then
-    local registry = require("filetree.features")
-    local proot = registry.require("project_root")
-    if proot then
-      local ok, root = pcall(proot.find, file)
-      if ok and root and root ~= "" then return root end
-    end
-  end
-  return path.parent(file)
 end
 
 ---Ask the cwd_mode feature what its active policy wants for this file.
@@ -209,7 +187,7 @@ local function do_reveal(path_)
     root = decision.root
   end
 
-  root = root or target_dir(path_)
+  root = root or _resolve_target_dir(path_)
 
   -- Silently chdir to the root when it differs. Never prompts. Deliberately no
   -- _adapter.refresh() here: the reveal below re-roots/re-renders the tree, so a
@@ -293,16 +271,15 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg = config
   _adapter = adapter
+  _active = true
 
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(do_reveal, _cfg.debounce_ms or 150)
 
-  -- Build the cached stable-root finder unless disabled (root_markers = false).
-  -- Default markers are { ".git" } so the cwd anchors to the git root.
-  _root_finder = nil
-  local markers = _cfg.root_markers
-  if markers == nil then markers = { ".git" } end
-  if markers ~= false then _root_finder = find_root({ markers = markers }) end
+  _resolve_target_dir = target_dir_util.new({
+    root_markers = _cfg.root_markers,
+    use_project_root = _cfg.use_project_root,
+  })
 
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_cwd_sync", true)
@@ -361,7 +338,8 @@ end
 function M.teardown()
   bufevents.unregister("cwd_sync")
   if _debounce then _debounce.cancel() end
-  _root_finder = nil
+  _resolve_target_dir = nil
+  _active = false
   if _augroup then
     au.del_group(_augroup)
     _augroup = nil
@@ -374,6 +352,16 @@ end
 ---@param ms integer
 function M.pause(ms)
   pause(ms)
+end
+
+---Whether cwd_sync is active AND already doing its own reveal (`reveal ~=
+---false`) for the current buffer switch. Consulted by auto_reveal's
+---`follow_root` fallback so the two features don't both re-root the tree for
+---the same event -- see filetree.util.target_dir's header for why either or
+---both running is harmless, just redundant.
+---@return boolean
+function M.reveal_active()
+  return _active and _cfg.reveal ~= false
 end
 
 return M

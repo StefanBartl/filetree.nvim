@@ -21,11 +21,16 @@ fighting the user's own `+`/`-` press.
 ## Auto Reveal
 
 Scrolls to (or expands+reveals) the current file in the tree on every
-buffer switch, **without ever changing the cwd or the tree's root** — it
-only acts within the root the tree already has. Debounced (`debounce_ms`,
-default 150ms), auto-pauses while the cursor is inside the tree window to
-avoid feedback loops, and does nothing for a file outside the current root
-(that's `cwd_sync`'s job, or the tree plugin's own native follow).
+buffer switch, **without ever changing the cwd itself** — that stays
+`cwd_sync`'s job. Debounced (`debounce_ms`, default 150ms), auto-pauses
+while the cursor is inside the tree window to avoid feedback loops.
+
+For a file OUTSIDE the tree's current root, it re-roots the tree's own
+display (not the cwd) to wherever the file resolves via the same directory
+logic `cwd_sync` uses, by default (`follow_root`, default `true`) — skipped
+when `cwd_sync` is already handling the reveal for that switch, since both
+resolve the same directory. Set `follow_root = false` to go back to doing
+nothing for a file outside the current root.
 
 Entering the tree window (`<C-w>w`, `<C-h>`, a mouse click) also puts the
 tree cursor on the current file's node (`sync_on_enter`, default `true`).
@@ -36,7 +41,7 @@ reveal found the cursor already in the tree, dropped itself, and left you
 wherever you last were.
 
 - **Module:** [`features/nav/auto_reveal/init.lua`](../../lua/filetree/features/nav/auto_reveal/init.lua)
-- **Config:** `enabled` (default `true`), `debounce_ms` (150), `ignore_ft`, `only_if_open` (default `true`), `sync_on_enter` (default `true`)
+- **Config:** `enabled` (default `true`), `debounce_ms` (150), `ignore_ft`, `only_if_open` (default `true`), `sync_on_enter` (default `true`), `follow_root` (default `true`)
 - **Usercmds:** `:Filetree reveal`, `:Filetree reveal pause [ms]`, `:Filetree reveal resume`
 
 ## Reveal Alt

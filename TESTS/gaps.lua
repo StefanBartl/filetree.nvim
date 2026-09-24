@@ -1959,14 +1959,52 @@ do
     inside_file
   )
 
+  -- follow_root defaults to true: the tree used to just sit on its old root
+  -- forever whenever a buffer switch -- from any source, not just a manual
+  -- tree click -- landed outside it and nothing else happened to be
+  -- watching cwd. A file OUTSIDE the current root now still triggers
+  -- open_reveal, just with a DIFFERENT root than the one the tree started on.
+  open_reveal_calls = {}
+  local reveal_roots = {}
+  stub.open_reveal = function(path, _parent_levels, reveal_root)
+    open_reveal_calls[#open_reveal_calls + 1] = path
+    reveal_roots[#reveal_roots + 1] = reveal_root
+  end
+  vim.cmd("edit " .. vim.fn.fnameescape(outside_file))
+  ar.reveal_current()
+  eq(
+    "auto_reveal.reveal_current(): a file OUTSIDE the current root now re-roots by default (follow_root)",
+    open_reveal_calls[1],
+    outside_file
+  )
+  check(
+    "auto_reveal follow_root: re-roots somewhere other than the tree's original root",
+    reveal_roots[1] ~= nil and reveal_roots[1] ~= root_dir
+  )
+
+  -- follow_root = false restores the old "silently skip" behaviour.
+  open_reveal_calls = {}
+  ar.teardown()
+  ar.setup({ enabled = true, debounce_ms = 10, only_if_open = true, follow_root = false }, stub)
+  vim.cmd("edit " .. vim.fn.fnameescape(inside_file)) -- settle back inside first
+  ar.reveal_current()
   open_reveal_calls = {}
   vim.cmd("edit " .. vim.fn.fnameescape(outside_file))
   ar.reveal_current()
   eq(
-    "auto_reveal.reveal_current(): a file OUTSIDE the tree's current root is silently skipped",
+    "auto_reveal.reveal_current(): follow_root = false still silently skips a file outside the root",
     #open_reveal_calls,
     0
   )
+
+  -- Restore the default-config stub used by the rest of this block.
+  stub.open_reveal = function(path)
+    open_reveal_calls[#open_reveal_calls + 1] = path
+  end
+  ar.teardown()
+  ar.setup({ enabled = true, debounce_ms = 10, only_if_open = true }, stub)
+  vim.cmd("edit " .. vim.fn.fnameescape(inside_file))
+  ar.reveal_current()
 
   -- Windows-separator robustness of under_root(): the adapter's root comes
   -- back with native backslashes (as a real Windows adapter might report),

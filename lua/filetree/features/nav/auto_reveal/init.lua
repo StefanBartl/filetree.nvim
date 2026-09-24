@@ -2,14 +2,25 @@
 --- Automatically reveal the current editor buffer in the tree.
 ---
 --- Unlike cwd_sync (which changes the working directory), auto_reveal never
---- changes the cwd or the tree's root. On every buffer switch it:
+--- changes the cwd. On every buffer switch it:
 ---   1. Scrolls to the file's line if it is already rendered (cheap).
----   2. Otherwise expands collapsed parent directories to reveal it, but only
----      within the tree's CURRENT root (adapter.open_reveal is called with that
----      root pinned) — so it can never re-root the tree itself.
----   3. Does nothing when the file lives outside the current root; getting the
----      root there first is cwd_sync's job (or the tree plugin's own cwd-follow,
----      e.g. neo-tree's bind_to_cwd + follow_current_file).
+---   2. Otherwise expands collapsed parent directories to reveal it, within
+---      the tree's CURRENT root (adapter.open_reveal is called with that
+---      root pinned) -- so the tree's root stays where it was.
+---   3. When the file lives OUTSIDE the current root: re-roots the tree to
+---      wherever filetree.util.target_dir resolves for that file (the same
+---      resolver cwd_sync uses, so both agree on the target), unless
+---      `follow_root = false`. Skipped when cwd_sync is already doing its
+---      own reveal for this switch (cwd_sync.reveal_active()) -- no cwd
+---      change happens here either way, this only moves the tree's display;
+---      getting Neovim's own cwd there too is still cwd_sync's job (or the
+---      tree plugin's native cwd-follow, e.g. neo-tree's bind_to_cwd +
+---      follow_current_file).
+---
+---      follow_root defaults to true so "the tree follows the current
+---      buffer, however it got focused" holds out of the box; set it to
+---      false in features.auto_reveal to restore the old behaviour of
+---      silently doing nothing outside the current root.
 ---
 --- Debounced to avoid spam during rapid buffer switching. Automatically
 --- pauses when the cursor is inside the tree window to prevent feedback
@@ -33,6 +44,8 @@
 ---   only_if_open   boolean   Only reveal when tree window is visible (default true).
 ---   sync_on_enter  boolean   Move the tree cursor onto the current file's node
 ---                            when the tree window is entered (default true).
+---   follow_root    boolean   Re-root the tree for a file outside its current
+---                            root instead of doing nothing (default true).
 ---
 --- User commands:
 ---   :FiletreeAutoRevealPause [ms]   Pause for N ms (default 2000).
@@ -42,6 +55,7 @@
 local bufevents = require("filetree.util.bufevents")
 local lib_debounce = require("lib.nvim.debounce")
 local lib_is_subpath = require("lib.nvim.fs.is_subpath")
+local target_dir_util = require("filetree.util.target_dir")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
@@ -66,6 +80,7 @@ local _cfg = {
   },
   only_if_open = true,
   sync_on_enter = true,
+  follow_root = true,
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -77,10 +92,19 @@ M.SCHEMA = {
   ignore_ft = { "table", of = "string" },
   only_if_open = "boolean",
   sync_on_enter = "boolean",
+  follow_root = "boolean",
 }
 
 ---@type FiletreeAdapter?
 local _adapter = nil
+
+---Built in M.setup() via `filetree.util.target_dir` (default markers/policy,
+---the same as cwd_sync's own default -- this is a fallback, not meant to be
+---separately tuned; use cwd_sync itself for that) -- used by `reveal_to`
+---when `follow_root` needs to re-root for a file outside the tree's current
+---root.
+---@type fun(file: string): string
+local _resolve_target_dir
 
 ---Explicit pauses only -- `M.pause()`, `:Filetree reveal pause`. Kept separate
 ---from the entry pause below so that a caller pausing reveals for a batch
@@ -211,6 +235,37 @@ local function place_cursor_when_rendered(path, anchor, attempt)
   end, delay)
 end
 
+---Ask the cwd_mode feature what its active policy wants for this file.
+---Mirrors cwd_sync's own `policy()` -- returns nil (no opinion, resolve
+---normally) when the feature is absent, disabled, or in "follow" mode.
+---@internal
+---@param path string
+---@return FiletreeCwdDecision?
+---@see filetree.features.nav.cwd_mode
+local function policy_decision(path)
+  local mode = require("filetree.features").require("cwd_mode")
+  if not mode or type(mode.decide) ~= "function" then return nil end
+  local ok, decision = pcall(mode.decide, path)
+  return ok and decision or nil
+end
+
+---`_adapter.open_reveal(path, 0, root)`, tracking the tree cursor's current
+---line first so `place_cursor_when_rendered` can land on the node once the
+---(possibly async) reveal finishes rendering it.
+---@internal
+---@param path string
+---@param root string
+local function do_open_reveal(path, root)
+  local winid = _adapter.get_winid and _adapter.get_winid() or -1
+  local anchor = nil
+  if winid > 0 and vim.api.nvim_win_is_valid(winid) then
+    local ok, pos = pcall(vim.api.nvim_win_get_cursor, winid)
+    if ok then anchor = pos[1] end
+  end
+  pcall(_adapter.open_reveal, path, 0, root)
+  if anchor then place_cursor_when_rendered(path, anchor, 1) end
+end
+
 ---Move the tree cursor onto `path`, expanding parents if it takes that. No
 ---guards: every caller has already decided that a reveal is wanted.
 ---@internal
@@ -228,27 +283,34 @@ local function reveal_to(path)
     end
   end
 
-  -- Slow path: the node is not currently visible (a parent dir is collapsed).
-  -- Expand to reveal it, but ONLY within the tree's CURRENT root — never re-root
-  -- here. Re-rooting is cwd_sync's job (it anchors at the project root); if
-  -- auto_reveal also re-rooted (e.g. to the file's parent), the two would race on
-  -- every buffer switch and the tree could settle on the wrong directory. When the
-  -- file lives outside the current root, silently do nothing — cwd_sync (or the
-  -- tree plugin's own cwd-follow, e.g. neo-tree bind_to_cwd) is responsible for
-  -- getting the root there first.
-  if type(_adapter.get_root_path) == "function" and type(_adapter.open_reveal) == "function" then
-    local root = _adapter.get_root_path()
-    if root and root ~= "" and under_root(path, root) then
-      local winid = _adapter.get_winid and _adapter.get_winid() or -1
-      local anchor = nil
-      if winid > 0 and vim.api.nvim_win_is_valid(winid) then
-        local ok, pos = pcall(vim.api.nvim_win_get_cursor, winid)
-        if ok then anchor = pos[1] end
-      end
-      pcall(_adapter.open_reveal, path, 0, root)
-      if anchor then place_cursor_when_rendered(path, anchor, 1) end
-    end
+  if type(_adapter.get_root_path) ~= "function" or type(_adapter.open_reveal) ~= "function" then
+    return
   end
+  local root = _adapter.get_root_path()
+  if not (root and root ~= "") then return end
+
+  -- Within the tree's CURRENT root: the node is not currently visible (a
+  -- parent dir is collapsed) — expand to reveal it, root unchanged.
+  if under_root(path, root) then
+    do_open_reveal(path, root)
+    return
+  end
+
+  -- Outside the current root: re-root to wherever the file actually belongs,
+  -- unless told not to, or unless cwd_sync is already handling this switch
+  -- with its own reveal (both resolve the identical directory via
+  -- filetree.util.target_dir, so this is only ever redundant work to skip,
+  -- never a conflict to avoid).
+  if not _cfg.follow_root then return end
+  local cwd_sync = require("filetree.features").require("cwd_sync")
+  if cwd_sync and cwd_sync.reveal_active() then return end
+
+  local decision = policy_decision(path)
+  if decision and decision.reveal == false then return end
+
+  local new_root = (decision and decision.root)
+    or (_resolve_target_dir and _resolve_target_dir(path))
+  if new_root and new_root ~= "" then do_open_reveal(path, new_root) end
 end
 
 ---The editor-driven reveal: something entered a buffer, follow it in the tree.
@@ -346,6 +408,7 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
+  _resolve_target_dir = target_dir_util.new({})
 
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(do_reveal, _cfg.debounce_ms)
@@ -378,6 +441,7 @@ end
 function M.teardown()
   bufevents.unregister("auto_reveal")
   _adapter = nil
+  _resolve_target_dir = nil
   _paused_until = 0
   _tree_pause_until = 0
   _last_editor_path = nil
