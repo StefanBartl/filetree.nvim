@@ -89,6 +89,18 @@ local function redraw(bufnr)
 
   vim.api.nvim_buf_clear_namespace(bufnr, ns(), 0, -1)
 
+  -- Nothing marked -- clearing the namespace above (stale extmarks from a
+  -- prior, now-unmarked state) is still correct and necessary, but the full
+  -- tree walk below exists only to find nodes worth marking, so skip it. Worth
+  -- doing now specifically: `redraw` fires on every neo-tree narrow redraw
+  -- (`on_render`, wired through `renderer.redraw` -- see
+  -- `adapter/neotree.lua`'s "Render-event bridge" comment), i.e. any buffer
+  -- opening or closing ANYWHERE in the session, not just full tree rescans --
+  -- for a session with no marks set (the common case for a user who has never
+  -- marked anything) that is a full tree walk on every such event for no
+  -- payoff at all.
+  if next(_marks) == nil then return end
+
   local nodes = _adapter.get_visible_nodes(nil, bufnr)
   for _, node in ipairs(nodes) do
     if _marks[node.path] then

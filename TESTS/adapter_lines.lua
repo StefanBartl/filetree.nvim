@@ -930,6 +930,73 @@ local function run_neotree_link_marker_check()
   end, 50)
 end
 
+-- ── neo-tree only: get_visible_nodes(filter, bufnr) must not silently
+-- substitute the ambient tree when `bufnr` itself fails to resolve ─────────
+-- Root cause: `bufnr and state_for_bufnr(bufnr) or get_state()` is the classic
+-- Lua `and/or` pitfall -- when a REAL bufnr is given but `state_for_bufnr(bufnr)`
+-- returns nil (a normal, reachable outcome: nothing shows that bufnr as a
+-- live tree window), the expression falls through to the ambient `get_state()`
+-- and returns a possibly UNRELATED tree's nodes instead of `{}`, inconsistent
+-- with the sibling `get_node_at_line`, which correctly returns nil for the
+-- identical resolution failure. Only a real neo-tree with a real, currently
+-- open tree reproduces this: the bug requires an ambient tree to exist for
+-- the fallback to wrongly substitute.
+local function run_neotree_get_visible_nodes_bufnr_check()
+  print("\n== neo-tree: get_visible_nodes(filter, bufnr) never falls back to the ambient tree ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-getvisiblebufnr")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "hi" }, work .. "/plain.txt")
+
+  require("filetree").setup({
+    adapter = "neotree",
+    features = { auto_reveal = { enabled = false } },
+  })
+
+  local adapter = require("filetree.adapter.neotree")
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  vim.wait(4000, function()
+    local b = adapter.get_bufnr()
+    if not b then return false end
+    local text = table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n")
+    return text:find("plain.txt", 1, true) ~= nil
+  end, 50)
+
+  local tree_bufnr = adapter.get_bufnr()
+  check("get-visible-bufnr: the tree buffer exists", tree_bufnr ~= nil, tostring(tree_bufnr))
+  if not tree_bufnr then
+    pcall(adapter.close)
+    return
+  end
+
+  -- The ambient tree is genuinely non-empty -- otherwise a wrong fallback to
+  -- it would be indistinguishable from a correct `{}`.
+  local ambient = adapter.get_visible_nodes()
+  check("get-visible-bufnr: the ambient tree has real nodes to wrongly fall back to", #ambient > 0)
+
+  -- A real bufnr that no live tree window shows -- an ordinary scratch
+  -- buffer, never displayed anywhere.
+  local scratch = vim.api.nvim_create_buf(false, true)
+  check(
+    "get-visible-bufnr: the scratch bufnr is a real, valid, unrelated buffer",
+    vim.api.nvim_buf_is_valid(scratch) and scratch ~= tree_bufnr
+  )
+
+  local result = adapter.get_visible_nodes(nil, scratch)
+  check(
+    "get-visible-bufnr: an unresolvable bufnr returns {} -- not the ambient tree's nodes",
+    type(result) == "table" and #result == 0,
+    "got " .. #result .. " node(s)"
+  )
+
+  pcall(vim.api.nvim_buf_delete, scratch, { force = true })
+  pcall(adapter.close)
+  vim.wait(300, function()
+    return false
+  end, 50)
+end
+
 -- ── neo-tree only: a background-tab redraw must still hit the tree's own,
 -- real per-tab state -- not whichever tab happens to be current ────────────
 -- Root cause: `adapter/neotree.lua`'s internal `get_state()` used to call
@@ -1085,6 +1152,7 @@ local function run_neotree_multitab_redraw_check()
   check("multitab: the symlinked file is in the rendered tree", line ~= nil)
   if not line then
     vim.cmd("tabonly")
+    vim.cmd("cd " .. vim.fn.fnameescape(orig_cwd))
     return
   end
   check(
@@ -1173,6 +1241,105 @@ local function run_neotree_multitab_redraw_check()
   vim.cmd("tabonly")
   vim.cmd("cd " .. vim.fn.fnameescape(orig_cwd))
   vim.wait(500, function()
+    return false
+  end, 50)
+end
+
+-- ── neo-tree only: `get_state()`'s single-slot `_tree_tabid` cache tier
+-- genuinely gets exercised, in isolation from the last-resort full-tabpage
+-- probe ───────────────────────────────────────────────────────────────────
+-- `get_state()` has three resolution tiers: the current tab, the
+-- `_tree_tabid` cache, and (only reached when the first two both miss) a
+-- full-tabpage probe. With only two tabs open, an ambient call from the
+-- treeless tab would resolve correctly whether the SECOND tier (the cache)
+-- or the THIRD (the probe, which would also find the only other tab) is what
+-- actually answered -- the RESULT alone cannot tell them apart. With a
+-- THIRD, uninvolved tab also open, it can: the full probe visits every OTHER
+-- tab, so if it ran at all, it would call `manager.get_state` for that third
+-- tab too. Spying on the real `manager.get_state` and asserting it was
+-- called for the tree's own (cached) tab but NEVER for the third, unrelated
+-- one proves the cache tier alone answered -- not merely that the answer
+-- happened to be correct either way.
+local function run_neotree_cache_tier_isolation_check()
+  print("\n== neo-tree: get_state()'s _tree_tabid cache tier is genuinely exercised ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-cachetier")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "hi" }, work .. "/plain.txt")
+
+  vim.cmd("tabonly")
+  require("filetree").setup({
+    adapter = "neotree",
+    features = { auto_reveal = { enabled = false }, cwd_mode = { enabled = false } },
+  })
+
+  local adapter = require("filetree.adapter.neotree")
+  local tabid_a = vim.api.nvim_get_current_tabpage()
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  vim.wait(4000, function()
+    return adapter.get_bufnr() ~= nil
+  end, 50)
+  check("cache-tier: the tree buffer exists", adapter.get_bufnr() ~= nil)
+
+  -- Prime the cache: an ambient call while tab A (the tree's own tab) is
+  -- current sets `_tree_tabid = tabid_a` (see `get_state()`'s tier-1 comment).
+  adapter.get_root_path()
+
+  vim.cmd("tabnew") -- tab B: current, treeless.
+  local tabid_b = vim.api.nvim_get_current_tabpage()
+  vim.cmd("tabnew") -- tab C: current, treeless, and UNINVOLVED -- never the
+  -- tree's own tab, never cached. Only the full-tabpage probe has any reason
+  -- to ever touch it.
+  local tabid_c = vim.api.nvim_get_current_tabpage()
+  vim.cmd("tabprevious") -- back to tab B: current, treeless, tab C now background.
+  check(
+    "cache-tier: tab B is current and genuinely tab/treeless",
+    vim.api.nvim_get_current_tabpage() == tabid_b and tabid_b ~= tabid_a and tabid_b ~= tabid_c
+  )
+
+  local mgr = require("neo-tree.sources.manager")
+  local queried_tabids = {}
+  local original_get_state = mgr.get_state
+  mgr.get_state = function(source_name, tabid, ...)
+    if source_name == "filesystem" then
+      queried_tabids[#queried_tabids + 1] = tabid or vim.api.nvim_get_current_tabpage()
+    end
+    return original_get_state(source_name, tabid, ...)
+  end
+
+  local ok_call, root = pcall(adapter.get_root_path)
+  mgr.get_state = original_get_state -- restore immediately, pass or fail
+  check("cache-tier: the ambient call itself succeeded", ok_call, tostring(root))
+
+  local saw_c, saw_a = false, false
+  for _, t in ipairs(queried_tabids) do
+    if t == tabid_c then saw_c = true end
+    if t == tabid_a then saw_a = true end
+  end
+  check(
+    "cache-tier: the cached tab (A) was queried -- the cache tier ran",
+    saw_a,
+    vim.inspect(queried_tabids)
+  )
+  check(
+    "cache-tier: the uninvolved third tab (C) was NEVER queried -- the full probe did not run",
+    not saw_c,
+    vim.inspect(queried_tabids)
+  )
+
+  -- Let any still-pending debounced `filesystem_navigate` from the initial
+  -- `show` above finish against tab A while it's still a valid tabpage --
+  -- otherwise `tabonly` below (closing every tab but the current one)
+  -- destroys tab A out from under that in-flight debounce, which then logs
+  -- a benign but noisy "Invalid tabpage id" error well after this test
+  -- itself has finished.
+  vim.wait(600, function()
+    return false
+  end, 50)
+  pcall(adapter.close)
+  vim.cmd("tabonly")
+  vim.wait(300, function()
     return false
   end, 50)
 end
@@ -1756,7 +1923,9 @@ if has_neotree and has_nui and want("neotree") then
   })
   run_neotree_filter_race_check()
   run_neotree_link_marker_check()
+  run_neotree_get_visible_nodes_bufnr_check()
   run_neotree_multitab_redraw_check()
+  run_neotree_cache_tier_isolation_check()
   run_neotree_two_live_trees_check()
   run_neotree_opened_buffers_redraw_check()
   ran = ran + 1

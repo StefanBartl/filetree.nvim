@@ -64,6 +64,22 @@ local function state_with_live_window(manager, tabid)
   return nil
 end
 
+-- Per-bufnr memoization of `state_for_bufnr`'s own resolution, keyed on the
+-- buffer's changedtick -- see that function's doc comment for what it
+-- resolves. A tree buffer's own bufnr→window→tab→state chain cannot change
+-- without the buffer's content also changing (a redraw, an expand/collapse,
+-- ...), which already bumps the changedtick this is keyed on -- so within one
+-- render pass (the same tick throughout), every per-line caller
+-- (`get_node_at_line`, used once per rendered line by up to six decorating
+-- features -- link_marker, git_status, lsp_diagnostics, size_info,
+-- copy_move, filter) hits this cache instead of redoing the
+-- `vim.fn.win_findbuf` scan plus a `manager.get_state` pcall from scratch on
+-- every single line. Measured on a 1000-line tree: the win_findbuf scan
+-- alone is the dominant cost of a full render pass once six features each
+-- walk every line once.
+---@type table<integer, {tick: integer, state: table?}>
+local _state_for_bufnr_cache = {}
+
 ---@internal
 ---Resolve the neo-tree state whose window is showing `bufnr` right now --
 ---independent of which tab is current and of `_tree_tabid`'s single-slot
@@ -77,18 +93,34 @@ end
 ---@param bufnr integer
 ---@return table? state
 local function state_for_bufnr(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    _state_for_bufnr_cache[bufnr] = nil
+    return nil
+  end
+
+  local tick = vim.api.nvim_buf_get_changedtick(bufnr)
+  local cached = _state_for_bufnr_cache[bufnr]
+  if cached and cached.tick == tick then return cached.state end
+
   local manager = get_manager()
-  if not manager or not vim.api.nvim_buf_is_valid(bufnr) then return nil end
-  for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
-    if vim.api.nvim_win_is_valid(winid) and vim.api.nvim_win_get_buf(winid) == bufnr then
-      local ok, tabid = pcall(vim.api.nvim_win_get_tabpage, winid)
-      if ok then
-        local state = state_with_live_window(manager, tabid)
-        if state and state.winid == winid then return state end
+  local resolved = nil
+  if manager then
+    for _, winid in ipairs(vim.fn.win_findbuf(bufnr)) do
+      if vim.api.nvim_win_is_valid(winid) and vim.api.nvim_win_get_buf(winid) == bufnr then
+        local ok, tabid = pcall(vim.api.nvim_win_get_tabpage, winid)
+        if ok then
+          local state = state_with_live_window(manager, tabid)
+          if state and state.winid == winid then
+            resolved = state
+            break
+          end
+        end
       end
     end
   end
-  return nil
+
+  _state_for_bufnr_cache[bufnr] = { tick = tick, state = resolved }
+  return resolved
 end
 
 ---@internal
@@ -99,6 +131,31 @@ end
 ---has focus -- so simply preferring the current tab already resolves those
 ---correctly, including with a second, unrelated tree live on some other tab.
 ---@return table? state
+---@internal
+---Whether neo-tree already tracks a "filesystem" state for `tabid`, WITHOUT
+---creating one -- unlike `manager.get_state`, which lazily creates and
+---PERMANENTLY registers an empty placeholder state (firing `STATE_CREATED`)
+---for any tabid that never had one. Used by `get_state()`'s last-resort probe
+---below to tell "this tab never had a tree" (a placeholder our own probe is
+---about to create) apart from "this tab has a real, if not currently live,
+---tracked state" (something that existed before we got here and is not ours
+---to dispose) -- see that probe's own comment for why the distinction matters.
+---`manager._get_all_states()` is the one read-only way to answer this without
+---a side effect; on any failure (an older neo-tree without it, say) this
+---answers `true` so the probe below never disposes something it isn't sure it
+---created.
+---@param manager table
+---@param tabid integer
+---@return boolean
+local function has_tracked_state(manager, tabid)
+  local ok, states = pcall(manager._get_all_states)
+  if not ok or type(states) ~= "table" then return true end
+  for _, s in ipairs(states) do
+    if s.name == "filesystem" and s.tabid == tabid then return true end
+  end
+  return false
+end
+
 local function get_state()
   local manager = get_manager()
   if not manager then return nil end
@@ -111,8 +168,9 @@ local function get_state()
   -- genuinely-current tree: whichever tab got cached first stayed "the" tree
   -- for every ambient caller everywhere, even one running from inside the
   -- second tree's own window.
-  local ok, current = pcall(manager.get_state, "filesystem")
-  if ok and current and current.winid and vim.api.nvim_win_is_valid(current.winid) then
+  local current_tab = vim.api.nvim_get_current_tabpage()
+  local current = state_with_live_window(manager, current_tab)
+  if current then
     _tree_tabid = current.tabid
     return current
   end
@@ -130,16 +188,30 @@ local function get_state()
   -- never cached (or whose cache went stale). Only worth trying with more
   -- than one tab open -- with a single tab, the current-tab call above
   -- already covered the only tab there is. `manager.get_state` lazily
-  -- creates a harmless empty placeholder for a tabid that never had one, so
-  -- probing every tab is safe.
+  -- creates a harmless-looking empty placeholder for a tabid that never had
+  -- one -- "harmless" only in that it doesn't error, NOT in that it's free:
+  -- nothing ever disposes it, and a stray leftover state in neo-tree's own
+  -- `all_states` list can later make its `opened_buffers_changed` handler
+  -- pcall-abort its whole iteration early, silently breaking the narrow-
+  -- redraw resync other, real trees depend on (see
+  -- `TESTS/adapter_lines.lua`'s `run_neotree_opened_buffers_redraw_check`).
+  -- So: probe via `has_tracked_state` first (a read-only check, creates
+  -- nothing) to tell a genuinely pre-existing state apart from one this
+  -- probe itself is about to lazily create, and dispose only the latter,
+  -- right after checking it -- never a state that was already there before
+  -- this call, which may be legitimately non-live right now (its window
+  -- closed) but still hold config/expand-state worth keeping for later.
   local tabpages = vim.api.nvim_list_tabpages()
   if #tabpages > 1 then
     for _, tabid in ipairs(tabpages) do
       if tabid ~= _tree_tabid then
+        local pre_existing = has_tracked_state(manager, tabid)
         local state = state_with_live_window(manager, tabid)
         if state then
           _tree_tabid = tabid
           return state
+        elseif not pre_existing then
+          pcall(manager.dispose, "filesystem", tabid)
         end
       end
     end
@@ -148,7 +220,8 @@ local function get_state()
   -- Nothing live anywhere -- same fallback this function always had, e.g.
   -- get_current_position()'s "no prior state yet" default before the tree
   -- has ever been shown.
-  return ok and current or nil
+  local ok, ambient = pcall(manager.get_state, "filesystem", current_tab)
+  return ok and ambient or nil
 end
 
 ---@internal
@@ -419,7 +492,20 @@ end
 ---@param bufnr? integer
 ---@return FiletreeNode[]
 function M.get_visible_nodes(filter, bufnr)
-  local state = bufnr and state_for_bufnr(bufnr) or get_state()
+  -- Deliberately NOT `bufnr and state_for_bufnr(bufnr) or get_state()`: with
+  -- a real bufnr given, a resolution failure (state_for_bufnr returning nil
+  -- -- a normal, reachable outcome, e.g. the tree's window closed between the
+  -- render and this call) must return {} here, not silently fall through to
+  -- the ambient get_state() and substitute a possibly unrelated tree. That
+  -- `and/or` idiom cannot tell "bufnr given but unresolved" apart from
+  -- "bufnr omitted" -- both evaluate the right-hand side. get_node_at_line
+  -- (same bufnr contract) already gets this right; this matches it.
+  local state
+  if bufnr then
+    state = state_for_bufnr(bufnr)
+  else
+    state = get_state()
+  end
   if not state or not state.tree then return {} end
 
   local nodes = {}
@@ -989,8 +1075,21 @@ end
 -- all of which share this exact "render without AFTER_RENDER" shape.)
 ---@type table<fun(integer?), true>
 local _render_listeners = {}
----@type boolean
-local _render_hook_installed = false
+---@type boolean  the AFTER_RENDER subscription -- see `install_render_hook`.
+local _after_render_subscribed = false
+---@type boolean  the `renderer.redraw` monkeypatch -- see `install_render_hook`.
+local _redraw_hook_installed = false
+---@type boolean  a `try_install_redraw_hook_later` retry loop is in flight.
+local _redraw_hook_retry_scheduled = false
+---@type integer
+local _redraw_hook_retries = 0
+-- Field name `install_redraw_hook` stores its live notify callback under, on
+-- `renderer` itself (neo-tree's own module table) rather than in a local
+-- here -- see that function's doc comment for why a module-level local
+-- cannot make the wrap idempotent across a hot reload, and why a table field
+-- on the CALLEE's own persistent table can.
+---@type string
+local REDRAW_NOTIFY_FIELD = "_filetree_notify_redraw"
 
 ---@internal
 ---Neo-tree's `ui/renderer.lua` fires AFTER_RENDER as
@@ -1026,6 +1125,30 @@ local function notify_render_listeners(bufnr)
 end
 
 ---@internal
+---Shared monkeypatch technique: replace `tbl[field_name]` with
+---`wrapper_factory(original)`, forwarding the stash/replace/forward dance
+---`install_redraw_hook` and `M.install_reveal_guard` each otherwise hand-roll
+---separately (a third, also-unfactored copy lives in `lib.nvim`'s
+---`lua/lib/nvim/neotree/watch/init.lua M.install()`). A deliberate
+---monkeypatch of the callee's own module table, not a redefinition of
+---anything at the call site: every caller reaches `tbl[field_name]` through
+---its own `require(...)` of the SAME shared module table, resolved at CALL
+---time via a plain field lookup -- so this is visible to every caller
+---regardless of which module loaded first, unlike a caller-side wrapper,
+---which only ever sees calls made through that one particular upvalue.
+---@param tbl table
+---@param field_name string
+---@param wrapper_factory fun(original: function): function
+---@return boolean installed
+local function monkeypatch(tbl, field_name, wrapper_factory)
+  local original = tbl[field_name]
+  if type(original) ~= "function" then return false end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  tbl[field_name] = wrapper_factory(original)
+  return true
+end
+
+---@internal
 ---Monkeypatch `neo-tree.ui.renderer`'s `redraw` (the narrow, no-rescan redraw
 ---path -- see the "Render-event bridge" comment above for why this exists
 ---alongside the AFTER_RENDER subscription, not instead of it) so every caller
@@ -1033,48 +1156,229 @@ end
 ---require(...)` upvalue, and regardless of whether that caller's module
 ---loaded before or after this hook installs -- notifies this bridge's
 ---subscribers right after neo-tree's own real redraw completes.
+---
+---Idempotent across a hot reload -- but NOT via a module-level local here,
+---the way a first attempt at this did: a plugin reload (`package.loaded[...]
+---= nil` + re-require, a normal dev workflow) gives THIS module a brand-new,
+---empty set of locals, including any "already wrapped" bookkeeping kept in
+---one -- so a local-only guard sees nothing and wraps `renderer.redraw`
+---again, stacking a second layer around a first-generation wrapper closure
+---whose own `notify_render_listeners` upvalue is now orphaned: the SECOND
+---generation's `marks`/`link_marker` subscribe into a fresh `_render_listeners`
+---table that the still-installed FIRST wrapper never calls, so its callbacks
+---never fire at all (measured, not theoretical -- this exact gap shipped once
+---before this comment was written).
+---
+---Fixed by storing the live notify callback on `renderer` itself
+---(`REDRAW_NOTIFY_FIELD` above) instead of in a local here: `renderer` is
+---neo-tree's OWN persistent module table, untouched by reloading THIS one --
+---so repointing that field to the CURRENT generation's `notify_render_listeners`
+---is enough to keep an already-installed wrapper calling the right callbacks,
+---with no need to ever re-wrap `renderer.redraw` a second time. The wrapper
+---itself reads the field fresh on every call (not a captured closure value),
+---so it is generation-agnostic by construction; only the very first call ever
+---(field is nil, nothing wrapped yet) does the actual monkeypatch.
 ---@param renderer table  `neo-tree.ui.renderer`, already `require`d by the caller.
 ---@return boolean installed
 local function install_redraw_hook(renderer)
-  if type(renderer.redraw) ~= "function" then return false end
-  local original_redraw = renderer.redraw
-  -- Deliberate monkeypatch of neo-tree's own module table, not a
-  -- redefinition -- see `install_reveal_guard`'s doc comment below for the
-  -- same technique and why it works regardless of load order.
-  ---@diagnostic disable-next-line: duplicate-set-field
-  renderer.redraw = function(state, ...)
-    local result = original_redraw(state, ...)
-    notify_render_listeners(bufnr_of(state))
-    return result
-  end
-  return true
+  local already_wrapped = renderer[REDRAW_NOTIFY_FIELD] ~= nil
+  renderer[REDRAW_NOTIFY_FIELD] = notify_render_listeners
+  if already_wrapped then return true end
+  return monkeypatch(renderer, "redraw", function(original_redraw)
+    return function(state, ...)
+      local result = original_redraw(state, ...)
+      local notify_fn = renderer[REDRAW_NOTIFY_FIELD]
+      if notify_fn then notify_fn(bufnr_of(state)) end
+      return result
+    end
+  end)
 end
 
 ---@internal
+---Keep retrying `install_redraw_hook` in the background until it succeeds,
+---independent of the AFTER_RENDER subscription below -- see
+---`install_render_hook`'s doc comment for why the two are tracked
+---separately. Warns once, after retries are exhausted, rather than staying
+---silent forever: a failed install here means narrow, no-rescan redraws
+---(neo-tree's own `opened_buffers_changed`, several `sources/common/
+---commands.lua` actions) silently stop keeping filetree's decorations in
+---sync, with nothing else about the session looking broken.
+local function try_install_redraw_hook_later()
+  if _redraw_hook_installed or _redraw_hook_retry_scheduled then return end
+  _redraw_hook_retry_scheduled = true
+  local function retry()
+    _redraw_hook_retry_scheduled = false
+    if _redraw_hook_installed then return end
+    local ok_renderer, renderer = pcall(require, "neo-tree.ui.renderer")
+    if ok_renderer then _redraw_hook_installed = install_redraw_hook(renderer) end
+    if _redraw_hook_installed then return end
+    _redraw_hook_retries = _redraw_hook_retries + 1
+    if _redraw_hook_retries < 20 then
+      _redraw_hook_retry_scheduled = true
+      vim.defer_fn(retry, 150)
+    else
+      notify.warn(
+        "could not hook neo-tree's narrow redraw path (renderer.redraw) after retries -- "
+          .. "decorations (marks, symlink signs, ...) may go stale after operations that "
+          .. "redraw without a full rescan (copy/cut/paste, opening/closing buffers, ...). "
+          .. "See docs/FEATURES/BACKENDS.md."
+      )
+    end
+  end
+  vim.defer_fn(retry, 150)
+end
+
+---@internal
+---Installs the AFTER_RENDER subscription and the `renderer.redraw`
+---monkeypatch as two INDEPENDENT flags, not one -- a failed redraw-hook
+---install (e.g. some future/forked neo-tree where `renderer.redraw` isn't a
+---plain function) must not be silently, permanently swallowed just because
+---the AFTER_RENDER half succeeded: the old single-flag version set
+---`_render_hook_installed = true` unconditionally after firing both
+---installs, ignoring `install_redraw_hook`'s own return value -- and because
+---this function short-circuits at the top once that flag is set, a failed
+---redraw-hook install was never retried and never logged again, with the
+---AFTER_RENDER half still visibly working so nothing looked broken.
+---
+---Returns true once the AFTER_RENDER subscription is up -- the minimum bar
+---for `M.on_render` callbacks to fire at all. The redraw-hook half keeps
+---retrying independently via `try_install_redraw_hook_later` when it fails,
+---and warns once its own retries are exhausted.
 ---@return boolean installed
 local function install_render_hook()
-  if _render_hook_installed then return true end
+  if _after_render_subscribed and _redraw_hook_installed then return true end
   local ok_events, events = pcall(require, "neo-tree.events")
   local ok_renderer, renderer = pcall(require, "neo-tree.ui.renderer")
   if not ok_events or not ok_renderer then return false end
 
-  local handler = {
-    event = events.AFTER_RENDER,
-    id = "filetree_neotree_after_render",
-    handler = function(state)
-      notify_render_listeners(bufnr_of(state))
-    end,
-  }
-  -- Unsubscribe first: neo-tree's event queue does not dedupe by id, so a
-  -- second subscribe (e.g. filetree.setup() re-running) would otherwise fire
-  -- the same handler twice per render.
-  pcall(events.unsubscribe, handler)
-  pcall(events.subscribe, handler)
+  if not _after_render_subscribed then
+    local handler = {
+      event = events.AFTER_RENDER,
+      id = "filetree_neotree_after_render",
+      handler = function(state)
+        notify_render_listeners(bufnr_of(state))
+      end,
+    }
+    -- Unsubscribe first: neo-tree's event queue does not dedupe by id, so a
+    -- second subscribe (e.g. filetree.setup() re-running) would otherwise
+    -- fire the same handler twice per render.
+    pcall(events.unsubscribe, handler)
+    pcall(events.subscribe, handler)
+    _after_render_subscribed = true
+  end
 
-  install_redraw_hook(renderer)
+  if not _redraw_hook_installed then
+    _redraw_hook_installed = install_redraw_hook(renderer)
+    if not _redraw_hook_installed then try_install_redraw_hook_later() end
+  end
 
-  _render_hook_installed = true
-  return true
+  return _after_render_subscribed
+end
+
+---@internal
+---Hoist the `renderer.redraw` monkeypatch to install BEFORE anyone else's
+---FIRST `require("neo-tree.ui.renderer")` -- closing a gap `install_redraw_hook`
+---alone cannot: neo-tree's own `sources/filesystem/commands.lua` does
+---`local redraw = renderer.redraw` at ITS OWN module-load time (a plain Lua
+---upvalue, captured once, not a field lookup) -- and that module is required
+---EAGERLY, for every configured source, from inside neo-tree's own `setup()`
+---(see `setup/init.lua`: `source_default_config.commands = ... or
+---require(mod_root .. ".commands")`). For a commonly lazy-loaded neo-tree.nvim
+---(`cmd = "Neotree"` / `ft = "neo-tree"`), that `setup()` call itself only
+---runs on the user's FIRST `:Neotree` invocation -- so `install_render_hook`'s
+---own retry loop, which only starts once THIS module's `on_render` is first
+---called (from marks/link_marker's own `setup()`), can lose the race
+---entirely: by the time it gets a turn, `commands.lua` may already have
+---captured the pre-patch `renderer.redraw` into its own local, permanently,
+---for the rest of the session -- the four clipboard commands bound through it
+---(`y`/`x`/`<Esc>`/`p` by default) then never notify this bridge again, no
+---matter how many times `renderer.redraw` itself gets patched afterwards
+---(Lua upvalues do not re-resolve to a table's current field value).
+---
+---Patching the table field later cannot retroactively fix an already-
+---captured local anywhere else in the process -- so the fix has to be
+---structural: win the race instead of running faster. `package.preload`
+---is Lua's own hook for "run this the FIRST time -- and only the first time
+----- anyone requires this module name", checked by `require()` before the
+---normal file-based searchers and cached into `package.loaded` exactly the
+---same way a normal `require` result is. Installing our own preload entry
+---here means the very FIRST `require("neo-tree.ui.renderer")` from ANYONE --
+---including from inside neo-tree's own `setup()` -- returns an
+---ALREADY-patched module table, before any caller's own top-level
+---`local redraw = renderer.redraw` can run. This wins regardless of whether
+---neo-tree.setup() runs before or after THIS function, as long as THIS
+---function runs before neo-tree.ui.renderer is first required by anyone --
+---which is why it's called eagerly, at THIS adapter module's own load time
+---(see the bottom of this file), rather than only from marks/link_marker's
+---`setup()` the way `install_render_hook` is.
+---
+---Residual limitation, clearly disclosed rather than papered over (see
+---docs/FEATURES/BACKENDS.md): if `neo-tree.ui.renderer` is ALREADY loaded by
+---the time this runs (e.g. the user's own config calls
+---`require("neo-tree").setup()` -- which itself requires `commands.lua`,
+---which requires `renderer` -- before `require("filetree").setup()` /
+---`require("filetree.adapter.neotree")` ever runs), hoisting is no longer
+---possible: `commands.lua` has already captured whatever `renderer.redraw`
+---was at that point. The fallback branch below still patches the field
+---directly (matching this module's previous, pre-fix behavior) so every
+---OTHER narrow-redraw call site (the ones that resolve `renderer.redraw` via
+---a live field lookup, not a captured local -- see the "Render-event bridge"
+---comment above) still benefits, but `commands.lua`'s own four clipboard
+---commands specifically stay unpatched for that session. Loading
+---filetree.nvim's setup before neo-tree.nvim's own setup() call (e.g. neither
+---plugin lazy-loaded past VimEnter, or filetree declared as neo-tree's own
+---plugin-manager dependency) avoids this entirely.
+---@internal
+---Load `name` via Lua's own module searchers, SKIPPING the `package.preload`
+---searcher (always index 1 -- see the Lua manual's `require`/`package.searchers`)
+----- i.e. exactly what `require(name)` itself would do, minus the preload
+---lookup. Needed because `hoist_redraw_hook`'s own preload entry cannot just
+---call `require(name)` to get the real module: `require` is not reentrant for
+---a module whose loader is still running -- calling it again for the SAME
+---name from inside our own preload function (even after clearing that entry)
+---errors "loop or previous error loading module", since Neovim's own
+---`require` tracks the in-flight call, not merely `package.loaded`/
+---`package.preload`'s current contents. Going straight to the remaining
+---searchers sidesteps that reentrancy check entirely.
+---@param name string
+---@return unknown
+local function require_bypassing_preload(name)
+  ---@diagnostic disable-next-line: deprecated, undefined-field
+  local searchers = package.loaders or package.searchers -- luacheck: ignore 143
+  for i = 2, #searchers do
+    local loader = searchers[i](name)
+    if type(loader) == "function" then
+      local result = loader(name)
+      if result == nil then result = true end
+      package.loaded[name] = result
+      return result
+    end
+  end
+  error("module '" .. name .. "' not found")
+end
+
+local function hoist_redraw_hook()
+  if package.loaded["neo-tree.ui.renderer"] then
+    -- Already loaded by someone else before we got here -- too late to hoist
+    -- (see the "Residual limitation" paragraph above); patch the field
+    -- directly, same as `install_render_hook` would, so at least every OTHER
+    -- call site still benefits.
+    pcall(function()
+      install_redraw_hook(require("neo-tree.ui.renderer"))
+    end)
+    return
+  end
+  if package.preload["neo-tree.ui.renderer"] then return end -- already hoisted
+
+  package.preload["neo-tree.ui.renderer"] = function(...)
+    -- Clear our own preload entry FIRST -- belt and suspenders, since
+    -- `require_bypassing_preload` below never even looks at it.
+    package.preload["neo-tree.ui.renderer"] = nil
+    local ok, mod = pcall(require_bypassing_preload, "neo-tree.ui.renderer")
+    if not ok then error(mod) end
+    install_redraw_hook(mod)
+    return mod
+  end
 end
 
 ---Subscribe `callback` to fire every time neo-tree finishes (re)rendering the
@@ -1148,26 +1452,31 @@ local _reveal_guard_installed = false
 function M.install_reveal_guard()
   if _reveal_guard_installed then return end
   local ok, commands = pcall(require, "neo-tree.command")
-  if not ok or type(commands.execute) ~= "function" then return end
+  if not ok then return end
 
-  local original_execute = commands.execute
-  -- Deliberate monkeypatch of neo-tree's own module table, not a
-  -- redefinition -- see the doc-comment on install_reveal_guard above.
-  ---@diagnostic disable-next-line: duplicate-set-field
-  commands.execute = function(args, ...)
-    if
-      type(args) == "table"
-      and args.dir == nil
-      and args.reveal_force_cwd == nil
-      and args.reveal ~= false
-    then
-      args.reveal_force_cwd = true
+  -- Shared monkeypatch technique with install_redraw_hook -- see
+  -- `monkeypatch`'s own doc comment above.
+  local installed = monkeypatch(commands, "execute", function(original_execute)
+    return function(args, ...)
+      if
+        type(args) == "table"
+        and args.dir == nil
+        and args.reveal_force_cwd == nil
+        and args.reveal ~= false
+      then
+        args.reveal_force_cwd = true
+      end
+      return original_execute(args, ...)
     end
-    return original_execute(args, ...)
-  end
+  end)
 
-  _reveal_guard_installed = true
+  if installed then _reveal_guard_installed = true end
 end
+
+-- Hoist the redraw hook as early as this module can manage -- see
+-- `hoist_redraw_hook`'s own doc comment for why this runs unconditionally at
+-- module-load time rather than gated behind any feature's own setup().
+hoist_redraw_hook()
 
 -- Self-register
 registry.register(M)

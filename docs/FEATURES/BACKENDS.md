@@ -38,6 +38,20 @@ distinct problems fall out of that, resolved two different ways:
   matters once a **second** tree is simultaneously live on a second tab: a
   cache that always won unconditionally would keep resolving the first tab
   that got cached, everywhere, even from inside the second tree's own window.
+  The last-resort probe checks liveness with neo-tree's own `manager.get_state`,
+  which lazily creates and *permanently registers* an empty state for any
+  tabid that never had one — left alone, that leaks a ghost `all_states` entry
+  per background tab this probe ever glances at, which can later make
+  neo-tree's own `opened_buffers_changed` abort its whole iteration early on a
+  stray disposed-window reference, silently breaking the narrow-redraw resync
+  below for *other, real* trees. The probe tells "never had a tracked state"
+  (safe to dispose right back after checking) apart from "already had one
+  before this probe ran" (left alone, even if not currently live) via
+  `manager._get_all_states()`, and only ever disposes the former.
+
+  `TESTS/neotree_redraw_hook.lua` pins this against a real neo-tree: it forces
+  the last-resort probe to run over a tab with no tracked state and asserts
+  `manager._get_all_states()` shows no leftover entry for it afterward.
 - **A caller that already has a concrete tree bufnr in hand** — `get_node_at_line`,
   and the bufnr the adapter's `on_render` bridge hands each redraw callback —
   resolves straight from that bufnr's own window (`state_for_bufnr`) instead,
@@ -62,13 +76,55 @@ content (`state.tree:render()`), which does not carry extmarks over, so a
 background tab's symlink sign or mark checkmark could go silently undrawn
 until that tab's own tree got a real `AFTER_RENDER` of its own. The bridge
 closes this by also monkeypatching `renderer.redraw` itself
-(`install_redraw_hook`) — reached by every caller through a plain field
-lookup on the shared module table, so the patch is visible regardless of load
-order — rather than a parallel autocmd guessing at neo-tree's own 200ms
-debounce from the outside; see that function's doc comment for the reasoning.
-`TESTS/adapter_lines.lua`'s `run_neotree_opened_buffers_redraw_check` pins
-this against a real neo-tree, firing the real buffer-add/-delete autocmds
-rather than a synthetic `AFTER_RENDER`.
+(`install_redraw_hook`) — reached by *most* callers through a plain field
+lookup on the shared module table, so the patch is visible to them regardless
+of load order — rather than a parallel autocmd guessing at neo-tree's own
+200ms debounce from the outside; see that function's doc comment for the
+reasoning. `TESTS/adapter_lines.lua`'s `run_neotree_opened_buffers_redraw_check`
+pins this against a real neo-tree, firing the real buffer-add/-delete
+autocmds rather than a synthetic `AFTER_RENDER`.
+
+**One caller does NOT reach `renderer.redraw` through a field lookup:**
+neo-tree's own `sources/filesystem/commands.lua` does
+`local redraw = renderer.redraw` at its OWN module-load time — a plain Lua
+upvalue, captured once, not re-read on every call. `M.copy_to_clipboard` and
+`M.cut_to_clipboard` (bound by default to `y`/`x`) call *that* captured local
+to redraw after marking a node, never a fresh field read — so patching the
+`renderer.redraw` *field* later cannot fix them if that module already
+captured its own copy first. And it is required *eagerly*, for every
+configured source, from inside neo-tree's own `setup()` — which, for a
+commonly lazy-loaded neo-tree.nvim (`cmd = "Neotree"` / `ft = "neo-tree"`),
+only runs on the user's first `:Neotree` invocation, i.e. potentially well
+after filetree.nvim's own `setup()` already tried to install this hook.
+
+To win that race, the adapter also installs a `package.preload` entry for
+`neo-tree.ui.renderer` (`hoist_redraw_hook`, called unconditionally at this
+adapter module's own load time, not gated behind any feature's `setup()`) —
+Lua's own hook for "run this the first time, and only the first time, anyone
+requires this module name". That makes the very first
+`require("neo-tree.ui.renderer")` from *anyone*, including from inside
+neo-tree's own `setup()`, return an already-patched module, before
+`commands.lua`'s own `local redraw = renderer.redraw` can run. This is
+reliable as long as `filetree.adapter.neotree` is `require`d (i.e.
+`filetree.setup()` runs, with `adapter = "neotree"` or `"auto"`) before
+anything else has ever required `neo-tree.ui.renderer` — true for the
+ordinary "neither plugin lazy past VimEnter" and "both lazy on the same
+`:Neotree` trigger, filetree's spec loads first" cases.
+
+**Disclosed limitation:** if the user's own config calls
+`require("neo-tree").setup()` (which itself eagerly requires
+`commands.lua`, which requires `renderer`) *before* filetree.nvim's own
+`setup()` ever runs, hoisting is no longer possible — `commands.lua` has
+already captured the original `renderer.redraw`. The field-patch fallback
+still installs and still covers every other narrow-redraw call site (the
+ones reached by field lookup), but `copy_to_clipboard`/`cut_to_clipboard`
+specifically will not notify this bridge for that session, and their
+decorations (marks, symlink signs) may go stale after a copy/cut until the
+next full rescan. Loading filetree.nvim before neo-tree.nvim's own `setup()`
+call avoids this entirely. `TESTS/neotree_redraw_hook.lua` pins the
+hoisted-and-winning case against real `copy_to_clipboard`/`cut_to_clipboard`
+calls, in the same relative load order (filetree first, then neo-tree's
+`setup()`) a lazily-loaded neo-tree.nvim gives in practice.
 
 - **Module:** [`adapter/neotree.lua`](../../lua/filetree/adapter/neotree.lua) — `filetypes = {"neo-tree"}`
 - **Config:** `opts.adapter = "neotree"`

@@ -14,19 +14,33 @@ Everything CI runs, plus the manual pass it cannot.
 | [`gaps.lua`](gaps.lua) | unit: fs-heavy and lifecycle modules `units.lua`/`smoke.lua` had not reached yet — see "gaps.lua" below |
 | [`adapter_lines.lua`](adapter_lines.lua) | integration: the adapter's line→node mapping, against a **real neo-tree and a real nvim-tree** — the only suite that needs a tree plugin — plus two neo-tree-only regression pins: a background-tab redraw resolving the tree's own per-tab state (not whichever tab is current), and two simultaneously live per-tab trees each resolving and decorating their own tree without bleeding into the other's |
 | [`group_empty_dirs_collapse.lua`](group_empty_dirs_collapse.lua) | integration: `<S-CR>` (`open_variants.open_badd_or_collapse`) collapsing a neo-tree `group_empty_dirs` merged directory line, against a **real neo-tree** — drives the actual `<CR>`/`<S-CR>` buffer keymaps, not the adapter function directly |
+| [`neotree_redraw_hook.lua`](neotree_redraw_hook.lua) | integration: the `renderer.redraw` monkeypatch (`adapter/neotree.lua`'s `install_redraw_hook`/`hoist_redraw_hook`) against a **real neo-tree**, run in its own process — real `copy_to_clipboard`/`cut_to_clipboard` (`y`/`x`) in the exact load order a lazily-loaded neo-tree.nvim gives, and the last-resort tab probe's ghost-state cleanup |
 | [`refs/`](refs/) | fixture-based: real on-disk multi-file projects, described below |
 | [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
 
-All of them are headless and exit 0 on a pass, and CI gates on every one.
-All but `adapter_lines.lua` and `group_empty_dirs_collapse.lua` run against a
-stub adapter and need no tree plugin; those two need neo-tree (plus
-nui/plenary/devicons, and lib.nvim for the latter) and print a skip instead
+All of them are headless and exit 0 on a pass. `.github/workflows/ci.yml`'s
+`test` job gates on the nine stub-based suites above `adapter_lines.lua` in
+the table, plus `refs/run.lua`; it does not install neo-tree/nui/devicons, so
+the three real-neo-tree suites (`adapter_lines.lua`, `group_empty_dirs_collapse.lua`,
+`neotree_redraw_hook.lua`) always print a skip there today rather than
+running for real — a pre-existing CI gap, not something this pass closes.
+All but `adapter_lines.lua`,
+`group_empty_dirs_collapse.lua` and `neotree_redraw_hook.lua` run against a
+stub adapter and need no tree plugin; those three need neo-tree (plus
+nui/plenary/devicons, and lib.nvim for the first) and print a skip instead
 of failing when they are absent, because what they test needs a real
 backend: `adapter_lines.lua`'s line→node mapping is precisely what a stub
-cannot have, and `group_empty_dirs_collapse.lua` exercises neo-tree's own
-merge/replace machinery (`ui/renderer.lua`'s `group_empty_dirs` branch), not
-just a hand-built node shape. `MANUAL.md` describes each in more detail and
-carries the lib.nvim resolution notes.
+cannot have, `group_empty_dirs_collapse.lua` exercises neo-tree's own
+merge/replace machinery (`ui/renderer.lua`'s `group_empty_dirs` branch), and
+`neotree_redraw_hook.lua` needs a real, controllable `require()` order against
+neo-tree's own modules that a stub cannot reproduce. `MANUAL.md` describes
+each in more detail and carries the lib.nvim resolution notes.
+
+`neotree_redraw_hook.lua` deliberately reloads core neo-tree modules and
+controls their `require()` order, which no other suite in this repo may
+safely do once it shares a process with other neo-tree-backed checks — so it
+runs in its OWN `nvim -l` process rather than being folded into
+`adapter_lines.lua`.
 
 ## gaps.lua
 
