@@ -359,9 +359,15 @@ end
 ---`follow_root` fallback so the two features don't both re-root the tree for
 ---the same event -- see filetree.util.target_dir's header for why either or
 ---both running is harmless, just redundant.
+---
+---Also false while `paused()` (the user just navigated manually in the tree):
+---`do_reveal` bails out on that same check before it would reveal anything, so
+---without this, auto_reveal would skip its own fallback for up to the pause
+---duration trusting a reveal that is never going to happen -- leaving a file
+---outside the tree's root unrevealed by either feature.
 ---@return boolean
 function M.reveal_active()
-  return _active and _cfg.reveal ~= false
+  return _active and _cfg.reveal ~= false and not paused()
 end
 
 return M
