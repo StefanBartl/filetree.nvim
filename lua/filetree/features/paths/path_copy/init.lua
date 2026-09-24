@@ -15,7 +15,8 @@
 ---   project_root      /home/user/project        (detected project root, cwd-independent)
 ---   project_relative  src/foo.lua               (path relative to that root)
 ---   buffer_relative   ./ROADMAP.md              (relative to the OPEN buffer's directory)
----   env_rooted        $REPOS_DIR/foo.nvim/x.lua (absolute, with an env-var root folded in)
+---   env_rooted        $REPOS_DIR/foo.nvim/x.lua (absolute, with an env-var root folded in;
+---                     $NVIM_CONFIG_DIR/lua/x.lua under stdpath("config"), see nvim_config_root)
 ---
 --- Config:
 ---   enabled              boolean
@@ -29,6 +30,9 @@
 ---   keymap_env_root      string?  Copy path with an env-var root (default "[e").
 ---   root_markers         string[]|false  Markers for the project-root walk (default {".git"}).
 ---   env_roots            string[]  Env vars tried for `env_rooted` (default { "REPOS_DIR" }).
+---   nvim_config_root     boolean  `env_rooted` also tries `$NVIM_CONFIG_DIR`, backed by
+---                                 `vim.fn.stdpath("config")` -- no environment variable of
+---                                 that name needs to actually be set (default true).
 ---   notify               boolean  Show a notification after copying (default true).
 ---
 --- Commands (via :Filetree dispatcher):
@@ -58,6 +62,7 @@ local _cfg = {
   keymap_env_root = "[e", -- copy absolute path with $REPOS_DIR-style root
   root_markers = { ".git" },
   env_roots = { "REPOS_DIR" },
+  nvim_config_root = true, -- also fold in $NVIM_CONFIG_DIR (stdpath("config"))
   notify = true,
 }
 
@@ -76,6 +81,7 @@ M.SCHEMA = {
   keymap_env_root = "keymap",
   root_markers = { "table|false", of = "string" },
   env_roots = { "table", of = "string" },
+  nvim_config_root = "boolean",
   notify = "boolean",
 }
 
@@ -192,9 +198,17 @@ local FORMATS = {
     return ftpath.dot_relative(path, editor_dir())
   end,
   -- Absolute, but with a configured env var folded back into the root ([e):
-  -- `$REPOS_DIR/foo.nvim/x.lua` instead of `E:/repos/foo.nvim/x.lua`.
+  -- `$REPOS_DIR/foo.nvim/x.lua` instead of `E:/repos/foo.nvim/x.lua`. Also
+  -- tries `$NVIM_CONFIG_DIR` (stdpath("config")) unless `nvim_config_root`
+  -- is turned off -- otherwise a node inside the Neovim config itself always
+  -- fell through every `env_roots` entry (it typically lives nowhere near
+  -- `$REPOS_DIR`) straight to the plain absolute path.
   env_rooted = function(path)
-    return (ftpath.env_rooted(path, _cfg.env_roots or {}))
+    local extra = nil
+    if _cfg.nvim_config_root ~= false then
+      extra = { { name = "NVIM_CONFIG_DIR", root = vim.fn.stdpath("config") } }
+    end
+    return (ftpath.env_rooted(path, _cfg.env_roots or {}, extra))
   end,
   -- Path relative to the project root (]R), independent of the current cwd.
   project_relative = function(path)

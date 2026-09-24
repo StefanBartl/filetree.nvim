@@ -704,6 +704,9 @@
 ---@field root_markers?       string[]|false  Markers for project-root detection (default { ".git" }); false → use cwd.
 ---@field env_roots?          string[]  Env var names tried by `env_rooted`, longest match wins
 ---                                     (default { "REPOS_DIR" }); written without the `$`.
+---@field nvim_config_root?   boolean  `env_rooted` also tries `$NVIM_CONFIG_DIR`, backed by
+---                                    `vim.fn.stdpath("config")` rather than an actual
+---                                    environment variable (default true).
 ---@field notify?             boolean  Show notification after copy (default true).
 
 -- ── live_search ──────────────────────────────────────────────────────────────

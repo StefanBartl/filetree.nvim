@@ -52,7 +52,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard (or all marked) |
 | `]R` | path_copy | `keymap_project_rel` | Copy path relative to project root, cwd-independent (or all marked) |
 | `]b` | path_copy | `keymap_buffer_rel` | Copy path relative to the buffer open in the editor, `./x`/`../x` (or all marked) |
-| `[e` | path_copy | `keymap_env_root` | Copy absolute path with an env-var root folded in, `$REPOS_DIR/…` (or all marked) |
+| `[e` | path_copy | `keymap_env_root` | Copy absolute path with an env-var root folded in, `$REPOS_DIR/…` or `$NVIM_CONFIG_DIR/…` (or all marked) |
 | `d` | trash | `keymap` | Trash current node (or all marked). **`filesystem` source only** |
 | `U` | trash | `keymap_undo` | Undo last trash operation. **`filesystem` source only** |
 | `<leader>th` | trash | `keymap_history` | Show trash history. **`filesystem` source only** |

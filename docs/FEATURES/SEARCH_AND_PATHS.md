@@ -99,8 +99,17 @@ than `E:/repos/filetree.nvim/lua/x.lua`. Written into a note, that path
 still means the same file on a machine where the checkout lives on
 another drive. The variables to try are `env_roots` (default
 `{ "REPOS_DIR" }`, written without the `$`); the longest match wins, so
-a `$REPOS_DIR` inside `$HOME` beats `$HOME`. With no variable matching,
-the plain absolute path comes back.
+a `$REPOS_DIR` inside `$HOME` beats `$HOME`.
+
+`nvim_config_root` (default `true`) additionally tries `$NVIM_CONFIG_DIR`,
+backed by `vim.fn.stdpath("config")` — no environment variable of that name
+has to actually be set. Without it, a node inside your own Neovim config
+falls all the way through `env_roots` (it typically lives nowhere near
+`$REPOS_DIR`) to the plain absolute path; with it, `[e` on
+`~/.config/nvim/lua/plugins/foo.lua` copies
+`$NVIM_CONFIG_DIR/lua/plugins/foo.lua`. Set it `false` to turn this off.
+With no variable or `$NVIM_CONFIG_DIR` matching, the plain absolute path
+comes back.
 
 ```lua
 path_copy = {
@@ -109,6 +118,7 @@ path_copy = {
   keymap_env_root = "[e",
   -- Longest match wins; each name is written without the `$`.
   env_roots = { "REPOS_DIR", "XDG_CONFIG_HOME", "HOME" },
+  nvim_config_root = true, -- also try $NVIM_CONFIG_DIR (stdpath("config"))
 }
 ```
 
