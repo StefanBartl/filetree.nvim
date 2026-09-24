@@ -48,6 +48,9 @@
 
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
+-- Module-level (not just inside `M.setup()`) so `M.teardown()` can also
+-- strip a window's `Cursor` override -- see the restore loop there.
+local wh = require("lib.nvim.ui.winhighlight")
 local M = {}
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -68,6 +71,12 @@ local _adapter = nil
 ---so `apply_show` restores the exact prior state instead of assuming "on".
 ---@type table<integer, boolean>
 local _prev_cursorline = {}
+---Windows that currently carry the `Cursor` winhighlight override, tracked
+---independently of `_prev_cursorline` (which only fills in when
+---`force_cursorline` is true). `M.teardown()` walks this set to restore
+---every such window instead of leaving it stranded -- see the comment there.
+---@type table<integer, boolean>
+local _hidden_wins = {}
 
 ---Tree filetypes to target — the adapter's if declared, else the superset.
 ---@return table<string, boolean>
@@ -92,18 +101,19 @@ function M.setup(config, adapter)
   if _augroup then au.del_group(_augroup) end
   _augroup = au.group("filetree_cursor_hide", true)
   _prev_cursorline = {}
+  _hidden_wins = {}
 
-  -- `lib.nvim.ui.winhighlight` rather than string concatenation and a
-  -- gsub. It is the same merge-and-strip this used to do by hand, minus
-  -- two rough edges: appending did not dedupe, so applying twice left
-  -- `Cursor:X,Cursor:X`, and the strip was a Lua pattern over a value
-  -- other plugins also write.
-  local wh = require("lib.nvim.ui.winhighlight")
+  -- `wh` (module-level `lib.nvim.ui.winhighlight`, required above) rather
+  -- than string concatenation and a gsub. It is the same merge-and-strip
+  -- this used to do by hand, minus two rough edges: appending did not
+  -- dedupe, so applying twice left `Cursor:X,Cursor:X`, and the strip was a
+  -- Lua pattern over a value other plugins also write.
 
   local function apply_hide(win, buf)
     if not vim.api.nvim_win_is_valid(win) or not vim.api.nvim_buf_is_valid(buf) then return end
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
     wh.update(win, { Cursor = "FiletreeCursorHidden" })
+    _hidden_wins[win] = true
     if force_cursorline then
       -- Only remember on the FIRST hide of a hide/show pair -- a second
       -- BufEnter/WinEnter for the same window before any WinLeave (both
@@ -119,6 +129,7 @@ function M.setup(config, adapter)
     if not tree_filetypes()[vim.bo[buf].filetype] then return end
     -- Strips our override only; every other entry on the window stays.
     wh.remove(win, "Cursor")
+    _hidden_wins[win] = nil
     local prev = _prev_cursorline[win]
     if prev ~= nil then
       vim.wo[win].cursorline = prev
@@ -163,7 +174,10 @@ function M.setup(config, adapter)
     desc = "[filetree] Drop any remembered cursorline state for a closed window",
     callback = function(ev)
       local win = tonumber(ev.match)
-      if win then _prev_cursorline[win] = nil end
+      if win then
+        _prev_cursorline[win] = nil
+        _hidden_wins[win] = nil
+      end
     end,
   })
 end
@@ -174,8 +188,28 @@ function M.teardown()
     au.del_group(_augroup)
     _augroup = nil
   end
+  -- Restore any window this feature is still hiding the cursor in *before*
+  -- wiping the state below. Without this, a reconfigure (filetree.setup()
+  -- called again while a tree window is focused -- see case (b) at
+  -- filetree/init.lua's own setup(), which tears every feature down and
+  -- sets it back up) strands that window: the next setup() starts from a
+  -- fresh, empty `_prev_cursorline`, so `apply_show` can never find the real
+  -- prior value again and 'cursorline' is stuck forced on forever. Worse if
+  -- the user disables this feature in the same reconfigure -- no BufLeave/
+  -- WinLeave handler is left to run `apply_show` at all, so the `Cursor`
+  -- winhighlight override is never removed either and the block cursor
+  -- never reappears in that window, exactly the symptom this module's
+  -- docstring above describes as needing a Neovim restart.
+  for win in pairs(_hidden_wins) do
+    if vim.api.nvim_win_is_valid(win) then
+      wh.remove(win, "Cursor")
+      local prev = _prev_cursorline[win]
+      if prev ~= nil then vim.wo[win].cursorline = prev end
+    end
+  end
   _adapter = nil
   _prev_cursorline = {}
+  _hidden_wins = {}
 end
 
 return M
