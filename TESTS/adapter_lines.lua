@@ -141,6 +141,12 @@ local function run_backend(spec)
       size_info = { enabled = true, show_files = true, show_dirs = false },
       copy_move = { enabled = true },
       filter = { enabled = true },
+      -- auto_reveal is on by default (opt-out) and reacts to BufEnter with
+      -- its own debounced reveal/re-root -- see `run_neotree_multitab_redraw_check`'s
+      -- setup() call for why every neo-tree suite in this file disables it
+      -- explicitly rather than letting a stray debounced call from real
+      -- editor buffers opened below outlive this pass.
+      auto_reveal = { enabled = false },
     },
   })
 
@@ -691,7 +697,9 @@ local function run_neotree_filter_race_check()
 
   require("filetree").setup({
     adapter = "neotree",
-    features = { filter = { enabled = true } },
+    -- auto_reveal disabled -- see `run_neotree_multitab_redraw_check`'s
+    -- setup() call for why every neo-tree suite in this file does this.
+    features = { filter = { enabled = true }, auto_reveal = { enabled = false } },
   })
 
   local adapter = require("filetree.adapter.neotree")
@@ -860,7 +868,9 @@ local function run_neotree_link_marker_check()
 
   require("filetree").setup({
     adapter = "neotree",
-    features = { link_marker = { enabled = true } },
+    -- auto_reveal disabled -- see `run_neotree_multitab_redraw_check`'s
+    -- setup() call for why every neo-tree suite in this file does this.
+    features = { link_marker = { enabled = true }, auto_reveal = { enabled = false } },
   })
 
   local adapter = require("filetree.adapter.neotree")
@@ -951,11 +961,30 @@ local function run_neotree_multitab_redraw_check()
   end
 
   vim.cmd("tabonly")
+  -- Restored below on every exit path: neo-tree's `bind_to_cwd` (default on)
+  -- reacts to `DirChanged` through its own 200ms-debounced event queue (see
+  -- `setup/init.lua`) -- a queued reaction can still be sitting there,
+  -- unfired, well past this test's own teardown wait, and fire LATE during a
+  -- LATER test, silently re-navigating whatever tab is tracked back to THIS
+  -- test's `work` dir out from under it. Leaving the global cwd changed here
+  -- is exactly what feeds that: restoring it removes the trigger for good,
+  -- not just outrunning its timing.
+  local orig_cwd = vim.fn.getcwd()
   vim.cmd("cd " .. vim.fn.fnameescape(work))
 
   require("filetree").setup({
     adapter = "neotree",
-    features = { link_marker = { enabled = true } },
+    -- auto_reveal is on by default (opt-out, not opt-in -- see
+    -- filetree/init.lua's DEFAULT_DISABLED) and reacts to BufEnter on the
+    -- real editor buffer this test opens below with its own debounced
+    -- reveal/re-root. `lib.nvim`'s debounce primitive stops a pending call
+    -- via a libuv timer:stop(), which cannot un-queue a callback that had
+    -- already fired at the libuv level and is merely waiting for
+    -- `vim.schedule` to run it -- so a reveal armed here can still land, with
+    -- this test's OWN `work` dir baked into its closure, during a LATER
+    -- test's own `vim.wait`. Disabled here since this test has no interest in
+    -- reveal behavior, closing that off at the source rather than racing it.
+    features = { link_marker = { enabled = true }, auto_reveal = { enabled = false } },
   })
 
   local adapter = require("filetree.adapter.neotree")
@@ -983,6 +1012,7 @@ local function run_neotree_multitab_redraw_check()
   check("multitab: the tree buffer exists", bufnr ~= nil, tostring(bufnr))
   if not bufnr then
     vim.cmd("tabonly")
+    vim.cmd("cd " .. vim.fn.fnameescape(orig_cwd))
     return
   end
 
@@ -1017,6 +1047,7 @@ local function run_neotree_multitab_redraw_check()
   check("multitab: link_marker's namespace exists", ns ~= nil)
   if not ns then
     vim.cmd("tabonly")
+    vim.cmd("cd " .. vim.fn.fnameescape(orig_cwd))
     return
   end
 
@@ -1140,6 +1171,7 @@ local function run_neotree_multitab_redraw_check()
   require("filetree.features.ui.link_marker").teardown()
   pcall(adapter.close)
   vim.cmd("tabonly")
+  vim.cmd("cd " .. vim.fn.fnameescape(orig_cwd))
   vim.wait(500, function()
     return false
   end, 50)
@@ -1198,9 +1230,12 @@ local function run_neotree_two_live_trees_check()
 
   require("filetree").setup({
     adapter = "neotree",
+    -- auto_reveal disabled -- see `run_neotree_multitab_redraw_check`'s
+    -- setup() call for why every neo-tree suite in this file does this.
     features = {
       link_marker = { enabled = true },
       marks = { enabled = true },
+      auto_reveal = { enabled = false },
     },
   })
 
@@ -1465,6 +1500,237 @@ local function run_neotree_two_live_trees_check()
   end, 50)
 end
 
+-- ── neo-tree only: neo-tree's OWN `opened_buffers_changed`-driven redraw --
+-- fired whenever ANY buffer opens or closes ANYWHERE in the session, wired
+-- through `enable_opened_markers`/`enable_modified_markers` (both default
+-- on) -- must still leave a BACKGROUND tab's link_marker icon and marks
+-- checkmark drawn, not silently wiped ──────────────────────────────────────
+-- Root cause: `sources/manager.lua`'s `opened_buffers_changed` (itself
+-- reached from a REAL `BufAdd`/`BufDelete`/`BufWipeout` autocmd, debounced
+-- 200ms, see `setup/init.lua`) calls `renderer.redraw(state)` DIRECTLY for
+-- EVERY tracked per-tab state -- a real `state.tree:render()` buffer-content
+-- replace, which does not carry extmarks over, same as any other redraw --
+-- but that path never reaches `ui/renderer.lua`'s `show_nodes`, so it never
+-- fires `AFTER_RENDER`. Before this fix, link_marker/marks' ONLY resync
+-- signal for "a redraw just happened outside my own BufEnter/CursorMoved/
+-- BufWritePost" was the adapter's `on_render` bridge subscribing to
+-- `AFTER_RENDER` alone -- so this specific redraw path silently wiped a
+-- background tab's icon/checkmark and left them gone until that tab's OWN
+-- tree next got a real AFTER_RENDER (its own focus, its own rescan) --
+-- reproduced for real: a tree open in tab A, then further tabs opened
+-- elsewhere, and tab A's icon vanishes without tab A doing anything at all.
+--
+-- Reproduced here with the REAL trigger -- a real buffer opening and closing
+-- in a genuinely different, current tab -- not a synthetic AFTER_RENDER fire,
+-- unlike the two sibling suites above (which pin a DIFFERENT, already-fixed
+-- bug: tab-scoped state RESOLUTION, not this redraw-path coverage gap; see
+-- their own "wholly outside the on_render bridge this test pins" comment).
+-- Fixed by `adapter/neotree.lua` also monkeypatching `neo-tree.ui.renderer`'s
+-- `redraw` function itself (`install_redraw_hook`), reached by every caller
+-- -- including this test's real trigger -- through a plain field lookup, not
+-- a value captured once at neo-tree's own setup() time.
+local function run_neotree_opened_buffers_redraw_check()
+  print("\n== neo-tree: link_marker/marks survive a real opened_buffers_changed redraw ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-openedbuffers")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "hi" }, work .. "/plain.txt")
+  vim.fn.writefile({ "unrelated" }, work .. "/other.txt")
+
+  local link_ok = (vim.uv or vim.loop).fs_symlink(work .. "/plain.txt", work .. "/a_link.txt")
+  if not link_ok then
+    print("  note no permission to create a real symlink here -- skipping")
+    return
+  end
+
+  vim.cmd("tabonly")
+
+  require("filetree").setup({
+    adapter = "neotree",
+    -- auto_reveal disabled -- see `run_neotree_multitab_redraw_check`'s
+    -- setup() call for why every neo-tree suite in this file does this.
+    features = {
+      link_marker = { enabled = true },
+      marks = { enabled = true },
+      auto_reveal = { enabled = false },
+    },
+  })
+
+  local adapter = require("filetree.adapter.neotree")
+  local marks = require("filetree.features.org.marks")
+  local mgr = require("neo-tree.sources.manager")
+  local tabid_a = vim.api.nvim_get_current_tabpage()
+
+  -- This suite never actually opens a SECOND tabpage for the sibling
+  -- single-tree checks above -- `vim.cmd("tabonly")` on an already-single-tab
+  -- session is a no-op, so `tabid_a` here is the exact same tab handle every
+  -- earlier neo-tree check in this file just used. Neo-tree keeps its
+  -- "filesystem" state keyed by that persistent tabid and updates it IN
+  -- PLACE on every `show`/navigate -- fine for those tests' own synchronous
+  -- assertions, but a PRIOR check's own buffer/tab churn (ambient adapter
+  -- calls made from a background tab lazily create an empty placeholder
+  -- state for THAT tabid too -- see `get_state()`'s own doc comment) can
+  -- leave stray "filesystem" states, for tabids other than this one, sitting
+  -- in neo-tree's `all_states`. `opened_buffers_changed` (the mechanism this
+  -- test exercises) iterates ALL of them, not just this test's own -- a
+  -- stray entry erroring mid-iteration (e.g. a disposed window it still
+  -- references) would abort that whole pcall'd handler before it ever
+  -- reaches this test's own state, silently skipping the very redraw this
+  -- test means to trigger and reading as "survived" for the wrong reason.
+  -- Disposing every "filesystem" state up front -- real neo-tree APIs, not a
+  -- filetree internal -- drops all of that, so what this test measures is
+  -- unambiguously its OWN redraw.
+  for _, s in ipairs(mgr._get_all_states()) do
+    if s.name == "filesystem" then pcall(mgr.dispose, "filesystem", s.tabid) end
+  end
+
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  vim.wait(4000, function()
+    local b = adapter.get_bufnr()
+    if not b then return false end
+    local text = table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n")
+    return text:find("a_link.txt", 1, true) ~= nil
+  end, 50)
+
+  local bufnr = adapter.get_bufnr()
+  check("opened-buffers: the tree buffer exists", bufnr ~= nil, tostring(bufnr))
+  if not bufnr then
+    vim.cmd("tabonly")
+    return
+  end
+
+  -- `bufnr` is captured once above; every helper below guards its validity
+  -- rather than assuming it stays open for the rest of this test -- a stray
+  -- redraw elsewhere in this same nvim process closing/replacing it out from
+  -- under this test must fail a `check()` like any other unmet expectation,
+  -- not crash the whole suite on an "Invalid buffer id" from the API call.
+  local function line_of(name)
+    if not vim.api.nvim_buf_is_valid(bufnr) then return nil end
+    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+    for i = 0, #lines - 1 do
+      local n = adapter.get_node_at_line(bufnr, i)
+      if n and n.name == name then return i end
+    end
+    return nil
+  end
+
+  local function text_on(ns, line)
+    -- `line` is nil when `line_of()` couldn't resolve the node at all --
+    -- report "nothing drawn" rather than crashing on a bad extmark range.
+    if line == nil or not vim.api.nvim_buf_is_valid(bufnr) then return "" end
+    local ms = vim.api.nvim_buf_get_extmarks(
+      bufnr,
+      ns,
+      { line, 0 },
+      { line, -1 },
+      { details = true }
+    )
+    local vt = ""
+    for _, m in ipairs(ms) do
+      for _, chunk in ipairs(m[4].virt_text or {}) do
+        vt = vt .. chunk[1]
+      end
+    end
+    return vt
+  end
+
+  -- Give the async scan's own follow-up redraw time to actually happen first
+  -- -- same as the sibling `run_neotree_link_marker_check` -- so the icon is
+  -- genuinely there, drawn by the real thing, before this test starts. Polls
+  -- `line_of` itself (the node-level, nui-tree-backed lookup this test's own
+  -- checks rely on), not just the raw buffer text the earlier wait above
+  -- already matched on: the two can briefly disagree while an in-flight
+  -- render is still settling, and a fixed sleep landing inside that window
+  -- reads as this test's OWN fixture never having rendered at all.
+  vim.wait(3000, function()
+    return line_of("a_link.txt") ~= nil
+  end, 50)
+
+  local link_ns = vim.api.nvim_get_namespaces()["filetree_link_marker"]
+  local marks_ns = vim.api.nvim_get_namespaces()["filetree_marks"]
+  check("opened-buffers: link_marker's namespace exists", link_ns ~= nil)
+  check("opened-buffers: marks' namespace exists", marks_ns ~= nil)
+  if not (link_ns and marks_ns) then
+    vim.cmd("tabonly")
+    return
+  end
+
+  local line = line_of("a_link.txt")
+  check("opened-buffers: the symlinked file is in the rendered tree", line ~= nil)
+  if not line then
+    vim.cmd("tabonly")
+    return
+  end
+  check(
+    "opened-buffers: the icon is there before the test touches anything",
+    text_on(link_ns, line):find("⇢", 1, true) ~= nil,
+    text_on(link_ns, line)
+  )
+
+  -- Mark the SAME node too, via the real API -- covers `marks`, not just
+  -- `link_marker`, against the exact same redraw.
+  local node = adapter.get_node_at_line(bufnr, line)
+  check("opened-buffers: the symlinked node resolves", node ~= nil)
+  if node then marks.toggle(node.path) end
+  check(
+    "opened-buffers: the mark indicator is there before the test touches anything",
+    text_on(marks_ns, line) ~= "",
+    text_on(marks_ns, line)
+  )
+
+  -- Tab B: a fresh, unrelated tab becomes current -- tab A (the tree's real
+  -- tab) is now the background one, exactly like the reported repro (a tree
+  -- open in tab A, then further tabs opened elsewhere).
+  vim.cmd("tabnew")
+  local tabid_b = vim.api.nvim_get_current_tabpage()
+  check("opened-buffers: tab B is a genuinely different, current tab", tabid_b ~= tabid_a)
+
+  -- The REAL trigger: a real buffer opening, then closing, in tab B -- fires
+  -- neo-tree's own real `BufAdd`/`BufDelete`/`BufWipeout` autocmds (see
+  -- `setup/init.lua`'s `enable_opened_markers` wiring), NOT a synthetic
+  -- `AFTER_RENDER` fire. Nothing here touches tab A or its tree directly --
+  -- neo-tree's `opened_buffers_changed` is what reaches into tab A on its own.
+  --
+  -- The open and close are deliberately NOT back-to-back: `opened_buffers_changed`
+  -- only actually redraws when its own 200ms-debounced callback finds the
+  -- *opened-buffers set* genuinely different from what it cached last (see
+  -- `sources/manager.lua`) -- computed at CALLBACK time, not at the moment
+  -- the raw autocmd fired. Closing this buffer again before that callback has
+  -- run would let the add and the remove cancel out from its point of view
+  -- (same set before and after), skipping the redraw entirely and making this
+  -- test's own trigger a no-op regardless of the fix. Waiting comfortably
+  -- past the debounce after EACH half lets both the add and the remove land
+  -- as two genuinely separate, real redraws.
+  vim.cmd("edit " .. vim.fn.fnameescape(work .. "/other.txt"))
+  vim.wait(500, function()
+    return false
+  end, 50)
+  vim.cmd("bwipeout")
+  vim.wait(500, function()
+    return false
+  end, 50)
+
+  check(
+    "opened-buffers: [FROM TAB B, REAL BufAdd/BufDelete] tab A's icon survives",
+    text_on(link_ns, line):find("⇢", 1, true) ~= nil,
+    text_on(link_ns, line)
+  )
+  check(
+    "opened-buffers: [FROM TAB B, REAL BufAdd/BufDelete] tab A's mark survives",
+    text_on(marks_ns, line) ~= "",
+    text_on(marks_ns, line)
+  )
+
+  marks.teardown()
+  require("filetree.features.ui.link_marker").teardown()
+  pcall(adapter.close)
+  vim.cmd("tabonly")
+  vim.wait(500, function()
+    return false
+  end, 50)
+end
+
 -- ── Run ──────────────────────────────────────────────────────────────────────
 
 local wanted = vim.env.FILETREE_ADAPTER_LINES
@@ -1492,6 +1758,7 @@ if has_neotree and has_nui and want("neotree") then
   run_neotree_link_marker_check()
   run_neotree_multitab_redraw_check()
   run_neotree_two_live_trees_check()
+  run_neotree_opened_buffers_redraw_check()
   ran = ran + 1
 else
   print("\nneo-tree: not installed (or excluded) -- skipping that pass.")

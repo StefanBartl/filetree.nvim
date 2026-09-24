@@ -948,6 +948,45 @@ end
 -- gets wiped along with it. Callers that need to redraw a decoration in sync
 -- with neo-tree's OWN render cycle -- not just filetree's BufEnter/BufWritePost
 -- dispatch -- subscribe here instead of guessing at a poll interval.
+--
+-- Two DIFFERENT neo-tree code paths end a render, and only one of them fires
+-- an event: `ui/renderer.lua`'s `show_nodes` (a full filesystem-rescan pass --
+-- `refresh()`, `navigate()`, the first render after `:Neotree show`) rebuilds
+-- the whole node tree and fires `events.AFTER_RENDER` at the very end. But
+-- `renderer.redraw(state)` -- called from a dozen NARROWER call sites that
+-- only need to re-draw already-set nodes without rescanning anything, most
+-- notably `sources/manager.lua`'s `opened_buffers_changed` (wired to
+-- `enable_opened_markers`/`enable_modified_markers`, both default-on: ANY
+-- buffer opening or closing ANYWHERE in the session redraws EVERY tracked
+-- per-tab tree, including ones on background tabs the user never touched) --
+-- only calls a local `render_tree(state)` (`state.tree:render()` plus cursor
+-- restore) and never reaches `show_nodes` at all, so it never fires
+-- AFTER_RENDER. `state.tree:render()` is still a real NuiTree buffer-content
+-- replace though -- it does not carry extmarks over, same as any other
+-- render -- so a subscriber that only listens for AFTER_RENDER silently misses
+-- this whole class of redraw, and whatever it drew (a symlink sign, a mark
+-- checkmark) on a background tab's tree stays gone until that tab's OWN tree
+-- gets a real AFTER_RENDER of its own (its own focus, its own rescan).
+--
+-- Closed below by also monkeypatching `renderer.redraw` itself (see
+-- `install_redraw_hook`) rather than parallel-listening for neo-tree's own
+-- BufAdd/BufDelete/BufWipeout autocmds and guessing at its 200ms debounce from
+-- the outside: every one of those call sites reaches `renderer.redraw` through
+-- a plain field lookup on the shared `neo-tree.ui.renderer` module table
+-- (`local renderer = require("neo-tree.ui.renderer")`, then
+-- `renderer.redraw(state)`), resolved at CALL time -- not a function value
+-- captured once at neo-tree's own `setup()` time the way each event queue's
+-- subscriber list is (see `M.opened_buffers_changed`'s callers) -- so
+-- wrapping it here is visible to EVERY caller regardless of load order, the
+-- same reasoning `install_reveal_guard` below already relies on for
+-- `commands.execute`. It also runs synchronously, inside neo-tree's own
+-- callstack, immediately after the real redraw -- no timing window to race,
+-- and no separate debounce interval of this module's own to keep in sync with
+-- neo-tree's should that ever change. (It also, as a side effect, closes the
+-- identical gap for every OTHER narrow-redraw call site -- diagnostics,
+-- dir-changed, clipboard changes, several `sources/common/commands.lua`
+-- actions, and filetree's own `opened_sync` feature's `adapter.redraw()` --
+-- all of which share this exact "render without AFTER_RENDER" shape.)
 ---@type table<fun(integer?), true>
 local _render_listeners = {}
 ---@type boolean
@@ -965,6 +1004,10 @@ local _render_hook_installed = false
 ---falling back on the ambient, tab-guessing `get_state()` -- which, with two
 ---trees simultaneously live on two different tabs, cannot always tell the two
 ---apart (see `state_for_bufnr`'s doc comment).
+---
+---Shared by BOTH render hooks below (the real `AFTER_RENDER` event and the
+---`renderer.redraw` monkeypatch) -- `state` means the same thing on either
+---path: neo-tree's own per-render state for whichever tree just redrew.
 ---@param state table?
 ---@return integer? bufnr
 local function bufnr_of(state)
@@ -973,19 +1016,53 @@ local function bufnr_of(state)
 end
 
 ---@internal
+---Fire every `on_render` subscriber with `bufnr` -- see `M.on_render`'s doc
+---comment for what a subscriber does with it.
+---@param bufnr integer?
+local function notify_render_listeners(bufnr)
+  for callback in pairs(_render_listeners) do
+    pcall(callback, bufnr)
+  end
+end
+
+---@internal
+---Monkeypatch `neo-tree.ui.renderer`'s `redraw` (the narrow, no-rescan redraw
+---path -- see the "Render-event bridge" comment above for why this exists
+---alongside the AFTER_RENDER subscription, not instead of it) so every caller
+----- regardless of which neo-tree module holds its own `local renderer =
+---require(...)` upvalue, and regardless of whether that caller's module
+---loaded before or after this hook installs -- notifies this bridge's
+---subscribers right after neo-tree's own real redraw completes.
+---@param renderer table  `neo-tree.ui.renderer`, already `require`d by the caller.
+---@return boolean installed
+local function install_redraw_hook(renderer)
+  if type(renderer.redraw) ~= "function" then return false end
+  local original_redraw = renderer.redraw
+  -- Deliberate monkeypatch of neo-tree's own module table, not a
+  -- redefinition -- see `install_reveal_guard`'s doc comment below for the
+  -- same technique and why it works regardless of load order.
+  ---@diagnostic disable-next-line: duplicate-set-field
+  renderer.redraw = function(state, ...)
+    local result = original_redraw(state, ...)
+    notify_render_listeners(bufnr_of(state))
+    return result
+  end
+  return true
+end
+
+---@internal
 ---@return boolean installed
 local function install_render_hook()
   if _render_hook_installed then return true end
-  local ok, events = pcall(require, "neo-tree.events")
-  if not ok then return false end
+  local ok_events, events = pcall(require, "neo-tree.events")
+  local ok_renderer, renderer = pcall(require, "neo-tree.ui.renderer")
+  if not ok_events or not ok_renderer then return false end
+
   local handler = {
     event = events.AFTER_RENDER,
     id = "filetree_neotree_after_render",
     handler = function(state)
-      local bufnr = bufnr_of(state)
-      for callback in pairs(_render_listeners) do
-        pcall(callback, bufnr)
-      end
+      notify_render_listeners(bufnr_of(state))
     end,
   }
   -- Unsubscribe first: neo-tree's event queue does not dedupe by id, so a
@@ -993,13 +1070,19 @@ local function install_render_hook()
   -- the same handler twice per render.
   pcall(events.unsubscribe, handler)
   pcall(events.subscribe, handler)
+
+  install_redraw_hook(renderer)
+
   _render_hook_installed = true
   return true
 end
 
 ---Subscribe `callback` to fire every time neo-tree finishes (re)rendering the
----filesystem tree. Neo-tree may not be loaded yet (cmd-lazy), so installation
----is retried a few times, mirroring sidebar_guard's deferred install.
+---filesystem tree -- both a full rescan (`AFTER_RENDER`) and a narrower
+---redraw-without-rescan (`renderer.redraw`, e.g. neo-tree's own
+---`opened_buffers_changed` -- see the "Render-event bridge" comment above).
+---Neo-tree may not be loaded yet (cmd-lazy), so installation is retried a few
+---times, mirroring sidebar_guard's deferred install.
 ---
 ---`callback` receives the bufnr of the tree that just rendered (nil if it
 ---could not be resolved, e.g. the window closed between the render and this

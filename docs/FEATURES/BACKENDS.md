@@ -48,6 +48,28 @@ distinct problems fall out of that, resolved two different ways:
   redrew rather than re-deriving an ambient "current tab" bufnr that could
   silently be a different, unrelated tree.
 
+The `on_render` bridge itself covers two DIFFERENT neo-tree redraw paths, only
+one of which fires a real event. A full rescan (`refresh()`, `navigate()`, the
+first render after `:Neotree show`) ends in `ui/renderer.lua`'s `show_nodes`,
+which fires `AFTER_RENDER`. But neo-tree also redraws WITHOUT rescanning —
+`renderer.redraw(state)`, called from a dozen places, most notably
+`sources/manager.lua`'s `opened_buffers_changed` (wired to
+`enable_opened_markers`/`enable_modified_markers`, both default-on: opening or
+closing a buffer **anywhere in the session** redraws **every tracked per-tab
+tree**, including background tabs) — and that path never reaches `show_nodes`,
+so it never fires `AFTER_RENDER` either. It still replaces the buffer's
+content (`state.tree:render()`), which does not carry extmarks over, so a
+background tab's symlink sign or mark checkmark could go silently undrawn
+until that tab's own tree got a real `AFTER_RENDER` of its own. The bridge
+closes this by also monkeypatching `renderer.redraw` itself
+(`install_redraw_hook`) — reached by every caller through a plain field
+lookup on the shared module table, so the patch is visible regardless of load
+order — rather than a parallel autocmd guessing at neo-tree's own 200ms
+debounce from the outside; see that function's doc comment for the reasoning.
+`TESTS/adapter_lines.lua`'s `run_neotree_opened_buffers_redraw_check` pins
+this against a real neo-tree, firing the real buffer-add/-delete autocmds
+rather than a synthetic `AFTER_RENDER`.
+
 - **Module:** [`adapter/neotree.lua`](../../lua/filetree/adapter/neotree.lua) — `filetypes = {"neo-tree"}`
 - **Config:** `opts.adapter = "neotree"`
 
