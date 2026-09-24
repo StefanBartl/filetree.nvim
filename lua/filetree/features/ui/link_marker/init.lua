@@ -180,10 +180,19 @@ function M.setup(config, adapter)
     _unsubscribe_render = adapter.on_render(M._render)
   end
 
-  -- A debounced buffer-local CursorMoved keeps up with expand/collapse and
-  -- navigation in between BufEnters -- same trigger `git_status` uses for
-  -- its own re-renders, so both decorations stay in step on the same redraw.
+  -- Draw immediately on attach, not just on the next BufEnter/CursorMoved --
+  -- `tree_attach.on_attach` also fires for a tree buffer that was ALREADY
+  -- open when setup() ran (filetree.setup()'s startup FileType re-fire, see
+  -- init.lua), which BufEnter:tree does not. Without this, a tree opened
+  -- before filetree.nvim attached (or opened without ever moving focus into
+  -- it) stayed unmarked until the user happened to focus or move the cursor
+  -- inside it -- same trigger `git_status` uses for its own initial render,
+  -- so both decorations stay in step on the same redraw.
+  --
+  -- A debounced buffer-local CursorMoved then keeps up with expand/collapse
+  -- and navigation in between BufEnters.
   tree_attach.on_attach(function(buf)
+    if _render_debounce then _render_debounce.call() end
     au.acmd("CursorMoved", {
       group = _augroup,
       buffer = buf,
