@@ -21,11 +21,18 @@
 ---      reveal is the only thing that does this job for them. See
 ---      doc/filetree.txt §5.3 for the full per-adapter table.
 ---
----      This feature (cwd_sync) is itself opt-in (disabled by default). If it
----      is off, or on with `reveal = false` because the adapter's native
----      follow turns out not to fire reliably for a given buffer switch,
----      auto_reveal's `follow_root` (on by default) is the safety net that
----      still reveals the file — see that module.
+---      This feature (cwd_sync) is itself opt-in (disabled by default). Only
+---      while it is OFF (or paused) does auto_reveal's `follow_root` (on by
+---      default) act as a fallback and reveal the file itself — see that
+---      module. Once cwd_sync is active, `reveal_active()` reports so
+---      regardless of `reveal`'s own value: with `reveal = false` the intent
+---      is "the adapter's native follow owns the tree UI here", and
+---      auto_reveal firing its own re-root in that window would race that
+---      native follow the exact way `reveal = false` exists to prevent (see
+---      `M.reveal_active()`'s own comment for the full reasoning). A `reveal
+---      = false` setup that turns out to need the fallback after all should
+---      pair it with a working native follow, per the recipes below, rather
+---      than lean on auto_reveal to paper over one that isn't firing.
 ---
 --- No full tree refresh/rescan is issued — the reveal (or the tree plugin's own
 --- cwd-follow) re-renders anyway, so a separate rescan would be redundant work.
@@ -59,11 +66,13 @@ M.SCHEMA = {
 
 ---@class CwdSyncState
 ---@field last_path       string?  Last file we revealed.
+---@field last_root       string?  Tree root as of that reveal -- see do_reveal's dedup check.
 ---@field paused_until    number   Timestamp (uv.hrtime) after which sync resumes.
 
 ---@type CwdSyncState
 local S = {
   last_path = nil,
+  last_root = nil,
   paused_until = 0,
 }
 
@@ -160,7 +169,17 @@ end
 local function do_reveal(path_)
   if not _adapter then return end
   if paused() then return end
-  if S.last_path == path_ then return end
+  -- The root check alongside `last_path` matters: without it, the tree's root
+  -- changing out from under cwd_sync through some OTHER path (tree_traverse's
+  -- `-`/`+`, a session restore, a manual `set_root`) left this dedup stuck on
+  -- stale state -- re-entering the very file it last revealed then short-
+  -- circuited here before ever reaching the chdir/reveal logic below, even
+  -- though the tree was no longer actually rooted where that reveal had put
+  -- it. `reveal_active()` has no visibility into this skip either, so
+  -- auto_reveal's `follow_root` fallback (trusting cwd_sync to have handled
+  -- it) silently didn't catch it -- the file stayed unrevealed by either
+  -- feature until some other file was visited first.
+  if S.last_path == path_ and S.last_root == (_adapter.get_root_path() or nil) then return end
 
   S.last_path = path_
 
@@ -188,6 +207,7 @@ local function do_reveal(path_)
   end
 
   root = root or _resolve_target_dir(path_)
+  S.last_root = root ~= "" and root or nil
 
   -- Silently chdir to the root when it differs. Never prompts. Deliberately no
   -- _adapter.refresh() here: the reveal below re-roots/re-renders the tree, so a
@@ -345,6 +365,7 @@ function M.teardown()
     _augroup = nil
   end
   S.last_path = nil
+  S.last_root = nil
   S.paused_until = 0
 end
 
@@ -354,11 +375,25 @@ function M.pause(ms)
   pause(ms)
 end
 
----Whether cwd_sync is active AND already doing its own reveal (`reveal ~=
----false`) for the current buffer switch. Consulted by auto_reveal's
----`follow_root` fallback so the two features don't both re-root the tree for
----the same event -- see filetree.util.target_dir's header for why either or
----both running is harmless, just redundant.
+---Whether cwd_sync already has the current buffer switch covered, one way or
+---another, so auto_reveal's `follow_root` fallback should stand down instead
+---of re-rooting the tree itself for the same event.
+---
+---True whenever cwd_sync is active and not `paused()` -- deliberately
+---REGARDLESS of `_cfg.reveal`. `reveal = false` does not mean "cwd_sync does
+---nothing here"; it means "the adapter's own native cwd-follow (neo-tree
+---`bind_to_cwd` + `follow_current_file`) owns the tree UI for this switch,
+---cwd_sync only manages the cwd" -- see do_reveal's own `_cfg.reveal == false`
+---branch and its comment. auto_reveal calling `_adapter.open_reveal()` of its
+---own accord in that configuration would fight the very native follow
+---`reveal = false` was set to defer to (doc/filetree.txt's cwd_sync section
+---documents this exact "tree settles on the file's parent instead of the
+---project root" race for cwd_sync's own reveal; the mechanism is identical
+---whichever feature places the second, colliding call). A user who sets
+---`reveal = false` without a working native follow configured is already
+---outside this feature's documented recipe (doc/filetree.txt §5.3 pairs the
+---two), so that misconfiguration -- not a race -- is the more honest failure
+---mode to leave them with.
 ---
 ---Also false while `paused()` (the user just navigated manually in the tree):
 ---`do_reveal` bails out on that same check before it would reveal anything, so
@@ -367,7 +402,7 @@ end
 ---outside the tree's root unrevealed by either feature.
 ---@return boolean
 function M.reveal_active()
-  return _active and _cfg.reveal ~= false and not paused()
+  return _active and not paused()
 end
 
 return M

@@ -41,6 +41,46 @@ local function buf_to_win(bufnr)
   return nil
 end
 
+---netrw's per-entry type-suffix markers (glob-style listing): "/" a plain
+---directory, "@" a symlink, "*" an executable file, "=" a socket, "|" a FIFO.
+---@internal
+local SUFFIX_MARKERS = { ["/"] = true, ["@"] = true, ["*"] = true, ["="] = true, ["|"] = true }
+
+---Split netrw's raw entry text into its real name and type.
+---
+---A symlink always gets netrw's "@" suffix, never "/", even when it points at
+---a directory -- netrw's own listing code checks `getftype() == "link"`
+---before `isdirectory()` (see `s:NetrwLocalListingList` in netrw.vim), so "@"
+---says nothing about what the link actually resolves to. Resolved here via a
+---real stat (follows the symlink) so `type` reflects the target, matching how
+---a symlinked directory behaves everywhere else in this plugin (e.g.
+---`open_variants`'s `<S-CR>` collapsing it rather than adding it to the buffer
+---list).
+---
+---Every marker is stripped from `clean_name` regardless of which one it is,
+---not just "/" -- left in place it silently corrupted `path` (and therefore
+---`id`) for every symlink/executable/socket/fifo entry, not only their `type`.
+---@internal
+---@param root string
+---@param raw_name string
+---@return string clean_name, string path, "file"|"directory" ntype
+local function resolve_netrw_entry(root, raw_name)
+  local suffix = raw_name:sub(-1)
+  local clean_name = SUFFIX_MARKERS[suffix] and raw_name:sub(1, -2) or raw_name
+  local path = root .. "/" .. clean_name
+
+  local ntype = "file"
+  if suffix == "/" then
+    ntype = "directory"
+  elseif suffix == "@" then
+    local uv = vim.uv or vim.loop
+    local ok, stat = pcall(uv.fs_stat, path)
+    if ok and stat and stat.type == "directory" then ntype = "directory" end
+  end
+
+  return clean_name, path, ntype
+end
+
 ---Parse a netrw buffer line to extract the filename.
 ---netrw renders filenames in the last column; directories end with /.
 ---@internal
@@ -106,15 +146,13 @@ function M.get_current_node()
   if not name then return nil end
 
   local root = M.get_root_path()
-  local is_dir = name:sub(-1) == "/"
-  local clean_name = is_dir and name:sub(1, -2) or name
-  local path = root .. "/" .. clean_name
+  local clean_name, path, ntype = resolve_netrw_entry(root, name)
 
   return {
     id = path,
     name = clean_name,
     path = path,
-    type = is_dir and "directory" or "file",
+    type = ntype,
     depth = 1,
     line_number = line_nr,
     is_expanded = nil,
@@ -136,9 +174,7 @@ function M.get_visible_nodes(filter)
     line_nr = line_nr + 1
     local name = parse_netrw_line(line)
     if name then
-      local is_dir = name:sub(-1) == "/"
-      local clean = is_dir and name:sub(1, -2) or name
-      local ntype = is_dir and "directory" or "file"
+      local clean, path, ntype = resolve_netrw_entry(root, name)
 
       local include = filter == nil
         or filter == "all"
@@ -146,7 +182,6 @@ function M.get_visible_nodes(filter)
         or (filter == "folders" and ntype == "directory")
 
       if include then
-        local path = root .. "/" .. clean
         nodes[#nodes + 1] = {
           id = path,
           name = clean,

@@ -37,6 +37,27 @@ local function find_oil_buf()
   return nil
 end
 
+---oil's own `entry.type` for a symlink stays `"link"` even when it points at
+---a directory -- `fetch_entry_metadata` in oil's files adapter deliberately
+---does not overwrite it, it only fills `entry.meta.stat`/`entry.meta.link_stat`
+---with the RESOLVED target's stat (a real `fs_stat` through the link, on every
+---platform). Reading that stat here, not `entry.type` alone, is what lets a
+---symlinked directory behave like a directory elsewhere in this plugin (e.g.
+---`open_variants`'s `<S-CR>` collapsing it rather than adding it to the buffer
+---list) instead of silently misclassifying it as a file.
+---@internal
+---@param entry table  oil's own exported entry (util.export_entry's shape)
+---@return "file"|"directory"
+local function resolve_oil_type(entry)
+  if entry.type == "directory" then return "directory" end
+  if entry.type == "link" then
+    local meta = entry.meta
+    local stat = meta and (meta.link_stat or meta.stat)
+    if stat and stat.type == "directory" then return "directory" end
+  end
+  return "file"
+end
+
 ---Find the window for a buffer.
 ---@internal
 ---@param bufnr integer
@@ -96,7 +117,7 @@ function M.get_current_node()
   local current_dir = (dir_ok and dir) or vim.fn.getcwd()
 
   local path = current_dir .. entry.name
-  local ntype = (entry.type == "directory") and "directory" or "file"
+  local ntype = resolve_oil_type(entry)
 
   local buf = find_oil_buf()
   local win = buf and buf_to_win(buf)
@@ -139,7 +160,7 @@ function M.get_visible_nodes(filter)
   for line_n = 1, line_count do
     local ok_entry, entry = pcall(oil.get_entry_on_line, buf, line_n)
     if ok_entry and entry and entry.name then
-      local ntype = (entry.type == "directory") and "directory" or "file"
+      local ntype = resolve_oil_type(entry)
       local include = filter == nil
         or filter == "all"
         or (filter == "files" and ntype == "file")

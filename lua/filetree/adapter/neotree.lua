@@ -458,33 +458,56 @@ local function collapsible_parent(state, tree_node)
   return nil
 end
 
+---Whether `node` is currently displayed as a `group_empty_dirs` merged line
+---(neo-tree's single-line display for a chain of directories holding nothing
+---but another single directory, e.g. "personal/All/Finish") rather than an
+---ordinary directory.
+---
+---The node's own display name IS the tell: `to_filetree_node` copies it
+---verbatim from neo-tree's own `node.name` (see this file's `name = node.name`),
+---and a merged node's name is literally the chain's separator-joined path
+---segments, never a bare basename the way an ordinary directory's is --
+---confirmed against a real neo-tree. `is_expanded()`/`has_children()` cannot
+---make this call: a merged node mid-chain (not yet drilled into further)
+---reports `false`/`false`, identically to an ordinary directory that was
+---simply never opened, and a merged node drilled all the way to a real file
+---reports `true`/`true`, identically to a genuinely expanded ordinary
+---directory -- the name is the only signal an ordinary directory never has.
+---@param node FiletreeNode
+---@return boolean
+local function is_group_empty_dirs_merge(node)
+  return node.type == "directory"
+    and type(node.name) == "string"
+    and (node.name:find("/", 1, true) or node.name:find("\\", 1, true)) ~= nil
+end
+
 ---Collapse `node`, falling back to its nearest collapsible ancestor when the
 ---node itself isn't expanded.
 ---
----That fallback is not cosmetic: `group_empty_dirs` (neo-tree's merged
----display for a chain of directories holding nothing but another single
----directory, e.g. "personal/All/Finish" on one line) rebuilds the node from
----scratch on every lazy-loaded level -- see neo-tree's
----`ui/renderer.lua:show_nodes`, the `state.group_empty_dirs` branch. That
----replacement is spliced in via `tree:set_nodes()` directly, bypassing the
----`node:expand()` call that normally flips `is_expanded` -- so the merged
----node's `is_expanded()` reads false right after the very "expand" that
----produced it, and `<CR>` never recognizes it as open: every further press
----just drills one level deeper with no way back. Collapsing the parent
----instead is the same fallback neo-tree's own `close_node` command (bound to
----`C` by default) uses, and reliably gets the merged node off screen since it
----is that parent's only child.
----
----Each merge step also re-parents the replacement onto the *grandparent* of
----the directory it just absorbed (see `show_nodes`: `parentId =
+---A `group_empty_dirs` merged node (see `is_group_empty_dirs_merge`) always
+---goes straight to `M.refresh()` regardless of its own `is_expanded()` state,
+---checked FIRST, before any of the structural collapse logic below: neo-tree
+---rebuilds that node from scratch on every lazy-loaded level (see
+---`ui/renderer.lua:show_nodes`, the `state.group_empty_dirs` branch), spliced
+---in via `tree:set_nodes()` directly rather than the usual `node:expand()`
+---call -- so collapsing the node itself (or its structural parent) only ever
+---hides whatever it most recently drilled into, leaving the display still
+---merged on the very same line, not genuinely back to e.g. "personal". Each
+---merge step also re-parents the replacement onto the *grandparent* of the
+---directory it just absorbed (see `show_nodes`: `parentId =
 ---parent:get_parent_id()`), not onto anything still visible in between -- so
 ---a chain merged all the way from a top-level directory ends up parented
----directly on the tree root, where `collapsible_parent` refuses to help (root
----itself is not a level to "back out" to). `M.refresh()` is the fallback for
----exactly that case: it re-scans from disk and rebuilds the top level fresh,
----which is unmerged and collapsed because the merged node was never actually
----marked expanded to begin with -- same end result as a structural collapse,
----reached by rebuilding instead of folding.
+---directly on the tree root, where there is no structural ancestor left to
+---collapse to at all. `M.refresh()` sidesteps both problems at once: it
+---re-scans from disk and rebuilds the top level fresh, unmerged and collapsed
+---because the merged node was never actually marked expanded to begin with.
+---
+---For an ordinary directory, the fallback mirrors neo-tree's own `close_node`
+---command (bound to `C` by default): collapse the node itself if it is
+---expanded-with-children, else its nearest collapsible ancestor stopping
+---before the tree root -- collapsing root would hide the whole tree, and (for
+---an ordinary directory, unlike a merged one) there is nothing there to fix
+---with a refresh either, so this is a no-op instead.
 ---@param node FiletreeNode
 ---@return boolean
 function M.collapse_node(node)
@@ -494,6 +517,25 @@ function M.collapse_node(node)
     return state.tree:get_node(node.id)
   end)
   if not ok2 or not tree_node then return false end
+
+  if is_group_empty_dirs_merge(node) then
+    -- Collapse the node itself FIRST when it is currently expanded (the
+    -- "drilled all the way to a real file" state, e.g. Finish showing
+    -- leaf.txt): neo-tree's own refresh preserves expand state across a
+    -- rescan by re-walking `renderer.get_expanded_nodes(state.tree, ...)`
+    -- and re-loading exactly those same ids (see fs_scan.lua's
+    -- `handle_refresh_or_up`) -- so calling M.refresh() while this node's
+    -- `is_expanded()` still reads true just rebuilds it right back into the
+    -- same drilled-open state, a no-op in practice even though a real
+    -- filesystem rescan happened. Collapsing first clears that flag so the
+    -- rescan actually lands on a clean, collapsed "personal".
+    if tree_node.is_expanded and tree_node:is_expanded() and tree_node.collapse then
+      pcall(function()
+        tree_node:collapse()
+      end)
+    end
+    return M.refresh()
+  end
 
   local target
   if
@@ -519,7 +561,6 @@ function M.collapse_node(node)
     return true
   end
 
-  if node.type == "directory" then return M.refresh() end
   return false
 end
 

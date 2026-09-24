@@ -408,7 +408,20 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
-  _resolve_target_dir = target_dir_util.new({})
+  -- Built from cwd_sync's OWN configured root_markers/use_project_root
+  -- (falling back to target_dir's defaults when cwd_sync's section is absent,
+  -- e.g. the user never touched it) rather than target_dir_util's bare
+  -- defaults -- both features must resolve the identical directory for the
+  -- same file, per this module's own header comment, and cwd_sync is the one
+  -- of the two with a schema exposing those knobs to the user
+  -- (features.cwd_sync.root_markers / .use_project_root); reading its config
+  -- here instead of hardcoding target_dir's defaults is what actually keeps
+  -- that promise when the user customizes them.
+  local cwd_sync_cfg = require("filetree.config").get().features.cwd_sync or {}
+  _resolve_target_dir = target_dir_util.new({
+    root_markers = cwd_sync_cfg.root_markers,
+    use_project_root = cwd_sync_cfg.use_project_root,
+  })
 
   if _debounce then _debounce.cancel() end
   _debounce = lib_debounce.new(do_reveal, _cfg.debounce_ms)
