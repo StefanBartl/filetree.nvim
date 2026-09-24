@@ -100,6 +100,12 @@ vim.fn.delete(work, "rf")
 vim.fn.mkdir(work .. "/personal/All/Finish", "p")
 vim.fn.writefile({ "leaf" }, work .. "/personal/All/Finish/leaf.txt")
 vim.fn.writefile({ "sibling" }, work .. "/other.txt") -- a second top-level entry, so root isn't a single-child chain itself
+-- An ORDINARY top-level directory, never expanded -- not a group_empty_dirs
+-- chain (two children, not one), so it must never be confused with a merged
+-- node. See the <S-CR>-on-an-unopened-directory check near the end of this file.
+vim.fn.mkdir(work .. "/src", "p")
+vim.fn.writefile({ "a" }, work .. "/src/a.lua")
+vim.fn.writefile({ "b" }, work .. "/src/b.lua")
 
 vim.cmd("cd " .. vim.fn.fnameescape(work))
 
@@ -116,6 +122,17 @@ require("neo-tree").setup({
 
 require("filetree").setup({ adapter = "neotree" })
 local adapter = require("filetree.adapter.neotree")
+
+-- Counts calls to neo-tree's own filesystem-rescan refresh, without changing
+-- its behavior, so the <S-CR>-on-an-ordinary-directory check below can prove
+-- a no-op stays a no-op instead of silently forcing a full disk rescan.
+local manager = require("neo-tree.sources.manager")
+local refresh_calls = 0
+local orig_manager_refresh = manager.refresh
+manager.refresh = function(...)
+  refresh_calls = refresh_calls + 1
+  return orig_manager_refresh(...)
+end
 
 require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
 vim.wait(6000, function()
@@ -247,8 +264,52 @@ check(
   ("before=%d after=%d"):format(before_lines, vim.api.nvim_buf_line_count(bufnr))
 )
 check("'personal' is visible again (collapsed) after <S-CR>", find_line("personal") ~= nil)
+check(
+  "...and it's genuinely un-merged, not just still reading 'personal"
+    .. sep
+    .. "All"
+    .. sep
+    .. "Finish'"
+    .. " (a bare 'personal' substring match alone can't tell those apart)",
+  find_line("personal" .. sep .. "All") == nil,
+  table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), " | ")
+)
 check("the sibling 'other.txt' entry survived the refresh fallback", find_line("other.txt") ~= nil)
 
+-- ── <S-CR> on an ORDINARY, never-expanded directory must be a true no-op ────
+-- Regression check for a perf bug in the very fallback above: `src/` was
+-- never opened, so it has the exact same loaded=false/is_expanded=false/
+-- has_children=false shape neo-tree reports for a group_empty_dirs node
+-- mid-merge (confirmed by hand) -- collapse_node must tell them apart via the
+-- node's own name (a merged node's name IS the separator-joined chain, e.g.
+-- "personal/All/Finish"; an ordinary directory's name is just its own
+-- basename) rather than forcing a full filesystem rescan on every unopened
+-- top-level directory.
+-- Let any refresh still in flight from the merged-node collapse above fully
+-- settle first -- otherwise its own (real, expected) tail end can land inside
+-- this check's before/after window and read as a spurious extra call.
+vim.wait(1000, function()
+  return false
+end, 50)
+
+local src_line = find_line("src")
+check("'src' (an ordinary, never-expanded directory) is rendered", src_line ~= nil)
+if src_line then
+  local refresh_calls_before = refresh_calls
+  vim.api.nvim_win_set_cursor(winid, { src_line + 1, 0 })
+  check("pressed <S-CR> on 'src'", press("<S-CR>"))
+  vim.wait(500, function()
+    return false
+  end, 50)
+  check(
+    "<S-CR> on an unopened ordinary directory did NOT force a filesystem rescan",
+    refresh_calls == refresh_calls_before,
+    ("refresh_calls before=%d after=%d"):format(refresh_calls_before, refresh_calls)
+  )
+  check("'src' is still there, untouched", find_line("src") ~= nil)
+end
+
+manager.refresh = orig_manager_refresh
 pcall(adapter.close)
 print(("\ngroup_empty_dirs_collapse: %d passed, %d failed"):format(passed, failed))
 vim.cmd(failed > 0 and "cq" or "qa!")
