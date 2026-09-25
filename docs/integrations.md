@@ -1,8 +1,9 @@
 # Integrations
 
 `lua/filetree/integrations/` holds the bridges that expose filetree.nvim's
-own actions to something outside the plugin's own trigger — right now, that
-is the context menu. See [FEATURES/INTEGRATIONS.md](FEATURES/INTEGRATIONS.md)
+own actions to something outside the plugin's own trigger — the context menu
+below. The pickers.nvim bridge (going the other way: filetree hands a directory
+to a picker) has its own section at the end. See [FEATURES/INTEGRATIONS.md](FEATURES/INTEGRATIONS.md)
 for the other direction instead: the features that connect filetree.nvim
 outward to git, LSP, sessions and pdfport.nvim.
 
@@ -31,3 +32,26 @@ group via `config.menu` (`fileops`, `clipboard`, `delete`, `open`, `paths`,
 The full wiring — right-click out of the box, the kit-renderer extras
 (highlighted node, edge-anchored popup), and every entry offered — is
 [menu.md](menu.md).
+
+## pickers.nvim
+
+`find_files` (`f`, `tf`) and `grep_in_dir` (`gr`, `tg`) hand the directory of the
+node under the cursor to [pickers.nvim](https://github.com/StefanBartl/pickers.nvim)
+when it is installed, instead of driving a picker of their own. The bridge is
+`filetree.util.pickers`, which calls `pickers.integrations.filetree` over there:
+
+- **Engine and flags** are the ones the rest of your setup uses (telescope,
+  fzf-lua or snacks; `find.hidden`/`no_ignore`/`follow`; entry actions).
+- **The picked file is revealed in the tree** (`find_files.reveal_on_open`),
+  through pickers.nvim's `on_select` hook. A pickers.nvim without the hook just
+  opens the file.
+- **Opt-out on both ends**, default on: `integrations.pickers = false` here,
+  `filetree = { enabled = false }` in pickers.nvim. Either one makes `f`/`gr`
+  fall back silently to telescope / fzf-lua / mini.pick / the built-in backend;
+  `tf`/`tg` say "pickers.nvim not available", since they asked for it.
+- `:checkhealth filetree` has a "pickers.nvim integration" section that says
+  which of the conditions (installed, this switch, the other switch) holds.
+
+Configuration: [configuration.md](configuration.md#pickersnvim-integration). The
+pickers.nvim side is documented in its own
+[FILETREE feature page](https://github.com/StefanBartl/pickers.nvim/blob/main/docs/FEATURES/FILETREE.md).
