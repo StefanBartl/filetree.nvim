@@ -3,11 +3,13 @@
 
 local notify = require("filetree.util.notify").create("[filetree.adapter.neotree]")
 local registry = require("filetree.adapter")
+local au = require("filetree.util.autocmd")
 
 -- Shared neo-tree node helpers live in lib.nvim (a hard dependency).
 local libnode = require("lib.nvim.neotree.node")
 
 ---@class FiletreeNeotreeAdapter : FiletreeAdapter
+---@field _retry { limit: integer, interval_ms: integer }  Background install retries (`on_render`, redraw hook). Private: tests shorten it.
 local M = {
   name = "neotree",
   -- UI capabilities consumed by adapter-agnostic features.
@@ -1090,6 +1092,14 @@ local _redraw_hook_installed = false
 local _redraw_hook_retry_scheduled = false
 ---@type integer
 local _redraw_hook_retries = 0
+-- How long the background install loops keep trying (limit x interval_ms,
+-- 3 s by default) before `on_render` falls back to waiting for neo-tree's
+-- first tree buffer (see `M.on_render`). Read at call time; a field on `M`
+-- only so a test can shorten it -- not configuration.
+M._retry = { limit = 20, interval_ms = 150 }
+-- Augroup of the late-install `FileType neo-tree` autocmds `M.on_render` arms
+-- once its retries run out (one autocmd per subscriber, deleted individually).
+local LATE_INSTALL_GROUP = "filetree_neotree_late_install"
 -- Field name `install_redraw_hook` stores its live notify callback under, on
 -- `renderer` itself (neo-tree's own module table) rather than in a local
 -- here -- see that function's doc comment for why a module-level local
@@ -1228,9 +1238,9 @@ local function try_install_redraw_hook_later()
     if ok_renderer then _redraw_hook_installed = install_redraw_hook(renderer) end
     if _redraw_hook_installed then return end
     _redraw_hook_retries = _redraw_hook_retries + 1
-    if _redraw_hook_retries < 20 then
+    if _redraw_hook_retries < M._retry.limit then
       _redraw_hook_retry_scheduled = true
-      vim.defer_fn(retry, 150)
+      vim.defer_fn(retry, M._retry.interval_ms)
     else
       notify.warn(
         "could not hook neo-tree's narrow redraw path (renderer.redraw) after retries -- "
@@ -1240,7 +1250,7 @@ local function try_install_redraw_hook_later()
       )
     end
   end
-  vim.defer_fn(retry, 150)
+  vim.defer_fn(retry, M._retry.interval_ms)
 end
 
 ---@internal
@@ -1375,7 +1385,7 @@ local function require_bypassing_preload(name)
       return result
     end
   end
-  error("module '" .. name .. "' not found")
+  error("module '" .. name .. "' not found", 0)
 end
 
 local function hoist_redraw_hook()
@@ -1391,23 +1401,44 @@ local function hoist_redraw_hook()
   end
   if package.preload["neo-tree.ui.renderer"] then return end -- already hoisted
 
-  package.preload["neo-tree.ui.renderer"] = function(...)
+  local function preload_loader()
     -- Clear our own preload entry FIRST -- belt and suspenders, since
     -- `require_bypassing_preload` below never even looks at it.
     package.preload["neo-tree.ui.renderer"] = nil
     local ok, mod = pcall(require_bypassing_preload, "neo-tree.ui.renderer")
-    if not ok then error(mod) end
-    install_redraw_hook(mod)
+    if not ok then
+      -- Neo-tree is not on the runtimepath (yet) -- the normal state of a
+      -- lazy-loaded plugin, and exactly what `install_render_hook`'s own
+      -- background retries `require` into. LuaJIT's `require` stores a
+      -- "loading" sentinel in `package.loaded[name]` BEFORE it calls a loader
+      -- and never clears it when that loader throws, so leaving it would fail
+      -- every later `require("neo-tree.ui.renderer")` -- neo-tree's own, once
+      -- it does load -- with "loop or previous error loading module", for the
+      -- rest of the session. A plain `require` of a missing module leaves no
+      -- such trace; undo it, and re-arm the hoist for the real first load.
+      package.loaded["neo-tree.ui.renderer"] = nil
+      package.preload["neo-tree.ui.renderer"] = preload_loader
+      error(mod, 0)
+    end
+    pcall(install_redraw_hook, mod)
     return mod
   end
+  package.preload["neo-tree.ui.renderer"] = preload_loader
 end
 
 ---Subscribe `callback` to fire every time neo-tree finishes (re)rendering the
 ---filesystem tree -- both a full rescan (`AFTER_RENDER`) and a narrower
 ---redraw-without-rescan (`renderer.redraw`, e.g. neo-tree's own
 ---`opened_buffers_changed` -- see the "Render-event bridge" comment above).
----Neo-tree may not be loaded yet (cmd-lazy), so installation is retried a few
----times, mirroring sidebar_guard's deferred install.
+---Neo-tree may not be loaded yet (cmd-lazy), so installation is retried in the
+---background for a few seconds (`M._retry`), mirroring sidebar_guard's
+---deferred install. A neo-tree that is still not loaded when those retries run
+---out -- a lazy `cmd = "Neotree"` / `ft = "neo-tree"` plugin the user first
+---opens minutes into the session -- is not given up on: the subscription then
+---waits for the first `neo-tree` buffer (`FileType`), which cannot exist before
+---neo-tree itself is loaded, installs the hooks then, and calls `callback`
+---once with that buffer. Without this fallback such a session never got a
+---single redraw signal, and marks/link_marker decorations stayed undrawn.
 ---
 ---`callback` receives the bufnr of the tree that just rendered (nil if it
 ---could not be resolved, e.g. the window closed between the render and this
@@ -1420,6 +1451,43 @@ end
 ---@return fun() unsubscribe
 function M.on_render(callback)
   local cancelled = false
+  ---@type integer?
+  local late_autocmd
+
+  local function disarm_late_install()
+    if late_autocmd then pcall(vim.api.nvim_del_autocmd, late_autocmd) end
+    late_autocmd = nil
+  end
+
+  ---Retries are spent: wait for the first neo-tree buffer instead. Stays armed
+  ---until an install succeeds (a `FileType neo-tree` that fires before the
+  ---plugin's modules are requirable just leaves it for the next one) or until
+  ---the subscription is cancelled.
+  local function arm_late_install()
+    if cancelled or late_autocmd then return end
+    local scheduled = false
+    notify.debug("on_render: neo-tree not loaded after retries; waiting for its first buffer")
+    late_autocmd = au.create("FileType", function(args)
+      if scheduled then return end
+      scheduled = true
+      -- Deferred: the plugin manager that loads a lazy neo-tree on this very
+      -- FileType may run after this autocmd, and the tree buffer is not
+      -- rendered yet either -- let both settle before requiring/decorating.
+      vim.schedule(function()
+        scheduled = false
+        if cancelled or not install_render_hook() then return end
+        disarm_late_install()
+        _render_listeners[callback] = true
+        if vim.api.nvim_buf_is_valid(args.buf) then pcall(callback, args.buf) end
+      end)
+    end, {
+      group = au.group(LATE_INSTALL_GROUP, false),
+      pattern = "neo-tree",
+      record = false, -- per-subscriber, deleted again: not part of the binding catalog
+      desc = "filetree.adapter.neotree: install the render hooks once neo-tree exists",
+    })
+  end
+
   if install_render_hook() then
     _render_listeners[callback] = true
   else
@@ -1431,13 +1499,18 @@ function M.on_render(callback)
         if not cancelled then _render_listeners[callback] = true end
         return
       end
-      if tries < 20 then vim.defer_fn(retry, 150) end
+      if tries < M._retry.limit then
+        vim.defer_fn(retry, M._retry.interval_ms)
+      else
+        arm_late_install()
+      end
     end
-    vim.defer_fn(retry, 150)
+    vim.defer_fn(retry, M._retry.interval_ms)
   end
   return function()
     cancelled = true
     _render_listeners[callback] = nil
+    disarm_late_install()
   end
 end
 

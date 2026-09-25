@@ -111,6 +111,28 @@ anything else has ever required `neo-tree.ui.renderer` — true for the
 ordinary "neither plugin lazy past VimEnter" and "both lazy on the same
 `:Neotree` trigger, filetree's spec loads first" cases.
 
+The hoist never poisons a neo-tree that is not installed *yet*. LuaJIT's
+`require` parks a "loading" sentinel in `package.loaded` before it runs a
+loader and does not clear it when the loader throws, so a preload loader that
+threw for a missing module would have failed every later
+`require("neo-tree.ui.renderer")` — neo-tree's own, once it does load — with
+"loop or previous error loading module" for the rest of the session. The
+`on_render` install retries hit exactly that path (they `require` the renderer
+while neo-tree is still absent). The loader therefore clears the sentinel and
+re-arms itself before it re-raises the ordinary "module not found".
+
+**Lazy-loaded neo-tree and `on_render`.** `on_render` (marks, link_marker)
+retries the hook install in the background for about three seconds
+(20 × 150 ms). A neo-tree.nvim that is first opened after that — a
+`cmd = "Neotree"` / `ft = "neo-tree"` spec used minutes into the session —
+is not given up on: the subscription then waits for the first `neo-tree`
+buffer (`FileType`, which cannot exist before neo-tree is loaded), installs
+the `AFTER_RENDER` subscription and the `renderer.redraw` hook at that point,
+and calls the subscriber once with that buffer. The autocmd is deleted again
+after a successful install and when the subscription is cancelled.
+`TESTS/nav_switch_toggle.lua` pins both (against a stubbed neo-tree, with the
+retry window shortened through the private `M._retry`).
+
 **Disclosed limitation:** if the user's own config calls
 `require("neo-tree").setup()` (which itself eagerly requires
 `commands.lua`, which requires `renderer`) *before* filetree.nvim's own

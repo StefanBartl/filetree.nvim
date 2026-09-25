@@ -6,7 +6,8 @@
 -- of a host's neo-tree config: `source_switcher` (pick / cycle / display
 -- names for neo-tree's sources) and `tree_toggle` (position-aware global
 -- toggle keys), plus the neo-tree adapter's E95 self-heal in `toggle_at` and
--- the bookkeeping of its `renderer.redraw` hook install.
+-- the bookkeeping of its `renderer.redraw` hook install and `on_render`'s late
+-- install for a lazily-loaded neo-tree.
 --
 -- neo-tree itself is stubbed at `neo-tree` / `neo-tree.command`, so what is
 -- asserted is what the features hand neo-tree and how they react to what it
@@ -33,6 +34,8 @@ for _, candidate in ipairs(lib_candidates) do
     break
   end
 end
+
+local TMP_ROOT = vim.env.TEMP or vim.env.TMPDIR or vim.env.TMP or "/tmp"
 
 local passed, failed = 0, 0
 local function check(name, ok, detail)
@@ -390,6 +393,145 @@ do
   unsubscribe()
   package.loaded["neo-tree.ui.renderer"] = nil
   package.loaded["neo-tree.events"] = nil
+  package.loaded["filetree.adapter.neotree"] = nil
+end
+
+-- ── on_render: a neo-tree that loads AFTER the retries ran out ──────────────
+-- `on_render` retries the install in the background for a few seconds
+-- (`M._retry`, shortened here). A lazy neo-tree.nvim first opened after that
+-- used to leave the subscription dead for the rest of the session; it now
+-- waits for the first `neo-tree` buffer (`FileType`) and installs then.
+do
+  local LATE_GROUP = "filetree_neotree_late_install"
+  local function late_autocmds()
+    local ok, found = pcall(vim.api.nvim_get_autocmds, { group = LATE_GROUP, event = "FileType" })
+    return ok and #found or 0
+  end
+  local function neotree_absent()
+    package.loaded["neo-tree.ui.renderer"] = nil
+    package.loaded["neo-tree.events"] = nil
+    package.preload["neo-tree.ui.renderer"] = nil
+    package.preload["neo-tree.events"] = nil
+  end
+  local function neotree_arrives()
+    local renderer = { redraw = function() end }
+    package.loaded["neo-tree.events"] = {
+      AFTER_RENDER = "after_render",
+      subscribe = function() end,
+      unsubscribe = function() end,
+    }
+    package.loaded["neo-tree.ui.renderer"] = renderer
+    return renderer
+  end
+  local function tree_buffer()
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.bo[buf].filetype = "neo-tree"
+    return buf
+  end
+  local function fresh_adapter()
+    neotree_absent()
+    package.loaded["filetree.adapter.neotree"] = nil
+    local nt = require("filetree.adapter.neotree")
+    nt._retry.limit, nt._retry.interval_ms = 2, 10
+    return nt
+  end
+
+  -- 1. arrives late; a FileType that is too early leaves it armed
+  local nt = fresh_adapter()
+  local seen = {}
+  nt.on_render(function(bufnr)
+    seen[#seen + 1] = bufnr == nil and "nil" or bufnr
+  end)
+  vim.wait(300, function()
+    return late_autocmds() > 0
+  end, 10)
+  eq("late: retries spent -> one FileType autocmd armed", late_autocmds(), 1)
+
+  tree_buffer() -- neo-tree still not requirable: nothing installs
+  vim.wait(100, function()
+    return #seen > 0
+  end, 10)
+  eq("late: a FileType before neo-tree is requirable notifies nobody", #seen, 0)
+  eq("late: ... and stays armed for the next one", late_autocmds(), 1)
+
+  local renderer = neotree_arrives()
+  local buf = tree_buffer()
+  vim.wait(500, function()
+    return #seen > 0
+  end, 10)
+  eq("late: the first tree buffer installs the hooks and notifies once", #seen, 1)
+  eq("late: ... with that buffer", seen[1], buf)
+  eq("late: ... the autocmd is gone afterwards", late_autocmds(), 0)
+  check("late: renderer.redraw is wrapped for real", renderer._filetree_notify_redraw ~= nil)
+  renderer.redraw({})
+  eq("late: ... and the subscriber now gets redraw signals", #seen, 2)
+  tree_buffer()
+  vim.wait(60, function() end, 10)
+  eq("late: further tree buffers do not re-notify", #seen, 2)
+
+  -- 2. unsubscribing while still armed disarms it for good
+  nt = fresh_adapter()
+  local seen2 = 0
+  local unsubscribe = nt.on_render(function()
+    seen2 = seen2 + 1
+  end)
+  vim.wait(300, function()
+    return late_autocmds() > 0
+  end, 10)
+  eq("late/unsubscribe: armed", late_autocmds(), 1)
+  unsubscribe()
+  eq("late/unsubscribe: the autocmd is deleted", late_autocmds(), 0)
+  renderer = neotree_arrives()
+  tree_buffer()
+  vim.wait(100, function()
+    return seen2 > 0
+  end, 10)
+  eq("late/unsubscribe: neo-tree arriving afterwards notifies nobody", seen2, 0)
+  eq("late/unsubscribe: ... and nothing got wrapped for it", renderer._filetree_notify_redraw, nil)
+
+  -- 3. the preload hoist must not poison a neo-tree that arrives later.
+  -- LuaJIT parks a "loading" sentinel in package.loaded before it runs a
+  -- loader and never clears it when the loader throws. The hoist's loader
+  -- threw whenever neo-tree was not on the runtimepath yet -- which the
+  -- install retries above trigger by requiring the renderer early -- so
+  -- neo-tree's OWN later require died with "loop or previous error loading
+  -- module" for the rest of the session.
+  local dir = (TMP_ROOT .. "/nt-late-rtp"):gsub("\\", "/")
+  vim.fn.delete(dir, "rf")
+  vim.fn.mkdir(dir .. "/lua/neo-tree/ui", "p")
+  vim.fn.writefile(
+    { 'return { marker = "real renderer", redraw = function() return "real" end }' },
+    dir .. "/lua/neo-tree/ui/renderer.lua"
+  )
+  vim.fn.writefile({ "return {}" }, dir .. "/lua/neo-tree/events.lua")
+
+  fresh_adapter()
+  check(
+    "hoist: armed at load while neo-tree is absent",
+    package.preload["neo-tree.ui.renderer"] ~= nil
+  )
+  local ok_early = pcall(require, "neo-tree.ui.renderer") -- what the install retries do
+  eq("hoist: an early require fails like any missing module", ok_early, false)
+  eq("hoist: ... leaving no loading sentinel behind", package.loaded["neo-tree.ui.renderer"], nil)
+  check(
+    "hoist: ... and re-armed for the real first load",
+    package.preload["neo-tree.ui.renderer"] ~= nil
+  )
+
+  vim.opt.rtp:prepend(dir) -- neo-tree "gets lazy-loaded"
+  local ok_real, real = pcall(require, "neo-tree.ui.renderer")
+  check("hoist: neo-tree's own require then succeeds", ok_real, tostring(real))
+  eq("hoist: ... returning the real module", ok_real and real.marker, "real renderer")
+  check(
+    "hoist: ... already wrapped (the hoist's whole point)",
+    ok_real and real._filetree_notify_redraw ~= nil
+  )
+  eq("hoist: ... and the wrapper forwards to the real redraw", ok_real and real.redraw({}), "real")
+
+  vim.opt.rtp:remove(dir)
+  vim.fn.delete(dir, "rf")
+
+  neotree_absent()
   package.loaded["filetree.adapter.neotree"] = nil
 end
 
