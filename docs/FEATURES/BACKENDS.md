@@ -310,6 +310,19 @@ together.
 - **Config:** `opts.features.watcher_quarantine` — `enabled` (default **false**), `duration_ms` (500), `silent` (true), `patch_neotree_watch` (true — wraps neo-tree's `fs_watch` callbacks to swallow EPERM)
 - **Usercmds:** `:Filetree watcher enter [ms]`, `:Filetree watcher exit` (shared dispatcher with `file_watcher`)
 
+## Who Locks
+
+Diagnoses a Windows file lock (`EBUSY`/`EPERM`/`EACCES`) on any path, right
+after a file operation failed. It measures instead of guessing: a live
+`uv.fs_rename` probe, the processes holding the file (Windows Restart Manager,
+via `lib.nvim.cross.fs.lock`), and neo-tree's own `fs_event` watchers covering
+the file's folder — the local suspect the Restart Manager would only ever
+report as "nvim". Works without a buffer; an open buffer is never the cause.
+
+- **Module:** [`features/infra/who_locks/init.lua`](../../lua/filetree/features/infra/who_locks/init.lua) (`M.run`)
+- **Config:** none — a plain command, loaded on demand
+- **Usercmds:** `:Filetree wholocks [path] [--json]` (default path: the current buffer's file; `--json` prints one structured object)
+
 ## Handle Guard
 
 Fixes the same Windows/WSL file-lock at its source instead of hiding it:
