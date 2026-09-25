@@ -7,7 +7,9 @@
 ```
 
 Reports the status of each feature category (in the same order as
-`filetree.features.CATEGORY_ORDER`) and flags missing adapters or dependencies.
+`filetree.features.CATEGORY_ORDER`) and flags missing adapters or dependencies. It also
+says whether the pickers.nvim integration is active and, if not, which of its three
+conditions fails, and lists any key that two actions claim.
 
 ## Debug notifications
 
@@ -76,6 +78,36 @@ the same thing, plus how many stale ids it has had to drop.
 
 See [BACKENDS.md → Tree Integrity](FEATURES/BACKENDS.md#tree-integrity) for the
 mechanism.
+
+## A key does nothing, or does something else
+
+Two filetree actions on one key: Vim does not complain, the later `:map` wins, and
+the other action silently loses its key — which one is later depends on attach
+order, so it can even differ between sessions. filetree's own defaults never do
+this, but keys you set yourself can.
+
+```vim
+:Filetree keys
+```
+
+lists every key claimed by more than one action (the live one marked), recommends
+free alternatives, and moves the action you pick for this session; it copies the
+`setup()` fragment that makes the change permanent. The same list is the
+**conflicts** page of the `?` cheatsheet (`<CR>` there starts the same flow) and a
+warning in `:checkhealth filetree`. An action bound per buffer (`preview`) cannot be
+moved while the session runs — set its key in `setup()`.
+
+A key that filetree binds over one of neo-tree's own (`/`, `i`, `m`) is deliberate
+and not a conflict in this sense; see *Known conflicts* in
+[BINDINGS/KEYMAPS.md](BINDINGS/KEYMAPS.md).
+
+## `f` / `gr` do not open pickers.nvim
+
+`:checkhealth filetree` → "pickers.nvim integration" names the condition that fails:
+pickers.nvim missing (or too old to ship `pickers.integrations.filetree`),
+`integrations.pickers = false` here, or `filetree = { enabled = false }` (or no
+picker engine) on the pickers.nvim side. `f`/`gr` fall back to telescope / fzf-lua /
+mini.pick / the built-in backend in every one of those cases.
 
 ## Known adapter caveats
 

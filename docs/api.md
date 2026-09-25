@@ -8,6 +8,8 @@ ft.config()             -- → FiletreeConfig
 ft.feature("marks")     -- → feature module | nil
 ft.register_adapter(a)  -- register custom adapter (before setup)
 ft.is_initialized()     -- → boolean
+ft.attach(opts, config) -- deprecated no-op: hands `opts` back untouched (filetree no longer
+                        -- writes into neo-tree's window.mappings; the `?` cheatsheet lists the keys)
 ```
 
 ## Reference engine

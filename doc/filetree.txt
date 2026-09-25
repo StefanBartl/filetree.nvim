@@ -13,6 +13,8 @@ CONTENTS                                                    *filetree-contents*
   4. Configuration .......................... |filetree-config|
      4.1 Default-disabled features ......... |filetree-default-disabled|
      4.2 Menu integration .................. |filetree-menu|
+     4.3 pickers.nvim integration ......... |filetree-pickers-integration|
+     4.4 Keys claimed twice ................ |filetree-key-conflicts|
   5. Features ............................... |filetree-features|
      5.1 Picker ............................ |filetree-picker|
      5.2 Layout Guard ...................... |filetree-layout-guard|
@@ -60,6 +62,9 @@ Supported backends: neo-tree.nvim, nvim-tree.lua
     integrations still have local fallbacks if it's absent, but the
     commands themselves won't register without it.
   • One of: neo-tree.nvim, nvim-tree.lua
+  • pickers.nvim (optional) — `f` / `gr` run through it when installed
+    (|filetree-pickers-integration|); otherwise telescope, fzf-lua, mini.pick or
+    a built-in fallback.
   • ripgrep (optional, recommended) — pre-filters the reference scan
     (|filetree-refs|). Without it the scan falls back to a capped
     directory walk: slower, same result.
@@ -225,6 +230,42 @@ tree is the active context. Opt out per group via `config.menu`: >
       },
     })
 <
+------------------------------------------------------------------------------
+4.3 PICKERS.NVIM INTEGRATION                        *filetree-pickers-integration*
+
+`find_files` (`f`, `tf`) and `grep_in_dir` (`gr`, `tg`) hand the directory of the
+node under the cursor to pickers.nvim when it is installed: your engine, your
+`find` flags, your entry actions. The picked file is revealed in the tree
+(`find_files.reveal_on_open`) through pickers.nvim's `on_select` hook; a
+pickers.nvim without the hook just opens it. On by default; it is used only when
+all three hold, and each is an opt-out: >lua
+
+    require("filetree").setup({ integrations = { pickers = false } })
+    require("pickers").setup({ filetree = { enabled = false } })   -- other end
+<
+pickers.nvim installed (and new enough to ship `pickers.integrations.filetree`),
+`integrations.pickers` not `false` here, `filetree.enabled` not `false` there. If
+any fails, `f` / `gr` fall back silently to telescope / fzf-lua / mini.pick / the
+built-in backend; `tf` / `tg` say "pickers.nvim not available", since they asked
+for it. |filetree-health| reports which condition holds.
+
+------------------------------------------------------------------------------
+4.4 KEYS CLAIMED TWICE                                    *filetree-key-conflicts*
+
+filetree's own features never share a default key (`gp` locks the cwd, `go` opens
+a PDF, `<C-c>` clears a filter, `X` clears the copy/cut clipboard). Keys you set
+yourself can: Vim does not complain about a second `:map`, the later one wins
+silently, and which one is later depends on attach order. >vim
+
+    :Filetree keys
+<
+lists every key claimed by more than one action (the live one marked), recommends
+free alternatives (unmapped, no prefix clash, the original's kind of key first),
+and moves the action you pick for this session; the `setup()` fragment that makes
+it permanent is copied to the clipboard. The same list is the "conflicts" page of
+the `?` cheatsheet (<CR> there starts the flow) and a warning in |filetree-health|.
+An action bound per buffer (`preview`) cannot be moved while the session runs.
+
 ==============================================================================
 5. FEATURES                                                *filetree-features*
 
@@ -2275,6 +2316,8 @@ Run :checkhealth filetree to verify:
   • Adapter availability
   • Feature status
   • Optional dependencies
+  • The pickers.nvim integration (which of its three conditions holds)
+  • Keys claimed by more than one action
 
 ==============================================================================
 9. CUSTOM ADAPTERS                                 *filetree-custom-adapters*
