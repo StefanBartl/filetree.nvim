@@ -90,14 +90,15 @@ Enough to predict where a key lives without opening the full table:
 
 ## Known conflicts
 
-Four are known and documented rather than silently resolved, because each has a
-legitimate other owner:
+Three are known and documented rather than silently resolved, because each has a
+legitimate other owner (a filetree key shadowing one of neo-tree's own). Two
+features of filetree never share a key by default; if you configure them onto
+one, `:Filetree keys` lists the clash and offers free alternatives:
 
 | Keys | Colliding owners | Resolution |
 | --- | --- | --- |
 | `/` | `filter` vs. neo-tree's own fuzzy finder | Remap `filter.keymap` if you want neo-tree's search back |
 | `i` | `shell_run` vs. neo-tree's built-in `i` (node info) | filetree's `node_info` on `I` is the better one; noop neo-tree's `i` via `adapter_keymaps` |
-| `<C-c>` | `filter.keymap_clear` vs. `copy_move.keymaps.clear` | Both default to `<C-c>`; the last registered wins. Remap one to have both reachable |
 | `m` | `marks` vs. neo-tree's built-in `m` (move) | filetree binds marking; its own `M` does the move *and* updates references |
 
 `adapter_keymaps` is the escape hatch for the adapter's own keys:
@@ -137,16 +138,14 @@ require("filetree").setup({
 })
 ```
 
-## The neo-tree `?` cheatsheet
+## The `?` cheatsheet
 
-**neo-tree `?`:** neo-tree builds its help screen from its own
-`window.mappings` config, not from the buffer's actual keymaps — so keys set by
-the tree-attach dispatcher would normally be invisible there. `setup()` injects
-the enabled feature keymaps into neo-tree's live config after it is configured,
-and they appear in `?` labelled `filetree: …`. Nothing to wire up; see
-[the integration section](BINDINGS/KEYMAPS.md#neo-tree--cheatsheet-integration)
-for the explicit variant and the ordering race it handles.
+`?` opens filetree's own paged cheatsheet on every adapter, neo-tree included. It
+reads what is actually bound (filetree's keys from the registry, everything else
+from the buffer), in pages: filetree keys, other keys (the adapter's and other
+plugins'), commands, and -- only when two actions claim one key -- conflicts.
+`<Tab>` turns the page. See
+[the cheatsheet section](BINDINGS/KEYMAPS.md#the--cheatsheet-per-source-keys-conflicts).
 
-For **nvim-tree** (`g?`) and other adapters the keys work but do not show up in
-their native help, because the dispatcher sits outside their help registry.
-Verify with `:nmap` inside the tree buffer.
+`:Filetree keys` resolves a key two actions claim: it recommends free alternatives
+and moves the action you pick.

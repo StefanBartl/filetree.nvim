@@ -8,8 +8,7 @@ Windows/WSL) leaks OS-level file handles.
 ## neo-tree adapter
 
 `adapter = "neotree"`. The most complete adapter — the only one with a
-native `?` cheatsheet integration (filetree injects its own keymaps into
-neo-tree's `window.mappings`, see `attach.lua`), a native "follow cwd"
+native "follow cwd"
 feature (`bind_to_cwd`/`follow_current_file`) that `cwd_sync.reveal` should
 defer to, and libuv directory watchers that motivate `handle_guard`/
 `watcher_quarantine` below. Resolves the current node via `lib.nvim.neotree.node`.

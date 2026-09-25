@@ -1150,7 +1150,7 @@ recursive through a symlink cycle, since a real directory tree cannot have one
 but a naive walk following links does not know that). An ordinary (non-link)
 directory or file still copies its actual content, as always.
 
-Keymaps: c x p P <C-c>
+Keymaps: c x p P X
 
 Module: lua/filetree/features/fileops/copy_move/
 
@@ -2005,7 +2005,7 @@ chain (render into a buffer) instead of always shelling out to the system PDF
 reader. Soft dependency — without pdfport.nvim installed, `.pdf` nodes just
 open with the system reader, no prompt.
 
-`pdf_open`'s default keymap (`gp`) opens directly in `default_mode` (default
+`pdf_open`'s default keymap (`go`) opens directly in `default_mode` (default
 "buffer"), no prompt. Set `default_mode = "picker"` (or bind `keymap_picker`)
 instead to get pdfport's own "open PDF as…" chooser — every backend/mode
 pdfport knows about, plus "system application", which is always offered even
@@ -2048,12 +2048,14 @@ CHEATSHEET                                               *filetree-cheatsheet*
 
 A paged float, built from what is actually bound on the tree buffer (not from
 a table of defaults), on every adapter including neo-tree. <Tab> / <S-Tab> (or
-1..3) turn the pages:
+1..4) turn the pages:
 
   1. filetree    filetree.nvim's own keymaps, by category, plus the global ones
   2. other keys  every other buffer-local key: the adapter's native ones and
                  those other plugins attach (pickers.nvim, pdfport, ...)
   3. commands    the `:Filetree` sub-commands
+  4. conflicts   only when two actions claim one key: the live one, free
+                 alternatives; <CR> moves one (`:Filetree keys`)
 
 Keymaps: ?
 

@@ -159,8 +159,8 @@ return {
     { lhs = "p", desc = "Paste staged nodes", feature = "copy_move", scope = "tree" },
     { lhs = "P", desc = "Show copy/cut clipboard", feature = "copy_move", scope = "tree" },
     {
-      lhs = "<C-c>",
-      desc = "Clear copy/cut clipboard ⚠ conflicts with filter.keymap_clear",
+      lhs = "X",
+      desc = "Clear copy/cut clipboard",
       feature = "copy_move",
       scope = "tree",
     },
@@ -210,7 +210,7 @@ return {
     { lhs = "/", desc = "Filter tree", feature = "filter", scope = "tree" },
     {
       lhs = "<C-c>",
-      desc = "Clear applied filter ⚠ conflicts with copy_move.keymaps.clear",
+      desc = "Clear applied filter",
       feature = "filter",
       scope = "tree",
     },
@@ -299,6 +299,12 @@ return {
       scope = "tree",
     },
     { lhs = "i", desc = "Run shell command in dir", feature = "shell_run", scope = "tree" },
+    {
+      lhs = "go",
+      desc = "Open PDF (pdfport; default_mode picks the viewer)",
+      feature = "pdf_open",
+      scope = "tree",
+    },
     {
       lhs = "gP",
       desc = "Create PDF from node/marks/folder (pdfport, confirms first)",

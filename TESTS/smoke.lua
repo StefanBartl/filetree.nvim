@@ -239,22 +239,13 @@ do
   -- silent-never-fires class this check exists to catch. The legacy config's
   -- lack of complaints is consistent with that: nobody reports a key that
   -- quietly does nothing. `keymap_clear` now defaults to "<leader>mc".
-  -- filter.keymap_clear ("<C-c>") vs copy_move.keymaps.clear ("<C-c>") stays
-  -- accepted, and it is worth being precise about why it is NOT the case
-  -- above. These two claim the *same string*, so they collide one level
-  -- earlier: `build_mappings` writes them into the same `mappings[lhs]` slot
-  -- and the second write replaces the first. That really is
-  -- last-registration-wins -- one of the two is reachable, and which one is
-  -- decided by table order, not by the terminal. Ctrl+C is 0x03, an
-  -- unambiguous byte of its own, so nothing here depends on an extended
-  -- encoding. The reference legacy config carried the same pairing (two
-  -- native window.mappings entries for one key) without a reported issue,
-  -- `filter` is opt-in anyway (enabled = false), and both docs/BINDINGS.md
-  -- and docs/BINDINGS/KEYMAPS.md list it under "known conflicts" with the
-  -- remap escape hatch.
-  local ACCEPTED = {
-    ["copy_move:filter:<C-c>"] = true,
-  }
+  -- filter.keymap_clear and copy_move.keymaps.clear used to both default to
+  -- "<C-c>" and were waved through here as accepted. They are not any more: the
+  -- clipboard clear is "X". Two features on one key is a key that silently does
+  -- nothing (the later `:map` wins, and which one is later depends on attach
+  -- order), so no pair is accepted; `TESTS/keys.lua` checks the same thing
+  -- against the keys actually bound, opt-in features included.
+  local ACCEPTED = {}
 
   local b = require("filetree.bindings")
   local seen = {} -- canonical key -> feature name that claimed it first

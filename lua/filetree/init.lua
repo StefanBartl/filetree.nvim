@@ -231,29 +231,9 @@ function M.setup(user_config)
     end, { group = _adapter_keymaps_augroup, pattern = { "neo-tree", "NvimTree" } })
   end
 
-  -- Auto-inject filetree keymaps into neo-tree's window.mappings so they appear in
-  -- the `?` cheatsheet — no user wiring needed beyond setup().  neo-tree's merged
-  -- config only exists after its own setup() has run, which (with lazy=false) may
-  -- be before or after ours; run once when Neovim has finished starting (all
-  -- lazy=false plugin configs done), and immediately if we loaded post-startup.
   if adapter.name == "neotree" then
-    local function do_inject()
-      require("filetree.attach").inject(config_mod.get(), adapter)
-    end
-    if vim.v.vim_did_enter == 1 then
-      vim.schedule(function()
-        vim.defer_fn(do_inject, 50)
-      end)
-    else
-      au.create("VimEnter", function()
-        vim.defer_fn(do_inject, 50)
-      end, {
-        group = "filetree_setup",
-        once = true,
-        desc = "[filetree] Inject the tree adapter's keymaps once Neovim has started",
-      })
-    end
-    -- Give `/` back its native search inside neo-tree's `?` help popup.
+    -- Give `/` back its native search inside neo-tree's own help popup (filetree's
+    -- `?` cheatsheet replaces it by default; this is for when it is reachable).
     require("filetree.attach").native_search_in_help()
     -- Prevent neo-tree's own "File not in cwd. Change cwd to ...?" prompt from
     -- ever firing, regardless of which code calls neo-tree's command API (see
@@ -318,15 +298,16 @@ function M.register_adapter(adapter)
   adapter_mod.register(adapter)
 end
 
----Inject filetree feature keymaps into neo-tree's `window.mappings` so they show
----up in neo-tree's `?` cheatsheet.  Call BEFORE `require("neo-tree").setup(opts)`,
----passing the neo-tree opts table and the same config you give to `setup()`.
----No-op for non-neotree adapters (their help systems differ).
----@param opts table    neo-tree opts table (mutated in place).
----@param config FiletreeOpts  Same config table passed to setup().
+---Deprecated no-op, kept so a config that calls it before `neo-tree.setup(opts)`
+---keeps working. filetree no longer injects its keys into neo-tree's
+---`window.mappings`: it binds them itself, and its `?` cheatsheet lists what is
+---bound. `opts` comes back untouched.
+---@deprecated
+---@param opts table  neo-tree opts table.
+---@param _config? FiletreeOpts  Unused.
 ---@return table opts
-function M.attach(opts, config)
-  return require("filetree.attach").neotree(opts, config)
+function M.attach(opts, _config)
+  return require("filetree.attach").neotree(opts)
 end
 
 ---Return true when setup() has completed successfully.

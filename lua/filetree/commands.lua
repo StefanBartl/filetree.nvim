@@ -190,6 +190,12 @@ local TREE = {
     if f then f.open() end
   end,
 
+  -- ── keys ────────────────────────────────────────────────────────────────────
+  -- :Filetree keys   → keys claimed by more than one action; pick one to move
+  keys = function(_)
+    require("filetree.util.key_conflicts").resolve()
+  end,
+
   -- ── template ────────────────────────────────────────────────────────────────
   template = function(_)
     local f = ft("create_from_template")

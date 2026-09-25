@@ -13,7 +13,7 @@
 --- fallback chain.
 ---
 --- Keymaps (in tree buffer, defaults):
----   gp   Open PDF with `default_mode` (default "buffer" = pdfport text view;
+---   go   Open PDF with `default_mode` (default "buffer" = pdfport text view;
 ---        falls back to the system viewer when pdfport isn't installed).
 ---   The explicit-mode keys (text / system / terminal / picker) are opt-in
 ---   (default off) — set `default_mode = "picker"` (or bind `keymap_picker`)
@@ -30,7 +30,7 @@ local M = {}
 local _cfg = {
   enabled = false,
   default_mode = "buffer", -- mode used by keymap_open
-  keymap_open = "gp",
+  keymap_open = "go",
   keymap_text = false, -- mode "buffer"   (pdfport text extraction)
   keymap_system = false, -- mode "system"   (OS viewer, dependency-free)
   keymap_terminal = false, -- mode "terminal" (pdfport in a terminal)

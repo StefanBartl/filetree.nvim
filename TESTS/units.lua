@@ -585,59 +585,31 @@ do
   package.loaded["filetree.adapter.neotree"] = nil
 end
 
--- ── attach: a source-restricted feature stays out of the shared table ───────
+-- ── attach: the neo-tree `window.mappings` injection is gone ────────────────
 --
--- The defect this pins: `inject` runs AFTER neo-tree.setup(), so it writes
--- into the already-merged config and is the last word. A config that disabled
--- a trash key for one source (`document_symbols.window.mappings["<leader>th"]
--- = "noop"`) was silently overruled -- the key showed trash history in a
--- symbol tree, where there is no node to have trashed.
---
--- Asserted on the tables rather than on a live tree, because "which table it
--- lands in" IS the fix; a rendered tree would only show it second-hand.
+-- `attach` used to write filetree's keys into neo-tree's own mapping tables
+-- after neo-tree.setup(), which made it the last word: a key a user had
+-- switched off for one source was silently overruled. filetree binds its keys
+-- itself (see the tree_attach block below) and its `?` cheatsheet lists them,
+-- so there is nothing to inject; the old entry point stays as a no-op.
 do
   package.loaded["neo-tree"] = { config = {} }
   local attach = dofile(root .. "/lua/filetree/attach.lua")
-  local cfg = { features = { trash = { enabled = true } } }
 
-  local shared = attach.mappings_for(cfg, nil)
-  local fs = attach.mappings_for(cfg, "filesystem")
-  local sym = attach.mappings_for(cfg, "document_symbols")
-
-  -- The three trash keys, by their documented defaults.
-  for _, lhs in ipairs({ "d", "U", "<leader>th" }) do
-    check(("attach: %q not in the shared window table"):format(lhs), shared[lhs] == nil)
-    check(("attach: %q reaches filesystem"):format(lhs), fs[lhs] ~= nil)
-    check(("attach: %q stays out of document_symbols"):format(lhs), sym[lhs] == nil)
-  end
-
-  -- An unrestricted feature must be unaffected: still in all three. That is
-  -- what keeps this a restriction rather than a general narrowing.
-  check("attach: node_info still shared", shared["I"] ~= nil)
-  check("attach: node_info still in document_symbols", sym["I"] ~= nil)
-
-  -- build_mappings keeps its old contract -- every key, restrictions ignored --
-  -- because docs and tooling ask it "what does filetree define", not "what
-  -- goes in this table".
-  local all = attach.build_mappings(cfg)
-  check("attach: build_mappings still lists <leader>th", all["<leader>th"] ~= nil)
-
-  -- The pre-setup path has to place them the same way: neo-tree merges the
-  -- shared table into every source itself, so a restricted key left in
-  -- `window` would reach all of them anyway.
-  local opts = attach.neotree({}, cfg)
   check(
-    "attach: neotree() keeps <leader>th out of opts.window",
-    opts.window.mappings["<leader>th"] == nil
+    "attach: no injection entry points left",
+    attach.inject == nil and attach.mappings_for == nil
   )
+  local opts = { window = { mappings = { ["<space>"] = "none" } } }
+  local before = vim.deepcopy(opts)
   check(
-    "attach: neotree() puts <leader>th in filesystem",
-    opts.filesystem ~= nil and opts.filesystem.window.mappings["<leader>th"] ~= nil
+    "attach: neotree() hands opts back untouched",
+    attach.neotree(opts) == opts and vim.deep_equal(opts, before)
   )
-  check("attach: neotree() leaves document_symbols alone", opts.document_symbols == nil)
+  check("attach: neotree(nil) still answers a table", type(attach.neotree(nil)) == "table")
   check(
-    "attach: neotree() still writes unrestricted keys to opts.window",
-    opts.window.mappings["I"] ~= nil
+    "attach: neo-tree's config was not written to",
+    vim.tbl_isempty(package.loaded["neo-tree"].config)
   )
 end
 

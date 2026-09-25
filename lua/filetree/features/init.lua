@@ -2,8 +2,8 @@
 --- Feature registry — the single source of truth mapping feature names to
 --- their module paths and categories.
 ---
---- Every site that loads a feature *by name* — the setup loop, the neo-tree
---- cheatsheet injector, and cross-feature lookups — resolves through this
+--- Every site that loads a feature *by name* — the setup loop and
+--- cross-feature lookups — resolves through this
 --- module. Feature files therefore live in
 --- category subfolders (`features/<category>/<name>/`) without any consumer
 --- hard-coding those paths: moving a feature between categories means editing

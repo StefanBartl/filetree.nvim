@@ -131,7 +131,7 @@ opened directly can route through pdfport's own backend fallback chain
 reader. Soft dependency — without pdfport.nvim installed, `.pdf` nodes
 just open with the system reader, no prompt.
 
-`pdf_open`'s default keymap (`gp`) opens directly in `default_mode` (default
+`pdf_open`'s default keymap (`go`) opens directly in `default_mode` (default
 "buffer"), no prompt. Set `default_mode = "picker"` (or bind
 `keymap_picker`) instead to get pdfport's own "open PDF as…" chooser —
 every backend/mode pdfport knows about, plus "system application", which is

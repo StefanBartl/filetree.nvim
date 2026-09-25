@@ -2,20 +2,23 @@
 ---@brief `?` cheatsheet — a paged floating window with every key and command
 ---that is active on the current tree.
 ---@description
---- Pages (`<Tab>` / `<S-Tab>` or `1`..`3` switch):
+--- Pages (`<Tab>` / `<S-Tab>` or `1`..`4` switch):
 ---   1. filetree   -- filetree.nvim's own keymaps, grouped by category
 ---   2. other keys -- every other buffer-local key on the tree buffer: the
 ---                    adapter's native ones (neo-tree, nvim-tree, ...) and the
 ---                    ones other plugins of this ecosystem add (pickers.nvim
 ---                    entry actions, pdfport, ...)
 ---   3. commands   -- the `:Filetree` sub-commands
+---   4. conflicts  -- only when two filetree actions claim the same key: which
+---                    one is live, free alternatives; `<CR>` moves one
+---                    (`util.key_conflicts`)
 ---
 --- It used to skip neo-tree, on the argument that neo-tree's native `?` is
---- already complete. It was not: that list is built from a hand-kept table
---- (`attach.lua`'s SPEC) that lagged the features, so a key filetree rebinds
---- (`D`) was listed under the native action it had replaced. This one reads
---- what is **actually bound** -- lib.nvim's keymap registry for page 1, the
---- buffer's own keymaps for page 2 -- so it cannot disagree with the keys.
+--- already complete. It was not: that list was built from a hand-kept table that
+--- lagged the features, so a key filetree rebinds (`D`) was listed under the
+--- native action it had replaced. This one reads what is **actually bound** --
+--- lib.nvim's keymap registry for page 1, the buffer's own keymaps for page 2 --
+--- so it cannot disagree with the keys.
 ---
 --- nvim-tree's `g?` rebuilds its list on a throwaway buffer and never sees keys
 --- bound outside `on_attach`; netrw's `?` is a static page; so the other
@@ -25,6 +28,7 @@
 local map = require("filetree.util.map")
 local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
+local key_conflicts = require("filetree.util.key_conflicts")
 
 local M = {}
 
@@ -45,7 +49,13 @@ M.SCHEMA = {
 ---@type Ui.Kit.Surface|nil
 local _surf = nil
 
----@type { title: string, lines: string[] }[]
+---@class FiletreeCheatsheetPage
+---@field title string
+---@field lines string[]
+---@field action? fun()   # What `<CR>` does on this page.
+---@field hint?   string  # Footer text for it.
+
+---@type FiletreeCheatsheetPage[]
 local _pages = {}
 ---@type integer
 local _page = 1
@@ -89,67 +99,6 @@ local function emit_group(lines, header, rows, widest)
   lines[#lines + 1] = ""
 end
 
----@class FiletreeCheatsheetEntry
----@field key string                 # Registry surface, "filetree/<feature>[/global]".
----@field entry Lib.Keymap.Registered
-
----@internal
----filetree's registry entries that apply to tree buffer `buf`: the ones bound
----in it, and the global ones.
----
----The registry keeps one record per registration, so it also holds the keys of
----every other tree buffer -- a neo-tree symbol outline does not get the
----filesystem tree's keys, and the cheatsheet must not claim it does. When
----nothing is recorded for `buf` at all (the cheatsheet opened from somewhere
----that is not a tree buffer) the filter is dropped rather than showing an
----empty page. Ordered by surface so the winner among two features claiming the
----same key does not depend on `pairs` order.
----@param buf integer
----@return FiletreeCheatsheetEntry[]
-local function registry_entries(buf)
-  local all = require("lib.nvim.bindings.keymap").registered()
-  local surfaces = {}
-  for key in pairs(all) do
-    if key:match("^filetree/") then surfaces[#surfaces + 1] = key end
-  end
-  table.sort(surfaces)
-
-  ---@type FiletreeCheatsheetEntry[]
-  local list = {}
-  local scoped = false
-  for _, key in ipairs(surfaces) do
-    for _, e in ipairs(all[key]) do
-      list[#list + 1] = { key = key, entry = e }
-      if e.buffer == buf then scoped = true end
-    end
-  end
-  if not scoped then return list end
-
-  local out = {}
-  for _, item in ipairs(list) do
-    local b = item.entry.buffer
-    if b == nil or b == buf then out[#out + 1] = item end
-  end
-  return out
-end
-
----@internal
----The lhs of every bound filetree entry for `buf`, in the form
----`nvim_buf_get_keymap` reports it (`<leader>` expanded, key notation
----resolved), so page 2 can tell which buffer keymaps page 1 already lists.
----@param buf integer
----@return table<string, true>
-local function registry_raw_lhs(buf)
-  local out = {}
-  for _, item in ipairs(registry_entries(buf)) do
-    local e = item.entry
-    if e.bound and e.lhs then
-      out[vim.api.nvim_replace_termcodes(e.lhs, true, true, true)] = true
-    end
-  end
-  return out
-end
-
 ---@internal
 ---A stable string for an entry's mode (a string, or a list for a multi-mode
 ---action), for de-duplicating rows.
@@ -159,17 +108,41 @@ local function mode_id(mode)
   return type(mode) == "table" and table.concat(mode, ",") or tostring(mode)
 end
 
+---@internal
+---`feature:action` of a registry entry.
+---@param surface string
+---@param e Lib.Keymap.Registered
+---@return string
+local function claim_id(surface, e)
+  return (surface:match("^filetree/([^/]+)") or "?") .. ":" .. e.name
+end
+
 ---Page 1: filetree's own keymaps, one header per category, one row per key
 ---that is actually bound right now.
 ---
 ---Read back from the registry rather than from a catalog of defaults, so a
----remapped or disabled key shows up as what it is.
+---remapped or disabled key shows up as what it is. A key two actions claim is
+---listed once, as the action that owns it, and flagged.
 ---@param buf integer
+---@param conflicts FiletreeKeyConflict[]
 ---@return string[]
-local function build_filetree_page(buf)
+local function build_filetree_page(buf, conflicts)
   local ok_reg, registry = pcall(require, "filetree.features")
   local order = (ok_reg and registry.CATEGORY_ORDER) or {}
   local cat_of = category_of()
+
+  -- lhs id -> the claim that owns it (nil when unknown), and who else wants it.
+  ---@type table<string, { active: string|nil, others: string[] }>
+  local clash = {}
+  for _, c in ipairs(conflicts) do
+    local active = c.active and (c.active.feature .. ":" .. c.active.action) or nil
+    local others = {}
+    for _, claim in ipairs(c.claims) do
+      local id = claim.feature .. ":" .. claim.action
+      if id ~= active then others[#others + 1] = claim.feature end
+    end
+    clash[mode_id(c.claims[1].mode) .. " " .. c.lhs] = { active = active, others = others }
+  end
 
   local lines = {}
   local widest = 0
@@ -179,7 +152,7 @@ local function build_filetree_page(buf)
   ---@type table<string, boolean>
   local seen = {}
 
-  for _, item in ipairs(registry_entries(buf)) do
+  for _, item in ipairs(key_conflicts.entries(buf)) do
     -- "filetree/<feature>" is tree-scoped, "filetree/<feature>/global" is bound
     -- everywhere (the tree-toggle keys); other sub-surfaces are not keymaps of
     -- their own.
@@ -187,10 +160,13 @@ local function build_filetree_page(buf)
     local global_feature = item.key:match("^filetree/([^/]+)/global$")
     local e = item.entry
     if (feature or global_feature) and e.bound and e.lhs then
-      -- One row per key, not per registration: a buffer-local preset is
-      -- registered again for every tree buffer that attaches.
       local id = mode_id(e.mode) .. " " .. e.lhs
-      if not seen[id] then
+      local c = clash[id]
+      -- One row per key, not per registration (a buffer-local preset is
+      -- registered again for every tree buffer that attaches) -- and for a key
+      -- two actions claim, the owner's row, not whichever registered first.
+      local mine = not c or c.active == nil or c.active == claim_id(item.key, e)
+      if mine and not seen[id] then
         seen[id] = true
         local cat = global_feature and "global" or cat_of[feature] or "other"
         rows_by_cat[cat] = rows_by_cat[cat] or {}
@@ -198,6 +174,9 @@ local function build_filetree_page(buf)
         -- here would repeat. Capitalized because a cheatsheet row is a
         -- sentence about the key, not a fragment of one.
         local desc = (e.desc or e.name):gsub("^filetree: ", ""):gsub("^%l", string.upper)
+        if c then
+          desc = desc .. ("  [also wanted by %s -- page 4]"):format(table.concat(c.others, ", "))
+        end
         table.insert(rows_by_cat[cat], { lhs = e.lhs, desc = desc })
         if #e.lhs > widest then widest = #e.lhs end
       end
@@ -234,6 +213,21 @@ local function unexpand_leader(lhs)
   return (lhs:gsub(" ", "<Space>"))
 end
 
+---@internal
+---Every bound filetree key of `buf`, in the one canonical raw form
+---(`key_conflicts.canon`), so page 2 can tell which buffer keymaps page 1
+---already lists.
+---@param buf integer
+---@return table<string, true>
+local function filetree_keys(buf)
+  local out = {}
+  for _, item in ipairs(key_conflicts.entries(buf)) do
+    local e = item.entry
+    if e.bound and e.lhs then out[key_conflicts.canon(e.lhs)] = true end
+  end
+  return out
+end
+
 ---Page 2: every other buffer-local normal-mode key of the tree buffer.
 ---
 ---Whatever the adapter mapped natively plus what other plugins attached
@@ -245,15 +239,18 @@ local function build_other_page(buf)
   local lines = {}
   if not vim.api.nvim_buf_is_valid(buf) then return { " (no tree buffer)" } end
 
-  local ours = registry_raw_lhs(buf)
+  local ours = filetree_keys(buf)
   ---@type FiletreeCheatsheetRow[]
   local rows = {}
   local widest = 0
   for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf, "n")) do
     -- `<Plug>` targets and `<SNR>` internals are plumbing, and a key filetree
     -- itself bound is page 1's row (the registry is the better label).
-    local raw = m.lhsraw or m.lhs
-    if not ours[raw] and not m.lhs:match("^<Plug>") and not m.lhs:match("^<SNR>") then
+    if
+      not ours[key_conflicts.canon_live(m)]
+      and not m.lhs:match("^<Plug>")
+      and not m.lhs:match("^<SNR>")
+    then
       local desc = m.desc
       if not desc or desc == "" then
         if m.callback then
@@ -302,16 +299,56 @@ local function build_commands_page()
   return lines
 end
 
+---Page 4: keys two actions claim, the live one marked, free alternatives for
+---each. Only built when there is something to say.
+---@param buf integer
+---@param conflicts FiletreeKeyConflict[]
+---@return string[]
+local function build_conflicts_page(buf, conflicts)
+  local lines = {}
+  for _, c in ipairs(conflicts) do
+    lines[#lines + 1] = (" %s  is claimed by %d actions"):format(c.lhs, #c.claims)
+    for _, claim in ipairs(c.claims) do
+      local live = c.active
+        and c.active.feature == claim.feature
+        and c.active.action == claim.action
+      local alternatives = key_conflicts.suggest(buf, claim, 4)
+      lines[#lines + 1] = ("   %s %s   move to: %s"):format(
+        live and "*" or "-",
+        key_conflicts.label(claim, nil),
+        table.concat(alternatives, "  ")
+      )
+    end
+    lines[#lines + 1] = ""
+  end
+  lines[#lines + 1] = " * is the action the key does right now; the other cannot be reached by it."
+  return lines
+end
+
 ---@internal
 ---Build every page for the given tree buffer.
 ---@param buf integer
----@return { title: string, lines: string[] }[]
+---@return FiletreeCheatsheetPage[]
 local function build_pages(buf)
-  return {
-    { title = "filetree", lines = build_filetree_page(buf) },
+  local conflicts = key_conflicts.find(buf)
+  ---@type FiletreeCheatsheetPage[]
+  local pages = {
+    { title = "filetree", lines = build_filetree_page(buf, conflicts) },
     { title = "other keys", lines = build_other_page(buf) },
     { title = "commands", lines = build_commands_page() },
   }
+  if #conflicts > 0 then
+    pages[#pages + 1] = {
+      title = "conflicts",
+      lines = build_conflicts_page(buf, conflicts),
+      hint = "<CR> move a key",
+      action = function()
+        close_win()
+        key_conflicts.resolve(buf)
+      end,
+    }
+  end
+  return pages
 end
 
 ---@internal
@@ -326,11 +363,13 @@ local function render(height)
     tabs[#tabs + 1] = string.format(i == _page and "[%d %s]" or " %d %s ", i, p.title)
   end
   local lines = { " " .. table.concat(tabs, " "), "" }
-  local body = _pages[_page].lines
+  local page = _pages[_page]
   for i = 1, height do
-    lines[#lines + 1] = body[i] or ""
+    lines[#lines + 1] = page.lines[i] or ""
   end
-  lines[#lines + 1] = " <Tab>/<S-Tab> page   q / <Esc> close"
+  lines[#lines + 1] = " <Tab>/<S-Tab> page   "
+    .. (page.hint and (page.hint .. "   ") or "")
+    .. "q / <Esc> close"
   return lines
 end
 
@@ -389,6 +428,11 @@ function M.show()
       turn(i - _page, body_h)
     end, opts)
   end
+  -- The page decides what <CR> does (only the conflicts page has an action).
+  map("n", "<CR>", function()
+    local page = _pages[_page]
+    if page and page.action then page.action() end
+  end, opts)
 
   -- kit.viewer's own nice_quit only binds q/<Esc>; also close on a second
   -- press of the toggle key itself (e.g. a second `?`).
