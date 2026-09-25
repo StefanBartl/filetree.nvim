@@ -450,29 +450,6 @@ for name, info in pairs(registry.FEATURES) do
   end
 end
 
--- `attach.lua` declares the keymap fields of the `?` cheatsheet a second time,
--- outside the feature modules; a field it reads must be in that feature's SCHEMA
--- or the schema drops the very option the cheatsheet looks up.
-do
-  local text = read_file(root .. "/lua/filetree/attach.lua")
-  local feature, checked, missing = nil, 0, {}
-  for line in (text .. "\n"):gmatch("(.-)\n") do
-    feature = line:match("^  ([%a_]+) = {$") or feature
-    local field = line:match('field = "([%w_]+)"')
-    if field and feature then
-      checked = checked + 1
-      local fields = schema.for_feature(feature)
-      if not (fields and fields[field]) then missing[#missing + 1] = feature .. "." .. field end
-    end
-  end
-  check("attach.lua SPEC: at least one field was read", checked > 0)
-  check(
-    "attach.lua SPEC: every cheatsheet field is in its feature's SCHEMA",
-    #missing == 0,
-    table.concat(missing, ", ")
-  )
-end
-
 print(("\nfiletree.nvim config_schema: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")

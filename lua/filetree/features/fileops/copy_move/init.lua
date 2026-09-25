@@ -17,7 +17,7 @@
 ---   x      Stage current node for cut  (or all marked)
 ---   p      Paste staged files into the directory of the current node
 ---   P      Show the current clipboard
----   <C-c>  Clear the current clipboard
+---   X      Clear the current clipboard
 ---
 --- Extmark: staged-for-copy nodes get a "C" indicator, cut nodes get "X".
 
@@ -59,7 +59,7 @@ local _cfg = {
     cut = "x",
     paste = "p",
     show = "P",
-    clear = "<C-c>",
+    clear = "X",
   },
   confirm = false,
   use_safety = true,

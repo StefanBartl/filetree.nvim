@@ -503,7 +503,7 @@
 ---@field cut    string?  Stage for cut   (default "x")
 ---@field paste  string?  Paste staged    (default "p")
 ---@field show   string?  Show clipboard  (default "P")
----@field clear  string?  Clear clipboard (default "<C-c>")
+---@field clear  string?  Clear clipboard (default "X")
 
 ---@class FiletreeCopyMoveConfig
 ---@field enabled?             boolean
@@ -663,7 +663,7 @@
 ---@class FiletreePdfOpenConfig
 ---@field enabled         boolean
 ---@field default_mode    FiletreePdfOpenMode?  Mode for `keymap_open` (default "buffer"; falls back to system viewer when pdfport.nvim is absent).
----@field keymap_open     string|false?  Open the PDF under the cursor with `default_mode` (default "gp").
+---@field keymap_open     string|false?  Open the PDF under the cursor with `default_mode` (default "go").
 ---@field keymap_text     string|false?  Force text extraction into a buffer (default false, off).
 ---@field keymap_system   string|false?  Force the OS default viewer (default false, off).
 ---@field keymap_terminal string|false?  Force pdfport's terminal mode (default false, off).

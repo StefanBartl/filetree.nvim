@@ -359,6 +359,31 @@ function M.check()
     end
   end
 
+  -- ── Key conflicts ─────────────────────────────────────────────────────────
+  -- Two actions on one key: the later `:map` wins silently and the other action
+  -- is unreachable. Read from the registry, so it sees every tree attached so far.
+  vim.health.start("filetree.nvim — key conflicts")
+  local ok_kc, key_conflicts = pcall(require, "filetree.util.key_conflicts")
+  if not ok_kc then
+    vim.health.warn("filetree.util.key_conflicts failed to load: " .. tostring(key_conflicts))
+  else
+    local conflicts = key_conflicts.find(vim.api.nvim_get_current_buf())
+    if #conflicts == 0 then
+      vim.health.ok("no key is claimed by more than one action")
+    else
+      for _, c in ipairs(conflicts) do
+        local names = {}
+        for _, claim in ipairs(c.claims) do
+          names[#names + 1] = key_conflicts.label(claim, c.active)
+        end
+        vim.health.warn(
+          ("%s is claimed by: %s"):format(c.lhs, table.concat(names, "; ")),
+          { "run :Filetree keys to move one of them, or set one of the keys in setup()" }
+        )
+      end
+    end
+  end
+
   -- ── Reference engine ──────────────────────────────────────────────────────
   -- What the engine would do on the next rename/move, and whether it has the
   -- fast path (ripgrep) available -- the single question behind "why did my

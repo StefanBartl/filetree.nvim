@@ -55,6 +55,18 @@ end
 
 local M = {}
 
+---@class FiletreeBoundFeature
+---@field spec   table                    # The registry spec, as declared.
+---@field user   table                    # The user's overrides; the very table the per-buffer binders read.
+---@field fields table<string, string>    # Action name -> the config field holding its lhs.
+
+---What each feature declared through here. Kept so a key can be moved while the
+---session runs (`override` + `rebind`): the registry records what was bound but
+---not the config field it came from, and the spec/user tables the binders close
+---over are otherwise out of reach.
+---@type table<string, FiletreeBoundFeature>
+local BOUND = {}
+
 ---@internal
 --- The user's effective lhs for one spec, normalized for the registry.
 ---
@@ -121,6 +133,19 @@ local function build(specs, cfg)
   return { order = order, actions = actions }, user
 end
 
+---@internal
+---@param feature string
+---@param spec_table table
+---@param user table
+---@param specs FiletreeBindSpec[]
+local function remember(feature, spec_table, user, specs)
+  local fields = {}
+  for _, spec in ipairs(specs) do
+    fields[spec.name] = spec.field
+  end
+  BOUND[feature] = { spec = spec_table, user = user, fields = fields }
+end
+
 ---Declare and bind one feature's keymaps.
 ---
 ---`scope` decides when: "tree" binds buffer-locally as each tree buffer
@@ -136,6 +161,7 @@ function M.bind(feature, cfg, specs, scope)
   validate("specs", specs, "table")
 
   local spec_table, user = build(specs, cfg)
+  remember(feature, spec_table, user, specs)
 
   if scope == "global" then
     return keymap.register("filetree", spec_table, user, { surface = feature })
@@ -169,7 +195,45 @@ function M.bind_buffer(feature, cfg, specs, buf)
   validate("buf", buf, "number")
 
   local spec_table, user = build(specs, cfg)
+  remember(feature, spec_table, user, specs)
   return keymap.register("filetree", spec_table, user, { buffer = buf, surface = feature })
+end
+
+---The config field an action's lhs comes from ("keymap_open", "clear", ...), or
+---nil when the action is unknown here.
+---@param feature string
+---@param action string
+---@return string|nil
+function M.field_of(feature, action)
+  local b = BOUND[feature]
+  return b and b.fields[action] or nil
+end
+
+---Point one action at another key for the rest of the session: later tree
+---buffers bind it there. Buffers that are already open keep the old key until
+---`rebind` is called for them.
+---@param feature string
+---@param action string
+---@param lhs string
+---@return boolean ok  # false when the feature or action is not known here.
+function M.override(feature, action, lhs)
+  local b = BOUND[feature]
+  if not b or not b.fields[action] or type(lhs) ~= "string" or lhs == "" then return false end
+  b.user[action] = lhs
+  return true
+end
+
+---Bind a feature's keys again on one buffer, from the (possibly overridden)
+---user table. Does not unbind anything: a key that moved has to be deleted by
+---the caller first.
+---@param feature string
+---@param buf integer
+---@return boolean ok
+function M.rebind(feature, buf)
+  local b = BOUND[feature]
+  if not b or not vim.api.nvim_buf_is_valid(buf) then return false end
+  keymap.register("filetree", b.spec, b.user, { buffer = buf, surface = feature })
+  return true
 end
 
 return M

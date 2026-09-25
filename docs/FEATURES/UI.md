@@ -175,14 +175,15 @@ override the highlight groups yourself once you know they fit.
 A paged float built from what is **actually bound** on the tree buffer, not
 from a table of defaults — so a key filetree rebinds (`D` for diff, say) is
 listed as what it does now. It works on every adapter, neo-tree included
-(it replaces neo-tree's native `?`, whose list is built from a hand-kept table
-that lags the features). `<Tab>` / `<S-Tab>` (or `1`..`3`) turn the pages:
+(it replaces neo-tree's native `?`, whose list was built from a hand-kept table
+that lagged the features). `<Tab>` / `<S-Tab>` (or `1`..`4`) turn the pages:
 
 | Page | Content |
 |------|---------|
 | 1 `filetree` | filetree.nvim's own keymaps, grouped by category, plus the global ones |
 | 2 `other keys` | every other buffer-local key: the adapter's native ones and those other plugins attach (pickers.nvim entry actions, pdfport, ...) |
 | 3 `commands` | the `:Filetree` sub-commands |
+| 4 `conflicts` | only when two actions claim one key: which one is live, free alternatives; `<CR>` moves one (`:Filetree keys`) |
 
 - **Module:** `lua/filetree/features/ui/cheatsheet/`
 

@@ -6,18 +6,15 @@
 --- and the same `neo-tree` filetype -- so "bind this key on tree buffers" binds
 --- it in all five, whether or not the feature has anything to act on there.
 ---
---- This module is the one list of exceptions, and it is one list on purpose:
---- filetree puts its keys into a tree along two entirely separate paths, and
---- before this they could disagree without anyone noticing.
+--- This module is the one list of exceptions, and it is one list on purpose.
+--- `util.tree_attach` -> `util.bind` binds the actual keys, buffer-locally, from
+--- a single `FileType neo-tree` autocmd, and asks here which sources a feature
+--- may reach. A feature restricted to `filesystem` is not bound anywhere else,
+--- and so the `?` cheatsheet (which reads what is bound) does not list it there.
 ---
----   * `util.tree_attach` -> `util.bind` binds the actual keys, buffer-locally,
----     from a single `FileType neo-tree` autocmd. This is what a keypress
----     reaches.
----   * `attach.inject` writes `window.mappings` entries so the keys appear in
----     neo-tree's `?` cheatsheet. This is what a reader sees.
----
---- Both now ask here. A feature restricted to `filesystem` is neither bound nor
---- listed anywhere else.
+--- There used to be a second path -- `attach.inject` wrote `window.mappings`
+--- entries so the keys showed up in neo-tree's own `?` help -- and the two could
+--- disagree without anyone noticing. That path is gone.
 ---
 --- A feature absent from `RESTRICTED` is unrestricted and reaches every source,
 --- which is what all of them did before this module existed. Add one only with

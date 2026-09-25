@@ -158,18 +158,20 @@ reloading.
 The command is `renamebatch`, not `rename`: `rename` is already the leaf
 command that opens the batch-rename buffer.
 
-## `gp` is shared between `cwd_mode` and the PDF bridge — know which one is live
+## Two features on one key — `:Filetree keys`
 
-`cwd_mode.lock_here` and `pdf_open.open_default` both default to the same
-key, `gp` (tree buffer). This isn't a bug — `pdf_open` ships **disabled by
-default** (`opts.features.pdf_open.enabled = false`), so out of the box
-`gp` unambiguously means "lock cwd here". The trap only appears once you
-turn `pdf_open` on for a PDF-heavy workflow: `attach.lua` binds both
-against the same lhs, and whichever feature's `setup()` runs later wins the
-mapping silently — no error, no warning, just one of the two features
-losing its key. If you're enabling `pdf_open`, remap one of the two
-explicitly (`keymap_lock_here` on `cwd_mode`, or `keymap_open` on
-`pdf_open`) rather than relying on load order to sort it out for you.
+filetree's own features never share a default key: `gp` is `cwd_mode`'s lock,
+`go` is `pdf_open`'s open, `<C-c>` clears an applied filter and `X` clears the
+copy/cut clipboard. The shipped defaults are checked for this in CI.
+
+It can still happen once you set keys yourself. Vim does not complain about a
+second `:map` on the same key — the later one silently wins and the other
+feature loses its key, so the failure is a key that quietly does nothing.
+`:Filetree keys` lists every key claimed by more than one action (the active
+one marked), recommends free alternatives, and moves the one you pick — for
+the session, and it copies the `setup()` fragment that makes it permanent. The
+`?` cheatsheet shows the same list on its **conflicts** page (`<CR>` there
+starts the same flow) and flags the row on the filetree page.
 
 `pdf_open.default_mode = "picker"` is worth knowing before you decide which of
 the two to keep: it asks which backend to open with instead of committing to

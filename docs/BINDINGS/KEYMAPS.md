@@ -90,7 +90,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `x` | copy_move | `keymaps.cut` | Stage node for cut |
 | `p` | copy_move | `keymaps.paste` | Paste staged nodes |
 | `P` | copy_move | `keymaps.show` | Show copy/cut clipboard |
-| `<C-c>` | copy_move | `keymaps.clear` | Clear copy/cut clipboard |
+| `X` | copy_move | `keymaps.clear` | Clear copy/cut clipboard |
 | `sg` | open_variants | `keymap_vsplit` | Open current node in a vertical split |
 | `sv` | open_variants | `keymap_split` | Open current node in a horizontal split |
 | `st` | open_variants | `keymap_tabnew` | Open current node in a new tab |
@@ -104,6 +104,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `w` | window_size_cycler | `keymap` | Cycle tree width through presets (normal → large → small → …). With a count N (`3w`), jumps directly to preset N instead of stepping. |
 | `<leader>fm` | open_in_fm | `keymap` | Open node directory in system file manager |
 | `i` | shell_run | `keymap` | Prompt for a shell command, run in node directory |
+| `go` | pdf_open | `keymap_open` | Open the PDF under the cursor with `default_mode` (pdfport / system reader) |
 | `gP` | pdf_create | `keymap` | Create PDF(s) from the current node/marked nodes/folder via pdfport.nvim (confirms first) |
 
 ### Visual-mode keymaps
@@ -125,7 +126,6 @@ than one keypress per line.
 |------|---------|-------|
 | `/` | `filter` + neotree fuzzy finder | neotree uses `/` for its own search. Remap `filter.keymap` if using neotree. |
 | `i` | `shell_run` + neotree built-in `i` (toggle node info) | filetree's `node_info` provides a better `I`; noop neotree's `i` via `adapter_keymaps`. |
-| `<C-c>` | `filter.keymap_clear` + `copy_move.keymaps.clear` | Both default to `<C-c>`. Last one registered wins; remap one if you need both reachable at once. |
 | `m` | `marks` + neotree built-in `m` (move) | filetree binds `m` to marking, shadowing neo-tree's own move. filetree's `M` does the same job and updates references while it's at it. |
 
 ### Keys deliberately not used
@@ -199,36 +199,29 @@ require("filetree").setup({
 
 ---
 
-## neo-tree `?` cheatsheet integration
+## The `?` cheatsheet, per-source keys, conflicts
 
-neo-tree builds its `?` help screen from its `window.mappings` config (via
-`state.resolved_mappings`) — it does **not** read the buffer's actual keymaps.
-Because filetree sets its keymaps via the central tree-attach dispatcher (after
-neo-tree's own setup), those keymaps work but would normally be invisible to `?`.
+### The cheatsheet
 
-### Automatic (default)
+`?` opens filetree's own cheatsheet on every adapter, neo-tree included (it
+replaces neo-tree's native `?`). It reads what is **actually bound** -- lib.nvim's
+keymap registry for filetree's own keys, the buffer's keymaps for everything else --
+so it cannot disagree with the keys the way a hand-kept list can. `<Tab>` /
+`<S-Tab>` (or `1`..`4`) turn the pages:
 
-You don't need to do anything. `require("filetree").setup(config)` injects the
-enabled feature keymaps into neo-tree's live config (and any open tree) after
-neo-tree is configured, so they appear in `?` with a `filetree: …` label:
+1. **filetree** -- filetree's own keys by category, plus the global ones
+2. **other keys** -- every other buffer-local key: the adapter's native ones and
+   those other plugins attach (pickers.nvim, pdfport, ...)
+3. **commands** -- the `:Filetree` sub-commands
+4. **conflicts** -- only when two actions claim one key (see below)
 
-```lua
--- filetree plugin spec — that's it
-config = function()
-  require("filetree").setup({
-    adapter = "neotree",
-    features = {
-      marks         = { enabled = true, keymap = "m" },
-      tree_traverse = { enabled = true, keymap_up = "-", keymap_down = "+" },
-      -- …
-    },
-  })
-end
-```
-
-The injection runs once when Neovim finishes starting (or immediately if filetree
-is loaded after startup), which handles the `lazy = false` ordering race where
-neo-tree's `setup()` may run before or after filetree's.
+neo-tree's native help built its list from `window.mappings`, and filetree used to
+write its keys into that table so they would appear there. That injection is gone:
+the list was hand-kept and lagged the features (a rebound `D` was shown as
+neo-tree's own action), and because it ran after neo-tree's setup it overruled a
+user's `window.mappings` for a key they had switched off in one source.
+`require("filetree").attach(opts, config)` still exists so an existing config keeps
+working, and returns `opts` untouched.
 
 ### Per-source keymaps
 
@@ -236,47 +229,39 @@ neo-tree draws its filesystem, buffer list, git status, symbol outline and
 diagnostics list through one window and one `neo-tree` filetype, so "bind this
 on tree buffers" means all five. A feature whose actions presuppose a
 filesystem node says so in
-[`lua/filetree/sources.lua`](../../lua/filetree/sources.lua), and is then
-neither bound nor listed in `?` anywhere else. Today that is `trash` (`d`, `U`,
-`<leader>th`), restricted to `filesystem`: there is nothing to trash in a symbol
-outline, and `<leader>th` in particular was shadowing whatever global binding a
-config had on that key while offering nothing in exchange.
+[`lua/filetree/sources.lua`](../../lua/filetree/sources.lua), and is then not bound
+anywhere else -- so the cheatsheet, which reads what is bound, does not list it
+there either. Today that is `trash` (`d`, `U`, `<leader>th`), restricted to
+`filesystem`: there is nothing to trash in a symbol outline, and `<leader>th` in
+particular was shadowing whatever global binding a config had on that key while
+offering nothing in exchange. An adapter without sources (nvim-tree) is unaffected:
+no source means no restriction.
 
-Both paths read that one list — the dispatcher that binds the key and the
-injection that describes it — so a key cannot be bound in a tree whose
-cheatsheet does not list it. An adapter without sources (nvim-tree) is
-unaffected: no source means no restriction.
+### Keys claimed twice
 
-Restricted keys are also kept out of the *shared* `window.mappings` table
-rather than only filtered per source. neo-tree merges that table into every
-source itself, so anything left there would arrive in all five regardless.
+filetree's own features never share a default key, and `TESTS/keys.lua` checks that
+against the keys actually bound, opt-in features included. You can still put two
+actions on one key in your config. Vim does not complain: the second `:map` wins, and
+which one is second depends on attach order, so the other action silently loses its
+key.
 
-### Explicit (optional)
-
-If you'd rather not rely on post-setup config mutation, call
-`require("filetree").attach(opts, config)` **before** `neo-tree.setup(opts)` to
-inject the same entries into the `opts` table yourself. Point both `attach` and
-`setup` at one shared config table so they can't drift:
+`:Filetree keys` (or `<CR>` on the cheatsheet's **conflicts** page) lists every such
+key, marks the action that owns it, and recommends free alternatives -- keys that are
+not mapped on the buffer or globally, not claimed by another action, and not a prefix
+of (or prefixed by) one, ranked by keeping the original's kind of key (a `<C-x>` stays a
+ctrl key, a `gx` a g-key) and by how well the letters fit what the action does. Pick
+the action to move and the new key: it moves on every open tree now and on later ones
+for the session, and the `setup()` fragment that makes it permanent is copied to the
+clipboard:
 
 ```lua
--- neo-tree plugin spec
-config = function(_, opts)
-  require("filetree").attach(opts, require("config.filetree"))
-  require("neo-tree").setup(opts)
-end
-
--- filetree plugin spec
-config = function()
-  require("filetree").setup(require("config.filetree"))
-end
+require("filetree").setup({ features = { pdf_open = { keymap_open = "go" } } })
 ```
 
 ### Notes
 
-- Integration is neo-tree-specific. For other adapters the keymaps still work but
-  won't appear in their native help; verify with `:nmap` in the tree buffer.
-- The tree-attach dispatcher always runs, so keymaps behave identically
-  regardless — the injection only adds cheatsheet visibility (and native `?`
-  multi-key sub-menu grouping for prefixes like `]m` / `[m`).
+- A key filetree binds over one of neo-tree's own (`/`, `i`, `m`, ...) is a
+  deliberate shadowing, listed under *Known conflicts* above -- not a claim by two
+  filetree actions, so it is not on the conflicts page.
 - Keys resolve from your feature config; a field set to `false` is skipped, and
   omitted fields fall back to the feature's default key.
