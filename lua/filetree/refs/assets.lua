@@ -1,6 +1,6 @@
 ---@module 'filetree.refs.assets'
 --- Classifier for the cascade-delete-assets concept — step 2 of
---- `docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md`: given the outgoing links
+--- `wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md`: given the outgoing links
 --- `filetree.refs.outgoing` found in a file that is about to be deleted,
 --- decide which of them are actually safe to offer for deletion.
 ---

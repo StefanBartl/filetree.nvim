@@ -119,7 +119,7 @@
 ---@class FiletreeRefsExperimentalConfig
 ---@field plaintext? FiletreeRefsPlaintextConfig
 
----Cascade-delete-assets (`docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md`): when
+---Cascade-delete-assets (`wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md`): when
 ---a file is deleted, detect links it holds to asset files under a configured
 ---root and offer to delete those too, once nothing else still references
 ---them — the mirror of `on_delete`/`for_delete` above (which handle the

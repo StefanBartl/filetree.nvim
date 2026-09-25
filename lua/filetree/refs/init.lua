@@ -376,7 +376,7 @@ end
 ---Outgoing links found in `path`'s own current content, resolved to absolute
 ---paths — the mirror of `for_delete` above: that one asks "who points at
 ---this file", this asks "what does this file point at". Step 1 of the
----cascade-delete-assets concept (`docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md`)
+---cascade-delete-assets concept (`wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md`)
 ---— no assets-folder/extension classifier yet, every resolved link target
 ---comes back. Call it the moment a delete is triggered, while `path` still
 ---exists (same prefetch-before-mutation discipline as `prefetch` above).
