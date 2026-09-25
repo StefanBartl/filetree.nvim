@@ -112,7 +112,7 @@ local function results_win(lines_holder)
 end
 
 local function install_kit(picker_mode)
-  state = { inputs = {}, selects = 0 }
+  state = { inputs = {}, selects = 0, opens = 0 }
   local kit = {
     input = function(opts)
       state.inputs[#state.inputs + 1] = opts
@@ -133,6 +133,17 @@ local function install_kit(picker_mode)
         end,
         slots = { results = results_win(rw), prompt = { bufnr = prompt_buf } },
       }
+      handle.move = function(delta)
+        local count = math.max(1, vim.api.nvim_buf_line_count(rw.buf))
+        local line = vim.api.nvim_win_get_cursor(rw.win)[1] + delta
+        if line < 1 then
+          line = count
+        elseif line > count then
+          line = 1
+        end
+        vim.api.nvim_win_set_cursor(rw.win, { line, 0 })
+      end
+      state.opens = state.opens + 1
       state.handle, state.opts, state.rw, state.prompt_buf = handle, opts, rw, prompt_buf
       state.type = function(query)
         q = query
@@ -269,15 +280,14 @@ do
   )
 
   -- Submitting a header must be a no-op with feedback, not a silent close.
-  local before_inputs = #state.inputs
-  notified = {}
+  local before_inputs, before_opens = #state.inputs, state.opens
   state.opts.on_submit(1)
   eq("header submit: no filename prompt opened", #state.inputs, before_inputs)
-  check(
-    "header submit: user is told it is not a template",
-    #notified == 1 and notified[1]:find("Not a template", 1, true) ~= nil,
-    vim.inspect(notified)
-  )
+  vim.wait(500, function()
+    return state.opens > before_opens
+  end)
+  eq("header submit: the picker re-opens instead of just closing", state.opens, before_opens + 1)
+  eq("header submit: the re-opened picker shows the same rows", state.lines[1], "[custom]")
 end
 
 -- ── Template FIRST, then filename pre-filled with the template's name ──────
@@ -415,6 +425,114 @@ do
     #notified == 1 and notified[1]:find("Clear the filter", 1, true) ~= nil,
     vim.inspect(notified)
   )
+end
+
+-- ── <Up>/<Down> browsing never rests on a header row ───────────────────────
+
+do
+  fresh_dir(tdir, { ["alpha.lua"] = "A", ["beta.lua"] = "B" })
+  cft.open(tmp)
+  local win, h = state.rw.win, state.handle
+  eq("browse: rows are [custom], alpha, beta, [builtin], ...", state.lines[4], "[builtin]")
+
+  vim.api.nvim_win_set_cursor(win, { 3, 0 }) -- beta, the last custom row
+  h.move(1)
+  eq(
+    "browse: <Down> from the last custom skips the [builtin] header",
+    vim.api.nvim_win_get_cursor(win)[1],
+    5
+  )
+  h.move(-1)
+  eq(
+    "browse: <Up> from the first builtin skips it backwards too",
+    vim.api.nvim_win_get_cursor(win)[1],
+    3
+  )
+
+  vim.api.nvim_win_set_cursor(win, { 2, 0 }) -- alpha, the first custom row
+  h.move(-1)
+  eq(
+    "browse: <Up> from the first template wraps past [custom] to the last row",
+    vim.api.nvim_win_get_cursor(win)[1],
+    #state.lines
+  )
+  h.move(1)
+  eq(
+    "browse: <Down> from the last row wraps past [custom] to the first template",
+    vim.api.nvim_win_get_cursor(win)[1],
+    2
+  )
+end
+
+-- ── Filename handling: subdir, whitespace, directory targets ───────────────
+
+do
+  local dest = fresh_dir(tmp .. "/dest-names", {})
+  local function submit(name)
+    cft.open(dest)
+    state.opts.on_submit(index_of(state.lines, "alpha.lua"))
+    notified = {}
+    return pcall(state.inputs[#state.inputs].on_submit, name)
+  end
+
+  local ok = submit("sub/dir/new.lua")
+  check("names: a subdirectory name does not raise", ok)
+  eq(
+    "names: the missing parent directories are created",
+    vim.fn.filereadable(dest .. "/sub/dir/new.lua"),
+    1
+  )
+
+  ok = submit("  spaced.lua  ")
+  check("names: surrounding whitespace does not raise", ok)
+  eq(
+    "names: ... and is trimmed from the created name",
+    vim.fn.filereadable(dest .. "/spaced.lua"),
+    1
+  )
+
+  local before = #vim.fn.readdir(dest)
+  ok = submit("   ")
+  check("names: whitespace-only is ignored without raising", ok)
+  eq("names: ... and creates nothing", #vim.fn.readdir(dest), before)
+
+  ok = submit("onlydir/")
+  check("names: a trailing slash does not raise", ok)
+  check(
+    "names: ... and is refused with a hint",
+    #notified == 1 and notified[1]:find("filename", 1, true) ~= nil,
+    vim.inspect(notified)
+  )
+  eq("names: ... creating no directory either", vim.fn.isdirectory(dest .. "/onlydir"), 0)
+
+  vim.fn.mkdir(dest .. "/isdir.lua", "p")
+  ok = submit("isdir.lua")
+  check("names: a directory as the destination is reported, not raised", ok)
+  check(
+    "names: ... via a 'Could not write' error",
+    #notified >= 1 and notified[#notified]:find("Could not write", 1, true) ~= nil,
+    vim.inspect(notified)
+  )
+  eq("names: ... and the directory survives", vim.fn.isdirectory(dest .. "/isdir.lua"), 1)
+end
+
+-- ── M.move must not claim success when the order file cannot be written ────
+
+do
+  fresh_dir(tdir, { ["alpha.lua"] = "A", ["beta.lua"] = "B" })
+  -- json.write stages through "<file>.tmp"; a directory squatting on that
+  -- name makes the write fail WITHOUT throwing (it returns false, err).
+  vim.fn.mkdir(tdir .. "/.order.json.tmp", "p")
+  notified = {}
+  eq("move: an unwritable order file is reported as a failed move", cft.move("alpha.lua", 1), false)
+  check(
+    "move: ... with a warning naming the cause",
+    #notified >= 1 and notified[1]:find("Could not save the template order", 1, true) ~= nil,
+    vim.inspect(notified)
+  )
+  eq("move: ... and the visible order is unchanged", names(cft.list())[1], "alpha.lua")
+  vim.fn.delete(tdir .. "/.order.json.tmp", "rf")
+  eq("move: it works again once the write can succeed", cft.move("alpha.lua", 1), true)
 end
 
 -- ── Plain (kit.select) fallback: header pick re-opens instead of closing ───

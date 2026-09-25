@@ -129,7 +129,9 @@ Press `A`, or run `:Filetree template`. Workflow, in order:
    template's content) — the file's extension and its content could
    disagree, and the buffer opened with the wrong filetype. Pre-filling from
    the template keeps them in sync by default; change the base name (or the
-   extension, deliberately) before submitting.
+   extension, deliberately) before submitting. Surrounding whitespace is
+   trimmed, a name with a subdirectory (`sub/x.lua`) creates the missing
+   parent directories, and a name ending in `/` (no filename) is refused.
 3. **Created and opened.** Variables substitute against the real
    destination, then the file is created and opened.
 
@@ -142,7 +144,9 @@ TOML, shell/PowerShell, HTML/CSS, WAT.
 picker groups the list under a `[custom]` and a `[builtin]` header instead
 of tagging every single built-in entry — repeating a `[builtin]` marker on
 every row not authored by you was pure noise once the list mixes both.
-Headers only appear when both kinds exist and are never selectable; a
+Headers only appear when both kinds exist and are never selectable
+(`<Up>`/`<Down>`/`<C-n>`/`<C-p>` step over them; a header that still gets
+submitted re-opens the picker rather than closing it); a
 directory with just built-ins (the default, before you've added any of your
 own) stays a plain list. The pickers.nvim path (`prefer = "telescope"` etc.)
 shows a flat, ungrouped list — a fuzzy-match item list has no room for

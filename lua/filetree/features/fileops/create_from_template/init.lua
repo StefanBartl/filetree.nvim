@@ -241,8 +241,8 @@ end
 ---time `save_order()` writes a fresh order over it. Not re-written if a
 ---backup already exists (an earlier corruption caught on a previous load).
 ---@internal
-local function backup_corrupt_order()
-  local path = order_file()
+---@param path string  `order_file()`, resolved once by the caller
+local function backup_corrupt_order(path)
   local backup_path = path .. ".corrupt"
   if vim.fn.filereadable(backup_path) == 1 then return end
   local ok, lines = pcall(vim.fn.readfile, path)
@@ -262,27 +262,34 @@ end
 ---@internal
 ---@return string[]
 local function load_order()
-  if vim.fn.filereadable(order_file()) == 0 then return {} end -- nothing saved yet: not an error
+  local path = order_file() -- once: every call stats template_dir()
+  if vim.fn.filereadable(path) == 0 then return {} end -- nothing saved yet: not an error
 
-  local decoded, err = json.read(order_file())
+  local decoded, err = json.read(path)
   if type(decoded) == "table" and type(decoded.order) == "table" then return decoded.order end
 
-  backup_corrupt_order()
+  backup_corrupt_order(path)
   notify.warn(
     "Template order file is unreadable or corrupt; falling back to alphabetical order (original kept at "
-      .. order_file()
+      .. path
       .. ".corrupt): "
       .. tostring(err)
   )
   return {}
 end
 
+---`json.write` reports failure through its return value (`false, err`), it
+---does not throw -- so `pcall`'s own status alone would call every failed
+---write a success, and `M.move` would then claim a reorder that never
+---reached disk.
 ---@internal
 ---@param order string[]
 ---@return boolean ok
 local function save_order(order)
-  local ok = pcall(json.write, order_file(), { order = order })
-  return ok == true
+  local ok, wrote, err = pcall(json.write, order_file(), { order = order })
+  if ok and wrote == true then return true end
+  notify.warn("Could not save the template order: " .. tostring(ok and err or wrote))
+  return false
 end
 
 -- ── Template list ─────────────────────────────────────────────────────────────
@@ -468,9 +475,17 @@ local function create_from(tmpl_path, dest_path)
     table.remove(rendered_lines)
   end
 
-  local rc = vim.fn.writefile(rendered_lines, dest_path)
-  if rc ~= 0 then
-    notify.error("Could not write: " .. dest_path)
+  -- A name typed with a subdirectory ("sub/x.lua" -- accepted by M.open)
+  -- needs its parent to exist first: writefile() does not create it.
+  local parent = vim.fn.fnamemodify(dest_path, ":h")
+  if vim.fn.isdirectory(parent) == 0 then vim.fn.mkdir(parent, "p") end
+
+  -- writefile() reports failure by THROWING (E482: missing parent, dest is a
+  -- directory, permission), not by returning non-zero -- so an unguarded call
+  -- would surface as a raw Lua error out of the input callback.
+  local ok_write, rc = pcall(vim.fn.writefile, rendered_lines, dest_path)
+  if not ok_write or rc ~= 0 then
+    notify.error("Could not write: " .. dest_path .. (ok_write and "" or (": " .. tostring(rc))))
     return false
   end
   return true
@@ -628,11 +643,15 @@ local function pick_template_reorderable(templates, on_select)
       if row and row.tmpl then
         on_select(row.tmpl)
       elseif row then
-        -- Defense in depth alongside the cursor nudge in render() above: if
-        -- a header still somehow gets submitted (a race with a render, or a
-        -- kit.picker version that lets the cursor rest on it anyway), say so
-        -- instead of doing nothing with no feedback at all.
-        notify.info("Not a template: " .. row.text)
+        -- Defense in depth alongside the cursor nudge in render() and the
+        -- header-skipping handle.move below: kit.picker's submit closes the
+        -- picker BEFORE it calls on_submit, so a header that still gets
+        -- submitted (a race with a render) would otherwise just dismiss the
+        -- picker. Re-open it instead, as pick_template_plain does. Deferred
+        -- so the closing picker's own teardown (stopinsert) has finished.
+        vim.schedule(function()
+          pick_template_reorderable(templates, on_select)
+        end)
       end
     end,
   })
@@ -641,6 +660,23 @@ local function pick_template_reorderable(templates, on_select)
     return
   end
   render(handle)
+
+  -- <C-n>/<C-p>/<Up>/<Down> all call `handle.move(delta)` through the handle
+  -- table at keypress time, so wrapping it here is what keeps the cursor from
+  -- resting on a header while browsing (render() only covers re-renders).
+  -- Keep stepping in the same direction past any header; bounded by #rows,
+  -- and every header is followed by a real row (see build_rows).
+  local raw_move = handle.move
+  handle.move = function(delta)
+    raw_move(delta)
+    local win = handle.slots.results
+    if not (win and win:is_valid()) then return end
+    for _ = 1, #rows do
+      local row = rows[vim.api.nvim_win_get_cursor(win.winid)[1]]
+      if not row or row.tmpl then return end
+      raw_move(delta)
+    end
+  end
 
   local function current_idx()
     local results = handle.slots.results
@@ -777,8 +813,16 @@ function M.open(dest_dir)
         .. "): ",
       default = tmpl.name,
       on_submit = function(name)
-        if not name or name == "" then return end
+        -- Surrounding whitespace is never intended (Windows would silently
+        -- drop a trailing space or dot from the name, so what gets created
+        -- would differ from what the "Created:" message reports).
+        name = name and vim.trim(name) or ""
+        if name == "" then return end
         name = path_u.slashify(name) -- accept "/" or "\" if creating into a subdir
+        if name:sub(-1) == "/" then
+          notify.warn("Give a filename, not just a directory: " .. name)
+          return
+        end
         local dest = dest_dir .. "/" .. name
 
         local function proceed()

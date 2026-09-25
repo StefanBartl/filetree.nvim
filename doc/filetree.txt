@@ -732,9 +732,11 @@ Fixes the old name-first flow's actual bug: typing the name first and only
 filtering the picker by its extension didn't stop a fallback pick of a
 template whose real extension didn't match (e.g. "check.md" with a C++
 template's content) — the file's extension and its content could disagree,
-opening the buffer with the wrong filetype. `${module}` and every other
-variable below resolves once both the template and the destination path are
-known.
+opening the buffer with the wrong filetype. Surrounding whitespace in the
+name is trimmed, a name with a subdirectory ("sub/x.lua") creates the
+missing parent directories, and a name ending in "/" (no filename) is
+refused. `${module}` and every other variable below resolves once both the
+template and the destination path are known.
 
 DISPLAY GROUPING ~
 
@@ -742,8 +744,10 @@ Once you've added your own templates, the builtin picker (see PICKER
 BACKEND below) groups the list under a "[custom]" and a "[builtin]" header
 instead of tagging every single built-in entry — repeating a "[builtin]"
 marker on every row not authored by you was pure noise once the list mixes
-both. Headers only appear when both kinds exist and are never selectable; a
-directory with just built-ins (the default) stays a plain list. The
+both. Headers only appear when both kinds exist and are never selectable
+(<Up>/<Down>/<C-n>/<C-p> step over them; a header that still gets submitted
+re-opens the picker rather than closing it); a directory with just
+built-ins (the default) stays a plain list. The
 pickers.nvim path (prefer = "telescope"/"fzf"/"snacks") shows a flat,
 ungrouped list instead — a fuzzy-match item list has no room for
 non-selectable header rows.
