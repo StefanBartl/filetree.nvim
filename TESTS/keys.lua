@@ -387,5 +387,99 @@ kc.resolve(tree)
 check("resolve() with nothing claimed twice asks nothing", #quiet == 0, vim.inspect(quiet))
 package.loaded["filetree.util.select"] = nil
 
+-- ── 6. Guards: a taken key, a per-buffer feature, a buffer that is not the tree ──
+
+setup_all({ copy_move = { keymaps = { clear = "<C-c>" } }, filter = { keymap_clear = "<C-c>" } })
+tree = new_tree()
+local guarded = kc.find(tree)
+check("(guards) the forced clash is back", #guarded == 1, tostring(#guarded))
+local gc = guarded[1]
+check("find() records the tree buffer the owner was found on", gc.buf == tree, tostring(gc.buf))
+
+local mover
+for _, c in ipairs(gc.claims) do
+  if c.feature == "copy_move" then mover = c end
+end
+
+-- A key that is already mapped is refused, and nothing is left half-done.
+vim.keymap.set("n", "gW", function() end, { buffer = tree, desc = "someone's key" })
+local taken_ok, taken_err = kc.apply(gc, mover, "gW")
+check(
+  "apply() refuses a key already in use",
+  taken_ok == false and (taken_err or ""):find("in use") ~= nil,
+  tostring(taken_err)
+)
+check("a refused move leaves the clash in place", #kc.find(tree) == 1)
+tree = new_tree()
+check(
+  "a refused move: later trees still bind the old key",
+  live_desc(tree, "<C-c>") ~= nil and live_desc(tree, "gW") == nil,
+  tostring(live_desc(tree, "gW"))
+)
+check("is_free() says no for a mapped key", kc.is_free(tree, "n", "<C-c>") == false)
+check("is_free() says yes for an unmapped one", kc.is_free(tree, "n", "gY") == true)
+
+-- `preview` is declared per buffer: it cannot be moved or rebound while running.
+check("can_rebind: an ordinary feature", bind.can_rebind("copy_move") == true)
+check("can_rebind: a per-buffer feature is not", bind.can_rebind("preview") == false)
+check("override() refuses a per-buffer feature", bind.override("preview", "open", "gZ") == false)
+check("rebind() refuses a per-buffer feature", bind.rebind("preview", tree) == false)
+local pv_claim =
+  { feature = "preview", action = "open", desc = "filetree: x", lhs = "<C-c>", mode = "n" }
+local pv_ok, pv_err =
+  kc.apply({ mode = "n", lhs = "<C-c>", claims = { pv_claim, mover }, buf = tree }, pv_claim, "gV")
+check(
+  "apply() refuses a claimant bound per buffer, and says why",
+  pv_ok == false and (pv_err or ""):find("per buffer") ~= nil,
+  tostring(pv_err)
+)
+check("...before touching anything", live_desc(tree, "gV") == nil)
+check("label() flags it up front", kc.label(pv_claim, nil):find("set in setup()", 1, true) ~= nil)
+check("label() leaves an ordinary one alone", kc.label(mover, nil):find("setup()", 1, true) == nil)
+
+-- Resolving from a window that is not the tree: the free keys are asked of the
+-- tree buffer the owner was found on, not of the buffer that happens to be current.
+local scratch = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_set_current_buf(scratch)
+package.loaded["filetree.util.select"] = function(items, _, on_choice)
+  on_choice(items[1], 1)
+end
+kc.resolve()
+vim.wait(200)
+vim.api.nvim_set_current_buf(tree)
+check("resolve() works from a buffer that is not the tree", #kc.find(tree) == 0)
+package.loaded["filetree.util.select"] = nil
+
+-- "other key...": a hand-typed key goes through the same guard.
+setup_all({ copy_move = { keymaps = { clear = "<C-c>" } }, filter = { keymap_clear = "<C-c>" } })
+tree = new_tree()
+vim.keymap.set("n", "gW", function() end, { buffer = tree, desc = "someone's key" })
+local kit = require("ui.kit")
+local real_input = kit.input
+local typed
+kit.input = function(o)
+  o.on_submit(typed)
+end
+local last_choice = function(items, _, on_choice)
+  on_choice(items[#items], #items)
+end
+package.loaded["filetree.util.select"] = function(items, opts, on_choice)
+  if opts.prompt:find("to:", 1, true) then
+    last_choice(items, opts, on_choice) -- "other key..."
+  else
+    on_choice(items[1], 1)
+  end
+end
+typed = "gW" -- taken
+kc.resolve(tree)
+vim.wait(200)
+check("a typed key that is taken is refused", #kc.find(tree) == 1)
+typed = "gU" -- free
+kc.resolve(tree)
+vim.wait(200)
+check("a typed key that is free moves the action", #kc.find(tree) == 0)
+kit.input = real_input
+package.loaded["filetree.util.select"] = nil
+
 print(string.format("\nkeys.lua: %d passed, %d failed", passed, failed))
 vim.cmd(failed == 0 and "qa!" or "cq!")

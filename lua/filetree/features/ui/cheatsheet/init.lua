@@ -316,7 +316,7 @@ local function build_conflicts_page(buf, conflicts)
       local live = c.active
         and c.active.feature == claim.feature
         and c.active.action == claim.action
-      local alternatives = key_conflicts.suggest(buf, claim, 4)
+      local alternatives = key_conflicts.suggest(c.buf or buf, claim, 4)
       lines[#lines + 1] = ("   %s %s   move to: %s"):format(
         live and "*" or "-",
         key_conflicts.label(claim, nil),

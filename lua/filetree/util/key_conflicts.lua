@@ -39,6 +39,7 @@ local M = {}
 ---@field lhs     string
 ---@field claims  FiletreeKeyClaim[]
 ---@field active  FiletreeKeyClaim|nil   # The claim the buffer's live map belongs to.
+---@field buf     integer|nil            # The tree buffer that map was found on: what to ask for free keys.
 
 -- ── Reading the registry ─────────────────────────────────────────────────────
 
@@ -135,7 +136,7 @@ M.canon_live = canon_live
 ---binder put on the map, so it identifies the owner exactly.
 ---@param conflict FiletreeKeyConflict
 ---@param buf integer
----@return FiletreeKeyClaim|nil
+---@return FiletreeKeyClaim|nil claim, integer|nil found_in
 local function live_owner(conflict, buf)
   local want = M.canon(conflict.lhs)
   local bufs = { buf }
@@ -147,13 +148,13 @@ local function live_owner(conflict, buf)
       for _, m in ipairs(vim.api.nvim_buf_get_keymap(b, conflict.mode)) do
         if canon_live(m) == want then
           for _, claim in ipairs(conflict.claims) do
-            if m.desc == claim.desc then return claim end
+            if m.desc == claim.desc then return claim, b end
           end
         end
       end
     end
   end
-  return nil
+  return nil, nil
 end
 
 ---Every key claimed by more than one action, in key order.
@@ -197,7 +198,7 @@ function M.find(buf)
   for _, id in ipairs(order) do
     local c = by[id]
     if #c.claims > 1 then
-      c.active = live_owner(c, buf)
+      c.active, c.buf = live_owner(c, buf)
       out[#out + 1] = c
     end
   end
@@ -403,26 +404,60 @@ function M.snippet(claim, key)
   )
 end
 
+---Whether `key` is mapped nowhere the buffer can see it: not on the buffer, not
+---globally, not claimed by another action. Exact matches only -- a key that merely
+---shares a prefix with one is allowed here (`suggest` steers clear of those, but a
+---key typed in by hand is the user's call).
+---@param buf integer
+---@param mode string
+---@param key string
+---@return boolean
+function M.is_free(buf, mode, key)
+  local want = M.canon(key)
+  for _, used in ipairs(taken(buf, mode)) do
+    if used == want then return false end
+  end
+  return true
+end
+
 ---Move `moved` off the key of `conflict` and onto `key`.
 ---
----Every open buffer whose live map at that key is `moved`'s gets the two
----features rebound: the mover at its new key, the rest of the claimants back at
----the old one (deleting the map takes the winner's binding with it). Later tree
----buffers bind the new key through `bind.override`.
+---Every open buffer whose live map at that key is one of the claims' gets the
+---claimants' features rebound: the mover at its new key, the rest back at the old
+---one (deleting the map takes the winner's binding with it). Later tree buffers
+---bind the new key through `bind.override`.
+---
+---Refused, before anything is touched, when `key` is already in use, or when a
+---claimant is bound per buffer (`preview`: its handlers close over one buffer, so
+---it cannot be rebound on another) -- set those keys in `setup()`.
 ---@param conflict FiletreeKeyConflict
 ---@param moved FiletreeKeyClaim
 ---@param key string
+---@param buf? integer  # The tree buffer to check `key` against (default: where the conflict was found).
 ---@return boolean ok, string|nil err
-function M.apply(conflict, moved, key)
+function M.apply(conflict, moved, key, buf)
   if type(key) ~= "string" or key == "" then return false, "no key given" end
   if key == conflict.lhs then return false, "that is the key it already has" end
-  if not bind.override(moved.feature, moved.action, key) then
-    return false, ("unknown action %s.%s"):format(moved.feature, moved.action)
-  end
 
   local features = { [moved.feature] = true }
   for _, c in ipairs(conflict.claims) do
     features[c.feature] = true
+  end
+  for feature in pairs(features) do
+    if not bind.can_rebind(feature) then
+      return false,
+        ("%s is bound per buffer and cannot be moved while the session runs; set its key in setup()"):format(
+          feature
+        )
+    end
+  end
+
+  buf = buf or conflict.buf or vim.api.nvim_get_current_buf()
+  if not M.is_free(buf, conflict.mode, key) then
+    return false, ("%s is already in use"):format(key)
+  end
+  if not bind.override(moved.feature, moved.action, key) then
+    return false, ("unknown action %s.%s"):format(moved.feature, moved.action)
   end
 
   local mode = conflict.mode
@@ -459,6 +494,8 @@ local function label(claim, active)
   local mark = (active and active.feature == claim.feature and active.action == claim.action)
       and "  (active)"
     or ""
+  -- A per-buffer feature cannot be moved at runtime (see `apply`); say so up front.
+  if not bind.can_rebind(claim.feature) then mark = mark .. "  (set in setup())" end
   return ("%s: %s%s"):format(claim.feature, (claim.desc:gsub("^filetree: ", "")), mark)
 end
 
@@ -476,7 +513,7 @@ function M.resolve(buf)
   end
 
   local function pick_alternative(conflict, moved)
-    local options = M.suggest(buf, moved, 8)
+    local options = M.suggest(conflict.buf or buf, moved, 8)
     options[#options + 1] = "other key..."
     select(options, {
       prompt = ("Move %s to:"):format(label(moved, nil)),
