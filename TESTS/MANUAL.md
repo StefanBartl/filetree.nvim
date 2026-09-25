@@ -79,6 +79,15 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   Needs neo-tree, nui, plenary, nvim-web-devicons and lib.nvim — same
   resolution rules as `adapter_lines.lua`, skips (exit 0) without them.
 
+- **[create_from_template.lua](create_from_template.lua)** — unit: the
+  template-first flow of `create_from_template`. `M.move` never crossing the
+  `[custom]`/`[builtin]` boundary (both ends, plus the persisted custom-then-builtin
+  order file), header rows only for mixed sets, the filename prompt pre-filled
+  with the picked template's own name (extension included), `<M-j>`/`<M-k>`
+  reordering with the cursor following the row, and the cursor nudged off header
+  rows. Runs against a `ui.kit` picker double that owns a real results window,
+  so the cursor logic is genuine; a real picker's look/feel stays manual.
+
 - **[sidebar_guard.lua](sidebar_guard.lua)** — unit: the `nav/sidebar_guard`
   feature. A window carrying a `neo-tree` filetype buffer plus a stub adapter
   and a stubbed `neo-tree.events` exercise the default redirect (a foreign

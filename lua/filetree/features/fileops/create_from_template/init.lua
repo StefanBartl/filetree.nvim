@@ -770,7 +770,11 @@ end
 function M.open(dest_dir)
   pick_template(list_templates(), function(tmpl)
     require("ui.kit").input({
-      title = "New file from " .. tmpl.name .. " (in " .. vim.fn.fnamemodify(dest_dir, ":t") .. "): ",
+      title = "New file from "
+        .. tmpl.name
+        .. " (in "
+        .. vim.fn.fnamemodify(dest_dir, ":t")
+        .. "): ",
       default = tmpl.name,
       on_submit = function(name)
         if not name or name == "" then return end
