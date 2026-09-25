@@ -57,12 +57,35 @@ Diffing two marked files against each other was listed as missing, but
 and diffs them against one another, not against the current buffer) — nothing
 to add.
 
+### Auto-clear on idle (2026-09-25)
+
+Marks used to live forever until an explicit `<leader>mc`, or until a batch
+op that *consumed* them cleared them itself (trash/move/copy_move/diff do
+this; the read-only consumers — PDF-from-marks, markdown_links, path_copy,
+copy_file_list — deliberately don't, so the same marks can feed several of
+those in a row). That is a footgun on its own: mark a batch, run one of the
+read-only actions, get pulled away, come back much later and run an
+unrelated single-node action expecting it to act on just the node under the
+cursor — trash/move/copy_move all *prefer* the marked set over the cursor
+node whenever anything is marked, so it silently acts on the long-stale
+marks instead, with no visible reason why.
+
+`marks.auto_clear_ms` (default `60000`) clears every mark after that many ms
+without genuine mark activity — toggling, mark/unmark all, a Visual-mode
+mark, jumping between marks, or opening the list — with a notify so the
+"why did that just act on everything" moment has an obvious cause. Closing
+and reopening the tree does **not** count as activity in either direction:
+it neither resets the idle clock nor clears marks by itself, only elapsed
+idle time does. Set to `0` to disable the timeout and go back to the old
+"forever until cleared" behavior.
+
 - **Module:** `lua/filetree/features/org/marks/` (`goto_mark`,
   `goto_adjacent_mark`, `mark_visual`)
 - **Keymaps:** `m`, `]m`, `[m`, `<leader>mc`, `<leader>ms`, `gm`, `]M`, `[M`,
   plus `m`/`[m` in Visual mode
 - **Config:** `marks.keymap_goto` (default `gm`), `marks.keymap_next`
-  (`]M`), `marks.keymap_prev` (`[M`)
+  (`]M`), `marks.keymap_prev` (`[M`), `marks.auto_clear_ms` (default `60000`,
+  `0` disables)
 
 ## Session
 

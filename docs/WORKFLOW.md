@@ -146,6 +146,16 @@ mark, and an out-of-range count clamps to the last one the way `G` does. A
 mark inside a collapsed directory has no line to jump to at all — if `]M`
 seems to skip one, expand first rather than assuming the mark was lost.
 
+Trash/move/copy_move all prefer the marked set over the node under the
+cursor whenever anything is marked at all — so a single-node action long
+after a batch you forgot to clear silently acts on that whole stale batch
+instead of just the node you're looking at. `marks.auto_clear_ms` (default
+60s of no mark activity — toggling, jumping between marks, opening the
+list, ...) exists specifically for this: it clears the marks on its own and
+says so, rather than leaving them armed indefinitely. Closing/reopening the
+tree does not reset that clock either way; only actual idle time does. Set
+it to `0` if you'd rather go back to "marks live until I clear them".
+
 ## Dry-run the two bulk operations before letting them run
 
 `:Filetree copymove dry-run` and `:Filetree renamebatch dry-run` toggle

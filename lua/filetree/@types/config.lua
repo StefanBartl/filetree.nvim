@@ -379,6 +379,12 @@
 ---@field keymap_unmark_all string? Unmark all files in current directory (default "[m").
 ---@field keymap_clear      string?  Clear all marks (default "<leader>mc"; not "<C-m>", which is <CR>'s byte).
 ---@field keymap_show       string?  Show floating list of marked nodes (default "<leader>ms").
+---@field keymap_goto       string?  Jump to the Nth marked node, count-prefixed (default "gm").
+---@field keymap_next       string?  Jump to the next marked node, wrapping (default "]M").
+---@field keymap_prev       string?  Jump to the previous marked node, wrapping (default "[M").
+---@field auto_clear_ms     integer? Clear all marks after this many ms without mark activity
+---                                  (toggle, mark/unmark all, visual mark, goto/next/prev, show);
+---                                  default 60000 (60s). 0 disables the timeout.
 
 -- ── diff ──────────────────────────────────────────────────────────────────────
 
