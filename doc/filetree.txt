@@ -1927,7 +1927,8 @@ telescope, fzf-lua, mini.pick, or a built-in fallback — auto-detected. `tf`
 forces pickers.nvim specifically. A telescope-only key is available through
 `keymap_telescope` (off by default). The pickers.nvim path is opt-out on both
 sides: `integrations.pickers = false` here, `filetree = { enabled = false }`
-in pickers.nvim.
+in pickers.nvim. `integrations.ui_menu = false` keeps ui.nvim's right-click
+menu from offering "Open/Close filetree" in ordinary buffers.
 
 Keymaps: f tf
 

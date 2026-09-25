@@ -278,6 +278,7 @@ require("filetree").setup({
   -- soft: an absent plugin is never an error. See "pickers.nvim integration".
   integrations = {
     pickers = true,   -- false keeps find_files / grep_in_dir off pickers.nvim
+    ui_menu = true,   -- false keeps ui.nvim's right-click menu from offering "Open/Close filetree"
   },
 })
 ```
@@ -305,6 +306,18 @@ since they asked for it explicitly.
 ```lua
 require("filetree").setup({ integrations = { pickers = false } })
 require("pickers").setup({ filetree = { enabled = false } })  -- the other end
+```
+
+## ui.nvim right-click menu
+
+ui.nvim's `ui.menu` offers one row, "Open filetree" / "Close filetree", from any
+ordinary buffer. It asks `require("filetree.integrations.menu").enabled()`
+first: `false` when `integrations.ui_menu = false` or `menu.enable = false`.
+`items()` / `submenu()` / `window_entry()` keep working for any other host either
+way.
+
+```lua
+require("filetree").setup({ integrations = { ui_menu = false } })
 ```
 
 ## Adapters

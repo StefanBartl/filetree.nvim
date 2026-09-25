@@ -86,6 +86,7 @@ local KNOWN_MENU = {
 ---@type table<string, boolean>
 local KNOWN_INTEGRATIONS = {
   pickers = true,
+  ui_menu = true,
 }
 
 local describe_unknown = schema.describe_unknown

@@ -54,6 +54,7 @@
 
 ---@class FiletreeIntegrationsConfig
 ---@field pickers? boolean  Let find_files / grep_in_dir (and `tf`/`tg`) run through pickers.nvim when it is installed (default true). pickers.nvim has the matching switch `filetree = { enabled = false }`.
+---@field ui_menu? boolean  Let ui.nvim's right-click menu (`ui.menu`) offer the "Open/Close filetree" row in ordinary buffers (default true). `filetree.integrations.menu` stays available to any other host.
 
 --- What `require("filetree").setup({})` accepts: any subset of the above.
 ---@class FiletreeOpts
