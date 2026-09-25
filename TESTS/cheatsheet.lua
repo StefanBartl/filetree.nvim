@@ -102,41 +102,65 @@ check("`2` jumps to page 2", body():find("%[2 other keys%]") ~= nil)
 cheatsheet.close()
 check("close() closes the float", vim.api.nvim_get_current_buf() == tree)
 
--- ── pickers bridge: soft dependency ──────────────────────────────────────────
+-- -- pickers bridge: soft dependency, opt-out on both sides ---------------------
 
-package.loaded["pickers.engines"] = nil
+local cfg_mod = require("filetree.config")
 local bridge = require("filetree.util.pickers")
-local has_pickers = pcall(require, "pickers.actions.files")
+package.loaded["pickers.integrations.filetree"] = nil
+local has_pickers = pcall(require, "pickers.integrations.filetree")
 if not has_pickers then
   check("bridge answers false without pickers.nvim", bridge.files(root) == false)
   check("bridge grep answers false without pickers.nvim", bridge.grep(root) == false)
+  check("available() is false without pickers.nvim", bridge.available() == false)
 end
 
--- With stand-ins for pickers.nvim the bridge hands over the directory as the
--- one root, and the extra rg flags for grep.
+-- A stand-in for pickers.nvim's own bridge: the directory arrives as given,
+-- the query and the extra rg flags in the opts table.
 local seen = {}
-package.loaded["pickers.engines"] = {
-  load = function()
-    return { name = "stub" }
+local remote_on = true
+package.loaded["pickers.integrations.filetree"] = {
+  available = function()
+    return remote_on
+  end,
+  files = function(dir, opts)
+    seen.files = { dir = dir, opts = opts }
+    return remote_on
+  end,
+  grep = function(dir, opts)
+    seen.grep = { dir = dir, opts = opts }
+    return remote_on
   end,
 }
-package.loaded["pickers.actions.files"] = {
-  run = function(source, eng)
-    seen.files = { source = source, eng = eng }
-  end,
-}
-package.loaded["pickers.actions.grep"] = {
-  run = function(source, eng, extra)
-    seen.grep = { source = source, eng = eng, extra = extra }
-  end,
-}
-check("available() with stand-ins", bridge.available() == true)
+cfg_mod.setup({})
+check("integrations.pickers defaults to true", cfg_mod.get().integrations.pickers == true)
+check("available() with the bridge present", bridge.available() == true)
 check("files() reports handled", bridge.files("/x/proj", "foo") == true)
-check("files() root is the dir", vim.deep_equal(seen.files.source.roots, { "/x/proj" }))
-check("files() seeds the query", seen.files.source.query == "foo")
-check("files() prompt names the dir", seen.files.source.prompt:find("proj", 1, true) ~= nil)
+check(
+  "files() hands over the dir and query",
+  seen.files.dir == "/x/proj" and seen.files.opts.query == "foo"
+)
 check("grep() reports handled", bridge.grep("/x/proj", nil, { "--glob=!x" }) == true)
-check("grep() forwards extra args", vim.deep_equal(seen.grep.extra, { "--glob=!x" }))
+check("grep() forwards extra args", vim.deep_equal(seen.grep.opts.extra_args, { "--glob=!x" }))
+
+-- pickers.nvim's side switched off: it answers false, and so does the bridge.
+remote_on = false
+check("pickers.nvim opt-out: files() answers false", bridge.files("/x") == false)
+check("pickers.nvim opt-out: available() is false", bridge.available() == false)
+remote_on = true
+
+-- filetree's side switched off: pickers.nvim is not even asked.
+seen = {}
+cfg_mod.setup({ integrations = { pickers = false } })
+check("integrations.pickers = false is kept", cfg_mod.get().integrations.pickers == false)
+check("filetree opt-out: files() answers false", bridge.files("/x") == false)
+check("filetree opt-out: grep() answers false", bridge.grep("/x") == false)
+check("filetree opt-out: pickers.nvim is never called", seen.files == nil and seen.grep == nil)
+
+-- A wrongly typed / unknown option is dropped with an issue, default kept.
+cfg_mod.setup({ integrations = { pickers = "no", nope = true } })
+check("bad integrations value: default applies", cfg_mod.get().integrations.pickers == true)
+check("bad integrations value: reported", #cfg_mod.issues() == 2, vim.inspect(cfg_mod.issues()))
+cfg_mod.setup({})
 
 print(string.format("\ncheatsheet.lua: %d passed, %d failed", passed, failed))
 vim.cmd(failed == 0 and "qa!" or "cq!")

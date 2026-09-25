@@ -47,7 +47,9 @@ duplicating it.
 `f` finds files via whichever picker is available — pickers.nvim first, then
 telescope, fzf-lua, mini.pick, or a built-in fallback — auto-detected. `tf`
 forces pickers.nvim specifically. A telescope-only key is available through
-`keymap_telescope` (off by default).
+`keymap_telescope` (off by default). The pickers.nvim path is opt-out on both
+sides: `integrations.pickers = false` here, `filetree = { enabled = false }`
+in pickers.nvim; see [pickers.nvim integration](../configuration.md#pickersnvim-integration).
 
 - **Module:** `lua/filetree/features/search/find_files/`
 - **Keymaps:** `f` (auto), `tf` (force pickers.nvim)

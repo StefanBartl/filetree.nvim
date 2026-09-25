@@ -45,11 +45,15 @@
 ---@field autocmds          table<string,false>?             Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
 ---@field ignore_list       boolean|string[]                 true (default) = hide common dirs (.git, node_modules...); false = show all; string[] = custom list.
 ---@field menu              FiletreeMenuConfig               nvzone/menu integration entries (group-level opt-out; entries provided by filetree.integrations.menu).
+---@field integrations      FiletreeIntegrationsConfig       Sister-plugin integrations (all opt-out, all soft).
 ---@field confirmations     boolean|FiletreeConfirmationsConfig|nil  Confirmable actions: paste/rename_batch default to *no* prompt, delete defaults to *prompt*. true/false applies to all three at once; a table applies per action, e.g. { delete = false } to opt out of just the delete prompt. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
 ---@field deps_popup        boolean                          Show the lib.nvim.deps "declared tools" popup once, ever, on first setup() after install (default true; needs lib.nvim.deps -- a no-op without it).
 ---@field refs              FiletreeRefsConfig               Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style    Lib.Progress.Style               Style for batch-operation progress indicators (trash, paste, ...): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress -- a no-op without it.
 ---@field max_visible_nodes integer                          Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
+
+---@class FiletreeIntegrationsConfig
+---@field pickers? boolean  Let find_files / grep_in_dir (and `tf`/`tg`) run through pickers.nvim when it is installed (default true). pickers.nvim has the matching switch `filetree = { enabled = false }`.
 
 --- What `require("filetree").setup({})` accepts: any subset of the above.
 ---@class FiletreeOpts
@@ -62,6 +66,7 @@
 ---@field autocmds          table<string,false>?             Disable per-feature autocmds: { auto_reveal = false }. Sets feature.autocmds_enabled = false.
 ---@field ignore_list       boolean|string[]|nil             true (default) = hide common dirs (.git, node_modules…); false = show all; string[] = custom list.
 ---@field menu              FiletreeMenuConfig?              nvzone/menu integration entries (group-level opt-out; entries provided by filetree.integrations.menu).
+---@field integrations?    FiletreeIntegrationsConfig       Sister-plugin integrations (all opt-out, all soft).
 ---@field confirmations     boolean|FiletreeConfirmationsConfig|nil  Confirmable actions: paste/rename_batch default to *no* prompt, delete defaults to *prompt*. true/false applies to all three at once; a table applies per action, e.g. { delete = false } to opt out of just the delete prompt. A feature's own `features.<name>.confirm` (if explicitly set) always wins over this.
 ---@field deps_popup        boolean?                         Show the lib.nvim.deps "declared tools" popup once, ever, on first setup() after install (default true; needs lib.nvim.deps — a no-op without it).
 ---@field refs              FiletreeRefsConfig?              Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
