@@ -823,6 +823,13 @@ function M.setup(cfg)
   end
 end
 
+---The primary command name registered by the last M.setup() ("Filetree" unless
+---the user renamed it), for display in docs and the cheatsheet.
+---@return string
+function M.command_name()
+  return _registered_commands[1] or "Filetree"
+end
+
 ---Unregister every :Filetree/:Ft command variant registered by the last M.setup().
 function M.teardown()
   for _, cmd_name in ipairs(_registered_commands) do

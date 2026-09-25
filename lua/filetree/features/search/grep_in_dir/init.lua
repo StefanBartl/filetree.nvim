@@ -2,15 +2,17 @@
 --- Grep/ripgrep in the directory of the current tree node.
 ---
 --- Detects available backends in order:
----   1. telescope.nvim  live_grep / grep_string
----   2. fzf-lua         live_grep / grep
----   3. vim.fn.system   ripgrep → grep fallback → quickfix list
+---   1. pickers.nvim   live grep (picks its own engine)
+---   2. telescope.nvim  live_grep / grep_string
+---   3. fzf-lua         live_grep / grep
+---   4. vim.fn.system   ripgrep → grep fallback → quickfix list
 ---
 --- The search root is the directory of the node under the cursor (or cwd).
 --- After selection the file is opened and the match line is jumped to.
 ---
 --- Keymaps (in tree buffer, default):
 ---   gr  grep with prompt
+---   tg  grep via pickers.nvim specifically
 --- (keymap_cword, "grep word under cursor", has no default keymap — set one
 --- explicitly via config if wanted.)
 ---
@@ -38,8 +40,9 @@ local _cfg = {
   enabled = false,
   keymap = "gr",
   keymap_cword = nil,
-  keymap_telescope = "tg",
-  prefer = "auto", -- "auto"|"telescope"|"fzf-lua"|"builtin"
+  keymap_pickers = "tg",
+  keymap_telescope = nil,
+  prefer = "auto", -- "auto"|"pickers"|"telescope"|"fzf-lua"|"builtin"
   hidden = false,
   extra_args = {},
 }
@@ -51,8 +54,9 @@ local _cfg = {
 M.SCHEMA = {
   keymap = "keymap",
   keymap_cword = "keymap",
+  keymap_pickers = "keymap",
   keymap_telescope = "keymap",
-  prefer = { "string", enum = { "auto", "telescope", "fzf-lua", "builtin" } },
+  prefer = { "string", enum = { "auto", "pickers", "telescope", "fzf-lua", "builtin" } },
   hidden = "boolean",
   extra_args = { "table", of = "string" },
 }
@@ -78,6 +82,15 @@ local function get_dir()
 end
 
 -- ── Backends ──────────────────────────────────────────────────────────────────
+
+---@internal
+---Grep via pickers.nvim. Returns false when it is not installed.
+---@param dir string
+---@param pattern string?
+---@return boolean handled
+local function via_pickers(dir, pattern)
+  return require("filetree.util.pickers").grep(dir, pattern, _cfg.extra_args)
+end
 
 ---@internal
 ---Grep via telescope.nvim. Returns false when telescope isn't installed.
@@ -244,6 +257,10 @@ function M.grep(dir, pattern)
   dir = dir or get_dir()
   local prefer = _cfg.prefer or "auto"
 
+  if prefer == "pickers" then
+    via_pickers(dir, pattern)
+    return
+  end
   if prefer == "telescope" then
     via_telescope(dir, pattern)
     return
@@ -257,7 +274,11 @@ function M.grep(dir, pattern)
     return
   end
 
-  if not via_telescope(dir, pattern) and not via_fzflua(dir, pattern) then
+  if
+    not via_pickers(dir, pattern)
+    and not via_telescope(dir, pattern)
+    and not via_fzflua(dir, pattern)
+  then
     via_builtin(dir, pattern)
   end
 end
@@ -265,6 +286,14 @@ end
 ---Grep the word under the cursor in the current node's directory.
 function M.grep_cword()
   M.grep(get_dir(), vim.fn.expand("<cword>"))
+end
+
+---Force pickers.nvim specifically, regardless of the configured `prefer` backend.
+---@param dir?     string
+---@param pattern? string
+function M.grep_pickers(dir, pattern)
+  dir = dir or get_dir()
+  if not via_pickers(dir, pattern) then notify.warn("pickers.nvim not available") end
 end
 
 ---Force telescope specifically, regardless of the configured `prefer` backend.
@@ -291,6 +320,12 @@ function M.setup(config, adapter)
       field = "keymap_cword",
       rhs = M.grep_cword,
       desc = "grep cword in node directory",
+    },
+    {
+      name = "grep_pickers",
+      field = "keymap_pickers",
+      rhs = M.grep_pickers,
+      desc = "grep via pickers.nvim specifically",
     },
     {
       name = "grep_telescope",

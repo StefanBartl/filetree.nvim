@@ -4952,8 +4952,8 @@ do
     float_win == nil or not vim.api.nvim_win_is_valid(float_win)
   )
 
-  -- neotree: must NOT bind '?' (native help already covers it) and must not
-  -- error even though the neotree adapter module isn't actually loadable here.
+  -- neotree: binds '?' like every other adapter (its native help is built from
+  -- a hand-kept table that lags the features) and must not error even though the neotree adapter module isn't actually loadable here.
   local neotree_stub = setmetatable({
     name = "neotree",
     filetypes = { "neo-tree" },
@@ -4987,7 +4987,7 @@ do
   for _, m in ipairs(vim.api.nvim_buf_get_keymap(buf2, "n")) do
     if m.lhs == "?" then has_q = true end
   end
-  check("cheatsheet: does NOT bind '?' on the neotree adapter", not has_q)
+  check("cheatsheet: binds '?' on the neotree adapter too (replaces its stale native help)", has_q)
 
   -- filetypes missing/wrong-shaped (catch-all __index stub) must not error.
   local no_filetypes_stub = setmetatable({
