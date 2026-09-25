@@ -695,6 +695,18 @@ local function run_neotree_filter_race_check()
   vim.fn.writefile({ "bbb" }, work .. "/dirB/yankee.lua")
   vim.cmd("cd " .. vim.fn.fnameescape(work))
 
+  -- Start from one tab and no tree. Earlier phases of this file leave trees
+  -- open on other tabs and other projects, and the filter feature (like
+  -- `mgr.get_state()` below) resolves "the tree" through the CURRENT tab: with a
+  -- stale tab state in play the fixture is rendered by one state while the
+  -- feature drives another, and the baseline check reads a tree that is not the
+  -- one on screen. It only showed up as a coin flip once startup timing shifted.
+  pcall(vim.cmd, "tabonly")
+  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
+  vim.wait(300, function()
+    return false
+  end, 20)
+
   require("filetree").setup({
     adapter = "neotree",
     -- auto_reveal disabled -- see `run_neotree_multitab_redraw_check`'s
@@ -741,17 +753,6 @@ local function run_neotree_filter_race_check()
   )
   if not (dirA_native and dirB_native) then return end
 
-  -- Expand both dirs before any search -- this is the baseline the whole
-  -- race is about preserving.
-  for _, p in ipairs({ dirA_native, dirB_native }) do
-    local node = state.tree:get_node(p)
-    if node then node:expand() end
-  end
-  renderer.redraw(state)
-  vim.wait(300, function()
-    return false
-  end, 20)
-
   local function expanded_set()
     local set = {}
     for _, id in ipairs(renderer.get_expanded_nodes(state.tree)) do
@@ -760,6 +761,26 @@ local function run_neotree_filter_race_check()
     return set
   end
   local dirA, dirB = slash(dirA_native), slash(dirB_native)
+
+  -- Expand both dirs before any search -- this is the baseline the whole
+  -- race is about preserving. neo-tree loads a directory's children with an
+  -- asynchronous fs scan and rebuilds `state.tree` when it lands, which can
+  -- swallow an `expand()` made in between; a fixed sleep after one attempt is
+  -- therefore a coin flip on a loaded machine (it was stable until startup work
+  -- elsewhere shifted the timing). Expand again until both are seen open,
+  -- bounded, and only then read the baseline.
+  vim.wait(4000, function()
+    for _, p in ipairs({ dirA_native, dirB_native }) do
+      local node = state.tree:get_node(p)
+      if node then node:expand() end
+    end
+    renderer.redraw(state)
+    local set = expanded_set()
+    return (set[dirA] and set[dirB]) or false
+  end, 200)
+  vim.wait(300, function()
+    return false
+  end, 20)
 
   local before = expanded_set()
   check(
