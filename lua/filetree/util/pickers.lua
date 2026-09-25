@@ -50,11 +50,12 @@ end
 ---Find files under `dir`.
 ---@param dir string
 ---@param query? string  Seeds the prompt.
+---@param on_select? fun(path: string)  Called with the picked file's absolute path once pickers.nvim opened it (an older pickers.nvim ignores it).
 ---@return boolean handled
-function M.files(dir, query)
+function M.files(dir, query, on_select)
   local b = bridge()
   if not b then return false end
-  return b.files(dir, { query = query }) == true
+  return b.files(dir, { query = query, on_select = on_select }) == true
 end
 
 ---Live grep under `dir`.

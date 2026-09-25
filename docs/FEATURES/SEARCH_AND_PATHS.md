@@ -51,6 +51,10 @@ forces pickers.nvim specifically. A telescope-only key is available through
 sides: `integrations.pickers = false` here, `filetree = { enabled = false }`
 in pickers.nvim; see [pickers.nvim integration](../configuration.md#pickersnvim-integration).
 
+With `reveal_on_open` (default on) the picked file is revealed in the tree, also when
+the pick went through pickers.nvim (needs a pickers.nvim that ships the `on_select`
+hook; an older one just opens the file).
+
 - **Module:** `lua/filetree/features/search/find_files/`
 - **Keymaps:** `f` (auto), `tf` (force pickers.nvim)
 
