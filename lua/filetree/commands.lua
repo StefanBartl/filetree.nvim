@@ -723,6 +723,23 @@ local function build_routes()
   }
 
   routes[#routes + 1] = {
+    path = { "wholocks" },
+    args = { { name = "path", type = "PATH", optional = true } },
+    desc = "Diagnose who is holding a file open (Windows EBUSY/EPERM); --json for structured output",
+    run = function(ctx)
+      local as_json = false
+      for _, t in ipairs(ctx.rest) do
+        if t == "--json" then as_json = true end
+      end
+      local path = ctx.args.path
+      if path == "--json" then
+        path, as_json = nil, true
+      end
+      require("filetree.features.infra.who_locks").run(path, as_json)
+    end,
+  }
+
+  routes[#routes + 1] = {
     path = { "cwd", "mode" },
     args = {
       {
