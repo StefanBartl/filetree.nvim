@@ -26,7 +26,7 @@
 --- offered to mark REF!) and outgoing asset links (files the one being
 --- deleted points at, under a configured assets folder — offered for
 --- cascade-deletion when nothing else still references them; see
---- docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md). Neither exists for a
+--- wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md). Neither exists for a
 --- multi-item "delete all at once" batch, same as before this feature.
 ---
 --- That makes a delete two mutations, so `U` undoes two: the incoming-ref
@@ -55,7 +55,7 @@ local refs_picker = require("filetree.util.refs_picker")
 -- References that would dangle once the file is gone (markdown links only —
 -- see refs.for_delete), AND assets the file itself links out to that would be
 -- orphaned by its deletion (refs.outgoing_assets — see
--- docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md). This feature decides what to
+-- wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md). This feature decides what to
 -- do with both before the delete happens.
 local refs = require("filetree.refs")
 -- Optional: progress indicator for a multi-item batch (no other feedback

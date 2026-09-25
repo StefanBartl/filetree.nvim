@@ -2284,7 +2284,7 @@ end
 
 -- ── trash: cascade-delete-assets — orphaned asset offered and deleted ───────
 -- Step 3 of the cascade-delete-assets concept
--- (docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md): a markdown file that links
+-- (wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md): a markdown file that links
 -- to an image under assets/ which nothing else references has no INCOMING
 -- refs of its own, so this must still trigger the chooser (asset-only, no
 -- "Inspect first" branch) and, on confirm, cascade-delete the asset too.

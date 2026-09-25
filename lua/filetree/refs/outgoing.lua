@@ -4,7 +4,7 @@
 --- asks "who points at this file"; this asks "what does this file point at").
 ---
 --- Step 1 of the cascade-delete-assets concept
---- (`docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md`): read the file's own
+--- (`wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md`): read the file's own
 --- content *before* it is deleted — same prefetch-before-mutation discipline
 --- as the rest of the engine, call this the moment the delete is triggered,
 --- while the path still exists — and return every resolved link target,

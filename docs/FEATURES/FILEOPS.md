@@ -326,7 +326,7 @@ stack — are reported instead of silently skipped, since those stay broken.
 
 The opposite direction of the same delete: `refs.outgoing_assets` looks at
 what the file *about to be deleted* itself links out to (via
-`docs/ROADMAP/IDEAS/Cascade_Delete_Assets.md`) and offers to delete those
+`wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md`) and offers to delete those
 targets too, once nothing else still references them — a markdown note
 linking to `assets/shot.png` deletes the screenshot along with the note
 instead of leaving it orphaned. Three checks gate every candidate: it must
