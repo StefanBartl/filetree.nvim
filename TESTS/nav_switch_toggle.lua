@@ -5,7 +5,8 @@
 -- nav_switch_toggle.lua — headless tests for the two features that came out
 -- of a host's neo-tree config: `source_switcher` (pick / cycle / display
 -- names for neo-tree's sources) and `tree_toggle` (position-aware global
--- toggle keys), plus the neo-tree adapter's E95 self-heal in `toggle_at`.
+-- toggle keys), plus the neo-tree adapter's E95 self-heal in `toggle_at` and
+-- the bookkeeping of its `renderer.redraw` hook install.
 --
 -- neo-tree itself is stubbed at `neo-tree` / `neo-tree.command`, so what is
 -- asserted is what the features hand neo-tree and how they react to what it
@@ -333,6 +334,63 @@ do
   fail_next = nil
   check("both attempts failing returns false", ok_twice == false)
   eq("...after exactly one retry", #executed, 2)
+end
+
+-- ── redraw-hook install: a failed wrap must not read as "installed" ─────────
+-- `install_redraw_hook` used to mark `renderer` as wrapped BEFORE it wrapped
+-- anything. With `renderer.redraw` not (yet) a function the wrap failed, but
+-- the mark stayed -- so the retry loop's next attempt saw "already wrapped",
+-- reported success, and `on_render` subscribers were never notified.
+do
+  local renderer = { redraw = "not a function yet" }
+  package.loaded["neo-tree.ui.renderer"] = renderer
+  package.loaded["neo-tree.events"] = {
+    AFTER_RENDER = "after_render",
+    subscribe = function() end,
+    unsubscribe = function() end,
+  }
+  package.loaded["filetree.adapter.neotree"] = nil
+  local nt = require("filetree.adapter.neotree") -- load-time hoist attempts (and fails) the wrap
+
+  eq("hook: a failed wrap leaves no 'wrapped' mark behind", renderer._filetree_notify_redraw, nil)
+
+  local real_calls = 0
+  renderer.redraw = function()
+    real_calls = real_calls + 1
+    return "result"
+  end
+  local seen = {}
+  local unsubscribe = nt.on_render(function(bufnr)
+    seen[#seen + 1] = bufnr == nil and "nil" or bufnr
+  end)
+
+  eq(
+    "hook: once redraw is a function, the retry really wraps it",
+    type(renderer.redraw),
+    "function"
+  )
+  check("hook: ... marking the renderer only now", renderer._filetree_notify_redraw ~= nil)
+  eq("hook: the wrapper forwards the original's result", renderer.redraw({}), "result")
+  eq("hook: ... after running the original redraw", real_calls, 1)
+  eq("hook: ... and notifies the subscriber (nil bufnr: no live window)", seen[1], "nil")
+
+  -- A second install (hot reload, setup() re-run) repoints, never re-wraps.
+  local wrapped = renderer.redraw
+  package.loaded["filetree.adapter.neotree"] = nil
+  local nt2 = require("filetree.adapter.neotree")
+  local seen2 = 0
+  nt2.on_render(function()
+    seen2 = seen2 + 1
+  end)
+  eq("hook: a reloaded module does not stack a second wrapper", renderer.redraw, wrapped)
+  renderer.redraw({})
+  eq("hook: ... and the reloaded generation's subscribers fire", seen2, 1)
+  eq("hook: ... exactly once per redraw", real_calls, 2)
+
+  unsubscribe()
+  package.loaded["neo-tree.ui.renderer"] = nil
+  package.loaded["neo-tree.events"] = nil
+  package.loaded["filetree.adapter.neotree"] = nil
 end
 
 print(("\n%d passed, %d failed"):format(passed, failed))
