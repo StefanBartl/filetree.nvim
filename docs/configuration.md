@@ -273,7 +273,36 @@ require("filetree").setup({
   adapter_keymaps = {
     -- ["i"] = false,
   },
+
+  -- Sister plugins filetree may hand work to. All opt-OUT (default true), all
+  -- soft: an absent plugin is never an error. See "pickers.nvim integration".
+  integrations = {
+    pickers = true,   -- false keeps find_files / grep_in_dir off pickers.nvim
+  },
 })
+```
+
+## pickers.nvim integration
+
+With [pickers.nvim](https://github.com/StefanBartl/pickers.nvim) installed,
+`find_files` (`f`) and `grep_in_dir` (`gr`) hand the node's directory to it
+instead of driving a picker of their own; `tf` / `tg` force it. Engine choice,
+`find.*` flags and entry actions are then the ones the rest of your setup uses.
+Nothing needs wiring, and **it is on by default**. It is used only when all
+three hold:
+
+1. pickers.nvim is installed (and recent enough to ship
+   `pickers.integrations.filetree`; an older one counts as absent);
+2. `integrations.pickers` is not `false` here;
+3. `filetree = { enabled = false }` is not set in pickers.nvim's config.
+
+If any of them fails, `f` / `gr` fall back silently to telescope / fzf-lua /
+mini.pick / the builtin backend. `tf` / `tg` say "pickers.nvim not available",
+since they asked for it explicitly.
+
+```lua
+require("filetree").setup({ integrations = { pickers = false } })
+require("pickers").setup({ filetree = { enabled = false } })  -- the other end
 ```
 
 ## Adapters

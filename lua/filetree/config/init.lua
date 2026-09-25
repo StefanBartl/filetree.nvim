@@ -54,6 +54,7 @@ local KNOWN_TOP = {
   autocmds = true,
   ignore_list = true,
   menu = true,
+  integrations = true,
   confirmations = true,
   deps_popup = true,
   refs = true,
@@ -79,6 +80,12 @@ local KNOWN_MENU = {
   info = true,
   marks = true,
   window = true,
+}
+
+---Known sub-keys of the top-level `integrations` table (see `DEFAULTS.lua`).
+---@type table<string, boolean>
+local KNOWN_INTEGRATIONS = {
+  pickers = true,
 }
 
 local describe_unknown = schema.describe_unknown
@@ -143,6 +150,28 @@ local function sanitize(opts)
           end
         end
         clean[key] = clean_menu
+      end
+    elseif key == "integrations" then
+      if type(value) ~= "table" then
+        found_issues[#found_issues + 1] = ("option 'integrations' must be a table, got %s -- using the default"):format(
+          type(value)
+        )
+      else
+        local clean_int = {}
+        for ikey, ival in pairs(value) do
+          if not KNOWN_INTEGRATIONS[ikey] then
+            found_issues[#found_issues + 1] =
+              describe_unknown(ikey, KNOWN_INTEGRATIONS, "integrations.")
+          elseif type(ival) ~= "boolean" then
+            found_issues[#found_issues + 1] = ("option 'integrations.%s' must be a boolean, got %s -- using the default"):format(
+              ikey,
+              type(ival)
+            )
+          else
+            clean_int[ikey] = ival
+          end
+        end
+        clean[key] = clean_int
       end
     else
       clean[key] = value

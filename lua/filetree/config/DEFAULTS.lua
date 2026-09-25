@@ -52,6 +52,14 @@ return {
     marks = true, -- toggle / mark all / unmark all / clear / show marked
     window = true, -- open/close the tree itself
   },
+
+  -- Sister plugins filetree may hand work to (all opt-OUT, all soft: an absent
+  -- plugin is never an error). `pickers = false` keeps find_files / grep_in_dir
+  -- off pickers.nvim (they fall back to telescope / fzf-lua / builtin); the
+  -- matching switch on pickers.nvim's side is `filetree = { enabled = false }`.
+  integrations = {
+    pickers = true,
+  },
   features = {
     layout_guard = {
       enabled = true,

@@ -1,41 +1,50 @@
 ---@module 'filetree.util.pickers'
 ---@brief Soft bridge to pickers.nvim: files / live grep scoped to one directory.
 ---@description
---- pickers.nvim already owns the engine choice (telescope / fzf-lua / snacks),
---- the `find.*` flags and the entry actions, so the tree hands it a root and
---- lets it do the rest instead of re-implementing a picker per engine.
+--- pickers.nvim owns the engine choice (telescope / fzf-lua / snacks), the
+--- `find.*` flags and the entry actions, so the tree hands it a directory and
+--- lets it do the rest instead of driving a picker of its own.
 ---
---- It has no "run `files` in this directory" entry point of its own (its
---- scopes are cwd / config / folder / collection), so this drives the same two
---- pieces every scope ends up in: the engine module and the action module,
---- with a hand-built `{ roots, prompt }` source. Soft dependency: every call
---- answers `false` when pickers.nvim is not installed.
+--- It is used only when all three hold, and each is an opt-out:
+---   1. pickers.nvim is installed and ships `pickers.integrations.filetree`
+---      (an older one does not, and is treated as absent);
+---   2. `integrations.pickers` is not `false` in filetree's own config;
+---   3. `filetree = { enabled = false }` is not set in pickers.nvim's config
+---      (that side answers `false` itself).
+--- Any of them missing makes every call answer `false`, and the caller falls
+--- back to its own backends (telescope, fzf-lua, ...).
 
 local M = {}
 
 ---@internal
----@return table? engine
-local function engine()
-  local ok, engines = pcall(require, "pickers.engines")
-  if not ok then return nil end
-  local mod = engines.load()
-  return mod
-end
-
----True when pickers.nvim is installed and an engine is available.
+---filetree's own switch. Read from the resolved config rather than passed in,
+---so the `tf`/`tg` keys and the auto chain cannot disagree about it.
 ---@return boolean
-function M.available()
-  local ok = pcall(require, "pickers.actions.files")
-  return ok and engine() ~= nil
+local function enabled_here()
+  local ok, cfg = pcall(function()
+    return require("filetree.config").get()
+  end)
+  if not ok or type(cfg) ~= "table" or type(cfg.integrations) ~= "table" then return true end
+  return cfg.integrations.pickers ~= false
 end
 
 ---@internal
----@param dir string
----@param what string
----@return Pickers.Source
-local function source_for(dir, what)
-  local name = vim.fn.fnamemodify(dir, ":t")
-  return { roots = { dir }, prompt = what .. " " .. (name ~= "" and name or dir) .. "> " }
+---pickers.nvim's side of the bridge, or nil when it is absent, too old, or
+---switched off on this side.
+---@return table?
+local function bridge()
+  if not enabled_here() then return nil end
+  local ok, mod = pcall(require, "pickers.integrations.filetree")
+  if not ok or type(mod) ~= "table" then return nil end
+  return mod
+end
+
+---True when the bridge is usable right now (all three conditions above, plus
+---an installed engine).
+---@return boolean
+function M.available()
+  local b = bridge()
+  return b ~= nil and b.available() == true
 end
 
 ---Find files under `dir`.
@@ -43,13 +52,9 @@ end
 ---@param query? string  Seeds the prompt.
 ---@return boolean handled
 function M.files(dir, query)
-  local eng = engine()
-  local ok, files = pcall(require, "pickers.actions.files")
-  if not eng or not ok then return false end
-  local source = source_for(dir, "Files")
-  source.query = query
-  files.run(source, eng)
-  return true
+  local b = bridge()
+  if not b then return false end
+  return b.files(dir, { query = query }) == true
 end
 
 ---Live grep under `dir`.
@@ -58,13 +63,9 @@ end
 ---@param extra_args? string[]  Additional rg flags.
 ---@return boolean handled
 function M.grep(dir, query, extra_args)
-  local eng = engine()
-  local ok, grep = pcall(require, "pickers.actions.grep")
-  if not eng or not ok then return false end
-  local source = source_for(dir, "Grep")
-  source.query = query
-  grep.run(source, eng, extra_args)
-  return true
+  local b = bridge()
+  if not b then return false end
+  return b.grep(dir, { query = query, extra_args = extra_args }) == true
 end
 
 return M
