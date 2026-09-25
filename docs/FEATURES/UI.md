@@ -172,10 +172,17 @@ override the highlight groups yourself once you know they fit.
 
 ## Cheatsheet
 
-A float listing every active tree-buffer keymap, generated from the same
-binding table [BINDINGS/KEYMAPS.md](../BINDINGS/KEYMAPS.md) documents —
-so a forgotten key is one press away without leaving the tree or opening
-a doc file.
+A paged float built from what is **actually bound** on the tree buffer, not
+from a table of defaults — so a key filetree rebinds (`D` for diff, say) is
+listed as what it does now. It works on every adapter, neo-tree included
+(it replaces neo-tree's native `?`, whose list is built from a hand-kept table
+that lags the features). `<Tab>` / `<S-Tab>` (or `1`..`3`) turn the pages:
+
+| Page | Content |
+|------|---------|
+| 1 `filetree` | filetree.nvim's own keymaps, grouped by category, plus the global ones |
+| 2 `other keys` | every other buffer-local key: the adapter's native ones and those other plugins attach (pickers.nvim entry actions, pdfport, ...) |
+| 3 `commands` | the `:Filetree` sub-commands |
 
 - **Module:** `lua/filetree/features/ui/cheatsheet/`
 

@@ -44,21 +44,21 @@ duplicating it.
 
 ## Find Files
 
-`f` finds files via whichever picker engine is available — telescope,
-fzf-lua, mini.pick, or a built-in fallback — auto-detected. `tf` forces
-telescope specifically, for a config running more than one picker plugin
-side by side.
+`f` finds files via whichever picker is available — pickers.nvim first, then
+telescope, fzf-lua, mini.pick, or a built-in fallback — auto-detected. `tf`
+forces pickers.nvim specifically. A telescope-only key is available through
+`keymap_telescope` (off by default).
 
 - **Module:** `lua/filetree/features/search/find_files/`
-- **Keymaps:** `f` (auto), `tf` (force telescope)
+- **Keymaps:** `f` (auto), `tf` (force pickers.nvim)
 
 ## Grep In Directory
 
 `gr` greps inside the node's directory using the same auto-detected
-picker engine as `find_files`; `tg` forces telescope specifically.
+picker as `find_files`; `tg` forces pickers.nvim specifically.
 
 - **Module:** `lua/filetree/features/search/grep_in_dir/`
-- **Keymaps:** `gr` (auto), `tg` (force telescope)
+- **Keymaps:** `gr` (auto), `tg` (force pickers.nvim)
 
 ## Path Copy
 

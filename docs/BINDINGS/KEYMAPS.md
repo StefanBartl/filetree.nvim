@@ -83,9 +83,9 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `<RightMouse>` | context_menu | `keymap` | Open a right-click context menu via ui.contextmenu (nvzone/menu, or its own kit renderer) |
 | `<leader>rb` | rename_batch | `keymap` | Open batch rename buffer |
 | `f` | find_files | `keymap_tree` | Find files (telescope/fzf-lua/builtin) |
-| `tf` | find_files | `keymap_telescope` | Find files, forcing telescope specifically |
+| `tf` | find_files | `keymap_pickers` | Find files, forcing pickers.nvim specifically |
 | `gr` | grep_in_dir | `keymap` | Grep in node directory |
-| `tg` | grep_in_dir | `keymap_telescope` | Grep, forcing telescope specifically |
+| `tg` | grep_in_dir | `keymap_pickers` | Grep, forcing pickers.nvim specifically |
 | `c` | copy_move | `keymaps.copy` | Stage node for copy |
 | `x` | copy_move | `keymaps.cut` | Stage node for cut |
 | `p` | copy_move | `keymaps.paste` | Paste staged nodes |

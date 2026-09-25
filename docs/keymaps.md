@@ -12,7 +12,11 @@ and the command dispatcher so it never drifts.
 installed, `setup()` registers leader-group labels automatically (v2 and v3 APIs);
 individual tree keys carry a `desc` so which-key shows them out of the box.
 
-> **neo-tree `?` cheatsheet:** filetree keymaps appear there automatically —
+> **`?` cheatsheet:** filetree's own paged cheatsheet (keys, other plugins' keys,
+> commands; `<Tab>` turns the page) is bound on every adapter, neo-tree included,
+> and reads the keys that are actually bound.
+>
+> **neo-tree's native help:** filetree keymaps appear there automatically —
 > `setup()` injects them into neo-tree's mapping registry, no extra wiring needed.
 > For **nvim-tree** (`g?`) and other adapters the keymaps are registered via the
 > central tree-attach dispatcher (outside their help registry), so their

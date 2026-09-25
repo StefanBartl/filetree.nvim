@@ -2,10 +2,11 @@
 --- Fuzzy-find files within the tree root, then reveal the result.
 ---
 --- Detects available fuzzy finders in order:
----   1. telescope.nvim  (nvim-telescope/telescope.nvim)
----   2. fzf-lua         (ibhagwan/fzf-lua)
----   3. mini.pick       (echasnovski/mini.pick)
----   4. vim.ui.select   (built-in fallback, uses vim.fn.glob)
+---   1. pickers.nvim   (StefanBartl/pickers.nvim; picks its own engine)
+---   2. telescope.nvim  (nvim-telescope/telescope.nvim)
+---   3. fzf-lua         (ibhagwan/fzf-lua)
+---   4. mini.pick       (echasnovski/mini.pick)
+---   5. vim.ui.select   (built-in fallback, uses vim.fn.glob)
 ---
 --- The search root is (in priority order):
 ---   - The directory of the current tree node
@@ -15,7 +16,7 @@
 --- After selection, the file is opened in the editor and optionally
 --- revealed in the tree via adapter.reveal().
 ---
---- Keymaps (default): "<leader>ff" global, "f" inside tree buffer.
+--- Keymaps (default): "f" inside tree buffer, "tf" forces pickers.nvim.
 --- User command:      :FiletreeFindFiles
 
 local notify = require("filetree.util.notify").create("[filetree.find_files]")
@@ -41,9 +42,10 @@ end
 local _cfg = {
   enabled = false,
   keymap_tree = "f",
-  keymap_telescope = "tf",
+  keymap_pickers = "tf",
+  keymap_telescope = nil,
   keymap_global = nil,
-  prefer = "auto", -- "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
+  prefer = "auto", -- "auto"|"pickers"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
   reveal_on_open = true,
   hidden = false,
 }
@@ -54,9 +56,13 @@ local _cfg = {
 ---@type FiletreeSchema
 M.SCHEMA = {
   keymap_tree = "keymap",
+  keymap_pickers = "keymap",
   keymap_telescope = "keymap",
   keymap_global = "keymap",
-  prefer = { "string", enum = { "auto", "telescope", "fzf-lua", "mini.pick", "builtin" } },
+  prefer = {
+    "string",
+    enum = { "auto", "pickers", "telescope", "fzf-lua", "mini.pick", "builtin" },
+  },
   reveal_on_open = "boolean",
   hidden = "boolean",
 }
@@ -106,6 +112,14 @@ local function on_select(path)
 end
 
 -- ── Backends ──────────────────────────────────────────────────────────────────
+
+---@internal
+---Find files via pickers.nvim. Returns false when it is not installed.
+---@param root string
+---@return boolean handled
+local function via_pickers(root)
+  return require("filetree.util.pickers").files(root)
+end
 
 ---@internal
 ---Find files via telescope.nvim. Returns false when telescope isn't installed.
@@ -251,6 +265,10 @@ function M.find(root)
   root = root or get_root(node)
 
   local prefer = _cfg.prefer or "auto"
+  if prefer == "pickers" then
+    via_pickers(root)
+    return
+  end
   if prefer == "telescope" then
     via_telescope(root)
     return
@@ -269,9 +287,22 @@ function M.find(root)
   end
 
   -- auto
-  if not via_telescope(root) and not via_fzflua(root) and not via_minipick(root) then
+  if
+    not via_pickers(root)
+    and not via_telescope(root)
+    and not via_fzflua(root)
+    and not via_minipick(root)
+  then
     via_builtin(root)
   end
+end
+
+---Force pickers.nvim specifically, regardless of the configured `prefer` backend.
+---@param root? string
+function M.find_pickers(root)
+  local node = _adapter and _adapter.get_current_node()
+  root = root or get_root(node)
+  if not via_pickers(root) then notify.warn("pickers.nvim not available") end
 end
 
 ---Force telescope specifically, regardless of the configured `prefer` backend.
@@ -294,6 +325,12 @@ function M.setup(config, adapter)
   -- Keymap inside tree
   bind.bind("find_files", _cfg, {
     { name = "find", field = "keymap_tree", rhs = M.find, desc = "find files from current node" },
+    {
+      name = "find_pickers",
+      field = "keymap_pickers",
+      rhs = M.find_pickers,
+      desc = "find files via pickers.nvim specifically",
+    },
     {
       name = "find_telescope",
       field = "keymap_telescope",

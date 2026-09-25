@@ -141,7 +141,7 @@ return {
     },
     {
       lhs = "?",
-      desc = "Keymap cheatsheet (native `?` on neotree instead)",
+      desc = "Paged cheatsheet: filetree keys, other keys, commands",
       feature = "cheatsheet",
       scope = "tree",
     },
@@ -218,14 +218,14 @@ return {
     { lhs = "f", desc = "Find files", feature = "find_files", scope = "tree" },
     {
       lhs = "tf",
-      desc = "Find files via telescope specifically",
+      desc = "Find files via pickers.nvim specifically",
       feature = "find_files",
       scope = "tree",
     },
     { lhs = "gr", desc = "Grep in dir", feature = "grep_in_dir", scope = "tree" },
     {
       lhs = "tg",
-      desc = "Grep via telescope specifically",
+      desc = "Grep via pickers.nvim specifically",
       feature = "grep_in_dir",
       scope = "tree",
     },

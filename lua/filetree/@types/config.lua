@@ -473,8 +473,9 @@
 ---@field enabled          boolean
 ---@field keymap           string?    Key in tree for grep with prompt (default "gr").
 ---@field keymap_cword     string?    Key in tree for grep cword (default nil, off).
----@field keymap_telescope string?    Key in tree to force telescope specifically (default "tg").
----@field prefer           "auto"|"telescope"|"fzf-lua"|"builtin"
+---@field keymap_pickers   string?    Key in tree to force pickers.nvim specifically (default "tg").
+---@field keymap_telescope string?    Key in tree to force telescope specifically (default nil, off).
+---@field prefer           "auto"|"pickers"|"telescope"|"fzf-lua"|"builtin"
 ---@field hidden           boolean    Include hidden files (default false).
 ---@field extra_args       string[]   Additional args passed to rg/grep.
 
@@ -521,9 +522,10 @@
 ---@class FiletreeFindFilesConfig
 ---@field enabled          boolean
 ---@field keymap_tree      string?  Key inside tree buffer (default "f").
----@field keymap_telescope string?  Key to force telescope specifically (default "tf").
+---@field keymap_pickers   string?  Key to force pickers.nvim specifically (default "tf").
+---@field keymap_telescope string?  Key to force telescope specifically (default nil, off).
 ---@field keymap_global    string?  Global normal-mode key (default nil).
----@field prefer           "auto"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
+---@field prefer           "auto"|"pickers"|"telescope"|"fzf-lua"|"mini.pick"|"builtin"
 ---@field reveal_on_open   boolean  Reveal selected file in tree (default true).
 ---@field hidden           boolean  Include hidden files (default false).
 
