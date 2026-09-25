@@ -11,6 +11,7 @@ Everything CI runs, plus the manual pass it cannot.
 | [`sidebar_guard.lua`](sidebar_guard.lua) | unit: `&winfixbuf` pinning of the tree window, neo-tree event (un)subscription, no-op on a non-neotree adapter |
 | [`nav_switch_toggle.lua`](nav_switch_toggle.lua) | unit: `source_switcher` (pick / cycle / display names for neo-tree sources) and `tree_toggle` (global positional toggle keys), plus the neo-tree adapter's E95 self-heal in `toggle_at` — against a stubbed `neo-tree` / `neo-tree.command` |
 | [`config_schema.lua`](config_schema.lua) | unit: the per-feature option schemas (`filetree.config.schema`) — the engine, the `setup()` paths (typo, wrong type, out-of-range, non-table body, the deprecated `refs` options), and a drift check that every feature module exports a `SCHEMA` accepting its own defaults and declaring every option it reads |
+| [`create_from_template.lua`](create_from_template.lua) | unit: `create_from_template`'s template-first flow — `M.move` never crossing the `[custom]`/`[builtin]` boundary, header rows only for mixed sets, filename pre-filled from the picked template, and the reorderable picker's cursor kept off header rows (against a `ui.kit` picker double that owns a real results window) |
 | [`gaps.lua`](gaps.lua) | unit: fs-heavy and lifecycle modules `units.lua`/`smoke.lua` had not reached yet — see "gaps.lua" below |
 | [`adapter_lines.lua`](adapter_lines.lua) | integration: the adapter's line→node mapping, against a **real neo-tree and a real nvim-tree** — the only suite that needs a tree plugin — plus two neo-tree-only regression pins: a background-tab redraw resolving the tree's own per-tab state (not whichever tab is current), and two simultaneously live per-tab trees each resolving and decorating their own tree without bleeding into the other's |
 | [`group_empty_dirs_collapse.lua`](group_empty_dirs_collapse.lua) | integration: `<S-CR>` (`open_variants.open_badd_or_collapse`) collapsing a neo-tree `group_empty_dirs` merged directory line, against a **real neo-tree** — drives the actual `<CR>`/`<S-CR>` buffer keymaps, not the adapter function directly |
@@ -19,7 +20,7 @@ Everything CI runs, plus the manual pass it cannot.
 | [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
 
 All of them are headless and exit 0 on a pass. `.github/workflows/ci.yml`'s
-`test` job gates on the nine stub-based suites above `adapter_lines.lua` in
+`test` job gates on the ten stub-based suites above `adapter_lines.lua` in
 the table, plus `refs/run.lua`; it does not install neo-tree/nui/devicons, so
 the three real-neo-tree suites (`adapter_lines.lua`, `group_empty_dirs_collapse.lua`,
 `neotree_redraw_hook.lua`) always print a skip there today rather than
