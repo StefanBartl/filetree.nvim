@@ -562,19 +562,47 @@ end
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template_reorderable(templates, on_select)
   local list = templates -- current template set (post-filter), always flat
-  local filtering = false
   local rows = {} -- current display rows -- may include header rows when unfiltered
 
   local function render(handle)
-    rows = filtering and vim.tbl_map(function(t)
-      return { text = display_name(t), tmpl = t }
-    end, list) or build_rows(list)
+    -- Read the query straight from `handle` rather than caching a separate
+    -- "filtering" flag: a flag set only inside on_change can drift from what
+    -- the picker is actually showing (e.g. this initial pre-any-on_change
+    -- call), and there is no upside to a second copy of the same fact.
+    rows = (handle.query() ~= "")
+        and vim.tbl_map(function(t)
+          return { text = display_name(t), tmpl = t }
+        end, list)
+      or build_rows(list)
 
     local lines = {}
     for _, row in ipairs(rows) do
       lines[#lines + 1] = row.text
     end
     handle.set_results(lines)
+
+    -- Headers ("[custom]"/"[builtin]") are cosmetic, not real choices, but
+    -- kit.picker's results list has no notion of a disabled row to keep the
+    -- cursor off one — unlike pick_template_plain's vim.ui.select fallback,
+    -- which re-opens itself when a header gets picked, `on_submit` below
+    -- just silently does nothing for one. Row 1 IS a header ("[custom]")
+    -- whenever any custom template exists, so a bare <CR> right after
+    -- opening the picker would otherwise land on it. Nudge the cursor onto
+    -- the next real template row whenever a (re)render leaves it sitting on
+    -- a header — every header is immediately followed by at least one real
+    -- row (see build_rows: a header is only emitted for a non-empty group).
+    local results = handle.slots.results
+    if results and results:is_valid() then
+      local cur = vim.api.nvim_win_get_cursor(results.winid)[1]
+      if rows[cur] and not rows[cur].tmpl then
+        for i = cur, #rows do
+          if rows[i].tmpl then
+            pcall(vim.api.nvim_win_set_cursor, results.winid, { i, 0 })
+            break
+          end
+        end
+      end
+    end
   end
 
   -- Forward-declared: `on_change` below closes over `handle`, but on the
@@ -585,8 +613,7 @@ local function pick_template_reorderable(templates, on_select)
   local handle
   handle = kit.picker({
     on_change = function(query)
-      filtering = query ~= ""
-      if not filtering then
+      if query == "" then
         list = templates
       else
         local q = query:lower()
@@ -598,7 +625,15 @@ local function pick_template_reorderable(templates, on_select)
     end,
     on_submit = function(idx)
       local row = rows[idx]
-      if row and row.tmpl then on_select(row.tmpl) end
+      if row and row.tmpl then
+        on_select(row.tmpl)
+      elseif row then
+        -- Defense in depth alongside the cursor nudge in render() above: if
+        -- a header still somehow gets submitted (a race with a render, or a
+        -- kit.picker version that lets the cursor rest on it anyway), say so
+        -- instead of doing nothing with no feedback at all.
+        notify.info("Not a template: " .. row.text)
+      end
     end,
   })
   if not handle then
