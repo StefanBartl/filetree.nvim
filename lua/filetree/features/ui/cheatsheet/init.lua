@@ -263,7 +263,11 @@ local function build_other_page(buf)
       end
       -- A row is one buffer line: an rhs (or a desc) with a newline in it would
       -- make `nvim_buf_set_lines` refuse the whole page.
-      desc = desc:gsub("[%c]+", " "):gsub("^%l", string.upper)
+      desc = desc:gsub("[%c]+", " ")
+      -- neo-tree labels its native keys with the bare command name
+      -- ("toggle_hidden"); as a sentence that reads better with spaces.
+      if desc:match("^[%l%d_]+$") then desc = desc:gsub("_", " ") end
+      desc = desc:gsub("^%l", string.upper)
       local lhs = unexpand_leader(m.lhs)
       rows[#rows + 1] = { lhs = lhs, desc = desc }
       if #lhs > widest then widest = #lhs end

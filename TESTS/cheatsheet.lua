@@ -85,6 +85,7 @@ bind.bind_buffer("elsewhere", { keymap = "ZZ" }, {
 -- Native keys that are awkward as a row: a newline in the desc, and a disabled key.
 vim.keymap.set("n", "W", noop, { buffer = tree, desc = "two" .. string.char(10) .. "lines" })
 vim.keymap.set("n", "V", "<Nop>", { buffer = tree })
+vim.keymap.set("n", "H", noop, { buffer = tree, desc = "toggle_hidden" })
 
 cheatsheet.show()
 
@@ -127,6 +128,11 @@ check(
   body()
 )
 check("page 2 keeps a desc with a newline on one line", body():find("W%s+Two lines") ~= nil, body())
+check(
+  "page 2 reads a native command name as words",
+  body():find("H%s+Toggle hidden") ~= nil,
+  body()
+)
 check("page 2 marks a <Nop> key as disabled", body():find("V%s+%(disabled%)") ~= nil, body())
 
 vim.api.nvim_feedkeys(vim.keycode("<Tab>"), "x", false)
