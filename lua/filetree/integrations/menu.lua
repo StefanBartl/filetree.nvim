@@ -124,6 +124,18 @@ local function add_group(out, ...)
   return true
 end
 
+---Whether a host that asks first (ui.nvim's `ui.menu`) may offer the
+---"Open/Close filetree" row: `integrations.ui_menu` is not false and the `menu`
+---group is not switched off. `items()`/`submenu()`/`window_entry()` themselves
+---stay governed by `menu` alone, so other hosts are unaffected by `ui_menu`.
+---@return boolean
+function M.enabled()
+  local ok, main = pcall(require, "filetree")
+  local cfg = (ok and main.config()) or {}
+  if (cfg.integrations or {}).ui_menu == false then return false end
+  return (cfg.menu or {}).enable ~= false
+end
+
 ---Single entry to open or close the tree, depending on whether it is
 ---currently open. Deliberately NOT part of `items()`'s node-action groups
 ---(rename/trash/copy/… only make sense against a node under the cursor,

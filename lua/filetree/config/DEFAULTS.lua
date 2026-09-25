@@ -57,8 +57,12 @@ return {
   -- plugin is never an error). `pickers = false` keeps find_files / grep_in_dir
   -- off pickers.nvim (they fall back to telescope / fzf-lua / builtin); the
   -- matching switch on pickers.nvim's side is `filetree = { enabled = false }`.
+  -- `ui_menu = false` keeps ui.nvim's right-click menu (ui.menu) from offering
+  -- the "Open/Close filetree" row in ordinary buffers; `filetree.integrations.
+  -- menu` itself (items/submenu/window_entry) stays available to other hosts.
   integrations = {
     pickers = true,
+    ui_menu = true,
   },
   features = {
     layout_guard = {

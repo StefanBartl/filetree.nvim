@@ -306,6 +306,25 @@ do
   package.loaded["filetree.integrations.menu"] = nil
 end
 
+-- ── enabled(): what ui.nvim's ui.menu asks first ─────────────────────────────
+do
+  local menu_e = install_stub({ enable = true }, {}, nil)
+  check("enabled(): true by default", menu_e.enabled() == true)
+
+  package.loaded["filetree"].config = function()
+    return { menu = { enable = true }, integrations = { ui_menu = false } }
+  end
+  check("enabled(): integrations.ui_menu = false -> false", menu_e.enabled() == false)
+
+  package.loaded["filetree"].config = function()
+    return { menu = { enable = false }, integrations = { ui_menu = true } }
+  end
+  check("enabled(): menu.enable = false -> false", menu_e.enabled() == false)
+
+  package.loaded["filetree"] = nil
+  package.loaded["filetree.integrations.menu"] = nil
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim menu: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
