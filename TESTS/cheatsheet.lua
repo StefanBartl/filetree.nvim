@@ -195,6 +195,10 @@ check(
   "files() hands over the dir and query",
   seen.files.dir == "/x/proj" and seen.files.opts.query == "foo"
 )
+check(
+  "files() forwards on_select (the reveal after pickers.nvim opened the file)",
+  bridge.files("/x/proj", nil, noop) == true and seen.files.opts.on_select == noop
+)
 check("grep() reports handled", bridge.grep("/x/proj", nil, { "--glob=!x" }) == true)
 check("grep() forwards extra args", vim.deep_equal(seen.grep.opts.extra_args, { "--glob=!x" }))
 

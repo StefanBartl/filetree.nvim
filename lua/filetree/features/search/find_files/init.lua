@@ -92,6 +92,21 @@ end
 -- ── Post-select action ────────────────────────────────────────────────────────
 
 ---@internal
+---Reveal `path` in the tree when `reveal_on_open` is on.
+---
+---`reveal` is not an adapter member and never was -- the guard was always false,
+---so `reveal_on_open` (on by default) revealed nothing. The capability is called
+---`open_reveal`, and every backend in this repo implements it.
+---@param path string
+local function reveal(path)
+  if _cfg.reveal_on_open and _adapter and type(_adapter.open_reveal) == "function" then
+    vim.defer_fn(function()
+      pcall(_adapter.open_reveal, path, 0)
+    end, 50)
+  end
+end
+
+---@internal
 ---Open the selected file and optionally reveal it in the tree.
 ---@param path string?
 local function on_select(path)
@@ -101,24 +116,18 @@ local function on_select(path)
     return
   end
   vim.cmd("edit " .. vim.fn.fnameescape(path))
-  -- `reveal` is not an adapter member and never was -- the guard was always
-  -- false, so `reveal_on_open` (on by default) revealed nothing. The capability
-  -- is called `open_reveal`, and every backend in this repo implements it.
-  if _cfg.reveal_on_open and _adapter and type(_adapter.open_reveal) == "function" then
-    vim.defer_fn(function()
-      pcall(_adapter.open_reveal, path, 0)
-    end, 50)
-  end
+  reveal(path)
 end
 
 -- ── Backends ──────────────────────────────────────────────────────────────────
 
 ---@internal
 ---Find files via pickers.nvim. Returns false when it is not installed.
+---pickers.nvim opens the file itself, so only the reveal is left to do here.
 ---@param root string
 ---@return boolean handled
 local function via_pickers(root)
-  return require("filetree.util.pickers").files(root)
+  return require("filetree.util.pickers").files(root, nil, reveal)
 end
 
 ---@internal
