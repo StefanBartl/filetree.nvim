@@ -66,6 +66,26 @@ bind.bind_buffer("diff", { keymap = "D" }, {
 vim.keymap.set("n", "Q", function() end, { buffer = tree, desc = "some plugin's key" })
 vim.keymap.set("n", "<leader>zz", function() end, { buffer = tree, desc = "leader key" })
 
+-- Keys in the forms `nvim_buf_get_keymap` reports differently from how the
+-- registry spells them: page 2 must still recognise them as filetree's own.
+local noop = function() end
+bind.bind_buffer("multi_form", { a = "<C-n>", b = "<M-s>", c = "<S-CR>", d = "<leader>fm" }, {
+  { name = "a", field = "a", rhs = noop, desc = "ctrl key" },
+  { name = "b", field = "b", rhs = noop, desc = "meta key" },
+  { name = "c", field = "c", rhs = noop, desc = "shift-cr key" },
+  { name = "d", field = "d", rhs = noop, desc = "leader form key" },
+}, tree)
+
+-- A key another tree buffer has must not show up on this one's page 1.
+local other = vim.api.nvim_create_buf(false, true)
+bind.bind_buffer("elsewhere", { keymap = "ZZ" }, {
+  { name = "z", field = "keymap", rhs = noop, desc = "only in another buffer" },
+}, other)
+
+-- Native keys that are awkward as a row: a newline in the desc, and a disabled key.
+vim.keymap.set("n", "W", noop, { buffer = tree, desc = "two" .. string.char(10) .. "lines" })
+vim.keymap.set("n", "V", "<Nop>", { buffer = tree })
+
 cheatsheet.show()
 
 -- The viewer is the current window now.
@@ -77,6 +97,19 @@ end
 check("page 1 is the filetree page", body():find("%[1 filetree%]") ~= nil)
 check("page 1 lists filetree's own key", body():find("D%s+Stage/diff current file") ~= nil, body())
 check("page 1 omits foreign keys", body():find("some plugin's key", 1, true) == nil)
+check(
+  "page 1 lists the <C-n> / <M-s> / <S-CR> / <leader>fm keys",
+  body():find("<C%-n>%s+Ctrl key")
+    and body():find("<M%-s>%s+Meta key")
+    and body():find("<S%-CR>%s+Shift%-cr key")
+    and body():find("<leader>fm%s+Leader form key"),
+  body()
+)
+check(
+  "page 1 omits another buffer's key",
+  body():find("only in another buffer", 1, true) == nil,
+  body()
+)
 
 -- ── Paging ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +118,16 @@ check("<Tab> turns to page 2", body():find("%[2 other keys%]") ~= nil, body())
 check("page 2 lists a foreign buffer key", body():find("Q%s+Some plugin's key") ~= nil, body())
 check("page 2 shows <leader> as such", body():find("<leader>zz") ~= nil, body())
 check("page 2 leaves out a filetree key", body():find("Stage/diff current file", 1, true) == nil)
+check(
+  "page 2 leaves out keys filetree bound in every spelling",
+  body():find("Ctrl key", 1, true) == nil
+    and body():find("Meta key", 1, true) == nil
+    and body():find("Shift-cr key", 1, true) == nil
+    and body():find("Leader form key", 1, true) == nil,
+  body()
+)
+check("page 2 keeps a desc with a newline on one line", body():find("W%s+Two lines") ~= nil, body())
+check("page 2 marks a <Nop> key as disabled", body():find("V%s+%(disabled%)") ~= nil, body())
 
 vim.api.nvim_feedkeys(vim.keycode("<Tab>"), "x", false)
 check("<Tab> turns to page 3", body():find("%[3 commands%]") ~= nil, body())
@@ -101,6 +144,19 @@ check("`2` jumps to page 2", body():find("%[2 other keys%]") ~= nil)
 
 cheatsheet.close()
 check("close() closes the float", vim.api.nvim_get_current_buf() == tree)
+
+-- A <Space> leader arrives raw in `lhs`; it must still read `<leader>`.
+vim.g.mapleader = " "
+local spaced = vim.api.nvim_create_buf(false, true)
+vim.api.nvim_set_current_buf(spaced)
+vim.keymap.set("n", "<leader>sp", noop, { buffer = spaced, desc = "space leader key" })
+vim.keymap.set("n", "x x", noop, { buffer = spaced, desc = "inner space key" })
+cheatsheet.show()
+buf = vim.api.nvim_get_current_buf()
+vim.api.nvim_feedkeys(vim.keycode("<Tab>"), "x", false)
+check("space leader shows as <leader>", body():find("<leader>sp%s+Space leader key") ~= nil, body())
+check("an inner space shows as <Space>", body():find("x<Space>x%s+Inner space key") ~= nil, body())
+cheatsheet.close()
 
 -- -- pickers bridge: soft dependency, opt-out on both sides ---------------------
 

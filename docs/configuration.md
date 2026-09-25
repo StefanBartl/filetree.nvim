@@ -296,6 +296,8 @@ three hold:
 2. `integrations.pickers` is not `false` here;
 3. `filetree = { enabled = false }` is not set in pickers.nvim's config.
 
+`:checkhealth filetree` says which of the three holds.
+
 If any of them fails, `f` / `gr` fall back silently to telescope / fzf-lua /
 mini.pick / the builtin backend. `tf` / `tg` say "pickers.nvim not available",
 since they asked for it explicitly.

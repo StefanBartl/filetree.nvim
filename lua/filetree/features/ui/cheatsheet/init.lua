@@ -89,24 +89,74 @@ local function emit_group(lines, header, rows, widest)
   lines[#lines + 1] = ""
 end
 
+---@class FiletreeCheatsheetEntry
+---@field key string                 # Registry surface, "filetree/<feature>[/global]".
+---@field entry Lib.Keymap.Registered
+
 ---@internal
----The lhs of every filetree registry entry, in the form `nvim_buf_get_keymap`
----reports it (`<leader>` expanded, key notation resolved), so page 2 can tell
----which buffer keymaps page 1 already lists.
----@return table<string, true>
-local function registry_raw_lhs()
-  local out = {}
+---filetree's registry entries that apply to tree buffer `buf`: the ones bound
+---in it, and the global ones.
+---
+---The registry keeps one record per registration, so it also holds the keys of
+---every other tree buffer -- a neo-tree symbol outline does not get the
+---filesystem tree's keys, and the cheatsheet must not claim it does. When
+---nothing is recorded for `buf` at all (the cheatsheet opened from somewhere
+---that is not a tree buffer) the filter is dropped rather than showing an
+---empty page. Ordered by surface so the winner among two features claiming the
+---same key does not depend on `pairs` order.
+---@param buf integer
+---@return FiletreeCheatsheetEntry[]
+local function registry_entries(buf)
   local all = require("lib.nvim.bindings.keymap").registered()
-  for key, entries in pairs(all) do
-    if key:match("^filetree/") then
-      for _, e in ipairs(entries) do
-        if e.bound and e.lhs then
-          out[vim.api.nvim_replace_termcodes(e.lhs, true, true, true)] = true
-        end
-      end
+  local surfaces = {}
+  for key in pairs(all) do
+    if key:match("^filetree/") then surfaces[#surfaces + 1] = key end
+  end
+  table.sort(surfaces)
+
+  ---@type FiletreeCheatsheetEntry[]
+  local list = {}
+  local scoped = false
+  for _, key in ipairs(surfaces) do
+    for _, e in ipairs(all[key]) do
+      list[#list + 1] = { key = key, entry = e }
+      if e.buffer == buf then scoped = true end
+    end
+  end
+  if not scoped then return list end
+
+  local out = {}
+  for _, item in ipairs(list) do
+    local b = item.entry.buffer
+    if b == nil or b == buf then out[#out + 1] = item end
+  end
+  return out
+end
+
+---@internal
+---The lhs of every bound filetree entry for `buf`, in the form
+---`nvim_buf_get_keymap` reports it (`<leader>` expanded, key notation
+---resolved), so page 2 can tell which buffer keymaps page 1 already lists.
+---@param buf integer
+---@return table<string, true>
+local function registry_raw_lhs(buf)
+  local out = {}
+  for _, item in ipairs(registry_entries(buf)) do
+    local e = item.entry
+    if e.bound and e.lhs then
+      out[vim.api.nvim_replace_termcodes(e.lhs, true, true, true)] = true
     end
   end
   return out
+end
+
+---@internal
+---A stable string for an entry's mode (a string, or a list for a multi-mode
+---action), for de-duplicating rows.
+---@param mode string|string[]
+---@return string
+local function mode_id(mode)
+  return type(mode) == "table" and table.concat(mode, ",") or tostring(mode)
 end
 
 ---Page 1: filetree's own keymaps, one header per category, one row per key
@@ -114,8 +164,9 @@ end
 ---
 ---Read back from the registry rather than from a catalog of defaults, so a
 ---remapped or disabled key shows up as what it is.
+---@param buf integer
 ---@return string[]
-local function build_filetree_page()
+local function build_filetree_page(buf)
   local ok_reg, registry = pcall(require, "filetree.features")
   local order = (ok_reg and registry.CATEGORY_ORDER) or {}
   local cat_of = category_of()
@@ -128,29 +179,27 @@ local function build_filetree_page()
   ---@type table<string, boolean>
   local seen = {}
 
-  local all = require("lib.nvim.bindings.keymap").registered()
-  for key, entries in pairs(all) do
+  for _, item in ipairs(registry_entries(buf)) do
     -- "filetree/<feature>" is tree-scoped, "filetree/<feature>/global" is bound
     -- everywhere (the tree-toggle keys); other sub-surfaces are not keymaps of
     -- their own.
-    local feature = key:match("^filetree/([^/]+)$")
-    local global_feature = key:match("^filetree/([^/]+)/global$")
-    if feature or global_feature then
-      for _, e in ipairs(entries) do
-        -- One row per key, not per registration: a buffer-local preset is
-        -- registered again for every tree buffer that attaches.
-        local id = tostring(e.mode) .. " " .. tostring(e.lhs)
-        if e.bound and e.lhs and not seen[id] then
-          seen[id] = true
-          local cat = global_feature and "global" or cat_of[feature] or "other"
-          rows_by_cat[cat] = rows_by_cat[cat] or {}
-          -- The registry's `desc` carries the plugin prefix, which every row
-          -- here would repeat. Capitalized because a cheatsheet row is a
-          -- sentence about the key, not a fragment of one.
-          local desc = (e.desc or e.name):gsub("^filetree: ", ""):gsub("^%l", string.upper)
-          table.insert(rows_by_cat[cat], { lhs = e.lhs, desc = desc })
-          if #e.lhs > widest then widest = #e.lhs end
-        end
+    local feature = item.key:match("^filetree/([^/]+)$")
+    local global_feature = item.key:match("^filetree/([^/]+)/global$")
+    local e = item.entry
+    if (feature or global_feature) and e.bound and e.lhs then
+      -- One row per key, not per registration: a buffer-local preset is
+      -- registered again for every tree buffer that attaches.
+      local id = mode_id(e.mode) .. " " .. e.lhs
+      if not seen[id] then
+        seen[id] = true
+        local cat = global_feature and "global" or cat_of[feature] or "other"
+        rows_by_cat[cat] = rows_by_cat[cat] or {}
+        -- The registry's `desc` carries the plugin prefix, which every row
+        -- here would repeat. Capitalized because a cheatsheet row is a
+        -- sentence about the key, not a fragment of one.
+        local desc = (e.desc or e.name):gsub("^filetree: ", ""):gsub("^%l", string.upper)
+        table.insert(rows_by_cat[cat], { lhs = e.lhs, desc = desc })
+        if #e.lhs > widest then widest = #e.lhs end
       end
     end
   end
@@ -175,15 +224,14 @@ local function build_filetree_page()
 end
 
 ---@internal
----Show `<leader>` as such rather than as the character it expands to.
----@param lhs string  # As `nvim_buf_get_keymap` reports it.
+---Show a leading `<leader>` as such rather than as the character it expands to.
+---@param lhs string  # As `nvim_buf_get_keymap` reports it (only <Space> comes raw).
 ---@return string
 local function unexpand_leader(lhs)
   local leader = vim.g.mapleader
   if type(leader) ~= "string" or leader == "" then leader = "\\" end
-  local shown = lhs:gsub(vim.pesc(leader), "<leader>", 1)
-  if leader == " " then shown = lhs:gsub("^ ", "<leader>", 1) end
-  return (shown:gsub(" ", "<Space>"))
+  if lhs:sub(1, #leader) == leader then lhs = "<leader>" .. lhs:sub(#leader + 1) end
+  return (lhs:gsub(" ", "<Space>"))
 end
 
 ---Page 2: every other buffer-local normal-mode key of the tree buffer.
@@ -197,7 +245,7 @@ local function build_other_page(buf)
   local lines = {}
   if not vim.api.nvim_buf_is_valid(buf) then return { " (no tree buffer)" } end
 
-  local ours = registry_raw_lhs()
+  local ours = registry_raw_lhs(buf)
   ---@type FiletreeCheatsheetRow[]
   local rows = {}
   local widest = 0
@@ -207,9 +255,20 @@ local function build_other_page(buf)
     local raw = m.lhsraw or m.lhs
     if not ours[raw] and not m.lhs:match("^<Plug>") and not m.lhs:match("^<SNR>") then
       local desc = m.desc
-      if not desc or desc == "" then desc = m.callback and "(lua function)" or (m.rhs or "") end
+      if not desc or desc == "" then
+        if m.callback then
+          desc = "(lua function)"
+        elseif m.rhs == nil or m.rhs == "" or m.rhs:lower() == "<nop>" then
+          desc = "(disabled)"
+        else
+          desc = m.rhs
+        end
+      end
+      -- A row is one buffer line: an rhs (or a desc) with a newline in it would
+      -- make `nvim_buf_set_lines` refuse the whole page.
+      desc = desc:gsub("[%c]+", " "):gsub("^%l", string.upper)
       local lhs = unexpand_leader(m.lhs)
-      rows[#rows + 1] = { lhs = lhs, desc = (desc:gsub("^%l", string.upper)) }
+      rows[#rows + 1] = { lhs = lhs, desc = desc }
       if #lhs > widest then widest = #lhs end
     end
   end
@@ -249,7 +308,7 @@ end
 ---@return { title: string, lines: string[] }[]
 local function build_pages(buf)
   return {
-    { title = "filetree", lines = build_filetree_page() },
+    { title = "filetree", lines = build_filetree_page(buf) },
     { title = "other keys", lines = build_other_page(buf) },
     { title = "commands", lines = build_commands_page() },
   }
