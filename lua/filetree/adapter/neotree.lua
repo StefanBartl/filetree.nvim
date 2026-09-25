@@ -119,6 +119,13 @@ local function state_for_bufnr(bufnr)
     end
   end
 
+  -- Drop entries of wiped buffers on the way (a miss is the rare path): each
+  -- one pins a whole neo-tree state table that nothing else would release.
+  for cached_bufnr in pairs(_state_for_bufnr_cache) do
+    if not vim.api.nvim_buf_is_valid(cached_bufnr) then
+      _state_for_bufnr_cache[cached_bufnr] = nil
+    end
+  end
   _state_for_bufnr_cache[bufnr] = { tick = tick, state = resolved }
   return resolved
 end
@@ -1181,10 +1188,12 @@ end
 ---@param renderer table  `neo-tree.ui.renderer`, already `require`d by the caller.
 ---@return boolean installed
 local function install_redraw_hook(renderer)
-  local already_wrapped = renderer[REDRAW_NOTIFY_FIELD] ~= nil
-  renderer[REDRAW_NOTIFY_FIELD] = notify_render_listeners
-  if already_wrapped then return true end
-  return monkeypatch(renderer, "redraw", function(original_redraw)
+  if renderer[REDRAW_NOTIFY_FIELD] ~= nil then
+    -- Wrapped by an earlier generation of this module: just repoint it.
+    renderer[REDRAW_NOTIFY_FIELD] = notify_render_listeners
+    return true
+  end
+  local installed = monkeypatch(renderer, "redraw", function(original_redraw)
     return function(state, ...)
       local result = original_redraw(state, ...)
       local notify_fn = renderer[REDRAW_NOTIFY_FIELD]
@@ -1192,6 +1201,12 @@ local function install_redraw_hook(renderer)
       return result
     end
   end)
+  -- Marked only AFTER a wrap actually happened: setting the field first
+  -- (as this once did) made a failed wrap -- `renderer.redraw` not a plain
+  -- function -- read as "already wrapped" on the very next call, so the
+  -- retry loop reported a hook that was never installed as installed.
+  if installed then renderer[REDRAW_NOTIFY_FIELD] = notify_render_listeners end
+  return installed
 end
 
 ---@internal
@@ -1346,9 +1361,15 @@ local function require_bypassing_preload(name)
   ---@diagnostic disable-next-line: deprecated, undefined-field
   local searchers = package.loaders or package.searchers -- luacheck: ignore 143
   for i = 2, #searchers do
-    local loader = searchers[i](name)
+    -- A searcher's second return is the loader's own argument (the file path
+    -- for the Lua-file searcher); `require` hands it on as `...`'s second
+    -- value, and a module may read it.
+    local loader, loader_data = searchers[i](name)
     if type(loader) == "function" then
-      local result = loader(name)
+      local result = loader(name, loader_data)
+      -- `require`'s own contract: a non-nil return wins; otherwise whatever
+      -- the module stored in package.loaded itself; otherwise `true`.
+      if result == nil then result = package.loaded[name] end
       if result == nil then result = true end
       package.loaded[name] = result
       return result
