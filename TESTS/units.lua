@@ -3770,9 +3770,19 @@ do
   vim.fn.writefile({ "existing" }, dest_dir .. "/new.lua")
 
   package.loaded["ui.kit"] = {
+    -- `o.items` are create_from_template's own {text, tmpl} rows, not raw
+    -- template descriptors: with both a custom and builtin template present
+    -- (the repo's shipped builtin/ templates always are), items[1] is the
+    -- cosmetic "[custom]" header row, not a pickable template — skip to the
+    -- first row that actually carries one.
     select = function(o)
-      o.on_select(o.items[1], 1)
-    end, -- pick template 1
+      for _, item in ipairs(o.items) do
+        if item.tmpl then
+          o.on_select(item, 1)
+          return
+        end
+      end
+    end,
     input = function(opts)
       opts.on_submit("new.lua")
     end,
@@ -3927,8 +3937,15 @@ do
       end,
     }
     package.loaded["ui.kit"] = {
+      -- Same reasoning as the overwrite test above: skip the "[custom]"
+      -- header row and pick the first row that actually carries a template.
       select = function(o)
-        o.on_select(o.items[1], 1)
+        for _, item in ipairs(o.items) do
+          if item.tmpl then
+            o.on_select(item, 1)
+            return
+          end
+        end
       end,
       input = function(opts)
         opts.on_submit("new2.lua")

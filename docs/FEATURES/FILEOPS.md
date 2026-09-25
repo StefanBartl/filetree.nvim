@@ -118,21 +118,35 @@ plus `require()`/`import` statements when no server handled the rename
 
 Press `A`, or run `:Filetree template`. Workflow, in order:
 
-1. **Filename first.** You're prompted for the new file's name before
-   anything else — the destination path is fully known from this point on.
-2. **Filtered picker.** The template list narrows to templates whose own
-   extension matches the filename you just typed (`foo.lua` → only `.lua`
-   templates). No match, or no extension typed, falls back to the full
-   list — a filter that would leave nothing to pick from is skipped
-   rather than enforced.
-3. **Pick a template.** Variables substitute against the real destination,
-   then the file is created and opened.
+1. **Pick a template first.** The full list, grouped under `[custom]`/
+   `[builtin]` headers when both kinds exist (plain, unlabelled list
+   otherwise — see "Display grouping" below).
+2. **Filename, pre-filled.** You're then prompted for the new file's name,
+   defaulted to the picked template's own filename (extension included).
+   Fixes the old name-first flow's actual bug: typing a name first and only
+   *filtering* the picker by its extension didn't stop you from falling
+   through to a mismatched template anyway (e.g. `check.md` with a C++
+   template's content) — the file's extension and its content could
+   disagree, and the buffer opened with the wrong filetype. Pre-filling from
+   the template keeps them in sync by default; change the base name (or the
+   extension, deliberately) before submitting.
+3. **Created and opened.** Variables substitute against the real
+   destination, then the file is created and opened.
 
 **Built-in templates** ship with filetree.nvim itself, several per common
-language so the extension filter in step 2 leaves a real choice: Lua
-(`lua_module`/`lua_class`/`lua_spec`/`lua_types`), TypeScript/TSX/JS,
-Python, Go, Rust, C#, C/C++, Zig, JSON, Markdown, YAML, TOML, shell/
-PowerShell, HTML/CSS, WAT — shown in the picker with a `[builtin]` marker.
+language: Lua (`lua_module`/`lua_class`/`lua_spec`/`lua_types`),
+TypeScript/TSX/JS, Python, Go, Rust, C#, C/C++, Zig, JSON, Markdown, YAML,
+TOML, shell/PowerShell, HTML/CSS, WAT.
+
+**Display grouping.** Once you've added your own templates, the builtin
+picker groups the list under a `[custom]` and a `[builtin]` header instead
+of tagging every single built-in entry — repeating a `[builtin]` marker on
+every row not authored by you was pure noise once the list mixes both.
+Headers only appear when both kinds exist and are never selectable; a
+directory with just built-ins (the default, before you've added any of your
+own) stays a plain list. The pickers.nvim path (`prefer = "telescope"` etc.)
+shows a flat, ungrouped list — a fuzzy-match item list has no room for
+non-selectable header rows.
 
 **Add your own** by dropping a file into the template directory (default
 `stdpath("data")/filetree/templates/`) — its filename becomes the
@@ -144,7 +158,9 @@ customize a shipped default.
 `<M-j>`/`<M-k>` move the highlighted template down/up, persisted
 immediately to a `.order.json` sidecar in the template directory. A
 never-reordered or newly-added template is appended alphabetically after
-the ones with an explicit position.
+the ones with an explicit position. A move never crosses the
+`[custom]`/`[builtin]` boundary — the persisted order is itself kept
+grouped custom-then-builtin, in step with the display.
 
 **Variables:** `${filename}` (basename, no extension), `${ext}`,
 `${date}`/`${year}`/`${month}`/`${day}`/`${time}`, `${author}`

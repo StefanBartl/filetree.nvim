@@ -25,23 +25,38 @@
 ---
 --- Workflow:
 ---   1. Press "A" in tree (the smart_create "a" counterpart) — or :Filetree template
----   2. Enter the new filename FIRST
----   3. The template picker is filtered to templates matching that filename's
----      extension (e.g. "foo.lua" only offers .lua templates); if none match,
----      the full list is shown instead
----   4. Pick a template — the destination path is already known at this
----      point, so ${module} (and every other variable) resolves against it
----   5. File is created in the current node's directory and opened
+---   2. Pick a template FIRST — the full list, grouped by [custom]/[builtin]
+---      (see "Display grouping" below)
+---   3. Enter the new filename, pre-filled with the template's own filename
+---      (extension included) so the destination always keeps the extension
+---      the picked template's content actually is — no more "check.md" filled
+---      with a C++ template's content: whatever extension you don't
+---      deliberately change stays the template's own
+---   4. File is created in the current node's directory (now that both the
+---      template and the destination path are known, ${module} and every
+---      other variable resolve against the real destination) and opened
 ---
 --- Adding your own templates: drop a file into the template directory (default
 --- stdpath("data")/filetree/templates/) — its filename becomes the template
 --- name — or call M.add_template(name, content) programmatically.
 ---
+--- Display grouping: the builtin picker (see "Picker backend" below) groups
+--- the list under a "[custom]" and a "[builtin]" header instead of tagging
+--- every single built-in entry — a per-item "name  [builtin]" marker on every
+--- row not authored by the user was pure repetition once the list mixes both.
+--- Headers are only shown when both kinds are actually present; a directory
+--- with only built-ins (the common case before you've added your own) stays a
+--- plain, unlabelled list. Headers are cosmetic and never selectable.
+---
 --- Reordering: while the picker is open (query empty, i.e. not mid-filter),
 --- <M-j>/<M-k> move the highlighted template down/up. The order is persisted
 --- to a `.order.json` sidecar in the template directory, so it survives
 --- restarts; a never-reordered or newly-added template is appended
---- alphabetically after the ones with an explicit position.
+--- alphabetically after the ones with an explicit position. A move never
+--- crosses the [custom]/[builtin] boundary (there is no "up" out of the
+--- bottom of one group into the other) — the persisted order is itself kept
+--- grouped custom-then-builtin, in step with the display, so a move is never
+--- silently absorbed by a boundary it can't actually cross.
 ---
 --- Picker backend (`indicator`-style `prefer` config, default "auto"): when
 --- pickers.nvim is installed, the template list goes through it instead of
@@ -361,28 +376,73 @@ local function list_templates()
   return ordered
 end
 
----Move `name` up (-1) or down (+1) one position in the persisted display
----order. Normalizes the order to the full current template list first (so a
----template that was never explicitly ordered can still be moved), then
----writes the swapped order back. No-op (false) at either boundary or when
----`name` doesn't exist.
+---Split `templates` into its custom (non-builtin) and builtin entries,
+---each preserving their relative order from `templates`. The shared basis
+---for both the grouped picker display (`build_rows` below) and `M.move`'s
+---own persisted order, so the two are never out of step with each other.
+---@internal
+---@param templates {name:string, path:string, builtin:boolean?}[]
+---@return {name:string, path:string, builtin:boolean?}[] custom
+---@return {name:string, path:string, builtin:boolean?}[] builtin
+local function partition_by_category(templates)
+  local custom, builtin = {}, {}
+  for _, t in ipairs(templates) do
+    if t.builtin then
+      builtin[#builtin + 1] = t
+    else
+      custom[#custom + 1] = t
+    end
+  end
+  return custom, builtin
+end
+
+---Move `name` up (-1) or down (+1) one position, WITHIN its own category
+---(custom or builtin) — never across the [custom]/[builtin] boundary the
+---picker displays, since a cross-category swap would reorder the persisted
+---list without any visible effect (the display always groups custom before
+---builtin regardless of how they interleave underneath), which would make
+---the keymap look like it silently did nothing. No-op (false) at either the
+---overall or the category boundary, or when `name` doesn't exist.
+---
+---Persists the FULL list every time, always as custom-block then
+---builtin-block (mirroring `build_rows`'s own grouping) — not just the
+---touched category — so the order file never drifts back into an
+---interleaved shape that a later render would have to un-group again.
 ---@param name string
 ---@param delta -1|1
 ---@return boolean moved
 function M.move(name, delta)
-  local current = list_templates()
-  local names, at = {}, nil
-  for i, t in ipairs(current) do
-    names[i] = t.name
-    if t.name == name then at = i end
+  local custom, builtin = partition_by_category(list_templates())
+
+  local group, at
+  for i, t in ipairs(custom) do
+    if t.name == name then
+      group, at = custom, i
+      break
+    end
   end
-  if not at then return false end
+  if not group then
+    for i, t in ipairs(builtin) do
+      if t.name == name then
+        group, at = builtin, i
+        break
+      end
+    end
+  end
+  if not group then return false end
 
   local target = at + delta
-  if target < 1 or target > #names then return false end
+  if target < 1 or target > #group then return false end
+  group[at], group[target] = group[target], group[at]
 
-  names[at], names[target] = names[target], names[at]
-  return save_order(names)
+  local full = {}
+  for _, t in ipairs(custom) do
+    full[#full + 1] = t.name
+  end
+  for _, t in ipairs(builtin) do
+    full[#full + 1] = t.name
+  end
+  return save_order(full)
 end
 
 -- ── Creation ──────────────────────────────────────────────────────────────────
@@ -418,27 +478,75 @@ end
 
 -- ── Picker flow ───────────────────────────────────────────────────────────────
 
----Display label: built-ins get a marker so the merged list makes clear which
----entries ship with the plugin vs. the user's own (or an override of one).
+---Display label for a single template row. No more per-item "[builtin]"
+---marker — the builtin picker conveys that distinction with the "[custom]"/
+---"[builtin]" section headers `build_rows` inserts below instead (repeating
+---the same marker on every single builtin row was pure noise once the list
+---mixes both kinds); the pickers.nvim path (`pick_template_via_pickers`,
+---which cannot render header rows without polluting its own fuzzy match)
+---still just shows the plain name.
 ---@internal
 ---@param t {name:string, builtin:boolean?}
 ---@return string
 local function display_name(t)
-  return t.builtin and (t.name .. "  [builtin]") or t.name
+  return t.name
+end
+
+---Rows for the builtin picker's display: a flat `{text, tmpl}[]`, `tmpl` nil
+---for the two cosmetic "[custom]"/"[builtin]" header rows. Headers are
+---inserted ONLY when `templates` actually holds both kinds — a directory
+---with just built-ins (or, in principle, just custom ones) stays a plain,
+---unlabelled list exactly as before, since there is nothing to distinguish.
+---Custom is listed before builtin — see the module docstring's "Display
+---grouping" note — matching the order `M.move` itself persists in, so the
+---two never disagree about where the boundary sits.
+---@internal
+---@param templates {name:string, path:string, builtin:boolean?}[]
+---@return {text:string, tmpl:({name:string, path:string, builtin:boolean?})?}[]
+local function build_rows(templates)
+  local custom, builtin = partition_by_category(templates)
+  local rows = {}
+
+  if #custom > 0 and #builtin > 0 then
+    rows[#rows + 1] = { text = "[custom]" }
+    for _, t in ipairs(custom) do
+      rows[#rows + 1] = { text = display_name(t), tmpl = t }
+    end
+    rows[#rows + 1] = { text = "[builtin]" }
+    for _, t in ipairs(builtin) do
+      rows[#rows + 1] = { text = display_name(t), tmpl = t }
+    end
+  else
+    for _, t in ipairs(templates) do
+      rows[#rows + 1] = { text = display_name(t), tmpl = t }
+    end
+  end
+
+  return rows
 end
 
 ---Plain, non-reorderable picker (fallback when the ui kit's `picker`
 ---component is unavailable — e.g. lib.nvim absent, or the kit's own mount
----failed).
+---failed). Picking a header row (nil `tmpl`) re-opens the same picker rather
+---than silently closing on nothing — headers aren't real choices, but a
+---`vim.ui.select`-shaped picker has no notion of a disabled row to prevent
+---landing on one in the first place.
 ---@internal
 ---@param templates {name:string, path:string, builtin:boolean?}[]
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template_plain(templates, on_select)
-  ui_select(templates, {
+  ui_select(build_rows(templates), {
     prompt = "Templates",
-    format_item = display_name,
-  }, function(tmpl)
-    if tmpl then on_select(tmpl) end
+    format_item = function(row)
+      return row.text
+    end,
+  }, function(row)
+    if not row then return end
+    if not row.tmpl then
+      pick_template_plain(templates, on_select)
+      return
+    end
+    on_select(row.tmpl)
   end)
 end
 
@@ -447,17 +555,24 @@ end
 ---immediately via M.move(). Filtering by typing still works (kit.picker's
 ---own query→on_change), it just can't be combined with reordering in the
 ---same keystroke, since "move" is only well-defined against the full,
----unfiltered order.
+---unfiltered order; a filtered list also drops the [custom]/[builtin]
+---headers (`build_rows`) and shows a flat match list instead, same reasoning.
 ---@internal
 ---@param templates {name:string, path:string, builtin:boolean?}[]
 ---@param on_select fun(tmpl: {name:string, path:string, builtin:boolean?})
 local function pick_template_reorderable(templates, on_select)
-  local list = templates
+  local list = templates -- current template set (post-filter), always flat
+  local filtering = false
+  local rows = {} -- current display rows -- may include header rows when unfiltered
 
   local function render(handle)
+    rows = filtering and vim.tbl_map(function(t)
+      return { text = display_name(t), tmpl = t }
+    end, list) or build_rows(list)
+
     local lines = {}
-    for _, t in ipairs(list) do
-      lines[#lines + 1] = display_name(t)
+    for _, row in ipairs(rows) do
+      lines[#lines + 1] = row.text
     end
     handle.set_results(lines)
   end
@@ -470,7 +585,8 @@ local function pick_template_reorderable(templates, on_select)
   local handle
   handle = kit.picker({
     on_change = function(query)
-      if query == "" then
+      filtering = query ~= ""
+      if not filtering then
         list = templates
       else
         local q = query:lower()
@@ -481,8 +597,8 @@ local function pick_template_reorderable(templates, on_select)
       render(handle)
     end,
     on_submit = function(idx)
-      local tmpl = list[idx]
-      if tmpl then on_select(tmpl) end
+      local row = rows[idx]
+      if row and row.tmpl then on_select(row.tmpl) end
     end,
   })
   if not handle then
@@ -503,14 +619,26 @@ local function pick_template_reorderable(templates, on_select)
       return
     end
     local idx = current_idx()
-    local tmpl = idx and list[idx]
+    local row = idx and rows[idx]
+    local tmpl = row and row.tmpl
     if not tmpl or not M.move(tmpl.name, delta) then return end
 
     templates = list_templates() -- reload: reflects the just-persisted order
     list = templates
     render(handle)
 
-    local target = math.max(1, math.min(idx + delta, #list))
+    -- Find where `tmpl` landed in the just-rebuilt rows, rather than
+    -- assuming `idx + delta`: a header row can sit between the old and new
+    -- position (e.g. moving the last custom entry down persisted-wise, even
+    -- though `M.move` itself never lets a move cross the group boundary),
+    -- so the row one position away isn't reliably the row `tmpl` moved to.
+    local target = idx
+    for i, r in ipairs(rows) do
+      if r.tmpl and r.tmpl.name == tmpl.name then
+        target = i
+        break
+      end
+    end
     local results = handle.slots.results
     if results and results:is_valid() then
       pcall(vim.api.nvim_win_set_cursor, results.winid, { target, 0 })
@@ -590,39 +718,30 @@ end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
----Templates whose OWN extension matches `filename`'s extension. Falls back
----to the full unfiltered list when nothing matches (a filter that leaves
----nothing to pick from is a dead end, not a useful restriction) or when
----`filename` has no extension at all.
----@param templates {name:string, path:string, builtin:boolean?}[]
----@param filename string
----@return {name:string, path:string, builtin:boolean?}[]
-local function filter_by_extension(templates, filename)
-  local ext = vim.fn.fnamemodify(filename, ":e")
-  if ext == "" then return templates end
-
-  local matched = {}
-  for _, t in ipairs(templates) do
-    if vim.fn.fnamemodify(t.name, ":e") == ext then matched[#matched + 1] = t end
-  end
-  return #matched > 0 and matched or templates
-end
-
----Prompt for a filename, then open the (extension-filtered) template picker,
----then create the file — in that order, so both the picker and ${module}
----substitution see the real destination path.
+---Open the template picker FIRST, then prompt for the filename — pre-filled
+---with the picked template's own filename (extension included) — then
+---create the file, in that order. Picking the template before the name is
+---known is what fixes the old name-first flow's actual bug: with the name
+---typed first (e.g. "check.md") and the picker then merely FILTERED by its
+---extension, nothing stopped a fallback-to-full-list pick of a template
+---whose real extension didn't match (a `.cpp` template, still with `.md` as
+---the destination) — the file got that template's content under an
+---extension that didn't fit it, so its buffer opened with the wrong
+---filetype. Pre-filling the name from the chosen template's own filename
+---means the destination's extension defaults to the one the content is
+---actually written for; the user can still rename the base part (or the
+---extension, deliberately) before submitting.
 ---@param dest_dir string  Absolute destination directory.
 function M.open(dest_dir)
-  require("ui.kit").input({
-    title = "New file (in " .. vim.fn.fnamemodify(dest_dir, ":t") .. "): ",
-    on_submit = function(name)
-      if not name or name == "" then return end
-      name = path_u.slashify(name) -- accept "/" or "\" if creating into a subdir
-      local dest = dest_dir .. "/" .. name
+  pick_template(list_templates(), function(tmpl)
+    require("ui.kit").input({
+      title = "New file from " .. tmpl.name .. " (in " .. vim.fn.fnamemodify(dest_dir, ":t") .. "): ",
+      default = tmpl.name,
+      on_submit = function(name)
+        if not name or name == "" then return end
+        name = path_u.slashify(name) -- accept "/" or "\" if creating into a subdir
+        local dest = dest_dir .. "/" .. name
 
-      local templates = filter_by_extension(list_templates(), name)
-
-      pick_template(templates, function(tmpl)
         local function proceed()
           if create_from(tmpl.path, dest) then
             notify.info("Created: " .. name .. " (from " .. tmpl.name .. ")")
@@ -654,9 +773,9 @@ function M.open(dest_dir)
         else
           proceed()
         end
-      end)
-    end,
-  })
+      end,
+    })
+  end)
 end
 
 ---Open picker at the current tree node's directory.

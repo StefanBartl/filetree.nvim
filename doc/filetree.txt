@@ -726,10 +726,27 @@ in underneath — a same-named file in your own template directory shadows a
 built-in one entirely.
 
 Workflow: press "A" in the tree (the smart_create "a" counterpart) — or
-`:Filetree template` — enter the new filename FIRST, then pick a template
-from the list filtered to that filename's extension (falls back to the full
-list when nothing matches). The destination path is already known at pick
-time, so `${module}` and every other variable below resolves against it.
+`:Filetree template` — pick a template FIRST, then enter the new filename,
+pre-filled with the picked template's own filename (extension included).
+Fixes the old name-first flow's actual bug: typing the name first and only
+filtering the picker by its extension didn't stop a fallback pick of a
+template whose real extension didn't match (e.g. "check.md" with a C++
+template's content) — the file's extension and its content could disagree,
+opening the buffer with the wrong filetype. `${module}` and every other
+variable below resolves once both the template and the destination path are
+known.
+
+DISPLAY GROUPING ~
+
+Once you've added your own templates, the builtin picker (see PICKER
+BACKEND below) groups the list under a "[custom]" and a "[builtin]" header
+instead of tagging every single built-in entry — repeating a "[builtin]"
+marker on every row not authored by you was pure noise once the list mixes
+both. Headers only appear when both kinds exist and are never selectable; a
+directory with just built-ins (the default) stays a plain list. The
+pickers.nvim path (prefer = "telescope"/"fzf"/"snacks") shows a flat,
+ungrouped list instead — a fuzzy-match item list has no room for
+non-selectable header rows.
 
 Variables (substituted on creation): >
   ${filename}   Basename of the new file (without extension)
@@ -772,7 +789,9 @@ While the picker is open and the filter is empty, <M-j>/<M-k> move the
 highlighted template down/up. The order persists to a `.order.json` sidecar
 in the template directory, so it survives restarts; a never-reordered or
 newly-added template is appended alphabetically after the ones with an
-explicit position.
+explicit position. A move never crosses the [custom]/[builtin] boundary —
+the persisted order is itself kept grouped custom-then-builtin, in step
+with the display.
 
 CONFIGURATION ~
 >lua
