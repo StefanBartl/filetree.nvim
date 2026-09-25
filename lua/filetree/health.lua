@@ -334,6 +334,31 @@ function M.check()
     end
   end
 
+  -- ── pickers.nvim integration ──────────────────────────────────────────────
+  -- find_files / grep_in_dir hand the node's directory to pickers.nvim when it is
+  -- installed and neither side opted out; say which of the three conditions
+  -- holds, so "why did `f` not use pickers.nvim?" has an answer here.
+  vim.health.start("filetree.nvim — pickers.nvim integration")
+  local ok_pk, pk_bridge = pcall(require, "pickers.integrations.filetree")
+  if not ok_pk then
+    vim.health.info("pickers.nvim (with `pickers.integrations.filetree`) not installed (optional)")
+  else
+    vim.health.ok("pickers.nvim found")
+    local int = require("filetree.config").get().integrations
+    if type(int) == "table" and int.pickers == false then
+      vim.health.info(
+        "`integrations.pickers = false` here — find_files / grep_in_dir use their own backends"
+      )
+    elseif pk_bridge.available() then
+      vim.health.ok("active — `f` / `gr` / `tf` / `tg` run through pickers.nvim")
+    else
+      vim.health.info(
+        "not active — pickers.nvim has `filetree = { enabled = false }` or no picker engine "
+          .. "(telescope / fzf-lua / snacks) installed; find_files / grep_in_dir use their own backends"
+      )
+    end
+  end
+
   -- ── Reference engine ──────────────────────────────────────────────────────
   -- What the engine would do on the next rename/move, and whether it has the
   -- fast path (ripgrep) available -- the single question behind "why did my
