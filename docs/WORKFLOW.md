@@ -222,15 +222,19 @@ rather than falling back to whatever the walk finds first. Worth knowing
 before debugging "why didn't the cwd follow that scratch file I opened" —
 it's not a bug, `sticky` is doing exactly what it's for.
 
-## Templates: filename first is deliberate, not an implementation detail
+## Templates: template first is deliberate, not an implementation detail
 
-`A` (create-from-template) asks for the destination filename *before*
-showing the template picker, specifically so the picker can filter to
-extension-matching templates (`foo.lua` → only `.lua` templates) — typing
-the name last would mean picking a template blind, with no guarantee it
-matches what you're about to name the file. If the filtered list looks
-empty or wrong, check the extension you typed rather than assuming the
-template is missing — a typo'd extension (`.lua` vs `.lu`) silently falls
-back to the *full* unfiltered list rather than erroring, which can look
-like "the filter isn't working" when it's actually "nothing matched, so
-you're seeing everything".
+`A` (create-from-template) shows the template picker *before* asking for
+the destination filename — the reverse of an earlier design that asked for
+the filename first and merely *filtered* the picker to extension-matching
+templates. That filter had a real bug: a typo'd or deliberately different
+extension (or simply no exact-extension template existing) silently fell
+back to the *full* unfiltered list rather than refusing the pick, so
+nothing stopped you from naming the file `check.md` and still picking a
+C++ template — the destination kept the `.md` extension while its content
+was C++, and the buffer opened with the wrong filetype. Picking the
+template first and then pre-filling the filename prompt with the
+template's own filename (extension included) removes the mismatch instead
+of merely filtering for it: whatever extension you don't deliberately
+change stays the one the picked template's content is actually written
+for.

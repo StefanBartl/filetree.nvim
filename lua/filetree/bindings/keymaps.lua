@@ -168,7 +168,7 @@ return {
     { lhs = "r", desc = "Rename with LSP refs", feature = "smart_rename", scope = "tree" },
     {
       lhs = "A",
-      desc = "Create from template (filename first, then filtered picker)",
+      desc = "Create from template (pick template first, then pre-filled filename)",
       feature = "create_from_template",
       scope = "tree",
     },
