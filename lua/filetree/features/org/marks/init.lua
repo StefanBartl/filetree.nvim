@@ -4,12 +4,36 @@
 --- Marks are stored per-session as a set of absolute paths. Visual indicators
 --- are rendered as extmarks in the tree buffer. Marked paths are exposed for
 --- use in batch operations (copy, move, delete, etc.).
+---
+--- Auto-clear on idle (`auto_clear_ms`, default 60000): marks otherwise live
+--- forever until an explicit `keymap_clear`, or until a batch op that
+--- CONSUMED them clears them itself (trash/move/copy_move/diff do; the
+--- read-only consumers — pdf_create, markdown_links, path_copy,
+--- copy_file_list — deliberately don't, so the same marks can feed several
+--- of those in a row). That is a footgun on its own: mark a batch, run one
+--- of the read-only actions, get pulled away, come back much later and run
+--- an unrelated single-node action (trash/move/... again) expecting it to
+--- act on just the node under the cursor — those all PREFER the marked set
+--- over the cursor node whenever any mark exists, so it silently acts on the
+--- long-stale marks instead. `touch()` below re-arms a `lib.nvim.debounce`
+--- countdown on every mark-facing keymap (toggle, mark/unmark all, visual
+--- mark, goto/next/prev, show) — genuine mark activity — and once `ms` pass
+--- without another touch, all marks clear on their own, with a notify so the
+--- "why did that just act on everything" moment has an obvious cause instead
+--- of none. Deliberately NOT tied to closing/reopening the tree (nothing in
+--- here calls `touch()` from adapter open/close) and NOT touched by internal
+--- callers (`M.count()`/`M.get_marked()`/`M.is_marked()`) that merely CHECK
+--- for marks as part of unrelated logic (e.g. every trash/move/copy_move
+--- call, marked or not) — hooking those would keep re-arming the timer from
+--- actions that have nothing to do with actually using the marks, defeating
+--- the point of the timeout entirely.
 
 local notify = require("filetree.util.notify").create("[filetree.marks]")
 
 local bufevents = require("filetree.util.bufevents")
 local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
+local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeMarksConfig
@@ -31,6 +55,10 @@ local _cfg = {
   keymap_goto = "gm",
   keymap_next = "]M",
   keymap_prev = "[M",
+  -- Clear all marks after this many ms of no mark activity (see the module
+  -- doc comment above); 0 disables the timeout, same "0 = off" convention
+  -- as trash's max_history.
+  auto_clear_ms = 60000,
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -48,6 +76,7 @@ M.SCHEMA = {
   keymap_goto = "keymap",
   keymap_next = "keymap",
   keymap_prev = "keymap",
+  auto_clear_ms = { "number", min = 0 },
 }
 
 ---@type FiletreeAdapter?
@@ -64,6 +93,23 @@ local _ns = nil
 local function ns()
   if not _ns then _ns = vim.api.nvim_create_namespace("filetree_marks") end
   return _ns
+end
+
+---One lib.nvim.debounce handle, built in M.setup() when auto_clear_ms > 0.
+---Every genuine mark-activity keymap re-arms it via `touch()`; once it fires
+---uninterrupted, all marks clear themselves. nil when the feature is off
+---(auto_clear_ms == 0) or before setup() has run.
+---@type Lib.Debounce.Handle|nil
+local _debounce = nil
+
+---Re-arm the idle-clear countdown. Call from every mark-facing keymap
+---handler (toggle, mark/unmark all, visual mark, goto/next/prev, show) —
+---see the module doc comment for why internal "does a mark exist" checks
+---(M.count()/M.get_marked()/M.is_marked(), called by unrelated features on
+---every run whether or not anything is marked) must NOT call this.
+---@internal
+local function touch()
+  if _debounce then _debounce.call() end
 end
 
 -- ── Internal ──────────────────────────────────────────────────────────────────
@@ -127,6 +173,7 @@ function M.toggle(path)
   else
     _marks[path] = true
   end
+  touch()
   redraw()
   return _marks[path] == true
 end
@@ -171,8 +218,11 @@ function M.count()
   return n
 end
 
----Clear all marks.
+---Clear all marks. Also cancels any pending auto-clear countdown -- nothing
+---left to expire, and letting a stale one fire later would just re-clear an
+---already-empty set (harmless, but there's no reason to leave it armed).
 function M.clear_all()
+  if _debounce then _debounce.cancel() end
   _marks = {}
   redraw()
 end
@@ -184,6 +234,7 @@ function M.mark_all_visible()
   for _, node in ipairs(nodes) do
     _marks[node.path] = true
   end
+  touch()
   redraw()
 end
 
@@ -194,6 +245,7 @@ function M.unmark_all_visible()
   for _, node in ipairs(nodes) do
     _marks[node.path] = nil
   end
+  touch()
   redraw()
 end
 
@@ -246,6 +298,7 @@ function M.goto_mark(n)
     notify.info("No marked nodes visible")
     return false
   end
+  touch()
   local idx = math.max(1, math.min(n or 1, #marks))
   goto_line(marks[idx].line)
   return true
@@ -261,6 +314,7 @@ function M.goto_adjacent_mark(dir)
     notify.info("No marked nodes visible")
     return false
   end
+  touch()
 
   local is_open, bufnr = _adapter.is_open()
   if not is_open or not bufnr then return false end
@@ -324,6 +378,7 @@ function M.mark_visual(unmark)
     end
   end
 
+  touch()
   redraw()
   return changed
 end
@@ -335,6 +390,7 @@ function M.show()
     notify.info("No nodes marked")
     return
   end
+  touch()
 
   local lines = {
     string.format("Marked nodes (%d)", #marked),
@@ -363,6 +419,31 @@ function M.setup(config, adapter)
   if not config.enabled then return end
   _cfg = vim.tbl_deep_extend("force", _cfg, config)
   _adapter = adapter
+
+  -- Cancel any handle from a previous setup() before replacing it -- same
+  -- guard every other lib.nvim.debounce owner in this codebase takes (see
+  -- e.g. file_watcher/git_status/auto_reveal's own setup()). Normally
+  -- unreachable because the top-level filetree.setup() tears down previous
+  -- features (which cancels this) before re-running setup(), but that
+  -- safety net only holds while teardown() itself does not error -- and
+  -- without this guard a stray timer from an aborted teardown would keep
+  -- running, uncancellable, since nothing would reference it any more.
+  if _debounce then _debounce.cancel() end
+  _debounce = nil
+
+  if _cfg.auto_clear_ms and _cfg.auto_clear_ms > 0 then
+    _debounce = lib_debounce.new(function()
+      -- clear_all() already cancels this timer, so an empty set here should
+      -- be rare -- but debounce firing right as some other caller clears the
+      -- marks itself is still a race worth guarding, rather than notifying
+      -- about clearing a set that's already empty.
+      if next(_marks) == nil then return end
+      M.clear_all()
+      notify.info(
+        ("Marks auto-cleared after %ds idle"):format(math.floor(_cfg.auto_clear_ms / 1000))
+      )
+    end, _cfg.auto_clear_ms)
+  end
 
   -- Redraw marks whenever the tree buffer is entered/refreshed
   bufevents.register("marks", { "BufEnter:*", "BufWritePost:*" }, {
@@ -481,6 +562,10 @@ function M.teardown()
   if _unsubscribe_render then
     _unsubscribe_render()
     _unsubscribe_render = nil
+  end
+  if _debounce then
+    _debounce.cancel()
+    _debounce = nil
   end
   _marks = {}
   if _adapter then
