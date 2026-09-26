@@ -413,9 +413,28 @@ end
 ---symlink. Always a symlink, never a hardlink: repair has no way to know
 ---what the ORIGINAL link kind was (POSIX doesn't record it), and a symlink is
 ---the only kind that can point at either a file or a directory.
+---
+---Re-checks `link_path` is STILL a symlink right before deleting it: the
+---caller reaches here only after an async filesystem search and an
+---interactive picker (repair_one → find_repair_candidates → offer_repair →
+---this), a window easily long enough (the user deliberating, a slow
+---search) for something else to have replaced `link_path` with a real file
+---in the meantime (a git checkout, a build script, another Neovim
+---instance). `mutate.delete_file` is an unconditional `fs_unlink` with no
+---type check of its own, so skipping this would silently delete whatever
+---real file now sits there.
 ---@param link_path string
 ---@param new_target string
 local function relink(link_path, new_target)
+  if not symlink_util.is_link(link_path) then
+    notify.error(
+      "Not relinking "
+        .. path.relative(link_path)
+        .. " — it is no longer a symlink (something else changed it in the meantime)"
+    )
+    return
+  end
+
   local stat = vim.uv.fs_stat(new_target)
   local is_dir = stat ~= nil and stat.type == "directory"
 
@@ -455,11 +474,14 @@ end
 ---and one a filesystem walk turns up — a case-sensitive compare would just
 ---never match there and silently let an unsafe path through. Same fold
 ---`path.env_rooted` already uses for the identical "is path A under root B"
----question.
+---question. `vim.fn.tolower`, not Lua's `string.lower` — the latter only
+---folds ASCII (`("BJÖRN"):lower()` == `"bjÖrn"`, the `Ö` untouched), which
+---would leave exactly this comparison broken again for a non-ASCII profile
+---path (e.g. a Windows username with an accented letter).
 ---@param s string
 ---@return string
 local function fold_case(s)
-  return platform.is_windows() and s:lower() or s
+  return platform.is_windows() and vim.fn.tolower(s) or s
 end
 
 ---@internal
@@ -561,10 +583,10 @@ local function find_repair_candidates(tail, on_done)
     end
   end
 
-  notify.info("Searching filesystem for a replacement target…")
-  finder.find_async(basename, { roots = fast_roots }, function(hits)
-    local filtered = safe(hits or {})
-
+  ---@internal
+  ---Stage 2: `repair_roots`/`repair_nvim_config_root`, only reached once
+  ---stage 1 came up empty (or had nothing safe left to search at all).
+  local function try_slow_pass()
     -- `to_target` (not `vim.fn.expand`, SEC-34): `repair_roots` entries are
     -- config values, and `$VAR`-style env references in them need the
     -- shellout-free expansion every other config path in this plugin uses.
@@ -575,9 +597,8 @@ local function find_repair_candidates(tail, on_done)
     if _cfg.repair_nvim_config_root then
       extra_roots[#extra_roots + 1] = path.slashify(vim.fn.stdpath("config"))
     end
-
-    if #filtered > 0 or #extra_roots == 0 then
-      on_done(filtered)
+    if #extra_roots == 0 then
+      on_done({})
       return
     end
 
@@ -629,6 +650,31 @@ local function find_repair_candidates(tail, on_done)
 
       on_done(filtered2)
     end)
+  end
+
+  notify.info("Searching filesystem for a replacement target…")
+
+  -- NEVER call finder.find_async with an empty roots list: gopath.nvim's own
+  -- find_async silently substitutes ITS OWN default_roots() (cwd + stdpath
+  -- config/data/cache) for an empty/nil `opts.roots` -- exactly the roots
+  -- `fast_roots` was just filtered to exclude. An empty fast_roots (a real
+  -- case: e.g. cwd/bufdir/git-root all equal stdpath("config"), which the
+  -- filter above then removes, leaving nothing) would otherwise silently
+  -- reintroduce the whole excluded search space, bypassing
+  -- repair_nvim_config_root=false and the cache/data/state exclusion alike.
+  -- Treat "nothing left to search" as a stage-1 miss instead.
+  if #fast_roots == 0 then
+    try_slow_pass()
+    return
+  end
+
+  finder.find_async(basename, { roots = fast_roots }, function(hits)
+    local filtered = safe(hits or {})
+    if #filtered > 0 then
+      on_done(filtered)
+      return
+    end
+    try_slow_pass()
   end)
 end
 
@@ -811,6 +857,18 @@ function M.delete()
   if not ok_t or not trash then
     notify.warn("trash feature not available")
     return
+  end
+  -- `links` was validated above, but the actual OS-level delete happens
+  -- later, behind an async ref/asset scan plus (by default) an interactive
+  -- confirm dialog — arbitrarily long if the user is deliberating. Ask
+  -- trash to re-verify each path is still a symlink right before it
+  -- actually deletes it, so this command's "never a real file" guarantee
+  -- holds even if something else replaces one of these paths in the
+  -- meantime.
+  if type(trash.expect_symlink) == "function" then
+    for _, p in ipairs(links) do
+      trash.expect_symlink(p)
+    end
   end
   trash.delete_current({ paths = links })
 end

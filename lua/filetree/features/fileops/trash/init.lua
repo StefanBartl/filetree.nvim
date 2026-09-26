@@ -124,6 +124,29 @@ local function is_permanent()
 end
 
 ---@internal
+---Opt-in per-path expectation: a caller that already validated `path` at
+---gather time (e.g. `link_create.M.delete()` checking it IS a symlink,
+---never a real file) can additionally ask for that same guarantee to be
+---re-checked immediately before the actual OS-level delete, via
+---`M.expect_symlink(path)` below. Closes the TOCTOU window an async ref/
+---asset scan plus an interactive confirm dialog otherwise opens up between
+---"gathered the paths" and "actually deleted them" — arbitrarily long if the
+---user is deliberating on the picker. Self-clearing: consumed (and removed)
+---inside `do_trash` exactly once per entry, so a stale flag can never linger
+---across an unrelated later delete of the same path.
+---@type table<string, true>
+local _expect_symlink = {}
+
+---Ask `do_trash` to re-verify `path` is still a symlink immediately before
+---deleting it, aborting that one delete (with a notify, not an error) if
+---something else replaced it with a real file in the meantime. Call once
+---per path, right before handing it to `M.delete`/`M.delete_current`.
+---@param path string
+function M.expect_symlink(path)
+  _expect_symlink[path] = true
+end
+
+---@internal
 ---The confirm question for `path` (or the whole-batch variant when `path`
 ---is omitted) — worded so a permanent delete never reads like a trash
 ---(recoverable) one, since the two share every dialog in this module.
@@ -200,6 +223,17 @@ end
 ---@param cb fun(ok: boolean)  invoked on the main loop once the delete attempt settled
 ---@return nil
 local function do_trash(path, cb)
+  if _expect_symlink[path] then
+    _expect_symlink[path] = nil
+    if not symlink_util.is_link(path) then
+      notify.warn(
+        "Skipped — no longer a symlink (something else changed it in the meantime): " .. path
+      )
+      cb(false)
+      return
+    end
+  end
+
   -- `conflict.exists` (not a bare filereadable/isdirectory check): a broken
   -- symlink is neither, yet is very much a path that needs trashing.
   if not conflict.exists(path) then
