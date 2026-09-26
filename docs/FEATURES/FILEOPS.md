@@ -207,7 +207,11 @@ dialog's wording changes to make that explicit ("Permanently delete
 On Windows, "delete all at once" for several marked nodes runs the whole
 batch through a single PowerShell process instead of spawning one per
 file — spawning `powershell.exe` (plus its .NET startup) per file is what
-made trashing a couple dozen marked files visibly slow.
+made trashing a couple dozen marked files visibly slow. macOS and Linux
+batch the same way, one `trash`/AppleScript/`gio trash`/`trash-put`/`mv`
+call for the whole batch instead of one per file — cheaper to begin with
+there (no COM/.NET startup), but no reason to pay per-process overhead N
+times over when the backend already accepts a list of paths in one call.
 
 When something links to the file being deleted, the plain yes/no becomes a
 chooser — **Delete + remove refs** (blanks the dangling links to `REF!`),

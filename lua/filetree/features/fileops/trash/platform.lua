@@ -37,6 +37,19 @@ local function run(argv, err_msg, cb)
   end)
 end
 
+---@internal
+---Same existence check as `filetree.util.conflict.exists`, duplicated
+---rather than required: platform.lua only reasons about OS trash
+---mechanics and stays a leaf module with no sibling-util dependency; a
+---bare `filereadable`/`isdirectory` pair would miss a broken symlink (which
+---is neither, yet very much still an entry on disk).
+---@param path string
+---@return boolean
+local function path_exists(path)
+  if vim.fn.filereadable(path) == 1 or vim.fn.isdirectory(path) == 1 then return true end
+  return (vim.uv or vim.loop).fs_lstat(path) ~= nil
+end
+
 -- ── Windows ───────────────────────────────────────────────────────────────────
 
 ---@param path string  Absolute path. For the WSL caller below this is
@@ -215,6 +228,59 @@ local function trash_mac(path, cb)
   }, "AppleScript trash failed", cb)
 end
 
+---@internal
+---One process for the whole batch, same idea as `run_windows_batch` but far
+---simpler: both the `trash` CLI and Finder's `delete` Apple Event already
+---accept a LIST of items in a single call (`delete {file1, file2, ...}` is
+---the idiomatic way to trash several Finder items at once, not a loop of
+---separate `tell` invocations), so there is no generated script/JSON
+---round-trip to build here -- just pass every path in one invocation.
+---
+---Neither backend reports which individual path failed when the batch's
+---exit code is non-zero (a locked file among otherwise-fine ones, say), so
+---this checks existence afterward instead -- mirrors the pre-flight
+---`conflict.exists` the caller already ran, and is the one outcome that
+---means the same thing regardless of which backend (or its locale/version)
+---produced it.
+---@param paths string[]
+---@param cb fun(results: TrashResult[])  one result per input path, same order.
+local function run_mac_batch(paths, cb)
+  local function finish(err_msg)
+    local results = {}
+    for i, p in ipairs(paths) do
+      results[i] = path_exists(p) and { ok = false, err = err_msg } or { ok = true }
+    end
+    cb(results)
+  end
+
+  if vim.fn.executable("trash") == 1 then
+    local argv = { "trash" }
+    for _, p in ipairs(paths) do
+      argv[#argv + 1] = p
+    end
+    run(argv, "trash CLI failed", function(result)
+      finish(result.err)
+    end)
+    return
+  end
+
+  local specs = {}
+  for _, p in ipairs(paths) do
+    specs[#specs + 1] = string.format('POSIX file "%s"', applescript_string(p))
+  end
+  run(
+    {
+      "osascript",
+      "-e",
+      string.format('tell app "Finder" to delete {%s}', table.concat(specs, ", ")),
+    },
+    "AppleScript trash failed",
+    function(result)
+      finish(result.err)
+    end
+  )
+end
+
 -- ── Linux ─────────────────────────────────────────────────────────────────────
 
 ---@param path string
@@ -236,6 +302,58 @@ local function trash_linux(path, cb)
   local base = vim.fn.fnamemodify(path, ":t")
   local dst = trash_dir .. "/" .. base
   run({ "mv", path, dst }, "mv to XDG Trash failed", cb)
+end
+
+---@internal
+---One process for the whole batch: `gio trash`, `trash-put` and `mv` (into
+---a directory destination) all already accept multiple source paths in a
+---single invocation, same as `run_mac_batch`'s reasoning -- no
+---generated-script trick needed here either. Per-path outcome is
+---determined the same way too: check existence afterward rather than
+---trying to attribute one shared exit code across several paths.
+---@param paths string[]
+---@param cb fun(results: TrashResult[])  one result per input path, same order.
+local function run_linux_batch(paths, cb)
+  local function finish(err_msg)
+    local results = {}
+    for i, p in ipairs(paths) do
+      results[i] = path_exists(p) and { ok = false, err = err_msg } or { ok = true }
+    end
+    cb(results)
+  end
+
+  local argv, err_msg
+  if vim.fn.executable("gio") == 1 then
+    argv, err_msg = { "gio", "trash" }, "gio trash failed"
+  elseif vim.fn.executable("trash-put") == 1 then
+    argv, err_msg = { "trash-put" }, "trash-put failed"
+  end
+
+  if argv then
+    for _, p in ipairs(paths) do
+      argv[#argv + 1] = p
+    end
+    run(argv, err_msg, function(result)
+      finish(result.err)
+    end)
+    return
+  end
+
+  -- Manual XDG fallback: `mv src1 src2 ... trash_dir` (a directory
+  -- destination), same primitive as the single-path trash_linux above --
+  -- including the same same-basename-from-different-dirs collision that
+  -- already existed there (the second `mv` silently overwrites the first's
+  -- trashed copy), unrelated to batching it.
+  local trash_dir = (vim.env.XDG_DATA_HOME or (vim.env.HOME .. "/.local/share")) .. "/Trash/files"
+  if vim.fn.isdirectory(trash_dir) == 0 then vim.fn.mkdir(trash_dir, "p") end
+  local mv_argv = { "mv" }
+  for _, p in ipairs(paths) do
+    mv_argv[#mv_argv + 1] = p
+  end
+  mv_argv[#mv_argv + 1] = trash_dir
+  run(mv_argv, "mv to XDG Trash failed", function(result)
+    finish(result.err)
+  end)
 end
 
 -- ── WSL ───────────────────────────────────────────────────────────────────────
@@ -290,20 +408,22 @@ end
 
 ---Send several paths to trash in as few external processes as possible.
 ---
----On native Windows (where the per-process powershell.exe + COM/.NET
----startup cost is the actual bottleneck for a multi-mark batch -- see
----`run_windows_batch`), every path goes through ONE process. Everywhere
----else this is a plain sequential fallback over `M.send`, identical to what
----callers used to chain by hand -- WSL, macOS and Linux were never the
----reported slowdown, and batching gio/trash-put/trash/mv into fewer
----invocations is a real option but a separate, unasked-for change.
+---Every backend that can genuinely batch does: native Windows (see
+---`run_windows_batch` -- the per-process powershell.exe + COM/.NET startup
+---cost was the actual bottleneck for a multi-mark delete, several hundred ms
+---to a couple of seconds each), macOS (`run_mac_batch`) and Linux
+---(`run_linux_batch`). WSL and pre-0.10 Neovim (no vim.system to parse
+---`run_windows_batch`'s JSON stdout with) fall back to a plain sequential
+---loop over `M.send`, identical to what callers used to chain by hand --
+---neither was ever the reported slowdown, and WSL's own two-hop
+---wslpath+PowerShell dance per path is not worth batching on top of.
 ---@param paths string[]
 ---@param cb fun(results: TrashResult[])  one result per input path, same order.
 ---@return nil
 function M.send_batch(paths, cb)
   if #paths == 0 then return cb({}) end
 
-  if vim.system and platform.is_windows() then
+  if vim.system and platform.is_windows() and not platform.is_wsl() then
     local targets = {}
     for i, p in ipairs(paths) do
       targets[i] =
@@ -311,6 +431,8 @@ function M.send_batch(paths, cb)
     end
     return run_windows_batch(targets, cb)
   end
+  if platform.is_mac() then return run_mac_batch(paths, cb) end
+  if platform.is_linux() and not platform.is_wsl() then return run_linux_batch(paths, cb) end
 
   local results = {}
   local i = 0
