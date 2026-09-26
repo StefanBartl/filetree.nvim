@@ -4917,15 +4917,15 @@ do
   end
 end
 
--- ── trash.expect_symlink: skips a delete when the path is no longer a ──────
+-- ── trash require_symlink: skips a delete when the path is no longer a ────
 -- symlink by the time do_trash actually runs -- regression coverage for the
 -- same class of TOCTOU as the repair test above, for :Filetree symlink
--- delete's own "never a real file" guarantee (link_create.M.delete() calls
--- trash.expect_symlink() for each path right before handing them to
--- trash.delete_current(); tested here directly against trash's public API,
--- which is what M.delete() actually calls through).
+-- delete's own "never a real file" guarantee (link_create.M.delete() passes
+-- require_symlink=true to trash.delete_current(); tested here directly
+-- against trash's own M.delete(path, on_done, require_symlink), which is
+-- what M.delete_current() actually calls through per-path).
 do
-  local tmp = (TMP_ROOT .. "/units-trash-expectsymlink"):gsub("\\", "/")
+  local tmp = (TMP_ROOT .. "/units-trash-requiresymlink"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
   vim.fn.mkdir(tmp, "p")
   local link_path = tmp .. "/target.txt"
@@ -4935,11 +4935,11 @@ do
 
   if not ok_broken then
     print(
-      "  note trash.expect_symlink: could not create a test symlink in this environment, skipping"
+      "  note trash require_symlink: could not create a test symlink in this environment, skipping"
     )
   else
     local stub = setmetatable({
-      name = "units-stub-expectsymlink",
+      name = "units-stub-requiresymlink",
       is_available = function()
         return true
       end,
@@ -4963,15 +4963,14 @@ do
     local ft = require("filetree")
     ft.register_adapter(stub)
     ft.setup({
-      adapter = "units-stub-expectsymlink",
+      adapter = "units-stub-requiresymlink",
       -- permanent + confirm=false: a real, synchronous delete with no
-      -- dialog in the way, so do_trash runs (and the expect_symlink check
+      -- dialog in the way, so do_trash runs (and the require_symlink check
       -- fires) right inside this same call.
       features = { trash = { enabled = true, mode = "permanent", confirm = false } },
     })
     local trash = ft.feature("trash")
 
-    trash.expect_symlink(link_path)
     -- Simulate the race: something else replaced the symlink with a real
     -- file between "gathered/validated it" and "trash actually runs".
     local replaced_content = "real file, must survive untouched"
@@ -4981,15 +4980,117 @@ do
     local done_ok
     trash.delete(link_path, function(ok)
       done_ok = ok
-    end)
+    end, true)
 
-    check("trash.expect_symlink: reports the delete as NOT done", done_ok == false)
+    check("trash require_symlink: reports the delete as NOT done", done_ok == false)
     check(
-      "trash.expect_symlink: the real file that replaced the symlink survives untouched",
+      "trash require_symlink: the real file that replaced the symlink survives untouched",
       vim.fn.filereadable(link_path) == 1
         and table.concat(vim.fn.readfile(link_path), "\n") == replaced_content
     )
 
+    package.loaded["filetree.features.fileops.trash"] = nil
+  end
+end
+
+-- ── trash require_symlink (batched route): run_all_batched also enforces ──
+-- the check, not just the single-path do_trash chain -- regression coverage
+-- for the exact gap the second ultracode review round flagged: 2+ marked
+-- symlinks with the default trash mode go through run_all_batched, which
+-- used to skip the TOCTOU re-check entirely.
+do
+  local tmp = (TMP_ROOT .. "/units-trash-requiresymlink-batch"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local link_a = tmp .. "/a.txt"
+  local link_b = tmp .. "/b.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_a = mutate.symlink(tmp .. "/old_a.txt", link_a, false)
+  local ok_b = mutate.symlink(tmp .. "/old_b.txt", link_b, false)
+
+  if not (ok_a and ok_b) then
+    print(
+      "  note trash require_symlink (batch): could not create test symlinks in this environment, skipping"
+    )
+  else
+    -- >1 path with mode="trash" (default) routes run_all through
+    -- run_all_batched/send_batch, not the per-path do_trash chain -- stub
+    -- the platform layer so this never touches the real OS trash.
+    package.loaded["filetree.features.fileops.trash.platform"] = {
+      available = function()
+        return true
+      end,
+      send = function(p, cb)
+        os.remove(p)
+        if cb then cb({ ok = true }) end
+      end,
+      send_batch = function(paths, cb)
+        local results = {}
+        for i, p in ipairs(paths) do
+          os.remove(p)
+          results[i] = { ok = true }
+        end
+        if cb then cb(results) end
+      end,
+    }
+
+    local stub = setmetatable({
+      name = "units-stub-requiresymlink-batch",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return nil
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-requiresymlink-batch",
+      -- confirm=false: run_all's own batched route, no chooser dialog in
+      -- the way -- mode stays the default ("trash"), which is what
+      -- actually reaches run_all_batched (permanent delete never batches).
+      features = { trash = { enabled = true, confirm = false } },
+    })
+    local trash = ft.feature("trash")
+
+    -- Same race as the single-path test above, but on ONE of the two
+    -- batched paths: link_b gets replaced by a real file before the batch
+    -- actually runs. link_a stays a genuine symlink throughout.
+    local replaced_content = "real file, must survive untouched"
+    vim.fn.delete(link_b)
+    vim.fn.writefile({ replaced_content }, link_b)
+
+    trash.delete_current({ paths = { link_a, link_b }, require_symlink = true })
+    vim.wait(2000, function()
+      return vim.fn.filereadable(link_a) == 0 or (vim.uv or vim.loop).fs_lstat(link_a) == nil
+    end, 20)
+
+    check(
+      "trash require_symlink (batch): the real file that replaced one symlink survives untouched",
+      vim.fn.filereadable(link_b) == 1
+        and table.concat(vim.fn.readfile(link_b), "\n") == replaced_content
+    )
+    check(
+      "trash require_symlink (batch): the genuine symlink in the same batch was still removed",
+      (vim.uv or vim.loop).fs_lstat(link_a) == nil
+    )
+
+    package.loaded["filetree.features.fileops.trash.platform"] = nil
     package.loaded["filetree.features.fileops.trash"] = nil
   end
 end

@@ -398,7 +398,9 @@ local DELETE_CHOICE = "Delete symlink instead"
 local function delete_via_trash(link_path)
   local ok_t, trash = require("filetree.features").load("trash")
   if ok_t and trash then
-    trash.delete(link_path)
+    -- require_symlink = true: re-verify right before the OS-level delete
+    -- that this is still a symlink, not just at the point repair found it.
+    trash.delete(link_path, nil, true)
   else
     notify.warn(
       "trash feature not available — leaving the broken symlink in place: " .. link_path
@@ -512,8 +514,9 @@ end
 ---     in-memory.
 ---  2. gopath's own fast default roots (buffer dir/cwd/git root/its own
 ---     stdpath set) — a live walk, but bounded to what a project normally is.
----  3. `features.link_create.repair_roots`/`.repair_nvim_config_root` (OFF by
----     default) — ONLY reached if 1 and 2 both found nothing, since these can
+---  3. `features.link_create.repair_roots`/`.repair_nvim_config_root` (ON by
+---     default: `repair_roots = {"$REPOS_DIR"}`, `repair_nvim_config_root =
+---     true`) — ONLY reached if 1 and 2 both found nothing, since these can
 ---     point at something genuinely large (a whole repos root, a real Neovim
 ---     config: measured at 5.8k files/737MB on one real machine). gopath's
 ---     async walker only reports once the WHOLE root set it was given has
@@ -860,17 +863,12 @@ function M.delete()
   end
   -- `links` was validated above, but the actual OS-level delete happens
   -- later, behind an async ref/asset scan plus (by default) an interactive
-  -- confirm dialog — arbitrarily long if the user is deliberating. Ask
-  -- trash to re-verify each path is still a symlink right before it
-  -- actually deletes it, so this command's "never a real file" guarantee
-  -- holds even if something else replaces one of these paths in the
-  -- meantime.
-  if type(trash.expect_symlink) == "function" then
-    for _, p in ipairs(links) do
-      trash.expect_symlink(p)
-    end
-  end
-  trash.delete_current({ paths = links })
+  -- confirm dialog — arbitrarily long if the user is deliberating.
+  -- require_symlink = true asks trash to re-verify each path is still a
+  -- symlink right before it actually deletes it, so this command's "never a
+  -- real file" guarantee holds even if something else replaces one of these
+  -- paths in the meantime.
+  trash.delete_current({ paths = links, require_symlink = true })
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────

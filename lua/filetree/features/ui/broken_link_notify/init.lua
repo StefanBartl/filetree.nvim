@@ -44,7 +44,13 @@ function M.setup(_config)
       local path = vim.api.nvim_buf_get_name(event.buf)
       if path == "" then return end
       if symlink_util.is_broken(path) then
-        notify.warn("Broken symlink — its target does not exist: " .. path)
+        local target = symlink_util.read_target(path)
+        notify.warn(
+          "This buffer is empty because "
+            .. path
+            .. " is a broken symlink"
+            .. (target and (" -> " .. target .. " (target does not exist)") or "")
+        )
       end
     end,
   })
