@@ -1801,6 +1801,16 @@ do
       os.remove(p)
       if cb then cb({ ok = true }) end
     end,
+    -- >1 marked path routes run_all through send_batch now (see
+    -- run_all_batched in trash/init.lua), not a chain of `send` calls.
+    send_batch = function(paths, cb)
+      local results = {}
+      for i, p in ipairs(paths) do
+        os.remove(p)
+        results[i] = { ok = true }
+      end
+      if cb then cb(results) end
+    end,
   }
   -- Auto-drive the batch chooser: always pick option 1 ("Delete all at once").
   ---@diagnostic disable-next-line: duplicate-set-field

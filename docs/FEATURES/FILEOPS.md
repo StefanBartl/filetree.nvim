@@ -193,15 +193,21 @@ they don't linger as edits-to-nowhere. Same progress indicator
 as Copy / Move above, for both the "delete all at once" and "confirm
 each individually" batch paths.
 
-`features.trash.mode` is `"trash"` by default — Windows Recycle Bin,
-macOS Finder/Trash, or `gio trash`/`trash-put` on Linux (XDG-trash
-fallback when neither is installed), all via `lib.nvim.fs.trash`. Set it
-to `"permanent"` to skip the OS trash and delete for good instead — no
-shell, same libuv/Vim-builtin primitive the "Overwrite" paste resolution
-uses. Opt-in on purpose: a permanent delete has no `U`/history entry to
-fall back on, so the confirm dialog's wording changes to make that
-explicit ("Permanently delete (cannot be undone)?") rather than sharing
-the "Send to trash?" phrasing.
+`features.trash.mode` is `"trash"` by default — Windows Recycle Bin (via
+`Microsoft.VisualBasic.FileIO.FileSystem`, not the Explorer delete verb,
+which triggers a confirmation dialog no headless PowerShell script can
+answer), macOS Finder/Trash, or `gio trash`/`trash-put` on Linux (XDG-trash
+fallback when neither is installed). Set it to `"permanent"` to skip the OS
+trash and delete for good instead — no shell, same libuv/Vim-builtin
+primitive the "Overwrite" paste resolution uses. Opt-in on purpose: a
+permanent delete has no `U`/history entry to fall back on, so the confirm
+dialog's wording changes to make that explicit ("Permanently delete
+(cannot be undone)?") rather than sharing the "Send to trash?" phrasing.
+
+On Windows, "delete all at once" for several marked nodes runs the whole
+batch through a single PowerShell process instead of spawning one per
+file — spawning `powershell.exe` (plus its .NET startup) per file is what
+made trashing a couple dozen marked files visibly slow.
 
 When something links to the file being deleted, the plain yes/no becomes a
 chooser — **Delete + remove refs** (blanks the dangling links to `REF!`),
