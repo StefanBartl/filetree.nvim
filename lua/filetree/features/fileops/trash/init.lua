@@ -566,9 +566,88 @@ local function finalize(ok_count, total, cancelled)
   notify.info(table.concat(parts, " "))
 end
 
+---@internal
+---Same contract/outcome as `run_all` below, for the case batching actually
+---helps: real trash mode (not dry-run — nothing external to batch there),
+---more than one path (a lone path gains nothing from building and parsing a
+---batch script it still has to pay for). Permanent mode never reaches this
+---either — `run_all` keeps it on the per-path chain, same as dry-run.
+---
+---Existence checks still happen per path up front (a stale mark pointing at
+---an already-deleted file — exactly what produced the confusing "path does
+---not exist" warnings in the original bug report — must not be sent to
+---`trash_platform.send_batch` at all), and safety-backup/undo/buffer-close
+---bookkeeping still runs per path, just once the whole batch has settled
+---rather than interleaved between individual OS calls.
+---@param paths string[]
+local function run_all_batched(paths)
+  local prog = progress.create({ title = "[filetree.trash]" })
+
+  local existing = {}
+  for _, p in ipairs(paths) do
+    if conflict.exists(p) then
+      existing[#existing + 1] = p
+    else
+      notify.warn("path does not exist: " .. p)
+    end
+  end
+
+  if _cfg.use_safety then
+    local ok_sf, safety = require("filetree.features").load("safety")
+    if ok_sf and safety then
+      for _, p in ipairs(existing) do
+        pcall(safety.before_delete, p)
+      end
+    end
+  end
+
+  local function spawn()
+    if prog then
+      prog:update({ text = string.format("%d item(s)", #existing), current = 0, total = #existing })
+    end
+    trash_platform.send_batch(existing, function(results)
+      local ok_count = 0
+      for i, p in ipairs(existing) do
+        local result = results[i]
+        if result and result.ok then
+          ok_count = ok_count + 1
+          undo.record(p)
+          buffer.close_for_path(p)
+        else
+          notify.error(
+            "Trash failed: " .. ((result and result.err) or "unknown error") .. " (" .. p .. ")"
+          )
+        end
+      end
+      if prog then prog:finish(summary_line(ok_count, #paths)) end
+      finalize(ok_count, #paths, 0)
+    end)
+  end
+
+  -- Release every watcher up front rather than per path -- do_trash's own
+  -- 20ms defer-before-spawn dance, just paid once for the whole batch
+  -- instead of once per path.
+  local any_released = false
+  for _, p in ipairs(existing) do
+    if watch.release(p) > 0 then any_released = true end
+  end
+  if any_released then
+    vim.defer_fn(spawn, 20)
+  else
+    spawn()
+  end
+end
+
 ---Delete every path with no further prompting (the "all" decision).
 ---@param paths string[]
 local function run_all(paths)
+  -- Batching only helps the one thing that's actually slow: spawning a
+  -- fresh OS trash process per path (see platform.lua's run_windows_batch).
+  -- Permanent delete and dry-run never do that — do_trash short-circuits
+  -- before ever touching trash_platform for either — so both, along with
+  -- the trivial single-path case, keep the existing per-path chain below.
+  if not is_permanent() and not _cfg.dry_run and #paths > 1 then return run_all_batched(paths) end
+
   local prog = progress.create({ title = "[filetree.trash]" })
   local ok_count = 0
 

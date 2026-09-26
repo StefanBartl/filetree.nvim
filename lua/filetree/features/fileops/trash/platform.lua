@@ -39,14 +39,19 @@ end
 
 -- ── Windows ───────────────────────────────────────────────────────────────────
 
----@param path string
+---@param path string  Absolute path. For the WSL caller below this is
+---                    already the *converted* Windows-style path, so
+---                    `isdirectory` on it would test the wrong filesystem --
+---                    that caller passes `is_dir` explicitly instead.
 ---@param cb fun(result: TrashResult)
-local function trash_windows(path, cb)
+---@param is_dir boolean?  Defaults to `vim.fn.isdirectory(path) == 1`.
+local function trash_windows(path, cb, is_dir)
   -- Paths need native backslash separators for the .NET APIs below, and
   -- PowerShell single-quoted strings escape an embedded quote by doubling it
   -- ('' not \'), so a path containing ' breaks the script otherwise. Both are
   -- handled the same way in trash/undo.lua's restore_windows.
   local win_path = path:gsub("/", "\\"):gsub("'", "''")
+  if is_dir == nil then is_dir = vim.fn.isdirectory(path) == 1 end
 
   -- Microsoft.VisualBasic.FileIO.FileSystem, NOT Shell.Application's
   -- ParseName(...).InvokeVerb('delete') (what this used to be): that verb
@@ -61,7 +66,7 @@ local function trash_windows(path, cb)
   -- re-done by hand). UIOption.OnlyErrorDialogs suppresses exactly that
   -- confirmation while still surfacing real errors (permission denied, path
   -- too long, file in use, ...) as a non-zero exit via the try/catch below.
-  local method = vim.fn.isdirectory(path) == 1 and "DeleteDirectory" or "DeleteFile"
+  local method = is_dir and "DeleteDirectory" or "DeleteFile"
   local script = string.format(
     "Add-Type -AssemblyName Microsoft.VisualBasic; "
       .. "try { [Microsoft.VisualBasic.FileIO.FileSystem]::%s("
@@ -77,6 +82,98 @@ local function trash_windows(path, cb)
     "PowerShell trash failed",
     cb
   )
+end
+
+---@internal
+---One PowerShell process for the WHOLE batch instead of one per path.
+---
+---powershell.exe's own startup plus loading the Microsoft.VisualBasic
+---assembly costs several hundred ms to a couple of seconds each (worse
+---under real-time antivirus scanning of every new process) -- multiplied by
+---a multi-mark batch, that is where "trashing 26 files took 30 seconds"
+---comes from. Every individual FileSystem.DeleteFile/DeleteDirectory call
+---*inside* one already-running process is comparatively instant, so
+---amortizing the startup cost across the batch is the actual win, not
+---making each delete itself faster.
+---@param targets { win_path: string, is_dir: boolean }[]  win_path already
+---       backslash/quote-escaped, same as trash_windows above.
+---@param cb fun(results: TrashResult[])  one result per target, same order.
+local function run_windows_batch(targets, cb)
+  local items = {}
+  for _, t in ipairs(targets) do
+    items[#items + 1] =
+      string.format("@{Path='%s';IsDir=$%s}", t.win_path, t.is_dir and "true" or "false")
+  end
+
+  -- Each target's own try/catch means one failure (locked file, permission
+  -- denied) does not abort the rest of the batch -- same "independent
+  -- failures" contract run_all already relies on for the per-path chain.
+  -- $results is force-cast to [array] so a 1-target batch still comes back
+  -- as a JSON array from ConvertTo-Json below, instead of Windows
+  -- PowerShell 5.1's usual "a 1-element pipeline collapses to a bare
+  -- object" behaviour.
+  local script = "Add-Type -AssemblyName Microsoft.VisualBasic; "
+    .. "$targets = @("
+    .. table.concat(items, ",")
+    .. "); "
+    .. "[array]$results = foreach ($t in $targets) { "
+    .. "try { "
+    .. "if ($t.IsDir) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($t.Path, "
+    .. "[Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, "
+    .. "[Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin) } "
+    .. "else { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($t.Path, "
+    .. "[Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, "
+    .. "[Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin) } "
+    .. "@{Ok=$true} "
+    .. "} catch { @{Ok=$false;Err=$_.Exception.Message} } "
+    .. "}; "
+    .. "ConvertTo-Json -InputObject $results -Compress"
+
+  vim.system(
+    { "powershell", "-NoProfile", "-NonInteractive", "-Command", script },
+    { text = true },
+    function(res)
+      vim.schedule(function()
+        cb(M._parse_batch_output(res, #targets))
+      end)
+    end
+  )
+end
+
+---@internal
+---Decode `run_windows_batch`'s JSON stdout into one `TrashResult` per
+---target, tolerating a non-zero exit (the whole process failed to even
+---start the script) and unparseable output (a PowerShell version quirk)
+---by falling back to "every target failed" rather than erroring.
+---@param res vim.SystemCompleted
+---@param count integer
+---@return TrashResult[]
+function M._parse_batch_output(res, count)
+  local function all_failed(err)
+    local results = {}
+    for i = 1, count do
+      results[i] = { ok = false, err = err }
+    end
+    return results
+  end
+
+  if res.code ~= 0 then return all_failed("PowerShell batch trash failed") end
+
+  local ok_decode, decoded = pcall(vim.json.decode, res.stdout or "")
+  if not ok_decode or type(decoded) ~= "table" then
+    return all_failed("Could not parse PowerShell batch trash output")
+  end
+
+  local results = {}
+  for i = 1, count do
+    local item = decoded[i]
+    if type(item) == "table" and item.Ok == true then
+      results[i] = { ok = true }
+    else
+      results[i] = { ok = false, err = (type(item) == "table" and item.Err) or "unknown error" }
+    end
+  end
+  return results
 end
 
 ---@internal
@@ -146,6 +243,12 @@ end
 ---@param path string
 ---@param cb fun(result: TrashResult)
 local function trash_wsl(path, cb)
+  -- Determined from the ORIGINAL (Linux-side) path, before wslpath below
+  -- rewrites it to a Windows-style string that `isdirectory` on this side
+  -- can no longer resolve (`trash_windows` would otherwise always fall back
+  -- to "file").
+  local is_dir = vim.fn.isdirectory(path) == 1
+
   -- Convert to Windows path and use PowerShell Recycle Bin. Two chained
   -- spawns; both used to block.
   if not vim.system then
@@ -154,7 +257,7 @@ local function trash_wsl(path, cb)
       cb({ ok = false, err = "wslpath conversion failed for: " .. path })
       return
     end
-    trash_windows(win_path, cb)
+    trash_windows(win_path, cb, is_dir)
     return
   end
 
@@ -165,7 +268,7 @@ local function trash_wsl(path, cb)
         cb({ ok = false, err = "wslpath conversion failed for: " .. path })
         return
       end
-      trash_windows(win_path, cb)
+      trash_windows(win_path, cb, is_dir)
     end)
   end)
 end
@@ -183,6 +286,43 @@ function M.send(path, cb)
   if platform.is_windows() then return trash_windows(path, cb) end
   if platform.is_mac() then return trash_mac(path, cb) end
   return trash_linux(path, cb)
+end
+
+---Send several paths to trash in as few external processes as possible.
+---
+---On native Windows (where the per-process powershell.exe + COM/.NET
+---startup cost is the actual bottleneck for a multi-mark batch -- see
+---`run_windows_batch`), every path goes through ONE process. Everywhere
+---else this is a plain sequential fallback over `M.send`, identical to what
+---callers used to chain by hand -- WSL, macOS and Linux were never the
+---reported slowdown, and batching gio/trash-put/trash/mv into fewer
+---invocations is a real option but a separate, unasked-for change.
+---@param paths string[]
+---@param cb fun(results: TrashResult[])  one result per input path, same order.
+---@return nil
+function M.send_batch(paths, cb)
+  if #paths == 0 then return cb({}) end
+
+  if vim.system and platform.is_windows() then
+    local targets = {}
+    for i, p in ipairs(paths) do
+      targets[i] =
+        { win_path = p:gsub("/", "\\"):gsub("'", "''"), is_dir = vim.fn.isdirectory(p) == 1 }
+    end
+    return run_windows_batch(targets, cb)
+  end
+
+  local results = {}
+  local i = 0
+  local function step()
+    i = i + 1
+    if i > #paths then return cb(results) end
+    M.send(paths[i], function(result)
+      results[i] = result
+      step()
+    end)
+  end
+  step()
 end
 
 ---Return true when a trash CLI is available on the current platform.
