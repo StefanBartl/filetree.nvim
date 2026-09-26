@@ -618,6 +618,14 @@ back to the delete-or-keep choice directly. `:Filetree symlink repairall`
 runs this over every broken symlink among the marked nodes (else the node
 under the cursor), one at a time.
 
+The search never widens into Neovim's own cache/data/state directories
+(that's where the undo/swap/shada directories live — a stray file there
+could otherwise spuriously match a broken link's basename and get offered
+as a bogus "candidate"). `features.link_create.repair_roots` (a list of
+extra directories, unset by default, `$VAR`-expanded) widens it the other
+way, to a sibling project entirely outside gopath's own search, e.g.
+`repair_roots = { "$REPOS_DIR" }`.
+
 `:Filetree symlink delete` removes every symlink among the marked nodes
 (else the node under the cursor) through the trash feature — a non-symlink
 caught up in the same batch is skipped, never deleted. Trashing a symlink
@@ -626,4 +634,4 @@ prompt says so explicitly rather than reading like an ordinary file delete.
 
 - **Module:** `lua/filetree/features/fileops/link_create/`
 - **Commands:** `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree symlink paste`, `:Filetree symlink check [path]`, `:Filetree symlink checkall`, `:Filetree symlink repair [path]`, `:Filetree symlink repairall`, `:Filetree symlink delete`
-- **Config:** `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all unset by default)
+- **Config:** `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` / `.repair_roots` (all unset by default)

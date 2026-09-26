@@ -4034,6 +4034,346 @@ do
   end
 end
 
+-- ── link_create repair: unsafe roots/hits filtered on the LIVE search path ──
+-- too, case-insensitively (Windows) ──────────────────────────────────────────
+-- The other test below covers the cache_lookup() half of find_repair_candidates
+-- (an early return before find_async is ever reached); this one drives the
+-- find_async() half specifically -- both the ROOT LIST handed to it (must
+-- exclude stdpath cache/data/state before the walk even starts) and its HITS
+-- (must be filtered again, since gopath's own persisted cache could already
+-- hold one). Also exercises the exact real-world mismatch that slipped past an
+-- earlier, case-sensitive version of this filter: Windows compares paths
+-- case-insensitively, and an env/stdpath-derived casing commonly disagrees
+-- with a filesystem-walk-derived one for the same directory.
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-liveunsafe"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  local fake_cache = tmp .. "/FakeCache"
+  vim.fn.mkdir(fake_cache .. "/undo", "p")
+  vim.fn.mkdir(tmp .. "/newloc", "p")
+  local safe_hit = tmp .. "/newloc/target.txt"
+  vim.fn.writefile({ "moved" }, safe_hit)
+  local unsafe_hit = fake_cache .. "/undo/mangled_undofile"
+  vim.fn.writefile({ "garbage" }, unsafe_hit)
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (live unsafe): could not create a test symlink in this environment, skipping"
+    )
+  else
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return {} -- empty -- forces the fallthrough to find_async
+      end,
+      -- Mirrors gopath's real default roots including a stdpath dir --
+      -- deliberately a DIFFERENT case than the fake stdpath("cache") below,
+      -- since that mismatch is exactly the real-world bug being guarded against.
+      guess_roots = function(_)
+        return { tmp, fake_cache:upper() }
+      end,
+    }
+    local captured_roots
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.truncated.finder"] = {
+      find_async = function(_, opts, on_done)
+        captured_roots = opts.roots
+        on_done({ safe_hit, unsafe_hit })
+      end,
+    }
+    local captured_items
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.select"] = function(items, _, on_choice)
+      captured_items = items
+      on_choice(nil, nil) -- only care what was offered, not what gets picked
+    end
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
+
+    local platform = require("filetree.util.platform")
+    local orig_is_windows = platform.is_windows
+    ---@diagnostic disable-next-line: duplicate-set-field
+    platform.is_windows = function()
+      return true
+    end
+    local orig_stdpath = vim.fn.stdpath
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.stdpath = function(what)
+      if what == "cache" then return fake_cache:lower() end -- yet another casing
+      return orig_stdpath(what)
+    end
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-liveunsafe",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-liveunsafe",
+      features = { link_create = { enabled = true } },
+    })
+    local lc = ft.feature("link_create")
+
+    lc.repair(link_path)
+    vim.fn.stdpath = orig_stdpath
+    platform.is_windows = orig_is_windows
+
+    check(
+      "link_create repair (live unsafe): the differently-cased unsafe root is stripped before find_async runs",
+      captured_roots ~= nil and not vim.tbl_contains(captured_roots, fake_cache:upper()),
+      vim.inspect(captured_roots)
+    )
+    check(
+      "link_create repair (live unsafe): the safe root still reaches find_async",
+      captured_roots ~= nil and vim.tbl_contains(captured_roots, tmp),
+      vim.inspect(captured_roots)
+    )
+    check(
+      "link_create repair (live unsafe): the picker gets only the safe hit, never the unsafe one",
+      captured_items ~= nil
+        and vim.tbl_contains(captured_items, safe_hit)
+        and not vim.tbl_contains(captured_items, unsafe_hit),
+      vim.inspect(captured_items)
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["gopath.truncated.finder"] = nil
+    package.loaded["filetree.util.select"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── link_create repair: a stray undofile-shaped hit is filtered out ─────────
+-- Regression coverage for a real report: gopath.nvim's default search roots
+-- include stdpath("cache")/stdpath("data"), where Neovim's own undo directory
+-- lives; an unrelated file's undofile (named by mangling ITS real path with
+-- "%" in place of separators) can spuriously tail-match a broken link's
+-- basename and get offered as a "candidate" -- picking it relinks the symlink
+-- to binary undofile garbage. `find_repair_candidates` must drop any hit
+-- under one of those stdpaths before it ever reaches the picker.
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-unsafe"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local fake_cache = tmp .. "/fake_cache"
+  vim.fn.mkdir(fake_cache .. "/undo", "p")
+  local unsafe_hit = fake_cache .. "/undo/mangled_undofile"
+  vim.fn.writefile({ "not a real target" }, unsafe_hit)
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (unsafe root): could not create a test symlink in this environment, skipping"
+    )
+  else
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return { unsafe_hit } -- the ONLY hit -- must be filtered to zero, not offered
+      end,
+      guess_roots = function()
+        return { tmp }
+      end,
+    }
+    local select_called = false
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.select"] = function(_, _, on_choice)
+      select_called = true
+      on_choice(nil, nil)
+    end
+    local captured_choices
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.confirm_choice"] = function(_, choices, on_choice)
+      captured_choices = choices
+      on_choice("Keep broken (do nothing)")
+    end
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
+
+    local orig_stdpath = vim.fn.stdpath
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.stdpath = function(what)
+      if what == "cache" then return fake_cache end
+      return orig_stdpath(what)
+    end
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-unsafe",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-unsafe",
+      features = { link_create = { enabled = true } },
+    })
+    local lc = ft.feature("link_create")
+
+    lc.repair(link_path)
+    vim.fn.stdpath = orig_stdpath
+
+    check(
+      "link_create repair (unsafe root): the stdpath('cache') hit is never offered in the picker",
+      not select_called
+    )
+    check(
+      "link_create repair (unsafe root): falls through to the no-candidate delete/keep choice instead",
+      captured_choices ~= nil
+        and captured_choices[1] == "Delete symlink instead"
+        and captured_choices[2] == "Keep broken (do nothing)",
+      vim.inspect(captured_choices)
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["filetree.util.select"] = nil
+    package.loaded["filetree.util.confirm_choice"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── link_create repair: repair_roots config reaches a sibling directory ────
+-- The other half of the same real report: a broken link's real target can
+-- live entirely outside the current project (a different repo altogether),
+-- which gopath's own buffer-dir/cwd/git-root guessing has no way to reach.
+-- `features.link_create.repair_roots` is the configured escape hatch --
+-- assert it actually reaches gopath's `guess_roots(extra)` call.
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-extraroot"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local link_path = tmp .. "/target.txt"
+  local extra_root = tmp .. "/sibling_repo"
+  vim.fn.mkdir(extra_root, "p")
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (repair_roots): could not create a test symlink in this environment, skipping"
+    )
+  else
+    local captured_extra
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return {}
+      end,
+      guess_roots = function(extra)
+        captured_extra = extra
+        return { tmp }
+      end,
+    }
+    -- cache_lookup is empty, so find_repair_candidates falls through to the
+    -- async finder -- stub it too (it isn't installed in this test rtp),
+    -- otherwise the pcall(require, ...) failure short-circuits before
+    -- guess_roots(extra) is ever reached.
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.truncated.finder"] = {
+      find_async = function(_, _, on_done)
+        on_done({})
+      end,
+    }
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stub
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-extraroot",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-extraroot",
+      features = { link_create = { enabled = true, repair_roots = { extra_root } } },
+    })
+    local lc = ft.feature("link_create")
+
+    lc.repair(link_path)
+
+    check(
+      "link_create repair (repair_roots): the configured extra root reaches gopath's guess_roots(extra)",
+      captured_extra ~= nil and vim.tbl_contains(captured_extra, extra_root),
+      vim.inspect(captured_extra)
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["gopath.truncated.finder"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
 -- ── rename_batch: confirm=true asks kit.confirm (async), not the old ────────
 -- blocking `vim.fn.input("...[y/N]...")` freetext prompt.
 do

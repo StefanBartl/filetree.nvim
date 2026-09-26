@@ -35,6 +35,7 @@ local _cfg = {
   keymap = nil, -- off by default; set e.g. keymap = "gl" to bind one
   keymap_mark = nil,
   keymap_paste = nil,
+  repair_roots = nil, -- extra search roots for `repair`/`repairall`; none by default
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -45,6 +46,7 @@ M.SCHEMA = {
   keymap = "keymap",
   keymap_mark = "keymap",
   keymap_paste = "keymap",
+  repair_roots = { "table", of = "string" },
 }
 ---@type FiletreeAdapter?
 local _adapter = nil
@@ -405,12 +407,67 @@ local function relink(link_path, new_target)
 end
 
 ---@internal
+---Directories a repair search must never walk into, or return a hit from:
+---Neovim's own cache/data/state dirs — among other things, where the undo
+---directory lives. A REAL regression: gopath.nvim's default roots include
+---`stdpath("data"/"cache")`, so an unrelated file's *undofile* (named by
+---mangling ITS real path with `%` in place of separators) can spuriously
+---tail-match a broken link's basename and get offered as a "candidate" —
+---picking it relinks the symlink to binary undo-file garbage. Filtered at
+---both ends below: dropped from the roots handed to the live search (so the
+---walk never descends into them at all) and, since gopath.nvim's own
+---persisted cache may already have indexed one from an earlier scan, from
+---any hit it returns too.
+---@return string[]
+local function unsafe_roots()
+  local out = {}
+  for _, sp in ipairs({ "cache", "data", "state" }) do
+    local ok, p = pcall(vim.fn.stdpath, sp)
+    if ok and type(p) == "string" and p ~= "" then out[#out + 1] = path.slashify(p) end
+  end
+  return out
+end
+
+---@internal
+---Windows compares paths case-insensitively, and a drive letter/segment
+---commonly disagrees in case between an env-var-derived path (`stdpath()`)
+---and one a filesystem walk turns up — a case-sensitive compare would just
+---never match there and silently let an unsafe path through. Same fold
+---`path.env_rooted` already uses for the identical "is path A under root B"
+---question.
+---@param s string
+---@return string
+local function fold_case(s)
+  return platform.is_windows() and s:lower() or s
+end
+
+---@internal
+---True when `p` is exactly one of `roots`, or nested under one of them.
+---@param p string
+---@param roots string[]
+---@return boolean
+local function is_under_any(p, roots)
+  local norm = fold_case(path.slashify(p))
+  for _, root in ipairs(roots) do
+    local folded_root = fold_case(root)
+    if norm == folded_root or norm:sub(1, #folded_root + 1) == (folded_root .. "/") then
+      return true
+    end
+  end
+  return false
+end
+
+---@internal
 ---Search the filesystem for a replacement target via gopath.nvim's truncated-
 ---path search (an OPTIONAL soft dependency, same pattern as `util/pdf.lua`'s
 ---pdfport.nvim bridge — nothing here breaks if gopath.nvim is not installed,
 ---repair just falls back to a plain delete/keep choice). Cache lookup first
 ---(instant, in-memory); only the cache miss falls through to the async live
----filesystem walk.
+---filesystem walk. `features.link_create.repair_roots` (config, off by
+---default) widens the search to sibling directories gopath's own root-
+---guessing has no way to reach on its own (e.g. an entirely different repo)
+---— never to Neovim's own cache/data/state dirs, `unsafe_roots()` always
+---wins over it.
 ---@param tail string  cleaned path tail (see gopath's tailsearch.sanitize)
 ---@param on_done fun(hits: string[]|nil)  nil = gopath.nvim not installed
 local function find_repair_candidates(tail, on_done)
@@ -420,7 +477,18 @@ local function find_repair_candidates(tail, on_done)
     return
   end
 
-  local cached = tailsearch.cache_lookup(tail)
+  local unsafe = unsafe_roots()
+  ---@param hits string[]
+  ---@return string[]
+  local function safe(hits)
+    local out = {}
+    for _, h in ipairs(hits) do
+      if not is_under_any(h, unsafe) then out[#out + 1] = h end
+    end
+    return out
+  end
+
+  local cached = safe(tailsearch.cache_lookup(tail))
   if #cached > 0 then
     on_done(cached)
     return
@@ -431,9 +499,27 @@ local function find_repair_candidates(tail, on_done)
     on_done({})
     return
   end
+
+  -- `to_target` (not `vim.fn.expand`, SEC-34): `repair_roots` entries are
+  -- config values, and `$VAR`-style env references in them need the
+  -- shellout-free expansion every other config path in this plugin uses —
+  -- same normalization `M.mark`'s explicit-path argument already gets.
+  local extra_roots = nil
+  if _cfg.repair_roots then
+    extra_roots = {}
+    for _, r in ipairs(_cfg.repair_roots) do
+      extra_roots[#extra_roots + 1] = to_target(r)
+    end
+  end
+
+  local roots = {}
+  for _, r in ipairs(tailsearch.guess_roots(extra_roots)) do
+    if not is_under_any(r, unsafe) then roots[#roots + 1] = r end
+  end
+
   notify.info("Searching filesystem for a replacement target…")
-  finder.find_async(tail, { roots = tailsearch.guess_roots() }, function(hits)
-    on_done(hits or {})
+  finder.find_async(tail, { roots = roots }, function(hits)
+    on_done(safe(hits or {}))
   end)
 end
 
@@ -474,11 +560,22 @@ local function offer_repair(link_path, candidates, on_done)
   items[#items + 1] = DELETE_CHOICE
   items[#items + 1] = KEEP_CHOICE
 
+  -- format_item only ever receives the item itself, not its index (kit.select
+  -- numbers nothing on its own) -- precompute item -> row number instead of
+  -- scanning `items` on every call.
+  local row_of = {}
+  for i, it in ipairs(items) do
+    row_of[it] = i
+  end
+
   ui_select(items, {
     prompt = "Repair " .. path.relative(link_path) .. " — pick a new target:",
+    -- kit.select defaults to cursor-anchored placement, which reads poorly
+    -- for a list of full paths; centered like kit.confirm's own default.
+    relative = "editor",
     format_item = function(item)
-      if item == DELETE_CHOICE or item == KEEP_CHOICE then return item end
-      return path.relative(item)
+      local label = (item == DELETE_CHOICE or item == KEEP_CHOICE) and item or path.relative(item)
+      return string.format("[%02d] %s", row_of[item], label)
     end,
   }, function(choice)
     if not choice or choice == KEEP_CHOICE then

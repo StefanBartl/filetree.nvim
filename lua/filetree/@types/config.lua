@@ -810,6 +810,14 @@
 ---                                Link kind is picked automatically, not prompted: directories
 ---                                always get a symlink; files get a hardlink on Windows (no
 ---                                elevation needed) and a symlink elsewhere.
+---@field repair_roots   string[]?  Extra directories `:Filetree symlink repair`/`repairall`
+---                                  searches for a broken link's moved target, on top of the
+---                                  usual buffer dir/cwd/git root (default nil, none). Needed
+---                                  for a target that lives in a sibling repo entirely outside
+---                                  the current project — repair's own root-guessing has no way
+---                                  to reach that on its own. Never widened to Neovim's own
+---                                  cache/data/state dirs regardless of this setting — see
+---                                  `link_create/init.lua`'s `unsafe_roots()`.
 
 -- ── cursor_hide ───────────────────────────────────────────────────────────────
 

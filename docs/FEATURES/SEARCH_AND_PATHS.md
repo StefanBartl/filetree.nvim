@@ -81,6 +81,13 @@ Neovim, in libuv and in every shell the clipboard is likely to land in — only
 a literal `explorer.exe`/`cmd /c` invocation needs native ones, and those are
 converted where they are invoked, not here.
 
+On a symlink node, every format reads the link's own path — never resolved
+to whatever it points at. Consistent with the rest of the plugin's symlink
+handling (Copy/Move's paste creates a new symlink rather than a
+dereferenced copy; Node Info shows the link's own path with the target on
+a separate `Link to:` line, never substituted in). `:Filetree symlink
+check` or Node Info's `I` is the way to see what a symlink resolves to.
+
 Mark-aware: with nodes marked (see [Marks](INTEGRATIONS.md#marks)), every `path_copy`
 keymap — including `pick` — copies one line per marked node instead of just
 the node under the cursor. Same rule as `copy_move`/`trash`: marks win when

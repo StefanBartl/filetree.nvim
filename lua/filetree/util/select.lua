@@ -14,7 +14,12 @@ local kit = require("ui.kit")
 
 ---Prompt the user to select one of `items`, via ui.kit.
 ---@param items any[]
----@param opts  table|nil   { prompt?, format_item? } (as vim.ui.select)
+---@param opts  table|nil   { prompt?, format_item?, relative?, width?, height? } (the first
+---                         two as vim.ui.select; the rest forwarded to kit.select as-is, nil
+---                         by default so every existing caller keeps kit.select's own default
+---                         (cursor-anchored) placement/sizing — pass `relative = "editor"` for
+---                         a centered float instead, e.g. a picker over a long list of full
+---                         paths that reads better centered than pinned near the cursor.
 ---@param on_choice fun(item: any|nil, idx: integer|nil)
 return function(items, opts, on_choice)
   opts = opts or {}
@@ -27,6 +32,9 @@ return function(items, opts, on_choice)
     items = items,
     title = opts.prompt,
     format_item = opts.format_item,
+    relative = opts.relative,
+    width = opts.width,
+    height = opts.height,
     on_select = on_choice,
     -- kit.select reports cancellation through on_cancel rather than by
     -- calling on_select with nil; translate back since this shim's whole
