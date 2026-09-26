@@ -42,22 +42,34 @@ end
 ---@param path string
 ---@param cb fun(result: TrashResult)
 local function trash_windows(path, cb)
-  -- Shell.Application's ParseName resolves paths against the shell namespace,
-  -- which needs native backslash separators — a forward-slash path (the form
-  -- Neovim usually hands us) yields $null and the item is never trashed. And
+  -- Paths need native backslash separators for the .NET APIs below, and
   -- PowerShell single-quoted strings escape an embedded quote by doubling it
   -- ('' not \'), so a path containing ' breaks the script otherwise. Both are
   -- handled the same way in trash/undo.lua's restore_windows.
   local win_path = path:gsub("/", "\\"):gsub("'", "''")
 
-  -- Shell.Application COM via PowerShell — moves item to Recycle Bin.
-  -- Passed as a single argv element (not a shell command line), so the
-  -- outer OS shell never re-parses/re-quotes it.
+  -- Microsoft.VisualBasic.FileIO.FileSystem, NOT Shell.Application's
+  -- ParseName(...).InvokeVerb('delete') (what this used to be): that verb
+  -- replays the exact same shell action as a manual Explorer delete,
+  -- INCLUDING the "Are you sure you want to move this item to the Recycle
+  -- Bin?" confirmation dialog -- which this script can never answer
+  -- (-NonInteractive, no window for the user to even find). One marked file
+  -- landing on that verb silently stalls the whole batch: do_trash's
+  -- callback for that path never fires, so run_all's chain never reaches the
+  -- paths queued after it, until a human notices the invisible dialog and
+  -- clicks it (by which point the rest of the batch has usually been
+  -- re-done by hand). UIOption.OnlyErrorDialogs suppresses exactly that
+  -- confirmation while still surfacing real errors (permission denied, path
+  -- too long, file in use, ...) as a non-zero exit via the try/catch below.
+  local method = vim.fn.isdirectory(path) == 1 and "DeleteDirectory" or "DeleteFile"
   local script = string.format(
-    "$sh = New-Object -ComObject Shell.Application; "
-      .. "$item = $sh.Namespace(0).ParseName('%s'); "
-      .. "if ($item) { $item.InvokeVerb('delete') } "
-      .. "else { exit 1 }",
+    "Add-Type -AssemblyName Microsoft.VisualBasic; "
+      .. "try { [Microsoft.VisualBasic.FileIO.FileSystem]::%s("
+      .. "'%s', "
+      .. "[Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs, "
+      .. "[Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin) } "
+      .. "catch { exit 1 }",
+    method,
     win_path
   )
   run(
