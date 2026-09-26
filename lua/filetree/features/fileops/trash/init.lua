@@ -124,26 +124,36 @@ local function is_permanent()
 end
 
 ---@internal
----Opt-in per-path expectation: a caller that already validated `path` at
----gather time (e.g. `link_create.M.delete()` checking it IS a symlink,
----never a real file) can additionally ask for that same guarantee to be
----re-checked immediately before the actual OS-level delete, via
----`M.expect_symlink(path)` below. Closes the TOCTOU window an async ref/
----asset scan plus an interactive confirm dialog otherwise opens up between
----"gathered the paths" and "actually deleted them" — arbitrarily long if the
----user is deliberating on the picker. Self-clearing: consumed (and removed)
----inside `do_trash` exactly once per entry, so a stale flag can never linger
----across an unrelated later delete of the same path.
----@type table<string, true>
-local _expect_symlink = {}
-
----Ask `do_trash` to re-verify `path` is still a symlink immediately before
----deleting it, aborting that one delete (with a notify, not an error) if
----something else replaced it with a real file in the meantime. Call once
----per path, right before handing it to `M.delete`/`M.delete_current`.
+---A caller that already validated `path` at gather time (e.g.
+---`link_create.M.delete()` checking it IS a symlink, never a real file) can
+---ask for that same guarantee to be re-checked right before each path is
+---actually acted on, by passing `require_symlink = true` through
+---`M.delete`/`M.delete_current`'s `opts`. This is a plain call-scoped
+---argument, not a persistent registry keyed by path — nothing to leak or
+---go stale if a delete is later cancelled, declined, or never reaches an
+---OS-level delete call at all, and every code path that can actually touch
+---disk (the per-path `do_trash` chain AND the batched `run_all_batched`,
+---which bypasses `do_trash` entirely) checks it, not just one of them.
+---
+---Not a mathematical guarantee: the trash-mode delete itself still runs via
+---a separately spawned OS process (`trash_platform.send`/`send_batch`),
+---whose own startup latency (measured at "several hundred milliseconds" for
+---the Windows PowerShell backend — see `trash/platform.lua`) sits between
+---this check and the moment that process actually touches the path. This
+---closes the large, unbounded window (an async ref/asset scan plus an
+---interactive confirm dialog the user can leave open indefinitely) down to
+---that external process's own, much smaller and bounded startup cost — not
+---to zero.
 ---@param path string
-function M.expect_symlink(path)
-  _expect_symlink[path] = true
+---@param require_symlink boolean|nil
+---@return boolean ok  false already notified why; caller just bails.
+local function symlink_still_ok(path, require_symlink)
+  if not require_symlink then return true end
+  if symlink_util.is_link(path) then return true end
+  notify.warn(
+    "Skipped — no longer a symlink (something else changed it in the meantime): " .. path
+  )
+  return false
 end
 
 ---@internal
@@ -221,17 +231,12 @@ end
 ---history entry, since there is nothing left to restore.
 ---@param path string
 ---@param cb fun(ok: boolean)  invoked on the main loop once the delete attempt settled
+---@param require_symlink boolean|nil  see `symlink_still_ok`'s doc comment
 ---@return nil
-local function do_trash(path, cb)
-  if _expect_symlink[path] then
-    _expect_symlink[path] = nil
-    if not symlink_util.is_link(path) then
-      notify.warn(
-        "Skipped — no longer a symlink (something else changed it in the meantime): " .. path
-      )
-      cb(false)
-      return
-    end
+local function do_trash(path, cb, require_symlink)
+  if not symlink_still_ok(path, require_symlink) then
+    cb(false)
+    return
   end
 
   -- `conflict.exists` (not a bare filereadable/isdirectory check): a broken
@@ -362,7 +367,8 @@ end
 ---@param cb fun(ok: boolean)  Whether `path` actually ended up trashed
 ---                            (declining, or the trash attempt itself
 ---                            failing, both report false).
-local function confirm_popup(path, cb)
+---@param require_symlink boolean|nil  see `symlink_still_ok`'s doc comment
+local function confirm_popup(path, cb, require_symlink)
   local name = vim.fn.fnamemodify(path, ":t")
   local pending = 2
   ---@type FiletreeRef[]?
@@ -397,7 +403,7 @@ local function confirm_popup(path, cb)
         question = confirm_question(path),
         on_choice = function(yes)
           if yes then
-            do_trash(path, cb)
+            do_trash(path, cb, require_symlink)
           else
             cb(false)
           end
@@ -482,7 +488,7 @@ local function confirm_popup(path, cb)
         else
           after_refs()
         end
-      end)
+      end, require_symlink)
     end
 
     -- `refs.on_delete = "auto"` means "don't ask about the cleanup specifics"
@@ -576,11 +582,11 @@ local function confirm_popup(path, cb)
             trash_then_cleanup(selected, cb)
           end,
           function()
-            confirm_popup(path, cb)
+            confirm_popup(path, cb, require_symlink)
           end -- Esc/cancel -> back to this same chooser
         )
       elseif choice == keep_label then
-        do_trash(path, cb)
+        do_trash(path, cb, require_symlink)
       else
         cb(false)
       end
@@ -629,16 +635,23 @@ end
 ---`trash_platform.send_batch` at all), and safety-backup/undo/buffer-close
 ---bookkeeping still runs per path, just once the whole batch has settled
 ---rather than interleaved between individual OS calls.
+---
+---Also where a `require_symlink` re-check lands for this route: unlike the
+---per-path chain below, this never calls `do_trash` (that's the whole point
+---of batching), so it needs the exact same `symlink_still_ok` guard inline
+---— a path dropped here is simply excluded from `existing`, same as one
+---that no longer exists.
 ---@param paths string[]
-local function run_all_batched(paths)
+---@param require_symlink boolean|nil  see `symlink_still_ok`'s doc comment
+local function run_all_batched(paths, require_symlink)
   local prog = progress.create({ title = "[filetree.trash]" })
 
   local existing = {}
   for _, p in ipairs(paths) do
-    if conflict.exists(p) then
-      existing[#existing + 1] = p
-    else
+    if not conflict.exists(p) then
       notify.warn("path does not exist: " .. p)
+    elseif symlink_still_ok(p, require_symlink) then
+      existing[#existing + 1] = p
     end
   end
 
@@ -690,13 +703,16 @@ end
 
 ---Delete every path with no further prompting (the "all" decision).
 ---@param paths string[]
-local function run_all(paths)
+---@param require_symlink boolean|nil  see `symlink_still_ok`'s doc comment
+local function run_all(paths, require_symlink)
   -- Batching only helps the one thing that's actually slow: spawning a
   -- fresh OS trash process per path (see platform.lua's run_windows_batch).
   -- Permanent delete and dry-run never do that — do_trash short-circuits
   -- before ever touching trash_platform for either — so both, along with
   -- the trivial single-path case, keep the existing per-path chain below.
-  if not is_permanent() and not _cfg.dry_run and #paths > 1 then return run_all_batched(paths) end
+  if not is_permanent() and not _cfg.dry_run and #paths > 1 then
+    return run_all_batched(paths, require_symlink)
+  end
 
   local prog = progress.create({ title = "[filetree.trash]" })
   local ok_count = 0
@@ -720,7 +736,7 @@ local function run_all(paths)
     do_trash(paths[i], function(ok)
       if ok then ok_count = ok_count + 1 end
       step()
-    end)
+    end, require_symlink)
   end
   step()
 end
@@ -728,7 +744,8 @@ end
 ---Delete each path after its own info+yes/no popup (the "individual" decision).
 ---Async, chained one popup at a time so the flow stays modal-feeling.
 ---@param paths string[]
-local function run_individual(paths)
+---@param require_symlink boolean|nil  see `symlink_still_ok`'s doc comment
+local function run_individual(paths, require_symlink)
   local prog = progress.create({ title = "[filetree.trash]" })
   local ok_count, cancelled = 0, 0
   local i = 0
@@ -753,7 +770,7 @@ local function run_individual(paths)
         cancelled = cancelled + 1
       end
       step()
-    end)
+    end, require_symlink)
   end
   step()
 end
@@ -768,8 +785,9 @@ end
 ---result is only known later - pass `on_done` to observe it.
 ---@param path string  Absolute path of the file or directory.
 ---@param on_done fun(ok: boolean)|nil  invoked once the trash attempt settled
+---@param require_symlink boolean|nil  see `symlink_still_ok`'s doc comment
 ---@return nil
-function M.delete(path, on_done)
+function M.delete(path, on_done, require_symlink)
   local function done(ok)
     if on_done then on_done(ok) end
   end
@@ -788,7 +806,7 @@ function M.delete(path, on_done)
   do_trash(path, function(ok)
     if ok and _adapter then pcall(_adapter.refresh) end
     done(ok)
-  end)
+  end, require_symlink)
 end
 
 ---Collect the paths to trash: all marked nodes if any are marked, else the
@@ -810,11 +828,17 @@ end
 --- - multiple items: one batch chooser (hover_select float) offering
 ---   "delete all at once", "confirm each individually", or "cancel" — instead
 ---   of asking once per file. "individual" then shows the info popup per file.
----@param opts { paths?: string[] }|nil  `paths` overrides `gather_paths()` —
----  for a caller that has already picked (and filtered) its own path set,
----  e.g. `:Filetree symlink delete` restricting a marks-or-cursor batch down
----  to just the symlinks in it. Everything else (confirm, the batch chooser,
----  undo, refresh) still goes through the exact same path as `d`.
+---@param opts { paths?: string[], require_symlink?: boolean }|nil  `paths`
+---  overrides `gather_paths()` — for a caller that has already picked (and
+---  filtered) its own path set, e.g. `:Filetree symlink delete` restricting
+---  a marks-or-cursor batch down to just the symlinks in it. `require_symlink`
+---  additionally re-verifies each path is STILL a symlink right before it is
+---  actually acted on (see `symlink_still_ok`'s doc comment) — every route
+---  below (single-item popup, "delete all at once" whether batched or not,
+---  "confirm individually") passes it straight through, so there is no route
+---  through this function that skips the re-check once asked for. Everything
+---  else (confirm, the batch chooser, undo, refresh) still goes through the
+---  exact same path as `d`.
 function M.delete_current(opts)
   if not _adapter then return end
   opts = opts or {}
@@ -827,7 +851,7 @@ function M.delete_current(opts)
 
   -- No confirmation configured → just delete everything.
   if not _cfg.confirm then
-    run_all(paths)
+    run_all(paths, opts.require_symlink)
     return
   end
 
@@ -837,7 +861,7 @@ function M.delete_current(opts)
   if #paths == 1 then
     confirm_popup(paths[1], function(ok)
       if ok then finalize(1, 1, 0) end
-    end)
+    end, opts.require_symlink)
     return
   end
 
@@ -848,9 +872,9 @@ function M.delete_current(opts)
     { "Delete all at once", "Confirm individually", "Cancel" },
     function(choice)
       if choice == "Delete all at once" then
-        run_all(paths)
+        run_all(paths, opts.require_symlink)
       elseif choice == "Confirm individually" then
-        run_individual(paths)
+        run_individual(paths, opts.require_symlink)
       end
       -- "Cancel" or nil (dismissed) → do nothing, marks stay.
     end
