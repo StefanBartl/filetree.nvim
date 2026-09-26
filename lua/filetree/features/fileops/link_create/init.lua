@@ -25,6 +25,7 @@ local path = require("filetree.util.path")
 local platform = require("filetree.util.platform")
 local buffer = require("filetree.util.buffer")
 local symlink_util = require("filetree.util.symlink")
+local progress = require("filetree.util.progress")
 local mutate = require("lib.nvim.cross.fs.mutate")
 
 local M = {}
@@ -35,7 +36,21 @@ local _cfg = {
   keymap = nil, -- off by default; set e.g. keymap = "gl" to bind one
   keymap_mark = nil,
   keymap_paste = nil,
-  repair_roots = nil, -- extra search roots for `repair`/`repairall`; none by default
+  -- On by default: a real measurement (5.8k files/737MB Neovim config,
+  -- worst case -- nothing found, full walk) came back in ~0.1s, so the
+  -- earlier worry about gopath.nvim's async walker being slow here doesn't
+  -- hold up in practice. Still only searched as a SECOND pass, after the
+  -- fast default roots come up empty (see `find_repair_candidates`), and
+  -- `repair_search_slow_hint_ms` below still warns if a particular machine's
+  -- filesystem (network drive, etc.) makes this pass genuinely slow.
+  repair_roots = { "$REPOS_DIR" },
+  repair_nvim_config_root = true,
+  repair_search_progress = "auto",
+  -- If the second-pass search (repair_roots/repair_nvim_config_root) takes
+  -- longer than this, notify with a hint on how to narrow or disable it,
+  -- rather than silently staying slow on every future repair. `false`
+  -- disables the hint entirely.
+  repair_search_slow_hint_ms = 2000,
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -47,6 +62,12 @@ M.SCHEMA = {
   keymap_mark = "keymap",
   keymap_paste = "keymap",
   repair_roots = { "table", of = "string" },
+  repair_nvim_config_root = "boolean",
+  repair_search_progress = {
+    "string|false",
+    enum = { "auto", "notify", "statusline", "fidget", "float", "kit" },
+  },
+  repair_search_slow_hint_ms = { "number|false", min = 0 },
 }
 ---@type FiletreeAdapter?
 local _adapter = nil
@@ -461,13 +482,24 @@ end
 ---Search the filesystem for a replacement target via gopath.nvim's truncated-
 ---path search (an OPTIONAL soft dependency, same pattern as `util/pdf.lua`'s
 ---pdfport.nvim bridge — nothing here breaks if gopath.nvim is not installed,
----repair just falls back to a plain delete/keep choice). Cache lookup first
----(instant, in-memory); only the cache miss falls through to the async live
----filesystem walk. `features.link_create.repair_roots` (config, off by
----default) widens the search to sibling directories gopath's own root-
----guessing has no way to reach on its own (e.g. an entirely different repo)
----— never to Neovim's own cache/data/state dirs, `unsafe_roots()` always
----wins over it.
+---repair just falls back to a plain delete/keep choice).
+---
+---Three passes, cheapest first, each only run when the previous one came up
+---empty:
+---  1. `tailsearch.cache_lookup` — gopath's own persisted cache, instant and
+---     in-memory.
+---  2. gopath's own fast default roots (buffer dir/cwd/git root/its own
+---     stdpath set) — a live walk, but bounded to what a project normally is.
+---  3. `features.link_create.repair_roots`/`.repair_nvim_config_root` (OFF by
+---     default) — ONLY reached if 1 and 2 both found nothing, since these can
+---     point at something genuinely large (a whole repos root, a real Neovim
+---     config: measured at 5.8k files/737MB on one real machine). gopath's
+---     async walker only reports once the WHOLE root set it was given has
+---     been walked, not as soon as a match turns up, so this pass gets its
+---     own progress indicator (`repair_search_progress`) — it is the one
+---     that can take a real, noticeable while. Never widened to Neovim's own
+---     cache/data/state dirs regardless of what these are set to,
+---     `unsafe_roots()` always wins — see its own doc comment for why.
 ---@param tail string  cleaned path tail (see gopath's tailsearch.sanitize)
 ---@param on_done fun(hits: string[]|nil)  nil = gopath.nvim not installed
 local function find_repair_candidates(tail, on_done)
@@ -500,26 +532,103 @@ local function find_repair_candidates(tail, on_done)
     return
   end
 
-  -- `to_target` (not `vim.fn.expand`, SEC-34): `repair_roots` entries are
-  -- config values, and `$VAR`-style env references in them need the
-  -- shellout-free expansion every other config path in this plugin uses —
-  -- same normalization `M.mark`'s explicit-path argument already gets.
-  local extra_roots = nil
-  if _cfg.repair_roots then
-    extra_roots = {}
-    for _, r in ipairs(_cfg.repair_roots) do
-      extra_roots[#extra_roots + 1] = to_target(r)
+  -- `finder.find_async` matches a SINGLE tail as an exact suffix and does
+  -- not itself shorten it the way `cache_lookup` does internally — so search
+  -- by BASENAME ALONE, not the full sanitized tail: a moved file's PARENT
+  -- directory commonly changes along with the move (the exact regression
+  -- this is guarding — the recorded target's `gone/` became `ROADMAP/IDEAS/`
+  -- at the real location), so any longer suffix would just never match.
+  -- Also a real perf concern, not just a correctness one: unlike
+  -- `cache_lookup`'s cheap in-memory suffix retries, `find_async` walks the
+  -- root directories on disk — trying several suffix lengths here would
+  -- re-walk the SAME tree once per length. Every hit still goes through the
+  -- picker for the user to judge, same as gopath's own ambiguous-match
+  -- chooser (`tailsearch.probe`) does when a search turns up more than one.
+  local basename = tailsearch.suffix_candidates(tail, 1)[1] or tail
+
+  -- gopath's own `guess_roots()` unconditionally bakes in
+  -- stdpath("config"/"data"/"cache"). data/cache are already excluded via
+  -- `unsafe` (the undo-file danger); stdpath("config") is not unsafe, just
+  -- potentially large (measured: 5.8k files/737MB on one real machine) --
+  -- exclude it from stage 1 too, regardless of `repair_nvim_config_root`,
+  -- so "the fast pass" is actually fast. That setting only controls whether
+  -- stage 2 (below) searches it — never stage 1.
+  local config_root = { path.slashify(vim.fn.stdpath("config")) }
+  local fast_roots = {}
+  for _, r in ipairs(tailsearch.guess_roots()) do
+    if not is_under_any(r, unsafe) and not is_under_any(r, config_root) then
+      fast_roots[#fast_roots + 1] = r
     end
   end
 
-  local roots = {}
-  for _, r in ipairs(tailsearch.guess_roots(extra_roots)) do
-    if not is_under_any(r, unsafe) then roots[#roots + 1] = r end
-  end
-
   notify.info("Searching filesystem for a replacement target…")
-  finder.find_async(tail, { roots = roots }, function(hits)
-    on_done(safe(hits or {}))
+  finder.find_async(basename, { roots = fast_roots }, function(hits)
+    local filtered = safe(hits or {})
+
+    -- `to_target` (not `vim.fn.expand`, SEC-34): `repair_roots` entries are
+    -- config values, and `$VAR`-style env references in them need the
+    -- shellout-free expansion every other config path in this plugin uses.
+    local extra_roots = {}
+    for _, r in ipairs(_cfg.repair_roots or {}) do
+      extra_roots[#extra_roots + 1] = to_target(r)
+    end
+    if _cfg.repair_nvim_config_root then
+      extra_roots[#extra_roots + 1] = path.slashify(vim.fn.stdpath("config"))
+    end
+
+    if #filtered > 0 or #extra_roots == 0 then
+      on_done(filtered)
+      return
+    end
+
+    local slow_roots = {}
+    for _, r in ipairs(extra_roots) do
+      if not is_under_any(r, unsafe) then slow_roots[#slow_roots + 1] = r end
+    end
+    if #slow_roots == 0 then
+      on_done({})
+      return
+    end
+
+    local prog = _cfg.repair_search_progress ~= false
+      and progress.create({
+        title = "[filetree.link_create]",
+        style = _cfg.repair_search_progress,
+      })
+    if prog then
+      prog:update({ text = "Searching " .. table.concat(slow_roots, ", ") .. " for a target…" })
+    end
+
+    local slow_t0 = vim.uv.hrtime()
+    finder.find_async(basename, { roots = slow_roots }, function(hits2)
+      local filtered2 = safe(hits2 or {})
+      if prog then
+        prog:finish(
+          #filtered2 > 0 and "Found a replacement target" or "No replacement target found"
+        )
+      end
+
+      -- The whole point of a second pass over possibly-large roots is that
+      -- it usually finishes fast anyway (measured: ~0.1s against a real
+      -- 5.8k-file Neovim config) -- but "usually" isn't "always" (a network
+      -- drive, an exceptionally large repos root, ...), so a genuinely slow
+      -- run gets a one-time, actionable notice instead of just staying slow
+      -- silently on every future repair.
+      local elapsed_ms = (vim.uv.hrtime() - slow_t0) / 1e6
+      if _cfg.repair_search_slow_hint_ms and elapsed_ms > _cfg.repair_search_slow_hint_ms then
+        notify.warn(
+          string.format(
+            "Repair's extra search took %.1fs. To narrow or turn it off, set "
+              .. "features.link_create.repair_roots and/or .repair_nvim_config_root "
+              .. "in your setup() call (currently searching: %s).",
+            elapsed_ms / 1000,
+            table.concat(slow_roots, ", ")
+          )
+        )
+      end
+
+      on_done(filtered2)
+    end)
   end)
 end
 
