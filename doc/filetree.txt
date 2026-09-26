@@ -1253,6 +1253,17 @@ routes through the trash feature, same confirm/undo/dry-run behavior as `d`.
 marked nodes (else the node under the cursor), one at a time so each picker
 resolves before the next one opens.
 
+The search never widens into Neovim's own cache/data/state directories
+(`stdpath("cache"/"data"/"state")`), no matter what `repair_roots` below is
+set to — those are where the undo/swap/shada directories live, and a stray
+file there can otherwise spuriously tail-match a broken link's basename and
+get offered as a "candidate" (picking it would relink to that file's
+contents, not a real target). `features.link_create.repair_roots` (a list
+of extra directories, unset by default) widens the search the other way —
+to a sibling project entirely outside gopath's own buffer-dir/cwd/git-root
+guessing, e.g. `repair_roots = { "$REPOS_DIR" }` when a moved target
+routinely lives in a different repo checkout.
+
 `:Filetree symlink delete` removes every symlink among the marked nodes
 (else the node under the cursor) through the trash feature — a non-symlink
 caught up in the same marks batch (e.g. a stale mark) is skipped, never
@@ -1263,8 +1274,10 @@ own confirm-prompt wording for a symlink), but this command additionally
 GUARANTEES nothing in the selection gets deleted unless it actually is a
 symlink.
 
-Config: `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all
-        unset by default)
+Config: `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` /
+        `.repair_roots` (all unset by default; `repair_roots` is a list of
+        extra directories for `repair`/`repairall`, `$VAR`-expanded the same
+        shellout-free way every other config path in this plugin is)
 
 Commands: `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree
           symlink paste`, `:Filetree symlink check [path]`, `:Filetree
@@ -1961,6 +1974,14 @@ notifications use, and the one this feature's own examples have always shown;
 Neovim, in libuv and in every shell the clipboard is likely to land in —
 only a literal `explorer.exe`/`cmd /c` invocation needs native ones, and those
 are converted where they are invoked, not here.
+
+On a symlink node, every format reads the LINK's own path — never resolved
+to whatever it points at. Consistent with the rest of the plugin's symlink
+handling: Copy/Move's paste creates a new symlink rather than a dereferenced
+copy, and Node Info shows the link's own `Path:` with the target on a
+separate `Link to:` line, never substituted in. Node Info's `I`, or
+`:Filetree symlink check`, is the way to see (or copy, via the `Link to:`
+line) what a symlink actually resolves to.
 
 Mark-aware: with nodes marked (see Marks), every `path_copy` keymap —
 including `pick` — copies one line per marked node instead of just the node
