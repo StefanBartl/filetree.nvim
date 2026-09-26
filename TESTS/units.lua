@@ -4625,6 +4625,410 @@ do
   end
 end
 
+-- ── link_create repair: find_async is NEVER called with an empty roots ─────
+-- list -- regression coverage for a real bug: gopath.nvim's own find_async
+-- silently substitutes ITS OWN default_roots() (cwd + stdpath config/data/
+-- cache) for an empty/nil `opts.roots`, exactly reintroducing the search
+-- space stage 1's filtering exists to exclude. A stage-1 fast_roots list
+-- that filters down to nothing (e.g. cwd/bufdir/git-root all collapse to
+-- stdpath("config"), which the config-exclusion filter then removes) must
+-- skip find_async for that stage entirely rather than calling it with {}.
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-emptyroots"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (empty roots): could not create a test symlink in this environment, skipping"
+    )
+  else
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return {}
+      end,
+      -- Only entry is stdpath("config") itself -- stage 1's own filtering
+      -- must remove it, leaving fast_roots empty.
+      guess_roots = function()
+        return { vim.fn.stdpath("config") }
+      end,
+      suffix_candidates = function(t, _)
+        return { t }
+      end,
+    }
+    local saw_empty_roots = false
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.truncated.finder"] = {
+      find_async = function(_, opts, on_done)
+        if not opts.roots or #opts.roots == 0 then saw_empty_roots = true end
+        on_done({})
+      end,
+    }
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.progress"] =
+      { create = function(_) end, set_style = function(_) end }
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-emptyroots",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-emptyroots",
+      -- repair_nvim_config_root=false so stage 2 has nothing configured
+      -- either (repair_roots' own $REPOS_DIR default can't be cleared via
+      -- override -- see @types/config.lua's doc comment -- so this test
+      -- only asserts the specific "never call find_async with {}" guarantee,
+      -- not "no find_async call happens at all").
+      features = { link_create = { enabled = true, repair_nvim_config_root = false } },
+    })
+    local lc = ft.feature("link_create")
+
+    lc.repair(link_path)
+
+    check(
+      "link_create repair (empty roots): find_async is never called with an empty/nil roots list",
+      not saw_empty_roots
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["gopath.truncated.finder"] = nil
+    package.loaded["filetree.util.progress"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── link_create repair: relink() re-checks link_path is STILL a symlink ────
+-- immediately before deleting it -- regression coverage for a TOCTOU: repair
+-- runs an async search plus an interactive picker between the initial
+-- is_link/is_broken check and the eventual delete-then-recreate in relink().
+-- If something else replaces link_path with a real file during that window,
+-- relink() must refuse instead of silently fs_unlink-ing that real file.
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-toctou"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/newloc", "p")
+  local new_target = tmp .. "/newloc/target.txt"
+  vim.fn.writefile({ "moved" }, new_target)
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (TOCTOU): could not create a test symlink in this environment, skipping"
+    )
+  else
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return { new_target } -- single candidate -> no picker needed to reach relink()
+      end,
+      guess_roots = function()
+        return { tmp }
+      end,
+    }
+    -- Simulate the race: by the time the (stubbed) picker "answers", replace
+    -- link_path with a REAL file -- something else touched it while repair
+    -- was working. Even with a single candidate, offer_repair still routes
+    -- through ui_select (M.select is only skipped for the zero-candidate
+    -- case), so stubbing it here is the right seam.
+    local replaced_content = "real file, must survive untouched"
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.select"] = function(_, _, on_choice)
+      vim.fn.delete(link_path)
+      vim.fn.writefile({ replaced_content }, link_path)
+      on_choice(new_target, 1)
+    end
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-toctou",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-toctou",
+      features = { link_create = { enabled = true } },
+    })
+    local lc = ft.feature("link_create")
+
+    local captured
+    local orig_notify = vim.notify
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(m)
+      captured = m
+    end
+    lc.repair(link_path)
+    vim.notify = orig_notify
+
+    check(
+      "link_create repair (TOCTOU): relink refuses once link_path is no longer a symlink",
+      captured ~= nil and captured:lower():find("no longer a symlink", 1, true) ~= nil,
+      tostring(captured)
+    )
+    check(
+      "link_create repair (TOCTOU): the real file that replaced it survives untouched",
+      vim.fn.filereadable(link_path) == 1
+        and table.concat(vim.fn.readfile(link_path), "\n") == replaced_content
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["filetree.util.select"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── trash.expect_symlink: skips a delete when the path is no longer a ──────
+-- symlink by the time do_trash actually runs -- regression coverage for the
+-- same class of TOCTOU as the repair test above, for :Filetree symlink
+-- delete's own "never a real file" guarantee (link_create.M.delete() calls
+-- trash.expect_symlink() for each path right before handing them to
+-- trash.delete_current(); tested here directly against trash's public API,
+-- which is what M.delete() actually calls through).
+do
+  local tmp = (TMP_ROOT .. "/units-trash-expectsymlink"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note trash.expect_symlink: could not create a test symlink in this environment, skipping"
+    )
+  else
+    local stub = setmetatable({
+      name = "units-stub-expectsymlink",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return nil
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-expectsymlink",
+      -- permanent + confirm=false: a real, synchronous delete with no
+      -- dialog in the way, so do_trash runs (and the expect_symlink check
+      -- fires) right inside this same call.
+      features = { trash = { enabled = true, mode = "permanent", confirm = false } },
+    })
+    local trash = ft.feature("trash")
+
+    trash.expect_symlink(link_path)
+    -- Simulate the race: something else replaced the symlink with a real
+    -- file between "gathered/validated it" and "trash actually runs".
+    local replaced_content = "real file, must survive untouched"
+    vim.fn.delete(link_path)
+    vim.fn.writefile({ replaced_content }, link_path)
+
+    local done_ok
+    trash.delete(link_path, function(ok)
+      done_ok = ok
+    end)
+
+    check("trash.expect_symlink: reports the delete as NOT done", done_ok == false)
+    check(
+      "trash.expect_symlink: the real file that replaced the symlink survives untouched",
+      vim.fn.filereadable(link_path) == 1
+        and table.concat(vim.fn.readfile(link_path), "\n") == replaced_content
+    )
+
+    package.loaded["filetree.features.fileops.trash"] = nil
+  end
+end
+
+-- ── link_create repair: unsafe-root case fold is Unicode-aware, not just ───
+-- ASCII -- regression coverage: Lua's string.lower() only folds ASCII
+-- (("BJÖRN"):lower() == "bjÖrn", the Ö untouched), so a case mismatch on a
+-- non-ASCII path segment (a Windows profile path with an accented letter,
+-- say) would previously slip past the cache/data/state exclusion filter.
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-unicodefold"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  -- Build the non-ASCII pair from explicit UTF-8 byte sequences (avoids
+  -- encoding the literal accented character awkwardly in this test file).
+  local upper_seg = "BJ" .. "\195\150" .. "RN" -- "BJÖRN" (Ö = U+00D6, UTF-8 C3 96)
+  local lower_seg = "bj" .. "\195\182" .. "rn" -- "björn" (ö = U+00F6, UTF-8 C3 B6)
+  local fake_cache_upper = tmp .. "/" .. upper_seg
+  local fake_cache_lower = tmp .. "/" .. lower_seg
+  vim.fn.mkdir(fake_cache_lower .. "/undo", "p")
+  local unsafe_hit = fake_cache_lower .. "/undo/mangled_undofile"
+  vim.fn.writefile({ "garbage" }, unsafe_hit)
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (unicode fold): could not create a test symlink in this environment, skipping"
+    )
+  else
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return {}
+      end,
+      -- gopath's own root, spelled with the UPPER-case accented letter --
+      -- differs from the fake stdpath("cache") below only in that one
+      -- non-ASCII character's case.
+      guess_roots = function()
+        return { fake_cache_upper }
+      end,
+      suffix_candidates = function(t, _)
+        return { t }
+      end,
+    }
+    local captured_items
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.truncated.finder"] = {
+      find_async = function(_, _, on_done)
+        on_done({ unsafe_hit })
+      end,
+    }
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.select"] = function(items, _, on_choice)
+      captured_items = items
+      on_choice(nil, nil)
+    end
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
+
+    local platform = require("filetree.util.platform")
+    local orig_is_windows = platform.is_windows
+    ---@diagnostic disable-next-line: duplicate-set-field
+    platform.is_windows = function()
+      return true
+    end
+    local orig_stdpath = vim.fn.stdpath
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.stdpath = function(what)
+      if what == "cache" then return fake_cache_lower end -- lower-case accented letter
+      return orig_stdpath(what)
+    end
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-unicodefold",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-unicodefold",
+      features = { link_create = { enabled = true, repair_nvim_config_root = false } },
+    })
+    local lc = ft.feature("link_create")
+
+    lc.repair(link_path)
+    vim.fn.stdpath = orig_stdpath
+    platform.is_windows = orig_is_windows
+
+    check(
+      "link_create repair (unicode fold): a non-ASCII-cased unsafe hit is still filtered out",
+      captured_items == nil or not vim.tbl_contains(captured_items, unsafe_hit),
+      vim.inspect(captured_items)
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["gopath.truncated.finder"] = nil
+    package.loaded["filetree.util.select"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
 -- ── rename_batch: confirm=true asks kit.confirm (async), not the old ────────
 -- blocking `vim.fn.input("...[y/N]...")` freetext prompt.
 do

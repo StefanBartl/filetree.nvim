@@ -170,8 +170,11 @@ function M.env_rooted(p, names, extra)
   -- Windows compares paths case-insensitively, and the drive letter alone can
   -- differ in case between `$REPOS_DIR` and what the tree reports for a file
   -- under it — a case-sensitive compare would just never match there.
+  -- `vim.fn.tolower`, not Lua's `string.lower` — the latter only folds ASCII
+  -- (`("BJÖRN"):lower()` == `"bjÖrn"`, the `Ö` untouched), which would leave
+  -- this broken again for a non-ASCII profile path.
   local function fold(s)
-    return platform.is_windows() and s:lower() or s
+    return platform.is_windows() and vim.fn.tolower(s) or s
   end
   local folded = fold(abs)
 
