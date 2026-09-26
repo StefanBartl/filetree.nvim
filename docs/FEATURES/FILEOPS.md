@@ -602,6 +602,28 @@ A link created this way is not just another entry in the listing — see
 [Link Marker](UI.md#link-marker) for the `⇢` sign that sets it apart in the
 tree, and Node Info's `I` window for the `Link to:` / hard-link detail.
 
+`:Filetree symlink check [path]` reports whether the node under the cursor
+(or an explicit path, or the focused editor buffer's file) is a symlink at
+all, and if so whether it still resolves — `:Filetree symlink checkall` runs
+the same check over every marked node (else the node under the cursor),
+skipping non-symlinks and summarizing the result.
+
+`:Filetree symlink repair [path]` targets a broken symlink: it reads the
+link's own recorded target and searches the filesystem for a file with a
+matching name via [gopath.nvim](https://github.com/StefanBartl/gopath.nvim)
+— an **optional** soft dependency, same style as PDF Open's pdfport.nvim
+bridge. Found candidates are offered in a picker (plus "delete instead" /
+"keep broken"); with gopath.nvim not installed, or nothing found, it falls
+back to the delete-or-keep choice directly. `:Filetree symlink repairall`
+runs this over every broken symlink among the marked nodes (else the node
+under the cursor), one at a time.
+
+`:Filetree symlink delete` removes every symlink among the marked nodes
+(else the node under the cursor) through the trash feature — a non-symlink
+caught up in the same batch is skipped, never deleted. Trashing a symlink
+(via `d`, or this command) only ever removes the link itself; the confirm
+prompt says so explicitly rather than reading like an ordinary file delete.
+
 - **Module:** `lua/filetree/features/fileops/link_create/`
-- **Commands:** `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree symlink paste`
+- **Commands:** `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree symlink paste`, `:Filetree symlink check [path]`, `:Filetree symlink checkall`, `:Filetree symlink repair [path]`, `:Filetree symlink repairall`, `:Filetree symlink delete`
 - **Config:** `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all unset by default)

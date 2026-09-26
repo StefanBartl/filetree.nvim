@@ -49,6 +49,7 @@ local buffer = require("filetree.util.buffer")
 -- "Overwrite" resolution already uses — reused here for `mode = "permanent"`
 -- instead of a second delete primitive.
 local conflict = require("filetree.util.conflict")
+local symlink_util = require("filetree.util.symlink")
 local confirm_choice = require("filetree.util.confirm_choice")
 local ui_confirm = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
@@ -126,12 +127,27 @@ end
 ---The confirm question for `path` (or the whole-batch variant when `path`
 ---is omitted) — worded so a permanent delete never reads like a trash
 ---(recoverable) one, since the two share every dialog in this module.
----@param path string?
+---
+---Also branches on whether the SINGLE path being trashed is itself a
+---symlink: "Send to trash?" reads exactly like "delete this file" with
+---nothing to tell the two apart, which is precisely what prompted this —
+---trashing a symlink only ever removes the link dirent (the OS-level
+---primitive never follows it), the target is never touched, and that needs
+---to be said in the question itself rather than left to be inferred from the
+---"Type: link (symlink)" line in the popup body above it.
+---@param path string?  Only used to detect a symlink (never appended for
+---                     display — the popup body already shows it via node_info).
 ---@param extra string?  Appended as-is (e.g. " (2 ref(s) will be marked REF!)").
 ---@return string
 local function confirm_question(path, extra)
-  local q = is_permanent() and "Permanently delete (cannot be undone)?" or "Send to trash?"
-  if path then q = q .. "\n  " .. path end
+  local symlink = path ~= nil and symlink_util.is_link(path)
+  local q
+  if symlink then
+    q = is_permanent() and "Permanently delete symlink (target is not touched, cannot be undone)?"
+      or "Send symlink to trash (target is not touched)?"
+  else
+    q = is_permanent() and "Permanently delete (cannot be undone)?" or "Send to trash?"
+  end
   if extra then q = q .. extra end
   return q
 end
@@ -344,7 +360,7 @@ local function confirm_popup(path, cb)
       ui_confirm({
         title = " Trash ",
         body = info_body(path),
-        question = confirm_question(),
+        question = confirm_question(path),
         on_choice = function(yes)
           if yes then
             do_trash(path, cb)
@@ -461,7 +477,7 @@ local function confirm_popup(path, cb)
       ui_confirm({
         title = " Trash ",
         body = info_body(path),
-        question = confirm_question(nil, string.format(" (%s)", table.concat(parts, "; "))),
+        question = confirm_question(path, string.format(" (%s)", table.concat(parts, "; "))),
         on_choice = function(yes)
           if yes then
             trash_then_cleanup(incoming_refs, cb)
@@ -760,10 +776,16 @@ end
 --- - multiple items: one batch chooser (hover_select float) offering
 ---   "delete all at once", "confirm each individually", or "cancel" — instead
 ---   of asking once per file. "individual" then shows the info popup per file.
-function M.delete_current()
+---@param opts { paths?: string[] }|nil  `paths` overrides `gather_paths()` —
+---  for a caller that has already picked (and filtered) its own path set,
+---  e.g. `:Filetree symlink delete` restricting a marks-or-cursor batch down
+---  to just the symlinks in it. Everything else (confirm, the batch chooser,
+---  undo, refresh) still goes through the exact same path as `d`.
+function M.delete_current(opts)
   if not _adapter then return end
+  opts = opts or {}
 
-  local paths = gather_paths()
+  local paths = opts.paths or gather_paths()
   if #paths == 0 then
     notify.warn("No node selected")
     return
