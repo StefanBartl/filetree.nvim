@@ -120,6 +120,7 @@
 ---@field lsp_diagnostics      FiletreeLspDiagnosticsConfig?
 ---@field size_info            FiletreeSizeInfoConfig?
 ---@field link_marker          FiletreeLinkMarkerConfig?
+---@field broken_link_notify   FiletreeBrokenLinkNotifyConfig?
 ---@field opened_sync          FiletreeOpenedSyncConfig?
 ---@field cheatsheet           FiletreeCheatsheetConfig?
 ---@field create_from_template FiletreeCreateFromTemplateConfig?
@@ -478,6 +479,18 @@
 ---@field show_target? boolean  Also show the link's target after the sign (default false).
 ---@field target_hl?   string   Highlight group for the target text (default "Comment").
 ---@field signs?       FiletreeLinkMarkerSigns?
+
+-- ── broken_link_notify ────────────────────────────────────────────────────────
+
+---@class FiletreeBrokenLinkNotifyConfig
+---@field enabled?  boolean  Warn when a just-opened buffer turns out to be a
+---                          dangling symlink's target (default true). Opening one
+---                          otherwise looks exactly like opening any other
+---                          nonexistent path -- a silently empty `[New]` buffer,
+---                          no hint why. Backend-agnostic: a single `BufNewFile`
+---                          autocmd, not tied to the tree's own `<CR>` or any
+---                          particular adapter, so it also catches `gf`, a plain
+---                          `:edit`, etc.
 
 -- ── grep_in_dir ───────────────────────────────────────────────────────────────
 

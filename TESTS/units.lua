@@ -3643,6 +3643,91 @@ do
   end
 end
 
+-- ── broken_link_notify: warns when a just-opened buffer is a dangling ──────
+-- symlink's target ────────────────────────────────────────────────────────
+-- Opening a broken symlink otherwise looks exactly like opening any other
+-- nonexistent path -- a silent, empty [New] buffer. A single BufNewFile
+-- autocmd (backend-agnostic: not tied to the tree's own <CR>) must warn.
+do
+  local tmp = (TMP_ROOT .. "/units-brokenlinknotify"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local real_file = tmp .. "/real.txt"
+  vim.fn.writefile({ "real" }, real_file)
+  local valid_link = tmp .. "/valid_link.txt"
+  local broken_link = tmp .. "/broken_link.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_valid = mutate.symlink(real_file, valid_link, false)
+  local ok_broken = mutate.symlink(tmp .. "/gone.txt", broken_link, false)
+
+  if not ok_valid or not ok_broken then
+    print(
+      "  note broken_link_notify: could not create a test symlink in this environment, skipping"
+    )
+  else
+    local stub = setmetatable({
+      name = "units-stub-brokenlinknotify",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return nil
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-brokenlinknotify",
+      features = { broken_link_notify = { enabled = true } },
+    })
+
+    local captured = {}
+    local orig_notify = vim.notify
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(m)
+      captured[#captured + 1] = m
+    end
+    vim.cmd("edit " .. vim.fn.fnameescape(broken_link))
+    vim.cmd("edit " .. vim.fn.fnameescape(valid_link))
+    vim.cmd("edit " .. vim.fn.fnameescape(real_file))
+    vim.notify = orig_notify
+
+    local joined = table.concat(captured, "\n")
+    check(
+      "broken_link_notify: warns when opening a broken symlink's target",
+      joined:lower():find("broken symlink", 1, true) ~= nil
+        and joined:find(broken_link, 1, true) ~= nil,
+      joined
+    )
+    check(
+      "broken_link_notify: no warning for a valid symlink's target",
+      not joined:find(valid_link, 1, true),
+      joined
+    )
+    check(
+      "broken_link_notify: no warning for an ordinary existing file",
+      not joined:find(real_file, 1, true),
+      joined
+    )
+
+    require("filetree").feature("broken_link_notify").teardown()
+  end
+end
+
 -- ── link_create check/checkall: symlink vs plain file, ok vs broken ──────────
 do
   local tmp = (TMP_ROOT .. "/units-linkcheck"):gsub("\\", "/")

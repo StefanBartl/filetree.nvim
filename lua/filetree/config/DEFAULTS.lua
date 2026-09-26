@@ -72,6 +72,12 @@ return {
     no_name_guard = {
       enabled = true,
     },
+    -- Warn when a just-opened buffer turns out to be a dangling symlink's
+    -- target -- otherwise indistinguishable from any other empty [New]
+    -- buffer. See docs/FEATURES/UI.md#broken-link-notify.
+    broken_link_notify = {
+      enabled = true,
+    },
     -- Keep the tree in its sidebar: a buffer that lands there (a stray
     -- `:buffer`, a tabline mouse-click, another plugin's `:edit`) is moved to
     -- an editor window and the tree is put back, instead of neo-tree reopening

@@ -72,6 +72,27 @@ the plain sign, working or not.
 - **Module:** `lua/filetree/features/ui/link_marker/`
 - **Config:** `opts.features.link_marker` — `show_target` (default **false**), `target_hl` (`"Comment"`), `signs.symlink` (`{text="⇢", hl="Special"}`), `signs.broken` (`{text="⇢!", hl="DiagnosticError"}`)
 
+## Broken Link Notify
+
+Link Marker's `⇢!` sign only exists in the tree — once a dangling symlink's
+target is actually open in an editor window, that context is gone. Opening
+one reads exactly like opening any other nonexistent path to Neovim: a
+silent, empty `[New]` buffer, no error, no hint why it's empty.
+
+Warns instead, once, the moment such a buffer is created: `BufNewFile`
+fires exactly when Neovim could not read the path it was asked to open —
+precisely the dangling-symlink case, since Neovim never resolves through
+the link itself, so the buffer name IS the symlink's own path.
+
+**Backend-agnostic by construction.** A single global autocmd, not tied to
+the tree's own `<CR>` or any particular adapter — it catches neo-tree's
+native open, `open_variants`' split/vsplit/tabnew, `open_replace`'s
+edit/swap, `gf`, a plain `:edit`, all the same way, without any of them
+needing to know this feature exists.
+
+- **Module:** `lua/filetree/features/ui/broken_link_notify/`
+- **Config:** `opts.features.broken_link_notify` — `enabled` (default **true**)
+
 ## Breadcrumbs
 
 Shows the path from the tree root down to the current node, so a deeply

@@ -1117,6 +1117,7 @@ SYSTEM
 
 UI
   Breadcrumbs ..........................................|filetree-breadcrumbs|
+  Broken Link Notify ............................|filetree-broken-link-notify|
   Cheatsheet ............................................|filetree-cheatsheet|
   Context Menu ........................................|filetree-context-menu|
   Cursor Hide ..........................................|filetree-cursor-hide|
@@ -2305,6 +2306,29 @@ Config: `opts.features.link_marker` — `show_target` (default false),
         hl="DiagnosticError"}`)
 
 Module: lua/filetree/features/ui/link_marker/
+
+------------------------------------------------------------------------------
+BROKEN LINK NOTIFY                              *filetree-broken-link-notify*
+
+Link Marker's `⇢!` sign only exists in the tree — once a dangling symlink's
+target is actually open in an editor window, that context is gone. Opening
+one reads exactly like opening any other nonexistent path to Neovim: a
+silent, empty `[New]` buffer, no error, no hint why it's empty.
+
+Warns instead, once, the moment such a buffer is created: `BufNewFile` fires
+exactly when Neovim could not read the path it was asked to open — precisely
+the dangling-symlink case, since Neovim never resolves through the link
+itself, so the buffer name IS the symlink's own path.
+
+Backend-agnostic by construction: a single global autocmd, not tied to the
+tree's own `<CR>` or any particular adapter — it catches neo-tree's native
+open, `open_variants`' split/vsplit/tabnew, `open_replace`'s edit/swap, `gf`,
+a plain `:edit`, all the same way, without any of them needing to know this
+feature exists.
+
+Config: `opts.features.broken_link_notify` — `enabled` (default true)
+
+Module: lua/filetree/features/ui/broken_link_notify/
 
 ------------------------------------------------------------------------------
 NODE INFO                                                 *filetree-node-info*
