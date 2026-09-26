@@ -1227,11 +1227,49 @@ A link created this way is not just another entry in the listing — see Link
 Marker for the `⇢` sign that sets it apart in the tree, and Node Info's `I`
 window for the `Link to:` / hard-link detail.
 
+`:Filetree symlink check [path]` reports whether the node under the cursor
+(or an explicit path, or the focused editor buffer's file — same resolution
+as `mark`) is a symlink at all, and if so whether it still resolves. Worded
+this way on purpose: Node Info's `I` window already shows "Type: link
+(symlink)" / "Link to: ... (broken — target missing)" for whatever is under
+the cursor, but `check` gives that same answer as a plain notify, without
+opening a float, and `checkall` runs it over a whole marks batch at once
+(`:Filetree symlink checkall`; a non-symlink in the batch is silently
+skipped, counted in the summary, not treated as an error).
+
+`:Filetree symlink repair [path]` targets a broken symlink specifically — a
+valid one, or anything that isn't a symlink, gets a notify and no further
+action. For a broken one, it reads the link's own recorded target and
+searches the filesystem for a file with a matching name/tail via gopath.nvim
+(github.com/StefanBartl/gopath.nvim) — an OPTIONAL soft dependency, the same
+integration style as Path Copy's/PDF Open's own soft deps: with gopath.nvim
+absent, or its search coming up empty, repair falls back to a plain "Delete
+symlink instead" / "Keep broken" choice. Otherwise it offers every candidate
+gopath.nvim found (relative paths, in a picker), plus those same two escape
+hatches. Picking a candidate relinks in place — the old (broken) link entry
+is removed and recreated as a symlink to the new target; picking "delete"
+routes through the trash feature, same confirm/undo/dry-run behavior as `d`.
+`:Filetree symlink repairall` runs this over every BROKEN symlink among the
+marked nodes (else the node under the cursor), one at a time so each picker
+resolves before the next one opens.
+
+`:Filetree symlink delete` removes every symlink among the marked nodes
+(else the node under the cursor) through the trash feature — a non-symlink
+caught up in the same marks batch (e.g. a stale mark) is skipped, never
+deleted. It exists as an explicit, symlink-only counterpart to the generic
+`d` keymap: trashing a symlink already only ever removes the link dirent
+(the OS-level delete primitive never follows it — see the trash section's
+own confirm-prompt wording for a symlink), but this command additionally
+GUARANTEES nothing in the selection gets deleted unless it actually is a
+symlink.
+
 Config: `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all
         unset by default)
 
 Commands: `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree
-          symlink paste`
+          symlink paste`, `:Filetree symlink check [path]`, `:Filetree
+          symlink checkall`, `:Filetree symlink repair [path]`, `:Filetree
+          symlink repairall`, `:Filetree symlink delete`
 
 Module: lua/filetree/features/fileops/link_create/
 
@@ -1419,6 +1457,14 @@ existence check that gates `d` reads the dirent itself
 (`filetree.util.conflict.exists`, `fs_lstat`-aware), not just
 `filereadable`/`isdirectory`, both of which follow the link and see nothing
 through a broken one.
+
+Trashing a symlink (dangling or not) only ever removes the link dirent
+itself — the underlying delete primitive is an `unlink`, which by definition
+never follows a link to whatever it points at — and the confirm prompt says
+so explicitly ("Send symlink to trash (target is not touched)?" /
+"Permanently delete symlink ...") rather than reading exactly like an
+ordinary file delete. See |filetree-link-create| for `:Filetree symlink
+check`/`repair`/`delete`, a symlink-specific complement to this generic `d`.
 
 Keymaps: d U <leader>th
 

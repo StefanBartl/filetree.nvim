@@ -206,6 +206,11 @@ local TREE = {
   -- :Filetree symlink              → prompt for a target, choose Symlink/Hardlink
   -- :Filetree symlink mark [path]  → mark a source (node/buffer/path, no prompt)
   -- :Filetree symlink paste        → paste the marked source, link kind by OS
+  -- :Filetree symlink check [path] → report whether it's a symlink, and if broken
+  -- :Filetree symlink checkall     → same, over every marked node (else cursor)
+  -- :Filetree symlink repair [path] → search + relink a broken symlink's target
+  -- :Filetree symlink repairall    → same, over every marked node (else cursor)
+  -- :Filetree symlink delete       → remove marked symlinks (else cursor node)
   --
   -- Named `symlink`, not `link`: `link` collided with the unrelated `mdlink`
   -- (Markdown-link-string) command under the same :Filetree verb — one is a
@@ -222,6 +227,26 @@ local TREE = {
     paste = function(_)
       local f = ft("link_create")
       if f then f.paste() end
+    end,
+    check = function(args)
+      local f = ft("link_create")
+      if f then f.check(#args > 0 and table.concat(args, " ") or nil) end
+    end,
+    checkall = function(_)
+      local f = ft("link_create")
+      if f then f.check_all() end
+    end,
+    repair = function(args)
+      local f = ft("link_create")
+      if f then f.repair(#args > 0 and table.concat(args, " ") or nil) end
+    end,
+    repairall = function(_)
+      local f = ft("link_create")
+      if f then f.repair_all() end
+    end,
+    delete = function(_)
+      local f = ft("link_create")
+      if f then f.delete() end
     end,
   },
 

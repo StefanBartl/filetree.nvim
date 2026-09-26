@@ -3602,6 +3602,438 @@ do
   package.loaded["filetree.features.fileops.link_create"] = nil
 end
 
+-- ── filetree.util.symlink: fresh lstat/stat pair, no adapter node needed ─────
+do
+  local tmp = (TMP_ROOT .. "/units-symlink-util"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local real_file = tmp .. "/real.txt"
+  vim.fn.writefile({ "real" }, real_file)
+
+  local symlink_util = require("filetree.util.symlink")
+  local mutate = require("lib.nvim.cross.fs.mutate")
+
+  check("symlink util: a plain file is not a link", not symlink_util.is_link(real_file))
+  check("symlink util: a plain file is not broken", not symlink_util.is_broken(real_file))
+  check("symlink util: no target for a plain file", symlink_util.read_target(real_file) == nil)
+
+  local ok_valid = mutate.symlink(real_file, tmp .. "/valid_link.txt", false)
+  local ok_broken = mutate.symlink(tmp .. "/does_not_exist.txt", tmp .. "/broken_link.txt", false)
+
+  if not ok_valid or not ok_broken then
+    print("  note symlink util: could not create a test symlink in this environment, skipping")
+  else
+    check("symlink util: a valid symlink is a link", symlink_util.is_link(tmp .. "/valid_link.txt"))
+    check(
+      "symlink util: a valid symlink is not broken",
+      not symlink_util.is_broken(tmp .. "/valid_link.txt")
+    )
+    check(
+      "symlink util: a broken symlink is a link",
+      symlink_util.is_link(tmp .. "/broken_link.txt")
+    )
+    check(
+      "symlink util: a broken symlink reports broken",
+      symlink_util.is_broken(tmp .. "/broken_link.txt")
+    )
+    check(
+      "symlink util: read_target returns something for a broken link",
+      symlink_util.read_target(tmp .. "/broken_link.txt") ~= nil
+    )
+  end
+end
+
+-- ── link_create check/checkall: symlink vs plain file, ok vs broken ──────────
+do
+  local tmp = (TMP_ROOT .. "/units-linkcheck"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local real_file = tmp .. "/real.txt"
+  vim.fn.writefile({ "real" }, real_file)
+  local valid_link = tmp .. "/valid_link.txt"
+  local broken_link = tmp .. "/broken_link.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_valid = mutate.symlink(real_file, valid_link, false)
+  local ok_broken = mutate.symlink(tmp .. "/gone.txt", broken_link, false)
+
+  if not ok_valid or not ok_broken then
+    print("  note link_create check: could not create a test symlink in this environment, skipping")
+  else
+    local cur_node = { path = broken_link, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkcheck",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkcheck",
+      features = { link_create = { enabled = true }, marks = { enabled = true } },
+    })
+    local lc = ft.feature("link_create")
+    local marks = ft.feature("marks")
+
+    -- Implicit resolution (no explicit path) prefers the tree's cursor node
+    -- ONLY while a tree buffer is focused (see the link_create mark implicit-
+    -- resolution test above) -- fake one here so this doesn't fall through to
+    -- whatever ordinary buffer an earlier test in this same process left focused.
+    local tree_buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(tree_buf)
+    vim.bo[tree_buf].filetype = "neo-tree"
+
+    local captured
+    local orig_notify = vim.notify
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(m)
+      captured = m
+    end
+    lc.check() -- cursor is on the broken link
+    check(
+      "link_create check: reports a broken symlink",
+      captured ~= nil and captured:lower():find("broken", 1, true) ~= nil,
+      tostring(captured)
+    )
+
+    captured = nil
+    lc.check(valid_link)
+    check(
+      "link_create check: reports an ok symlink for an explicit path",
+      captured ~= nil and captured:lower():find("ok", 1, true) ~= nil,
+      tostring(captured)
+    )
+
+    captured = nil
+    lc.check(real_file)
+    check(
+      "link_create check: a plain file is reported as not a symlink",
+      captured ~= nil and captured:lower():find("not a symlink", 1, true) ~= nil,
+      tostring(captured)
+    )
+    vim.notify = orig_notify
+
+    marks.toggle(valid_link)
+    marks.toggle(broken_link)
+    marks.toggle(real_file)
+
+    local captured_lines
+    local orig_kit = package.loaded["ui.kit"]
+    package.loaded["ui.kit"] = {
+      viewer = function(opts)
+        captured_lines = opts.lines
+      end,
+    }
+    lc.check_all()
+    package.loaded["ui.kit"] = orig_kit
+
+    local joined = captured_lines and table.concat(captured_lines, "\n") or ""
+    check(
+      "link_create checkall: summary counts 1 ok, 1 broken, 1 skipped",
+      joined:find("1 ok, 1 broken", 1, true) ~= nil
+        and joined:find("1 not a symlink", 1, true) ~= nil,
+      joined
+    )
+
+    marks.clear_all()
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── link_create delete: only removes symlinks, never a non-symlink mark ─────
+do
+  local tmp = (TMP_ROOT .. "/units-linkdelete"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local real_file = tmp .. "/real.txt"
+  vim.fn.writefile({ "keep me" }, real_file)
+  local broken_link = tmp .. "/broken_link.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/gone.txt", broken_link, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create delete: could not create a test symlink in this environment, skipping"
+    )
+  else
+    local cur_node = { path = real_file, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkdelete",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkdelete",
+      features = {
+        link_create = { enabled = true },
+        marks = { enabled = true },
+        -- permanent + confirm=false: a real, synchronous, no-subprocess delete
+        -- (see trash's do_trash), so the assertions below can run right after
+        -- lc.delete() returns instead of waiting on an async trash process.
+        trash = { enabled = true, mode = "permanent", confirm = false },
+      },
+    })
+    local lc = ft.feature("link_create")
+    local marks = ft.feature("marks")
+
+    -- Mark BOTH the broken symlink and the plain file -- delete() must remove
+    -- only the former, skip (never touch) the latter.
+    marks.toggle(broken_link)
+    marks.toggle(real_file)
+
+    local captured
+    local orig_notify = vim.notify
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(m)
+      captured = (captured and (captured .. "\n") or "") .. m
+    end
+    lc.delete()
+    vim.notify = orig_notify
+
+    check(
+      "link_create delete: the marked symlink is gone",
+      (vim.uv or vim.loop).fs_lstat(broken_link) == nil
+    )
+    check(
+      "link_create delete: the marked plain file is untouched",
+      vim.fn.filereadable(real_file) == 1
+        and table.concat(vim.fn.readfile(real_file), "\n") == "keep me"
+    )
+    check(
+      "link_create delete: notifies that the non-symlink mark was skipped",
+      captured ~= nil and captured:lower():find("non%-symlink node%(s%) skipped", 1, false) ~= nil
+        or captured:lower():find("non-symlink node(s) skipped", 1, true) ~= nil,
+      tostring(captured)
+    )
+
+    marks.clear_all()
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── link_create repair: gopath.nvim absent -- falls back to delete/keep ──────
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-nogopath"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local broken_link = tmp .. "/broken_link.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/gone.txt", broken_link, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair: could not create a test symlink in this environment, skipping"
+    )
+  else
+    -- Force the gopath.nvim require to fail regardless of whether it happens
+    -- to be installed on this machine's runtimepath, so this test always
+    -- exercises the "not installed" branch.
+    package.preload["gopath.resolvers.common.tailsearch"] = function()
+      error("gopath.nvim not on rtp (test double)")
+    end
+
+    local captured_choices
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.confirm_choice"] = function(_, choices, on_choice)
+      captured_choices = choices
+      on_choice("Delete symlink instead")
+    end
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stub
+
+    local cur_node = { path = broken_link, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-nogopath",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-nogopath",
+      features = {
+        link_create = { enabled = true },
+        trash = { enabled = true, mode = "permanent", confirm = false },
+      },
+    })
+    local lc = ft.feature("link_create")
+
+    local tree_buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(tree_buf)
+    vim.bo[tree_buf].filetype = "neo-tree"
+
+    lc.repair()
+
+    check(
+      "link_create repair (no gopath): offers Delete/Keep, not a candidate list",
+      captured_choices ~= nil
+        and captured_choices[1] == "Delete symlink instead"
+        and captured_choices[2] == "Keep broken (do nothing)",
+      vim.inspect(captured_choices)
+    )
+    check(
+      "link_create repair (no gopath): 'Delete symlink instead' actually removes it",
+      (vim.uv or vim.loop).fs_lstat(broken_link) == nil
+    )
+
+    package.preload["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["filetree.util.confirm_choice"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── link_create repair: gopath.nvim finds a candidate -- relinks in place ────
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-candidate"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/newloc", "p")
+  local new_target = tmp .. "/newloc/target.txt"
+  vim.fn.writefile({ "moved" }, new_target)
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (candidate): could not create a test symlink in this environment, skipping"
+    )
+  else
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return { new_target }
+      end,
+      guess_roots = function()
+        return { tmp }
+      end,
+    }
+    local captured_items
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.select"] = function(items, _, on_choice)
+      captured_items = items
+      on_choice(new_target, 1)
+    end
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-candidate",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-candidate",
+      features = { link_create = { enabled = true } },
+    })
+    local lc = ft.feature("link_create")
+
+    local tree_buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_set_current_buf(tree_buf)
+    vim.bo[tree_buf].filetype = "neo-tree"
+
+    lc.repair()
+
+    check(
+      "link_create repair (candidate): the picker was offered the found candidate plus escape hatches",
+      captured_items ~= nil
+        and vim.tbl_contains(captured_items, new_target)
+        and vim.tbl_contains(captured_items, "Delete symlink instead")
+        and vim.tbl_contains(captured_items, "Keep broken (do nothing)"),
+      vim.inspect(captured_items)
+    )
+    check(
+      "link_create repair (candidate): the symlink now resolves",
+      (vim.uv or vim.loop).fs_stat(link_path) ~= nil
+    )
+    check(
+      "link_create repair (candidate): reading through the relinked symlink gives the new target's content",
+      vim.fn.filereadable(link_path) == 1
+        and table.concat(vim.fn.readfile(link_path), "\n") == "moved"
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["filetree.util.select"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
 -- ── rename_batch: confirm=true asks kit.confirm (async), not the old ────────
 -- blocking `vim.fn.input("...[y/N]...")` freetext prompt.
 do

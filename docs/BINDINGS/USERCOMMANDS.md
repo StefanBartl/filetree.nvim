@@ -144,6 +144,13 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | Command | Action |
 |---------|--------|
 | `:Filetree symlink` | Prompt for a target path, create a symlink/hardlink to it in the current tree directory |
+| `:Filetree symlink mark [path]` | Mark a link source (node/buffer/explicit path), no prompt |
+| `:Filetree symlink paste` | Paste the marked source as a link, kind picked automatically |
+| `:Filetree symlink check [path]` | Report whether the node/path is a symlink, and whether it's broken |
+| `:Filetree symlink checkall` | Same, over every marked node (else the node under the cursor) |
+| `:Filetree symlink repair [path]` | If broken, search the filesystem for a new target (via gopath.nvim, optional) and offer a picker, or delete/keep it |
+| `:Filetree symlink repairall` | Same, over every broken symlink among the marked nodes (else the node under the cursor) |
+| `:Filetree symlink delete` | Remove marked symlinks (else the node under the cursor) via trash — never a non-symlink, never the target |
 
 ### Rename
 | Command | Action |
