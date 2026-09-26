@@ -1254,15 +1254,31 @@ marked nodes (else the node under the cursor), one at a time so each picker
 resolves before the next one opens.
 
 The search never widens into Neovim's own cache/data/state directories
-(`stdpath("cache"/"data"/"state")`), no matter what `repair_roots` below is
-set to — those are where the undo/swap/shada directories live, and a stray
-file there can otherwise spuriously tail-match a broken link's basename and
-get offered as a "candidate" (picking it would relink to that file's
-contents, not a real target). `features.link_create.repair_roots` (a list
-of extra directories, unset by default) widens the search the other way —
-to a sibling project entirely outside gopath's own buffer-dir/cwd/git-root
-guessing, e.g. `repair_roots = { "$REPOS_DIR" }` when a moved target
-routinely lives in a different repo checkout.
+(`stdpath("cache"/"data"/"state")`), no matter what `repair_roots`/
+`repair_nvim_config_root` below are set to — those are where the undo/swap/
+shada directories live, and a stray file there can otherwise spuriously
+tail-match a broken link's basename and get offered as a "candidate"
+(picking it would relink to that file's contents, not a real target).
+
+The search itself runs in two passes, cheapest first:
+  1. gopath's own persisted cache (instant), then its fast default roots
+     (buffer dir/cwd/git root) — bounded to what a project normally is.
+  2. `features.link_create.repair_roots` (default `{ "$REPOS_DIR" }`,
+     `$VAR`-expanded the same shellout-free way every other config path in
+     this plugin is) and `.repair_nvim_config_root` (default `true`, also
+     searches `stdpath("config")`) — ONLY once pass 1 comes up empty, since
+     these can point at something large (a whole repos root, a real Neovim
+     config). Measured at ~0.1s even against a 5.8k-file/737MB directory, so
+     both are on by default; `repair_search_progress` (default `"auto"`)
+     shows an indicator for this second pass specifically (see
+     `lib.nvim.progress`; `"statusline"` feeds `ui.nvim`'s statusline
+     segment instead, `false` shows nothing), and
+     `repair_search_slow_hint_ms` (default `2000`) notifies with a one-time,
+     actionable hint — how to narrow or disable `repair_roots`/
+     `.repair_nvim_config_root` — if that second pass ever takes longer than
+     that on a particular machine's filesystem (a network drive, say).
+     Neither search blocks the tree or any other window; switching away and
+     doing something else while it runs is always fine.
 
 `:Filetree symlink delete` removes every symlink among the marked nodes
 (else the node under the cursor) through the trash feature — a non-symlink
@@ -1274,10 +1290,10 @@ own confirm-prompt wording for a symlink), but this command additionally
 GUARANTEES nothing in the selection gets deleted unless it actually is a
 symlink.
 
-Config: `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` /
-        `.repair_roots` (all unset by default; `repair_roots` is a list of
-        extra directories for `repair`/`repairall`, `$VAR`-expanded the same
-        shellout-free way every other config path in this plugin is)
+Config: `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all
+        unset by default), `.repair_roots` (default `{ "$REPOS_DIR" }`),
+        `.repair_nvim_config_root` (default `true`), `.repair_search_progress`
+        (default `"auto"`), `.repair_search_slow_hint_ms` (default `2000`)
 
 Commands: `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree
           symlink paste`, `:Filetree symlink check [path]`, `:Filetree

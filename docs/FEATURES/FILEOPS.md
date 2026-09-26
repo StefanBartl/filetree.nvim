@@ -621,10 +621,21 @@ under the cursor), one at a time.
 The search never widens into Neovim's own cache/data/state directories
 (that's where the undo/swap/shada directories live — a stray file there
 could otherwise spuriously match a broken link's basename and get offered
-as a bogus "candidate"). `features.link_create.repair_roots` (a list of
-extra directories, unset by default, `$VAR`-expanded) widens it the other
-way, to a sibling project entirely outside gopath's own search, e.g.
-`repair_roots = { "$REPOS_DIR" }`.
+as a bogus "candidate"), no matter what the two settings below are set to.
+
+It runs in two passes, cheapest first: gopath's own cache and fast default
+roots (buffer dir/cwd/git root) first, then — only if that comes up empty —
+`features.link_create.repair_roots` (default `{ "$REPOS_DIR" }`,
+`$VAR`-expanded) and `.repair_nvim_config_root` (default `true`, also
+searches `stdpath("config")`), for a target that moved to a sibling project
+entirely outside gopath's own search. Measured at ~0.1s even against a
+5.8k-file/737MB directory, so both are on by default; if that second pass
+is ever genuinely slow on a particular machine (e.g. a network drive),
+`repair_search_slow_hint_ms` (default `2000`) notifies with a one-time hint
+on how to narrow or disable it, and `repair_search_progress` (default
+`"auto"`) shows a progress indicator for it — `"statusline"` feeds
+`ui.nvim`'s statusline segment, `false` shows nothing. Neither pass blocks
+the tree or any other window.
 
 `:Filetree symlink delete` removes every symlink among the marked nodes
 (else the node under the cursor) through the trash feature — a non-symlink
@@ -634,4 +645,4 @@ prompt says so explicitly rather than reading like an ordinary file delete.
 
 - **Module:** `lua/filetree/features/fileops/link_create/`
 - **Commands:** `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree symlink paste`, `:Filetree symlink check [path]`, `:Filetree symlink checkall`, `:Filetree symlink repair [path]`, `:Filetree symlink repairall`, `:Filetree symlink delete`
-- **Config:** `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` / `.repair_roots` (all unset by default)
+- **Config:** `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all unset by default), `.repair_roots` (default `{ "$REPOS_DIR" }`), `.repair_nvim_config_root` (default `true`), `.repair_search_progress` (default `"auto"`), `.repair_search_slow_hint_ms` (default `2000`)

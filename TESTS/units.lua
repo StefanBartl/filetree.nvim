@@ -4079,6 +4079,12 @@ do
       guess_roots = function(_)
         return { tmp, fake_cache:upper() }
       end,
+      -- The stubbed find_async below ignores which suffix it's called with
+      -- and always returns the same fixed hits, so a single passthrough
+      -- suffix is enough here.
+      suffix_candidates = function(t, _)
+        return { t }
+      end,
     }
     local captured_roots
     ---@diagnostic disable-next-line: duplicate-set-field
@@ -4281,12 +4287,17 @@ do
   end
 end
 
--- ── link_create repair: repair_roots config reaches a sibling directory ────
+-- ── link_create repair: repair_roots is a SECOND pass, after fast roots ─────
+-- come up empty ───────────────────────────────────────────────────────────
 -- The other half of the same real report: a broken link's real target can
 -- live entirely outside the current project (a different repo altogether),
 -- which gopath's own buffer-dir/cwd/git-root guessing has no way to reach.
--- `features.link_create.repair_roots` is the configured escape hatch --
--- assert it actually reaches gopath's `guess_roots(extra)` call.
+-- `features.link_create.repair_roots` is the configured escape hatch -- but
+-- (per a real measurement against a real, large Neovim config) it is only
+-- searched as a SECOND pass, once the fast default roots already came up
+-- empty, to avoid paying a potentially large directory walk's cost on every
+-- repair. Assert both: stage 1 (gopath's own `guess_roots()`, no `extra` arg
+-- anymore) never includes it, and stage 2 does.
 do
   local tmp = (TMP_ROOT .. "/units-linkrepair-extraroot"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
@@ -4303,7 +4314,6 @@ do
       "  note link_create repair (repair_roots): could not create a test symlink in this environment, skipping"
     )
   else
-    local captured_extra
     ---@diagnostic disable-next-line: duplicate-set-field
     package.loaded["gopath.resolvers.common.tailsearch"] = {
       sanitize = function(raw)
@@ -4312,22 +4322,25 @@ do
       cache_lookup = function(_)
         return {}
       end,
-      guess_roots = function(extra)
-        captured_extra = extra
-        return { tmp }
+      guess_roots = function()
+        return { tmp } -- stage 1's fast roots only -- no `extra` param anymore
+      end,
+      suffix_candidates = function(t, _)
+        return { t }
       end,
     }
-    -- cache_lookup is empty, so find_repair_candidates falls through to the
-    -- async finder -- stub it too (it isn't installed in this test rtp),
-    -- otherwise the pcall(require, ...) failure short-circuits before
-    -- guess_roots(extra) is ever reached.
+    local find_calls = {}
     ---@diagnostic disable-next-line: duplicate-set-field
     package.loaded["gopath.truncated.finder"] = {
-      find_async = function(_, _, on_done)
-        on_done({})
+      find_async = function(_, opts, on_done)
+        find_calls[#find_calls + 1] = opts.roots
+        on_done({}) -- both passes stub-empty -- only the ROOTS searched matter here
       end,
     }
-    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stub
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.progress"] =
+      { create = function(_) end, set_style = function(_) end }
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
 
     local cur_node = { path = link_path, type = "file" }
     local stub = setmetatable({
@@ -4363,13 +4376,251 @@ do
     lc.repair(link_path)
 
     check(
-      "link_create repair (repair_roots): the configured extra root reaches gopath's guess_roots(extra)",
-      captured_extra ~= nil and vim.tbl_contains(captured_extra, extra_root),
-      vim.inspect(captured_extra)
+      "link_create repair (repair_roots): stage 1 (fast roots) does NOT include the configured extra root",
+      find_calls[1] ~= nil and not vim.tbl_contains(find_calls[1], extra_root),
+      vim.inspect(find_calls)
+    )
+    check(
+      "link_create repair (repair_roots): stage 2 (after stage 1 found nothing) DOES search the extra root",
+      find_calls[2] ~= nil and vim.tbl_contains(find_calls[2], extra_root),
+      vim.inspect(find_calls)
     )
 
     package.loaded["gopath.resolvers.common.tailsearch"] = nil
     package.loaded["gopath.truncated.finder"] = nil
+    package.loaded["filetree.util.progress"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── link_create repair: repair_nvim_config_root defaults to searching ──────
+-- stdpath("config") in stage 2, and can be explicitly turned back off ──────
+-- A real measurement against a real, large Neovim config (5.8k files/737MB,
+-- worst case: nothing found, full walk) came back in ~0.1s, so unlike an
+-- earlier (mistaken) measurement, this is safe to ship on by default. It
+-- still only runs as stage 2, after the fast default roots (stage 1) come
+-- up empty -- this checks the shipped default reaches it out of the box,
+-- and that setting it back to `false` opts back out.
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-cfgroot"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (config root default): could not create a test symlink in this environment, skipping"
+    )
+  else
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return {}
+      end,
+      guess_roots = function()
+        return { tmp }
+      end,
+      suffix_candidates = function(t, _)
+        return { t }
+      end,
+    }
+    local find_calls = {}
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.truncated.finder"] = {
+      find_async = function(_, opts, on_done)
+        find_calls[#find_calls + 1] = opts.roots
+        on_done({})
+      end,
+    }
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.progress"] =
+      { create = function(_) end, set_style = function(_) end }
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-cfgroot",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-cfgroot",
+      -- No override -- exercises the shipped default (on) first.
+      features = { link_create = { enabled = true } },
+    })
+    local lc = ft.feature("link_create")
+    local expect = require("filetree.util.path").slashify(vim.fn.stdpath("config"))
+
+    lc.repair(link_path)
+    check(
+      "link_create repair (config root default): stage 2 searches stdpath('config') out of the box",
+      find_calls[2] ~= nil and vim.tbl_contains(find_calls[2], expect),
+      vim.inspect(find_calls) .. " / expected " .. expect
+    )
+
+    find_calls = {}
+    package.loaded["filetree.features.fileops.link_create"] = nil
+    ft.setup({
+      adapter = "units-stub-linkrepair-cfgroot",
+      -- Note: `repair_roots` can't be cleared back to "nothing" here via a
+      -- config override -- `vim.tbl_deep_extend("force", ...)` merges a
+      -- table value by INDEX, so a shorter (or empty) override table simply
+      -- fails to overwrite the default's existing indices, it doesn't clear
+      -- them. So this only isolates `repair_nvim_config_root`'s own effect
+      -- (stdpath("config") specifically), not "no stage 2 at all" -- stage 2
+      -- can still run for $REPOS_DIR (set for real on the machine running
+      -- this suite), just without stdpath("config") in it.
+      features = { link_create = { enabled = true, repair_nvim_config_root = false } },
+    })
+    lc = ft.feature("link_create")
+
+    lc.repair(link_path)
+    check(
+      "link_create repair (config root disabled): stage 2 no longer includes stdpath('config')",
+      find_calls[2] == nil or not vim.tbl_contains(find_calls[2], expect),
+      vim.inspect(find_calls) .. " / must not contain " .. expect
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["gopath.truncated.finder"] = nil
+    package.loaded["filetree.util.progress"] = nil
+    package.loaded["filetree.features.fileops.link_create"] = nil
+  end
+end
+
+-- ── link_create repair: a slow second pass gets a one-time, actionable ─────
+-- hint ──────────────────────────────────────────────────────────────────────
+-- The default search is fast in practice (see above), but "usually fast"
+-- isn't "always fast" (a network drive, an exceptionally large repos root),
+-- so a genuinely slow run must not stay silently slow forever --
+-- `repair_search_slow_hint_ms` notifies with actionable config guidance.
+do
+  local tmp = (TMP_ROOT .. "/units-linkrepair-slowhint"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp, "p")
+  local link_path = tmp .. "/target.txt"
+
+  local mutate = require("lib.nvim.cross.fs.mutate")
+  local ok_broken = mutate.symlink(tmp .. "/old_target.txt", link_path, false)
+
+  if not ok_broken then
+    print(
+      "  note link_create repair (slow hint): could not create a test symlink in this environment, skipping"
+    )
+  else
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.resolvers.common.tailsearch"] = {
+      sanitize = function(raw)
+        return vim.fs.basename((raw:gsub("\\", "/")))
+      end,
+      cache_lookup = function(_)
+        return {}
+      end,
+      guess_roots = function()
+        return { tmp }
+      end,
+      suffix_candidates = function(t, _)
+        return { t }
+      end,
+    }
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["gopath.truncated.finder"] = {
+      find_async = function(_, _, on_done)
+        -- Simulate a slow stage 2 without an actual multi-second sleep in
+        -- the test suite: the code under test measures elapsed wall time
+        -- around this call, so a real (short) busy-wait is enough to push
+        -- it over a tiny configured threshold below, deterministically.
+        local target = (vim.uv or vim.loop).hrtime() + 5 * 1e6 -- ~5ms
+        while (vim.uv or vim.loop).hrtime() < target do
+        end
+        on_done({})
+      end,
+    }
+    ---@diagnostic disable-next-line: duplicate-set-field
+    package.loaded["filetree.util.progress"] =
+      { create = function(_) end, set_style = function(_) end }
+    package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
+
+    local cur_node = { path = link_path, type = "file" }
+    local stub = setmetatable({
+      name = "units-stub-linkrepair-slowhint",
+      is_available = function()
+        return true
+      end,
+      get_current_node = function()
+        return cur_node
+      end,
+      get_winid = function()
+        return nil
+      end,
+      refresh = function()
+        return true
+      end,
+    }, {
+      __index = function()
+        return function()
+          return false
+        end
+      end,
+    })
+
+    local ft = require("filetree")
+    ft.register_adapter(stub)
+    ft.setup({
+      adapter = "units-stub-linkrepair-slowhint",
+      -- Threshold set below the simulated ~5ms delay, so the hint reliably
+      -- fires in this test without actually being slow for real.
+      features = { link_create = { enabled = true, repair_search_slow_hint_ms = 1 } },
+    })
+    local lc = ft.feature("link_create")
+
+    -- Accumulate every notify call -- the slow-hint warning fires before
+    -- the final "no candidate" info notify, and a single-message capture
+    -- would just be overwritten by that later, unrelated call.
+    local captured = ""
+    local orig_notify = vim.notify
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(m)
+      captured = captured .. tostring(m) .. "\n"
+    end
+    lc.repair(link_path)
+    vim.notify = orig_notify
+
+    check(
+      "link_create repair (slow hint): fires with actionable config guidance once the threshold is exceeded",
+      captured:find("repair_roots", 1, true) ~= nil
+        and captured:find("repair_nvim_config_root", 1, true) ~= nil,
+      tostring(captured)
+    )
+
+    package.loaded["gopath.resolvers.common.tailsearch"] = nil
+    package.loaded["gopath.truncated.finder"] = nil
+    package.loaded["filetree.util.progress"] = nil
     package.loaded["filetree.features.fileops.link_create"] = nil
   end
 end

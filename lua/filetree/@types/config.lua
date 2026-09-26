@@ -812,12 +812,52 @@
 ---                                elevation needed) and a symlink elsewhere.
 ---@field repair_roots   string[]?  Extra directories `:Filetree symlink repair`/`repairall`
 ---                                  searches for a broken link's moved target, on top of the
----                                  usual buffer dir/cwd/git root (default nil, none). Needed
----                                  for a target that lives in a sibling repo entirely outside
----                                  the current project — repair's own root-guessing has no way
----                                  to reach that on its own. Never widened to Neovim's own
----                                  cache/data/state dirs regardless of this setting — see
----                                  `link_create/init.lua`'s `unsafe_roots()`.
+---                                  usual buffer dir/cwd/git root (default `{ "$REPOS_DIR" }`,
+---                                  `$VAR`-expanded the shellout-free way every other config
+---                                  path in this plugin is — same default `path_copy`'s own
+---                                  `env_roots` already bakes in). Needed for a target that
+---                                  lives in a sibling repo entirely outside the current
+---                                  project — repair's own root-guessing has no way to reach
+---                                  that on its own. Only searched as a SECOND pass, after the
+---                                  fast default roots come up empty (see `link_create/init.lua`'s
+---                                  `find_repair_candidates`) — measured at ~0.1s even against a
+---                                  large (5.8k files/737MB) directory, so this is on by
+---                                  default; `repair_search_slow_hint_ms` still warns if a
+---                                  particular machine's filesystem makes it genuinely slow.
+---                                  Never widened to Neovim's own cache/data/state dirs
+---                                  regardless of this setting — see `link_create/init.lua`'s
+---                                  `unsafe_roots()`. A caveat inherited from `vim.tbl_deep_extend`:
+---                                  a user-supplied `repair_roots` shorter than the default is
+---                                  merged BY INDEX, not replaced wholesale — `{}` or `{"x"}`
+---                                  alone will not "clear" the `"$REPOS_DIR"` default, only an
+---                                  override with an ACTUAL replacement path at every index
+---                                  does. To turn this off entirely, disable the feature or
+---                                  override with a path that genuinely resolves to nothing.
+---@field repair_nvim_config_root  boolean?  Also search `stdpath("config")` as part of that
+---                                           same second pass (default true — see `repair_roots`
+---                                           above for why this is safe to default on; unlike
+---                                           `path_copy`'s similarly-named `nvim_config_root`,
+---                                           this is a filesystem walk, not a cheap prefix fold,
+---                                           which is why it gets its own on-by-default flag
+---                                           rather than being folded into `repair_roots`'s array
+---                                           — a user-supplied `repair_roots` replaces that array
+---                                           wholesale via `vim.tbl_deep_extend`, which would
+---                                           otherwise risk silently dropping this default too).
+---@field repair_search_progress  Lib.Progress.Style|false?  Progress indicator for that second
+---                                           search pass (default `"auto"`: prefers fidget.nvim
+---                                           if installed, else a plain notify — see
+---                                           `lib.nvim.progress`). Set `"statusline"` to feed
+---                                           `ui.nvim`'s statusline segment instead (needs the
+---                                           `statusline` integration configured — see
+---                                           `docs/installation.md`), or `false` to show nothing
+---                                           at all. Never blocks the tree or any other window —
+---                                           the search itself is async, so switching away and
+---                                           doing something else while it runs is always fine.
+---@field repair_search_slow_hint_ms  number|false?  Notify with a one-time, actionable hint
+---                                           (how to narrow/disable `repair_roots`/
+---                                           `.repair_nvim_config_root`) when that second search
+---                                           pass takes longer than this many milliseconds
+---                                           (default `2000`). `false` disables the hint.
 
 -- ── cursor_hide ───────────────────────────────────────────────────────────────
 
