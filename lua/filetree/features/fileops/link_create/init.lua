@@ -416,15 +416,20 @@ end
 ---what the ORIGINAL link kind was (POSIX doesn't record it), and a symlink is
 ---the only kind that can point at either a file or a directory.
 ---
----Re-checks `link_path` is STILL a symlink right before deleting it: the
+---Re-checks `link_path` is STILL a symlink right before deleting it, and
+---`new_target` still EXISTS right before pointing anything at it: the
 ---caller reaches here only after an async filesystem search and an
 ---interactive picker (repair_one → find_repair_candidates → offer_repair →
 ---this), a window easily long enough (the user deliberating, a slow
----search) for something else to have replaced `link_path` with a real file
----in the meantime (a git checkout, a build script, another Neovim
----instance). `mutate.delete_file` is an unconditional `fs_unlink` with no
----type check of its own, so skipping this would silently delete whatever
----real file now sits there.
+---search) for something else to have replaced `link_path` with a real file,
+---or removed/moved the chosen `new_target`, in the meantime (a git
+---checkout, a build script, another Neovim instance). `mutate.delete_file`
+---is an unconditional `fs_unlink` with no type check of its own, so skipping
+---the first check would silently delete whatever real file now sits at
+---`link_path`; skipping the second would delete the old (working) link and
+---replace it with a new symlink dangling at a target that no longer exists —
+---`mutate.symlink` never checks the target itself, so that "succeeds" and
+---reports as much, while the link is left exactly as broken as before.
 ---@param link_path string
 ---@param new_target string
 local function relink(link_path, new_target)
@@ -438,7 +443,16 @@ local function relink(link_path, new_target)
   end
 
   local stat = vim.uv.fs_stat(new_target)
-  local is_dir = stat ~= nil and stat.type == "directory"
+  if not stat then
+    notify.error(
+      "Not relinking "
+        .. path.relative(link_path)
+        .. " — repair target no longer exists: "
+        .. path.relative(new_target)
+    )
+    return
+  end
+  local is_dir = stat.type == "directory"
 
   local ok_del, err_del = mutate.delete_file(link_path)
   if not ok_del then
