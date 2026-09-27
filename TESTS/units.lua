@@ -4310,17 +4310,21 @@ do
         return { vim.fs.basename(t) }
       end,
     }
+    -- Only a real basename match ("target.txt") resolves a hit -- unlike a
+    -- stub that returns the same hit unconditionally, this also ties the
+    -- "the symlink now resolves" check below to the basename extraction
+    -- actually having happened, not just to find_async having been called.
     local captured_search_term
     ---@diagnostic disable-next-line: duplicate-set-field
     package.loaded["gopath.truncated.finder"] = {
       find_async = function(term, _, on_done)
         captured_search_term = term
-        on_done({ new_target })
+        on_done(term == vim.fs.basename(new_target) and { new_target } or {})
       end,
     }
     ---@diagnostic disable-next-line: duplicate-set-field
-    package.loaded["filetree.util.select"] = function(_, _, on_choice)
-      on_choice(new_target, 1)
+    package.loaded["filetree.util.select"] = function(items, _, on_choice)
+      on_choice(items[1], 1)
     end
     package.loaded["filetree.features.fileops.link_create"] = nil -- reload with stubs
 
