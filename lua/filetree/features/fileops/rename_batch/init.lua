@@ -149,16 +149,17 @@ local function run_plan(plan, on_done)
     notify.info(msg)
 
     -- One chooser for the whole batch, across every provider, instead of one
-    -- popup per renamed file.
+    -- popup per renamed file. Refresh (and this function's own on_done) wait
+    -- for the apply to actually land -- own_links.collect, when enabled, is
+    -- never fully synchronous, so firing these right after the call returns
+    -- would refresh before the rewrite is on disk.
     refs.handle_result(scan_result, moves, {
       op = "rename",
       title = "References across the renamed batch",
-    })
-
-    -- Refresh tree
-    if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
-
-    on_done(errors == 0)
+    }, function()
+      if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+      on_done(errors == 0)
+    end)
   end)
 end
 

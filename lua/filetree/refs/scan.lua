@@ -28,11 +28,14 @@ local progress = require("filetree.util.progress")
 
 local M = {}
 
--- Directories never worth scanning for references. Kept local (and not routed
--- through util.ignore) on purpose: util.ignore is the *display* ignore list,
--- which the user may legitimately want to differ from what a reference scan
--- traverses.
-local PRUNE_DIRS = {
+-- Directories never worth scanning for references. Not routed through
+-- util.ignore on purpose: util.ignore is the *display* ignore list, which the
+-- user may legitimately want to differ from what a reference scan traverses.
+-- Exported (not `@internal`) so `filetree.refs.own_links`'s directory-move
+-- walk -- the same "walk a tree for reference-bearing files" concern, just
+-- the outgoing direction -- prunes the identical set instead of drifting.
+---@type table<string, boolean>
+M.PRUNE_DIRS = {
   [".git"] = true,
   ["node_modules"] = true,
   [".venv"] = true,
@@ -45,6 +48,7 @@ local PRUNE_DIRS = {
   [".cache"] = true,
   ["__pycache__"] = true,
 }
+local PRUNE_DIRS = M.PRUNE_DIRS
 
 -- ── Line access ───────────────────────────────────────────────────────────────
 

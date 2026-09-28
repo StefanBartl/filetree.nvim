@@ -177,27 +177,31 @@ local function do_rename(old_path, new_path, scan_result)
     -- Update open buffers
     buffer.relocate(old_path, new_path)
 
+    local function finish()
+      if _adapter and _adapter.refresh then _adapter.refresh() end
+      notify.info(
+        string.format(
+          "%s → %s",
+          vim.fn.fnamemodify(old_path, ":t"),
+          vim.fn.fnamemodify(new_path, ":t")
+        )
+      )
+    end
+
     -- Everything that pointed at the old path: markdown links, require()s,
     -- imports. `lsp_handled` lets the engine skip the code providers whose
     -- language server already rewrote them (`refs.prefer_lsp`), while markdown
-    -- and Lua — which never get an LSP edit here — still run.
+    -- and Lua — which never get an LSP edit here — still run. `finish` (tree
+    -- refresh + notify) waits for the apply to actually land -- own_links,
+    -- when enabled, is never fully synchronous.
     if scan_result then
       refs.handle_result(scan_result, { [old_path] = new_path }, {
         op = "rename",
         lsp_handled = workspace_edit ~= nil,
-      })
+      }, finish)
+    else
+      finish()
     end
-
-    -- Refresh tree
-    if _adapter and _adapter.refresh then _adapter.refresh() end
-
-    notify.info(
-      string.format(
-        "%s → %s",
-        vim.fn.fnamemodify(old_path, ":t"),
-        vim.fn.fnamemodify(new_path, ":t")
-      )
-    )
   end)
 end
 
