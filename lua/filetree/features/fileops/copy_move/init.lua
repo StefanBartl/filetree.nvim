@@ -362,6 +362,13 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
     -- old path → new path, filled in only once a cut has actually landed, so a
     -- failed or skipped item never gets its references rewritten.
     local moves = {}
+    -- old source → new pasted path, copy entries only. Kept separate from
+    -- `moves` above: a copy never breaks an INCOMING reference (the original
+    -- stays put, `refs.prefetch` above only ever scanned `cut_paths`), but
+    -- the pasted COPY's own outgoing links (e.g. a markdown file's relative
+    -- links) can still need rewriting for ITS new location — see the second
+    -- `refs.handle_result` call below.
+    local copied_moves = {}
     local moved = {} -- entry -> true, once its cut has actually landed
     local claimed = {} -- names already handed out by "Keep both" this batch
 
@@ -421,6 +428,7 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
             errors = errors + 1
           else
             done = done + 1
+            copied_moves[e.path] = dst
           end
         else
           local rc, moved_dst = do_move(e.path, dst)
@@ -461,6 +469,18 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
       op = "move",
       title = "References across the moved item(s)",
     })
+
+    -- Copies never carry an incoming-ref scan (only `cut_paths` was
+    -- prefetched above — a copy leaves the original in place, so nothing
+    -- points at it needs fixing), but a pasted copy's OWN outgoing links can
+    -- still need rewriting for its new location. An empty scan result means
+    -- `refs.resolve` contributes nothing, so only `own_links.collect` runs.
+    if next(copied_moves) then
+      refs.handle_result({ refs = {}, plans = {} }, copied_moves, {
+        op = "copy",
+        title = "Links inside the copied item(s)",
+      })
+    end
 
     -- Clear clipboard entries that actually landed: copy items always stay
     -- (kept for potential re-paste); cut items only clear once their move

@@ -84,34 +84,84 @@ function M.under(p, base)
   return is_subpath(M.key(p), M.key(base))
 end
 
+---Environment roots an "as-written" `$VAR/...` target may be anchored on —
+---threaded in explicitly by the caller (own_links, wiki-free) rather than
+---read from `filetree.refs`'s own config here, to avoid a load cycle
+---(providers require this module; `refs/init.lua` requires the providers).
+---@class FiletreeRefEnvRoots
+---@field names? string[]                        Environment variable names, written without the leading `$`.
+---@field extra? { name: string, root: string }[]  Already-resolved roots to try alongside `names` (e.g. `$NVIM_CONFIG_DIR`, backed by `vim.fn.stdpath("config")` rather than an actual env var).
+
 ---Resolve `target` (as written in `from_file`) into an absolute path.
----Handles `./x`, `../x`, `x`, `~/x`, `/x` and Windows drive paths. A leading
----`/` is ambiguous in markdown — it can mean "filesystem root" or "project
----root" — so both readings are returned, in that order, and the caller keeps
+---Handles `$VAR/x` (only when `env` is given and `VAR` resolves), `./x`,
+---`../x`, `x`, `~/x`, `/x` and Windows drive paths. A leading `/` is
+---ambiguous in markdown — it can mean "filesystem root" or "project root" —
+---so both readings are returned, in that order, and the caller keeps
 ---whichever one matches.
 ---@param target string
 ---@param from_file string   The file the reference is written in.
 ---@param root string        Project root, for the root-relative reading.
----@return string[]  candidate absolute paths (never empty)
-function M.resolve_candidates(target, from_file, root)
-  local out = {}
+---@param env? FiletreeRefEnvRoots
+---@return string[] candidates  never empty
+---@return string[] styles  same length as `candidates`; "env"|"fs"|"root"|"relative" per entry
+function M.resolve_candidates(target, from_file, root, env)
+  local out, styles = {}, {}
   local t = target:gsub("\\", "/")
+
+  local var = env and t:match("^%$([%w_]+)")
+  if env and var then
+    local resolved_root ---@type string?
+    for _, name in ipairs(env.names or {}) do
+      local v = vim.env[name]
+      if name == var and type(v) == "string" and v ~= "" then
+        resolved_root = v
+        break
+      end
+    end
+    if not resolved_root then
+      for _, e in ipairs(env.extra or {}) do
+        if e.name == var and type(e.root) == "string" and e.root ~= "" then
+          resolved_root = e.root
+          break
+        end
+      end
+    end
+    if resolved_root then
+      -- Past "$NAME", stripping one leading "/" so "$VAR" (bare) and
+      -- "$VAR/rest" join the same way.
+      local rest = t:sub(#var + 2):gsub("^/", "")
+      local joined = rest == "" and resolved_root or (resolved_root:gsub("/+$", "") .. "/" .. rest)
+      out[#out + 1] = M.abs(joined)
+      styles[#styles + 1] = "env"
+      return out, styles
+    end
+    -- Named but unresolved (unset env var, no matching `extra` root): fall
+    -- through to the ordinary readings below rather than giving up — an
+    -- unset `$VAR` in a target most likely just fails every reading, same as
+    -- today's behavior before this branch existed.
+  end
 
   if t:sub(1, 1) == "~" or t:match("^%a:/") then
     -- expand_path, not vim.fn.expand (SEC-34): `target` is a raw reference
     -- string parsed out of a file the user wrote or edited.
     out[#out + 1] = M.abs(expand_path(t))
-    return out
+    styles[#styles + 1] = "fs"
+    return out, styles
   end
 
   if t:sub(1, 1) == "/" then
     out[#out + 1] = M.abs(t)
-    if root and root ~= "" then out[#out + 1] = M.abs(root:gsub("/+$", "") .. t) end
-    return out
+    styles[#styles + 1] = "fs"
+    if root and root ~= "" then
+      out[#out + 1] = M.abs(root:gsub("/+$", "") .. t)
+      styles[#styles + 1] = "root"
+    end
+    return out, styles
   end
 
   out[#out + 1] = M.abs(ftpath.parent(from_file) .. "/" .. t)
-  return out
+  styles[#styles + 1] = "relative"
+  return out, styles
 end
 
 ---Which of `resolve_candidates`' readings actually points at `wanted` (or, for
@@ -122,19 +172,10 @@ end
 ---@param root string
 ---@param wanted string      The path being moved.
 ---@param is_dir boolean     Whether `wanted` is a directory (prefix match).
----@return string? resolved, "fs"|"root"|"relative"|nil style
-function M.match(target, from_file, root, wanted, is_dir)
-  local t = target:gsub("\\", "/")
-  local styles
-  if t:sub(1, 1) == "~" or t:match("^%a:/") then
-    styles = { "fs" }
-  elseif t:sub(1, 1) == "/" then
-    styles = { "fs", "root" }
-  else
-    styles = { "relative" }
-  end
-
-  local candidates = M.resolve_candidates(target, from_file, root)
+---@param env? FiletreeRefEnvRoots
+---@return string? resolved, "env"|"fs"|"root"|"relative"|nil style
+function M.match(target, from_file, root, wanted, is_dir, env)
+  local candidates, styles = M.resolve_candidates(target, from_file, root, env)
   for i, cand in ipairs(candidates) do
     local hit = is_dir and M.under(cand, wanted) or M.same(cand, wanted)
     if hit then return cand, styles[i] or styles[#styles] end
@@ -144,16 +185,27 @@ end
 
 ---Re-express a moved path in the style the original reference used.
 ---
+---  * `env`      — `$VAR/rest`, refolded via `util.path.env_rooted` (falls
+---                 back to `fs` when `opts.env` is missing or nothing matches
+---                 anymore — the target's anchor itself moved out from under
+---                 every configured root)
 ---  * `fs`       — absolute filesystem path (`~` re-tildified when the original was)
 ---  * `root`     — leading-slash, project-root-relative
 ---  * `relative` — relative to the referencing file's directory, keeping an
 ---                 explicit `./` prefix when the original had one
----@param opts { style: "fs"|"root"|"relative", target: string, from_file: string, root: string, new_path: string }
+---@param opts { style: "env"|"fs"|"root"|"relative", target: string, from_file: string, root: string, new_path: string, env?: FiletreeRefEnvRoots }
 ---@return string
 function M.retarget(opts)
   local style, new_path = opts.style, opts.new_path
 
-  if style == "fs" then
+  if style == "env" and opts.env then
+    local folded, matched = ftpath.env_rooted(new_path, opts.env.names, opts.env.extra)
+    if matched then return folded end
+    -- Fall through to "fs" below: the moved-to location no longer sits under
+    -- any configured env root, so an env-relative spelling cannot be kept.
+  end
+
+  if style == "fs" or style == "env" then
     if opts.target:sub(1, 1) == "~" then
       return (vim.fn.fnamemodify(new_path, ":~"):gsub("\\", "/"))
     end
