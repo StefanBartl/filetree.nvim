@@ -1365,6 +1365,235 @@ local function run_own_links_copy_check()
   refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
 end
 
+-- ── own_links: a symlink is never scanned or rewritten through (security) ──
+-- Regression for a confirmed HIGH-severity finding from the 2026-09-28
+-- ultracode review: a symlink-to-file entry (inside a moved directory, or
+-- moved on its own) used to be walked/scanned exactly like a regular file --
+-- `outgoing.scan` reads THROUGH the symlink to its real target's content via
+-- `vim.fn.readfile`, and `refs.apply`'s `vim.fn.writefile` would write back
+-- through the same link, silently modifying whatever file the symlink
+-- actually points at (which can sit entirely outside the project). Fixed:
+-- `own_links.expand_files` drops any symlink entry before it ever reaches
+-- `outgoing.scan`/`apply`, in both the directory-walk and single-file-move
+-- branches.
+local function run_own_links_symlink_safety_check()
+  print("\n== own_links: a symlink is never scanned or rewritten through (security) ==")
+
+  local uv = vim.uv or vim.loop
+  local work = scratch_root .. "/own_links_symlink"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/outside", "p")
+  vim.fn.mkdir(work .. "/Docs", "p")
+  vim.fn.writefile({ "[tool.filetree]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "External: [x](./Other.md)" }, work .. "/outside/Secret.md")
+  vim.fn.writefile({ "x" }, work .. "/outside/Other.md")
+  local secret_before = read(work .. "/outside/Secret.md")
+
+  if not uv.fs_symlink(work .. "/outside/Secret.md", work .. "/Docs/Link.md") then
+    print("  note no permission to create a real symlink here -- skipping own_links symlink case")
+    return
+  end
+
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_links = { enabled = true }
+  refs.setup(cfg)
+
+  -- Move the whole directory containing the symlink much deeper: if the
+  -- symlink were (wrongly) scanned/rewritten, its "own" new depth would
+  -- force a materially different relative link inside Secret.md -- making
+  -- any write-through immediately, unambiguously observable as a change to
+  -- a file outside the moved tree entirely.
+  vim.fn.mkdir(work .. "/A/B/C", "p")
+  local old_dir = work .. "/Docs"
+  local new_dir = work .. "/A/B/C/Docs"
+  vim.fn.rename(old_dir, new_dir)
+
+  local own_links = require("filetree.refs.own_links")
+  local edits, done = nil, false
+  own_links.collect({ [old_dir] = new_dir }, { op = "move", cfg = cfg }, function(e)
+    edits = e
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+  check("own_links symlink: collect finished", done)
+  check(
+    "own_links symlink: no edit was produced for the symlinked entry",
+    #(edits or {}) == 0,
+    vim.inspect(edits)
+  )
+  check(
+    "own_links symlink: the REAL external file was never touched (critical negative control)",
+    read(work .. "/outside/Secret.md") == secret_before,
+    read(work .. "/outside/Secret.md")
+  )
+
+  -- A single moved/renamed symlink (no directory nesting involved) is
+  -- skipped the same way -- the `else` branch of `expand_files`.
+  if uv.fs_symlink(work .. "/outside/Secret.md", work .. "/LinkAlone.md") then
+    vim.fn.rename(work .. "/LinkAlone.md", work .. "/LinkAlone2.md")
+    local edits2, done2 = nil, false
+    own_links.collect(
+      { [work .. "/LinkAlone.md"] = work .. "/LinkAlone2.md" },
+      { op = "rename", cfg = cfg },
+      function(e)
+        edits2 = e
+        done2 = true
+      end
+    )
+    vim.wait(2000, function()
+      return done2
+    end, 10)
+    check(
+      "own_links symlink: a single moved symlink (no directory) is skipped too",
+      done2 and #(edits2 or {}) == 0,
+      vim.inspect(edits2)
+    )
+  end
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
+-- ── own_links: each file's project root is resolved independently (bug) ───
+-- Regression for a confirmed MEDIUM-severity finding from the 2026-09-28
+-- ultracode review: `handle_result` used to compute ONE project root for an
+-- entire move/copy batch (from an arbitrary `next(moves)` entry) and apply
+-- it to every file own_links processed -- wrong for any file in the batch
+-- that sits under a DIFFERENT (nested) project root than the one that
+-- happened to get picked. Fixed: `own_links.collect` now resolves each
+-- file's root independently (`outgoing.resolve_root(pr.new)` per file,
+-- mirroring how the incoming-refs path's `make_ctx` already works).
+--
+-- B2.md (root "subproj") and a same-named "shared.md" decoy one root up
+-- (root "work") are BOTH moved in the same batch, each to a DIFFERENTLY
+-- named destination -- so a correct per-file root and a wrong, shared one
+-- would resolve B2.md's root-relative link to two DIFFERENT, both very much
+-- observable, rewritten strings. Only the "own root" one may appear.
+local function run_own_links_multi_root_check()
+  print("\n== own_links: per-file project root for a multi-root batch (bug) ==")
+
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_links = { enabled = true }
+  refs.setup(cfg)
+
+  local work = scratch_root .. "/own_links_multi_root"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/subproj/docs", "p")
+  vim.fn.mkdir(work .. "/subproj/moved_correct", "p")
+  vim.fn.mkdir(work .. "/moved_wrong", "p")
+  vim.fn.writefile({ "[tool.filetree]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "[tool.filetree]" }, work .. "/subproj/pyproject.toml")
+  vim.fn.writefile({ "Ref: [x](/shared.md)" }, work .. "/subproj/docs/B.md")
+  vim.fn.writefile({ "correct target" }, work .. "/subproj/shared.md")
+  vim.fn.writefile({ "correct target (moved)" }, work .. "/subproj/moved_correct/shared.md")
+  vim.fn.writefile({ "wrong-root decoy" }, work .. "/shared.md")
+  vim.fn.writefile({ "wrong-root decoy (moved)" }, work .. "/moved_wrong/shared.md")
+
+  vim.fn.rename(work .. "/subproj/docs/B.md", work .. "/subproj/docs/B2.md")
+
+  local moves = {
+    [work .. "/subproj/docs/B.md"] = work .. "/subproj/docs/B2.md",
+    [work .. "/subproj/shared.md"] = work .. "/subproj/moved_correct/shared.md",
+    [work .. "/shared.md"] = work .. "/moved_wrong/shared.md",
+  }
+
+  local own_links = require("filetree.refs.own_links")
+  local edits, done = nil, false
+  own_links.collect(moves, { op = "move", cfg = cfg }, function(e)
+    edits = e
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+  check("own_links multi-root: collect finished", done)
+
+  local b_edit = nil
+  for _, e in ipairs(edits or {}) do
+    if e.file == work .. "/subproj/docs/B2.md" then b_edit = e end
+  end
+  check(
+    "own_links multi-root: B2.md's link followed ITS OWN root's moved target",
+    b_edit ~= nil and b_edit.new_target == "/moved_correct/shared.md",
+    b_edit and vim.inspect(b_edit) or "no edit found for B2.md"
+  )
+  check(
+    "own_links multi-root: the wrong (batch-shared) root's target never appears",
+    b_edit == nil or b_edit.new_target ~= "/moved_wrong/shared.md",
+    b_edit and vim.inspect(b_edit) or "n/a"
+  )
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
+-- ── own_links: a directory move prunes .git/node_modules/etc (perf) ────────
+-- Regression for a confirmed HIGH-severity finding from the 2026-09-28
+-- ultracode review: a directory move used to walk EVERY nested file
+-- unfiltered (`collect_recursive` with no `ignore_fn`) -- a moved directory
+-- that happened to contain a populated `node_modules`/`.git`/etc. would be
+-- fully enumerated and line-scanned synchronously on the main thread. Fixed:
+-- `expand_files` now prunes the same directory set `refs/scan.lua` already
+-- prunes for the incoming-refs side of this feature (`scan.PRUNE_DIRS`,
+-- exported for exactly this reuse).
+local function run_own_links_prune_dirs_check()
+  print("\n== own_links: directory-move walk prunes node_modules/etc (performance) ==")
+
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_links = { enabled = true }
+  refs.setup(cfg)
+
+  local work = scratch_root .. "/own_links_prune"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/Nested", "p")
+  vim.fn.mkdir(work .. "/Docs/node_modules/pkg", "p")
+  vim.fn.writefile({ "[tool.filetree]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "# Shared" }, work .. "/Shared.md")
+  vim.fn.writefile({ "Ref: [shared](../Shared.md)" }, work .. "/Docs/note.md")
+  -- Same kind of relative link INSIDE the pruned dir: if the walk ever
+  -- descended into node_modules, this would show up in `edits` below too.
+  vim.fn.writefile({ "Ref: [shared](../../Shared.md)" }, work .. "/Docs/node_modules/pkg/fake.md")
+
+  local old_dir = work .. "/Docs"
+  local new_dir = work .. "/Nested/Docs"
+  vim.fn.rename(old_dir, new_dir)
+
+  local own_links = require("filetree.refs.own_links")
+  local edits, done = nil, false
+  own_links.collect({ [old_dir] = new_dir }, { op = "move", cfg = cfg }, function(e)
+    edits = e
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+  check("own_links prune: collect finished", done)
+
+  local touched_node_modules = false
+  for _, e in ipairs(edits or {}) do
+    if e.file:find("node_modules", 1, true) then touched_node_modules = true end
+  end
+  check(
+    "own_links prune: nothing under node_modules/ was scanned or rewritten",
+    not touched_node_modules,
+    vim.inspect(edits)
+  )
+
+  local note_touched = false
+  for _, e in ipairs(edits or {}) do
+    if e.file == new_dir .. "/note.md" and e.new_target == "../../Shared.md" then
+      note_touched = true
+    end
+  end
+  check(
+    "own_links prune: the real note outside node_modules was still correctly processed",
+    note_touched,
+    vim.inspect(edits)
+  )
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
 -- ── Deleting a file and undoing it puts its REF! markers back ──────────────
 -- The delete flow is two mutations, not one: the file goes to the trash, and
 -- the references that pointed at it are rewritten to the provider's broken
@@ -2235,6 +2464,9 @@ run_own_links_move_check()
 run_own_links_dir_move_check()
 run_own_links_env_var_check()
 run_own_links_copy_check()
+run_own_links_symlink_safety_check()
+run_own_links_multi_root_check()
+run_own_links_prune_dirs_check()
 run_delete_undo_refs_check()
 run_delete_undo_refs_chunked_race_check()
 run_cut_paste_undo_check()

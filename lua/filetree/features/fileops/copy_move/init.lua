@@ -463,38 +463,51 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
     if prog then prog:finish(msg) end
     notify.info(msg)
 
+    -- Both handle_result calls below are fire-and-forget in shape but land
+    -- asynchronously (own_links.collect, when outgoing_links is enabled, is
+    -- never fully synchronous) -- the clipboard cleanup and refresh must wait
+    -- for BOTH (when there are two) to actually finish, not just for this
+    -- function to return, or the tree/clipboard could refresh before the
+    -- rewrite(s) landed on disk.
+    local has_own_links_call = next(copied_moves) ~= nil
+    local pending_handled = has_own_links_call and 2 or 1
+    local function after_refs_handled()
+      pending_handled = pending_handled - 1
+      if pending_handled > 0 then return end
+
+      -- Clear clipboard entries that actually landed: copy items always stay
+      -- (kept for potential re-paste); cut items only clear once their move
+      -- has actually happened, so a skipped or failed cut stays staged for
+      -- the user to resolve and paste again instead of vanishing silently.
+      local remaining = {}
+      for _, e in ipairs(_clipboard) do
+        if e.op == "copy" or not moved[e] then remaining[#remaining + 1] = e end
+      end
+      _clipboard = remaining
+      _cut_prefetch = nil
+
+      render_clipboard()
+      if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+    end
+
     -- One chooser for every reference across every moved item, rather than one
     -- popup per file.
     refs.handle_result(scan_result, moves, {
       op = "move",
       title = "References across the moved item(s)",
-    })
+    }, after_refs_handled)
 
     -- Copies never carry an incoming-ref scan (only `cut_paths` was
     -- prefetched above — a copy leaves the original in place, so nothing
     -- points at it needs fixing), but a pasted copy's OWN outgoing links can
     -- still need rewriting for its new location. An empty scan result means
     -- `refs.resolve` contributes nothing, so only `own_links.collect` runs.
-    if next(copied_moves) then
+    if has_own_links_call then
       refs.handle_result({ refs = {}, plans = {} }, copied_moves, {
         op = "copy",
         title = "Links inside the copied item(s)",
-      })
+      }, after_refs_handled)
     end
-
-    -- Clear clipboard entries that actually landed: copy items always stay
-    -- (kept for potential re-paste); cut items only clear once their move
-    -- has actually happened, so a skipped or failed cut stays staged for
-    -- the user to resolve and paste again instead of vanishing silently.
-    local remaining = {}
-    for _, e in ipairs(_clipboard) do
-      if e.op == "copy" or not moved[e] then remaining[#remaining + 1] = e end
-    end
-    _clipboard = remaining
-    _cut_prefetch = nil
-
-    render_clipboard()
-    if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
   end)
 end
 
