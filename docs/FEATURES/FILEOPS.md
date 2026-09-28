@@ -355,6 +355,47 @@ default the first time someone upgrades is the wrong default to risk.
 Wired into `d`/trash's confirm dialog regardless of the flag, but a no-op
 while off — turning it on needs nothing beyond the config below.
 
+### Rewriting a moved file's own outgoing links
+
+Everything above fixes what *other* files say about the one that moved.
+This is the other direction: a moved/renamed/copied file's **own** content
+can itself hold links that were written for its old location — a note at
+`Research/Research.md` linking to `../assets/Screenshot.png` reads a
+directory too high once the note is moved up a level. `refs.outgoing_links`
+rewrites those, the moment the file's own move lands.
+
+It handles every style a link can be written in: relative (`../assets/x`,
+re-derived for the new depth, not just kept as-is), absolute (left alone —
+it already doesn't depend on where the file itself lives), and
+`$VAR/…`-rooted, when the variable is listed in `outgoing_links.env_vars`
+(`$NVIM_CONFIG_DIR` is always recognized, backed by `stdpath("config")`, no
+config needed). Moving a whole directory covers every file underneath it,
+not just the one under the cursor, and a link whose *target* was moved in
+the same batch (a folder containing both a note and the asset it points at)
+is re-anchored to that target's own new location too.
+
+In the common case both directions share one effective mode (an unset
+`outgoing_links.mode` inherits `on_move`/`on_rename` for the operation), so
+a move that touches both an incoming reference elsewhere and the moved
+file's own outgoing link surfaces **one** chooser and reverts as **one**
+`:Filetree refs undo` — not two separate prompts for what is, from the
+user's side, a single move. Setting `outgoing_links.mode` explicitly to
+diverge from `on_move`/`on_rename` costs a second, independent
+confirmation/undo entry.
+
+Copying is wired the same way, separately from the main `refs.copy` switch
+above (which only ever gates the *incoming*-ref scan, and stays off by
+default since a copy leaves the original in place): the pasted copy's own
+outgoing links get the same treatment, while the original file — never
+touched by a copy — is guaranteed untouched by this either.
+
+**Off by default** (`refs.outgoing_links.enabled = false`), same opt-in
+posture as cascade-delete-assets above. Markdown-only today (the only
+provider with a `retarget_link` implementation); `[[wiki]]`-style links are
+not rewritten by it even with `wiki_links = true` — no wikilink-specific
+retarget logic exists yet, so a `[[wiki]]` outgoing link is left as-is
+rather than risk a wrong rewrite.
+
 ### Languages
 
 | Provider | Covers | Default |
@@ -425,6 +466,13 @@ require("filetree").setup({
       on_delete  = "ask",  -- "ask" | "auto" | "off"
       -- roots      = { "assets" }  -- override the default asset-folder name(s)
       -- extensions = { "png", … }  -- override the default extension allowlist
+    },
+    -- Rewrite a moved/renamed/copied file's OWN outgoing links. Opt-in,
+    -- independent of everything above.
+    outgoing_links = {
+      enabled  = false,
+      -- mode     = "ask",  -- "ask" | "auto" | "off"; unset inherits on_move/on_rename
+      env_vars = {},  -- e.g. { "REPOS_DIR" } -- names without the leading "$"
     },
     scan = {
       root              = "project",  -- "project" (nearest root) | "cwd"

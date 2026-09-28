@@ -77,13 +77,14 @@ end
 ---@param target string
 ---@param from_file string
 ---@param root string
----@return string resolved, boolean exists
-local function resolve_one(target, from_file, root)
-  local candidates = pathutil.resolve_candidates(target, from_file, root)
-  for _, cand in ipairs(candidates) do
-    if vim.fn.filereadable(cand) == 1 then return cand, true end
+---@param env? FiletreeRefEnvRoots
+---@return string resolved, boolean exists, string? style
+local function resolve_one(target, from_file, root, env)
+  local candidates, styles = pathutil.resolve_candidates(target, from_file, root, env)
+  for i, cand in ipairs(candidates) do
+    if vim.fn.filereadable(cand) == 1 then return cand, true, styles[i] end
   end
-  return candidates[1], false
+  return candidates[1], false, styles[1]
 end
 
 ---@internal
@@ -112,7 +113,11 @@ end
 ---classifier (assets-folder + extension allowlist) and the incoming-safety
 ---recheck land on top of this and genuinely need to be async.
 ---@param path string
----@param opts? { root?: string }
+---@param opts? { root?: string, base?: string, env?: FiletreeRefEnvRoots }
+---  `base` (default `path`): resolve a relative target against THIS file
+---  instead of `path` — needed by `filetree.refs.own_links`, which scans a
+---  file at its NEW location but whose relative link text was written when
+---  it still lived at its OLD one.
 ---@param cb fun(links: FiletreeOutgoingLink[])
 function M.scan(path, opts, cb)
   opts = opts or {}
@@ -128,6 +133,7 @@ function M.scan(path, opts, cb)
   local lines = scan.lines_of(path)
   if not lines then return cb({}) end
 
+  local base = opts.base or path
   local root = opts.root or M.resolve_root(path)
   local out = {}
 
@@ -143,7 +149,7 @@ function M.scan(path, opts, cb)
         text,
         cfg,
         function(col, target, decoded, kind)
-          local resolved, exists = resolve_one(decoded, path, root)
+          local resolved, exists, style = resolve_one(decoded, base, root, opts.env)
           out[#out + 1] = {
             file = path,
             line = lineno,
@@ -154,6 +160,7 @@ function M.scan(path, opts, cb)
             exists = exists,
             provider = provider.name,
             kind = kind,
+            style = style,
             display = string.format("%s:%d: %s", ftpath.relative(resolved), lineno, vim.trim(text)),
           }
         end

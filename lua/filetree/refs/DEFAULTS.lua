@@ -79,6 +79,30 @@ return {
     -- would have nothing to switch yet.
   },
 
+  -- Rewrite the OUTGOING links found INSIDE a moved/renamed/copied file's own
+  -- content, so they still resolve correctly from its new location (`../x.png`
+  -- in a markdown file that just moved a directory level). The mirror of the
+  -- main incoming-refs pipeline above (which fixes OTHER files that point AT
+  -- the moved file), hence its own on/off switch — a user may want one
+  -- direction without the other, same reasoning as `outgoing_assets`. Opt-in
+  -- until this has real mileage.
+  outgoing_links = {
+    enabled = false,
+
+    -- Unset (the default) inherits on_move/on_rename for the op in question,
+    -- so the common case (both directions should behave the same way) asks
+    -- at most once per operation instead of twice. Set to "ask"|"auto"|"off"
+    -- to diverge explicitly — that costs a second confirmation/undo entry
+    -- when the two directions land on different effective modes.
+    -- mode = "ask",
+
+    -- Environment variable names (without the leading "$") recognized in a
+    -- "$VAR/..." link target, e.g. { "REPOS_DIR" }. "$NVIM_CONFIG_DIR" is
+    -- always recognized in addition (backed by vim.fn.stdpath("config"), not
+    -- an actual environment variable), no config needed for it.
+    env_vars = {},
+  },
+
   -- In-development reference features. Each one is opt-in and its config
   -- shape may still change between releases — kept under `experimental` so
   -- that is unambiguous. Only scalars live here on purpose: the list-shaped

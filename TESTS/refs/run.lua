@@ -1043,6 +1043,328 @@ local function run_outgoing_assets_independent_switch_check()
   refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
 end
 
+-- ── own_links: a moved file's OWN outgoing links get rewritten too ─────────
+-- The mirror direction of everything above: `refs/outgoing.lua` finds what a
+-- file links OUT to, and `refs/own_links.lua` (opt-in, `outgoing_links`)
+-- rewrites those links after the file that CONTAINS them moved. Kept in its
+-- own fixture tree (`fixtures/markdown_own_links/`) rather than reusing
+-- `fixtures/markdown/`, so the directory-move/env-var cases below don't
+-- perturb the LANGS table's markdown checks above.
+--
+-- This first check also exercises `handle_result`'s merge: Index.md's link TO
+-- Research.md (an INCOMING ref) and Research.md's own link to Screenshot.png
+-- (an OUTGOING/own-links edit) both land from ONE move, under the SAME
+-- effective mode (both inherit `on_move = "auto"`) -- so they must apply
+-- through one combined call and revert together via a single `refs.undo()`.
+local function run_own_links_move_check()
+  print("\n== own_links: moved file's own relative link is re-anchored ==")
+
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_links = { enabled = true }
+  refs.setup(cfg)
+
+  local work = scratch_root .. "/own_links_move"
+  vim.fn.delete(work, "rf")
+  copy_dir(fixtures_root .. "/markdown_own_links", work)
+
+  local research_before = read(work .. "/Research/Research.md")
+  check(
+    "own_links move: fixture holds the relative link before the move",
+    research_before ~= nil and research_before:find("../assets/Screenshot.png", 1, true) ~= nil,
+    research_before
+  )
+
+  local src = work .. "/Research/Research.md"
+  local dst = work .. "/Research.md"
+
+  local move = require("filetree.features.fileops.move")
+  local done = false
+  move.setup({ enabled = true, use_safety = false, dry_run = false }, {
+    get_current_node = function()
+      return { path = src, type = "file" }
+    end,
+    refresh = function()
+      done = true
+      return true
+    end,
+  })
+  move.move(work)
+  vim.wait(5000, function()
+    return done
+  end, 20)
+
+  check("own_links move: the file moved up one level", vim.fn.filereadable(dst) == 1)
+  check("own_links move: the old path is gone", vim.fn.filereadable(src) == 0)
+
+  local index = read(work .. "/Index.md")
+  check(
+    "own_links move: the INCOMING ref (Index.md -> Research.md) followed the move",
+    index ~= nil and index:find("[research](./Research.md)", 1, true) ~= nil,
+    index
+  )
+
+  local moved = read(dst)
+  check(
+    "own_links move: the file's OWN relative link was re-anchored (no longer climbs a level)",
+    moved ~= nil and moved:find("[shot](assets/Screenshot.png)", 1, true) ~= nil,
+    moved
+  )
+  check(
+    "own_links move: the old, now-wrong '../assets/...' spelling is gone",
+    moved ~= nil and moved:find("../assets/Screenshot.png", 1, true) == nil,
+    moved
+  )
+  check(
+    "own_links move: an absolute link, unrelated to this move, stayed untouched (negative control)",
+    moved ~= nil and moved:find("/elsewhere/Fixed.md", 1, true) ~= nil,
+    moved
+  )
+
+  -- One `refs.undo()` reverts BOTH the incoming ref and the own-links edit --
+  -- proof they really did share one undo token (`handle_result`'s merged
+  -- path), not two independent applies that happen to have run back to back.
+  refs.undo()
+  local index_reverted = read(work .. "/Index.md")
+  local moved_reverted = read(dst)
+  check(
+    "own_links move: a single undo restores the incoming ref too",
+    index_reverted ~= nil
+      and index_reverted:find("[research](./Research/Research.md)", 1, true) ~= nil,
+    index_reverted
+  )
+  check(
+    "own_links move: ...AND the own-links edit, in the same undo",
+    moved_reverted ~= nil and moved_reverted:find("../assets/Screenshot.png", 1, true) ~= nil,
+    moved_reverted
+  )
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
+-- ── own_links: a directory move cascades to every nested file ──────────────
+-- `own_links.collect` expands a directory entry in `moves` into one
+-- {old, new} pair per file via `util/fs.lua`'s `collect_recursive` -- this
+-- isolates that expansion from the move-a-single-file case above by moving a
+-- directory that changes its OWN nesting depth (Docs/A -> top-level A), so a
+-- naive "only look at the moved node itself" implementation would miss both
+-- the direct child and the doubly-nested descendant below.
+local function run_own_links_dir_move_check()
+  print("\n== own_links: directory move covers every nested file (collect_recursive) ==")
+
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_links = { enabled = true }
+  refs.setup(cfg)
+
+  local work = scratch_root .. "/own_links_dir_move"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/Docs/A/sub", "p")
+  vim.fn.writefile({ "[tool.filetree]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "# Shared" }, work .. "/Shared.md")
+  vim.fn.writefile({ "Ref: [shared](../../Shared.md)" }, work .. "/Docs/A/note.md")
+  vim.fn.writefile({ "Ref: [shared](../../../Shared.md)" }, work .. "/Docs/A/sub/deep.md")
+
+  local old_dir = work .. "/Docs/A"
+  local new_dir = work .. "/A"
+
+  local move = require("filetree.features.fileops.move")
+  local done = false
+  move.setup({ enabled = true, use_safety = false, dry_run = false }, {
+    get_current_node = function()
+      return { path = old_dir, type = "directory" }
+    end,
+    refresh = function()
+      done = true
+      return true
+    end,
+  })
+  move.move(work)
+  vim.wait(5000, function()
+    return done
+  end, 20)
+
+  check("own_links dir move: the directory relocated", vim.fn.isdirectory(new_dir) == 1)
+  check("own_links dir move: the old directory is gone", vim.fn.isdirectory(old_dir) == 0)
+
+  local note = read(new_dir .. "/note.md")
+  check(
+    "own_links dir move: the direct child's link lost one '..' level",
+    note ~= nil and note:find("[shared](../Shared.md)", 1, true) ~= nil,
+    note
+  )
+
+  local deep = read(new_dir .. "/sub/deep.md")
+  check(
+    "own_links dir move: the doubly-nested descendant was covered too, not just the top-level file",
+    deep ~= nil and deep:find("[shared](../../Shared.md)", 1, true) ~= nil,
+    deep
+  )
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
+-- ── own_links: $VAR-rooted link targets ─────────────────────────────────────
+-- `pathutil.resolve_candidates`'/`retarget`'s "env" style: a link written as
+-- "$VAR/rest" resolves through a configured env root instead of the
+-- filesystem/relative readings. Two halves: (1) `refs.outgoing()` -- used
+-- independently of `own_links`, e.g. by the cascade-delete-assets classifier
+-- -- resolves it correctly when the caller threads `opts.env` in, and (2)
+-- once `own_links` is on and the $VAR-anchored TARGET itself moves along with
+-- its referrer (both inside one renamed directory), the rewritten link is
+-- re-folded back into "$VAR/..." form at the new location rather than falling
+-- back to a plain filesystem path.
+local function run_own_links_env_var_check()
+  print("\n== own_links: $VAR-rooted link (pre-move resolve + post-move re-render) ==")
+
+  local work = scratch_root .. "/own_links_env_var"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work .. "/Notes", "p")
+  vim.fn.writefile({ "[tool.filetree]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "Asset: [asset]($TESTVAR/Notes/Asset.txt)" }, work .. "/Notes/Notes.md")
+  vim.fn.writefile({ "x" }, work .. "/Notes/Asset.txt")
+
+  local prev_testvar = vim.env.TESTVAR
+  vim.env.TESTVAR = work
+
+  -- 1. Pre-move: refs.outgoing() resolves the $VAR-rooted target on its own,
+  --    independent of the own_links feature (mirrors how outgoing_assets
+  --    would use it).
+  local env = { names = { "TESTVAR" } }
+  local found, done = nil, false
+  refs.outgoing(work .. "/Notes/Notes.md", { root = work, env = env }, function(links)
+    found = links
+    done = true
+  end)
+  vim.wait(2000, function()
+    return done
+  end, 10)
+
+  local function normalized(p)
+    return (p or ""):gsub("\\", "/")
+  end
+
+  local link = found and found[1]
+  check("own_links env var: pre-move scan found the link", link ~= nil)
+  check(
+    "own_links env var: it resolved through $TESTVAR to Notes/Asset.txt",
+    link ~= nil and normalized(link.resolved):find("Notes/Asset.txt", 1, true) ~= nil,
+    link and link.resolved
+  )
+  check("own_links env var: the target exists on disk", link ~= nil and link.exists == true)
+  check('own_links env var: the detected style is "env"', link ~= nil and link.style == "env")
+
+  -- 2. Rename the whole directory (Notes -> Renamed): the $VAR-rooted link's
+  --    own target (Asset.txt) moves along with it, so the re-render must
+  --    still read in $VAR form, at the new path -- not fall back to "fs".
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_links = { enabled = true, env_vars = { "TESTVAR" } }
+  refs.setup(cfg)
+
+  local old_dir = work .. "/Notes"
+  local new_dir = work .. "/Renamed"
+  local smart_rename = require("filetree.features.fileops.smart_rename")
+  local rn_done = false
+  smart_rename.setup({ enabled = true, use_safety = false, dry_run = false }, {
+    get_current_node = function()
+      return { path = old_dir, type = "directory" }
+    end,
+    refresh = function()
+      rn_done = true
+      return true
+    end,
+  })
+  next_input = "Renamed"
+  smart_rename.rename_current()
+  vim.wait(5000, function()
+    return rn_done
+  end, 20)
+
+  check("own_links env var: the directory was renamed on disk", vim.fn.isdirectory(new_dir) == 1)
+
+  local notes_after = read(new_dir .. "/Notes.md")
+  check(
+    "own_links env var: re-rendered in $VAR form, at the new path",
+    notes_after ~= nil and notes_after:find("$TESTVAR/Renamed/Asset.txt", 1, true) ~= nil,
+    notes_after
+  )
+  check(
+    "own_links env var: the old $VAR/Notes/... spelling is gone",
+    notes_after ~= nil and notes_after:find("$TESTVAR/Notes/Asset.txt", 1, true) == nil,
+    notes_after
+  )
+
+  vim.env.TESTVAR = prev_testvar
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
+-- ── own_links: the copy path, wired separately from the incoming-ref scan ──
+-- A copy never carries an incoming-ref scan (the original stays put, nothing
+-- points at it needs fixing) -- but the pasted COPY's own outgoing links can
+-- still need rewriting for its new location, via the second, separately
+-- wired `refs.handle_result` call in `copy_move/init.lua`'s `do_paste_impl`.
+-- The critical negative control (design decision 7's own words): the
+-- ORIGINAL file at its old location must never be touched by this.
+local function run_own_links_copy_check()
+  print("\n== own_links: pasted copy's own link rewritten, original left alone ==")
+
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_links = { enabled = true }
+  refs.setup(cfg)
+
+  local work = scratch_root .. "/own_links_copy"
+  vim.fn.delete(work, "rf")
+  copy_dir(fixtures_root .. "/markdown_own_links", work)
+  vim.fn.mkdir(work .. "/Copies/Sub", "p")
+
+  local original = work .. "/Research/Research.md"
+  local original_before = read(original)
+
+  local copy_move = require("filetree.features.fileops.copy_move")
+  local current, done = original, false
+  copy_move.setup({ enabled = true, use_safety = false, dry_run = false }, {
+    get_current_node = function()
+      return { path = current, type = current == original and "file" or "directory" }
+    end,
+    refresh = function()
+      done = true
+      return true
+    end,
+  })
+
+  -- c on the file, then p two levels deeper -- so the pasted copy's relative
+  -- link genuinely needs re-anchoring, not just a no-op rewrite.
+  copy_move.stage_copy()
+  current = work .. "/Copies/Sub"
+  copy_move.paste()
+  vim.wait(5000, function()
+    return done
+  end, 20)
+
+  local pasted = work .. "/Copies/Sub/Research.md"
+  check("own_links copy: the copy landed at the destination", vim.fn.filereadable(pasted) == 1)
+  check("own_links copy: the original is still there too", vim.fn.filereadable(original) == 1)
+
+  local pasted_content = read(pasted)
+  check(
+    "own_links copy: the pasted copy's relative link was re-anchored for its new depth",
+    pasted_content ~= nil and pasted_content:find("../../assets/Screenshot.png", 1, true) ~= nil,
+    pasted_content
+  )
+  check(
+    "own_links copy: the pasted copy's absolute link stayed untouched",
+    pasted_content ~= nil and pasted_content:find("/elsewhere/Fixed.md", 1, true) ~= nil,
+    pasted_content
+  )
+
+  check(
+    "own_links copy: the ORIGINAL is byte-identical to before the paste (critical negative control)",
+    read(original) == original_before,
+    read(original)
+  )
+
+  copy_move.teardown()
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
 -- ── Deleting a file and undoing it puts its REF! markers back ──────────────
 -- The delete flow is two mutations, not one: the file goes to the trash, and
 -- the references that pointed at it are rewritten to the provider's broken
@@ -1909,6 +2231,10 @@ run_outgoing_scan_check()
 run_outgoing_assets_check()
 run_outgoing_assets_gate_check()
 run_outgoing_assets_independent_switch_check()
+run_own_links_move_check()
+run_own_links_dir_move_check()
+run_own_links_env_var_check()
+run_own_links_copy_check()
 run_delete_undo_refs_check()
 run_delete_undo_refs_chunked_race_check()
 run_cut_paste_undo_check()
