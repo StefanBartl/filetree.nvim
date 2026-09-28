@@ -747,10 +747,13 @@ end
 ---markers (`enable_modified_markers`/`enable_opened_markers`) are recomputed
 ---and drawn by neo-tree itself on ITS OWN redraw schedule (its
 ---`opened_buffers_changed` debounce, watcher-driven redraws, ...), entirely
----outside this plugin. Routing filetree's OWN other redraw triggers (see
----`opened_sync`) through `M.redraw_soon()` reduces filetree's contribution to
----a redraw burst around a collapse, but cannot eliminate a residual blink
----sourced purely from neo-tree's own internal timing.
+---outside this plugin, so a residual blink sourced purely from neo-tree's own
+---internal timing can never be eliminated from here. `M.redraw_soon()` exists
+---for a filetree-own redraw trigger that is NOT already debounced against
+---anything else and could otherwise stack with this one; `opened_sync`, the
+---original motivating caller, turned out not to need it -- its own debounce
+---already reduces a burst to one call, so a second debounce layer on top only
+---added latency (see `opened_sync`'s doc comment).
 ---@param node FiletreeNode
 ---@return boolean
 function M.collapse_node(node)
@@ -965,24 +968,29 @@ end
 local _redraw_soon = nil
 ---Milliseconds within which repeated `M.redraw_soon()` calls collapse into
 ---one `M.redraw()` — small and fixed: just enough to absorb a same-moment
----burst of filetree's OWN redraw requests (today: `opened_sync`, on top of a
----structural change like `collapse_node`'s own immediate redraw) without
----adding perceptible latency to any single one of them.
+---burst of MULTIPLE, otherwise-independent filetree-own redraw requests
+---without adding perceptible latency to any single one of them.
 local REDRAW_COALESCE_MS = 30
 
 ---Coalescing counterpart to `M.redraw()`: multiple calls within
 ---`REDRAW_COALESCE_MS` collapse into a single `renderer.redraw(state)` pass,
----for callers whose own trigger isn't already synchronously tied to a
----structural tree mutation (unlike `collapse_node`/`expand_node`, which stay
----on their own immediate, uncoalesced `do_narrow_redraw` — see those
----functions' doc comments for why deferring THEIR redraw is not safe).
+---for a caller whose own trigger isn't already synchronously tied to a
+---structural tree mutation AND isn't already debounced against itself
+---(unlike `collapse_node`/`expand_node`, which stay on their own immediate,
+---uncoalesced `do_narrow_redraw` — see those functions' doc comments for why
+---deferring THEIR redraw is not safe; and unlike `opened_sync`, which tried
+---this and reverted it — see its doc comment — because its OWN debounce
+---already reduces a burst to one call, leaving nothing here to coalesce
+---with). No production call site uses this today; kept as a primitive for a
+---future caller whose trigger genuinely fires more than once per structural
+---change with no debounce of its own.
 ---
----This only coordinates FILETREE's own call sites against each other (today:
----`opened_sync`). It cannot and does not coalesce with neo-tree's OWN
----internal `renderer.redraw` callers (`opened_buffers_changed`'s own
----debounce, filesystem-watcher-driven redraws, ...) — those live entirely in
----the external neo-tree.nvim dependency, out of this plugin's reach. See
----`docs/FEATURES/BACKENDS.md`'s render-event-bridge section.
+---This only coordinates FILETREE's own call sites against each other. It
+---cannot and does not coalesce with neo-tree's OWN internal `renderer.redraw`
+---callers (`opened_buffers_changed`'s own debounce, filesystem-watcher-driven
+---redraws, ...) — those live entirely in the external neo-tree.nvim
+---dependency, out of this plugin's reach. See `docs/FEATURES/BACKENDS.md`'s
+---render-event-bridge section.
 ---@return boolean
 function M.redraw_soon()
   if not _redraw_soon then
