@@ -4,16 +4,22 @@
 -- ── What this pins ──────────────────────────────────────────────────────────
 --
 -- The "modified"/"opened" icon blink on folder collapse (see the render-event
--- bridge section of docs/FEATURES/BACKENDS.md) is driven, on filetree's own
--- side, by several independent triggers each firing their own narrow
--- `renderer.redraw` pass close together: `collapse_node`'s own immediate
--- redraw, and `opened_sync`'s debounced buffer-lifecycle-driven redraw.
--- `M.redraw_soon()` gives callers whose trigger isn't already synchronously
--- tied to one structural mutation (today: `opened_sync`) a small coalescing
--- window so a burst of such requests collapses into one re-render.
+-- bridge section of docs/FEATURES/BACKENDS.md) was investigated as being
+-- driven, on filetree's own side, by several independent triggers each
+-- firing their own narrow `renderer.redraw` pass close together:
+-- `collapse_node`'s own immediate redraw, and `opened_sync`'s debounced
+-- buffer-lifecycle-driven redraw. `M.redraw_soon()` gives a caller whose
+-- trigger isn't already synchronously tied to one structural mutation AND
+-- isn't already debounced against itself a small coalescing window so a
+-- burst of such requests collapses into one re-render. `opened_sync` turned
+-- out to already satisfy that second condition on its own (its own debounce
+-- reduces a burst to one call already), so it calls `redraw()` directly
+-- instead — no production call site uses `redraw_soon` today; see its doc
+-- comment on `adapter/neotree.lua` for the reasoning and `TESTS/units.lua`
+-- for the regression check on `opened_sync` itself.
 --
--- This suite pins three things against a real neo-tree + real
--- `neo-tree.ui.renderer.redraw`:
+-- This suite pins the coalescing primitive itself against a real neo-tree +
+-- real `neo-tree.ui.renderer.redraw`:
 --   1. `M.redraw_soon()` called several times in a tight burst results in
 --      exactly ONE real `renderer.redraw` call once the coalescing window
 --      has elapsed, not one per call.
@@ -21,8 +27,7 @@
 --      shared `do_narrow_redraw`) stays synchronous and immediate — no
 --      debounce delay, no coalescing with a concurrent `redraw_soon` burst.
 --   3. A real `collapse_node` call still redraws immediately (unaffected by
---      this change), while `opened_sync`'s own trigger goes through the
---      coalescing path.
+--      this change).
 --
 -- Usage (from the repo root):
 --   nvim --clean --headless -u NONE -l TESTS/neotree_collapse_redraw_coalesce.lua

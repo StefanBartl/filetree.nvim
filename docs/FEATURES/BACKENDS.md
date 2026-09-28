@@ -159,19 +159,26 @@ native `enable_modified_markers`/`enable_opened_markers` icons are
 recomputed fresh on every one of those passes, a burst reads on screen as a
 brief flicker of the icon (most visibly: appearing to sit on the wrong node
 for a render or two before settling — see the collapse-flicker note on
-`M.collapse_node`'s own doc comment). `M.redraw_soon()` gives callers whose
-trigger isn't already synchronously tied to one structural mutation (today:
-`opened_sync`) a small (30ms) coalescing window via the same
-`lib.nvim.debounce` used elsewhere in this codebase, so a burst of such
-requests collapses into one re-render instead of several. `collapse_node`/
-`expand_node` themselves stay on the immediate, uncoalesced path — deferring
-their own redraw would risk `renderer.focus_node` landing on a stale line.
-**Disclosed limitation:** this only reduces filetree's *own* contribution to
-a redraw burst. It cannot coordinate with neo-tree's own internal redraw
-timing (`opened_buffers_changed`'s own debounce, watcher-driven redraws, the
-native marker recompute itself) — those live entirely inside the external
-neo-tree.nvim dependency. A residual flicker sourced purely from neo-tree's
-own internals can still occur.
+`M.collapse_node`'s own doc comment). `M.redraw_soon()` is a small (30ms)
+coalescing window (via the same `lib.nvim.debounce` used elsewhere in this
+codebase) for a caller whose trigger isn't already synchronously tied to one
+structural mutation AND isn't already debounced against itself.
+`collapse_node`/`expand_node` stay on the immediate, uncoalesced path —
+deferring their own redraw would risk `renderer.focus_node` landing on a
+stale line. `opened_sync` was the original motivating caller but, on
+inspection, turned out not to need it: its own debounce already reduces a
+burst of buffer events to exactly one call, so wrapping that single call in
+`redraw_soon`'s separate debounce had nothing left to coalesce with and only
+added latency (~90ms instead of ~60ms by default) — it now calls `redraw()`
+directly instead. No production call site uses `redraw_soon` today; it is
+kept as a primitive for a future caller whose own trigger genuinely fires
+more than once per structural change with no debounce of its own.
+**Disclosed limitation:** even when used, this only reduces filetree's *own*
+contribution to a redraw burst. It cannot coordinate with neo-tree's own
+internal redraw timing (`opened_buffers_changed`'s own debounce,
+watcher-driven redraws, the native marker recompute itself) — those live
+entirely inside the external neo-tree.nvim dependency. A residual flicker
+sourced purely from neo-tree's own internals can still occur.
 
 - **Module:** [`adapter/neotree.lua`](../../lua/filetree/adapter/neotree.lua) — `filetypes = {"neo-tree"}`
 - **Config:** `opts.adapter = "neotree"`
