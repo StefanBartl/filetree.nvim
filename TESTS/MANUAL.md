@@ -81,12 +81,16 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
 
 - **[neotree_collapse_redraw_coalesce.lua](neotree_collapse_redraw_coalesce.lua)** —
   integration: `adapter/neotree.lua`'s `M.redraw_soon()` coalescing helper,
-  part of the fix for the "modified"/"opened" icon blinking near a folder
-  node right after it collapses (several of filetree's own narrow-redraw
-  triggers — `collapse_node`'s own immediate redraw, `opened_sync`'s
-  debounced one — landing close together). Against a real neo-tree: wraps
-  the real, already filetree-patched `renderer.redraw` with a counting shim
-  and asserts a burst of `redraw_soon()` calls settles into exactly one real
+  originally added as part of investigating the "modified"/"opened" icon
+  blinking near a folder node right after it collapses. `opened_sync` — the
+  original motivating caller — was later found to not actually need it (its
+  own debounce already reduces a burst of buffer events to one call, so a
+  second debounce on top only added latency for zero coalescing benefit —
+  see `opened_sync`'s doc comment) and now calls `redraw()` directly; no
+  production call site uses `redraw_soon` today. This suite verifies the
+  primitive itself, in isolation, against a real neo-tree: wraps the real,
+  already filetree-patched `renderer.redraw` with a counting shim and
+  asserts a burst of `redraw_soon()` calls settles into exactly one real
   redraw once the coalescing window elapses, that `M.redraw()` itself (what
   `collapse_node`/`expand_node` use directly) stays synchronous with no
   coalescing delay, and that a real `<CR>`-expand-then-collapse via

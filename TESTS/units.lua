@@ -391,11 +391,18 @@ do
   check("opened_sync: a buffer event triggers adapter.redraw()", redrew > 0)
 end
 
--- ── opened_sync ── prefers adapter.redraw_soon() when the backend has one ───
+-- ── opened_sync ── does NOT use adapter.redraw_soon(), even when present ───
+-- opened_sync's own `_debounce` already collapses a burst of Buf* events
+-- into exactly one call to redraw_now() -- routing that single, already-
+-- debounced call through `redraw_soon()`'s own separate debounce window has
+-- nothing left to coalesce it with, and would only add latency (a real,
+-- confirmed regression this test guards against). Mirror image of the check
+-- above: this backend implements BOTH redraw and redraw_soon, and plain
+-- `redraw()` must be the one actually called.
 do
-  local redrew_soon = 0
+  local redrew, redrew_soon = 0, 0
   local stub = setmetatable({
-    name = "units-stub-opensync-soon",
+    name = "units-stub-opensync-both",
     is_available = function()
       return true
     end,
@@ -403,7 +410,7 @@ do
       return true, 1
     end,
     redraw = function()
-      check("opened_sync: redraw_soon present -- plain redraw must not be called", false)
+      redrew = redrew + 1
       return true
     end,
     redraw_soon = function()
@@ -422,15 +429,19 @@ do
   local ft = require("filetree")
   ft.register_adapter(stub)
   ft.setup({
-    adapter = "units-stub-opensync-soon",
+    adapter = "units-stub-opensync-both",
     features = { opened_sync = { enabled = true, debounce_ms = 0 } },
   })
 
   vim.api.nvim_exec_autocmds("BufAdd", {})
   vim.wait(80, function()
-    return redrew_soon > 0
+    return redrew > 0
   end, 10)
-  check("opened_sync: a buffer event prefers adapter.redraw_soon()", redrew_soon > 0)
+  check(
+    "opened_sync: a buffer event calls adapter.redraw() even when redraw_soon exists",
+    redrew > 0
+  )
+  check("opened_sync: redraw_soon() is never called from this path", redrew_soon == 0)
 end
 
 -- ── util.line_count ───────────────────────────────────────────────────────────

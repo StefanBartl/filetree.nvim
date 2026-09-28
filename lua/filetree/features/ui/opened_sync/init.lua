@@ -8,15 +8,19 @@
 --- "open" in the tree until you manually close and reopen the tree.
 ---
 --- This feature fixes that by asking the adapter for a cheap re-render
---- (`adapter.redraw_soon()`, falling back to `adapter.redraw()` — re-render
---- from existing state, NO filesystem rescan) shortly after a buffer is
---- added, deleted, wiped, or (un)displayed. Debounced so a burst of buffer
---- events (e.g. `:bufdo`, session restore) collapses into a single redraw,
---- and a no-op when the tree isn't open or the adapter can't redraw cheaply.
---- `redraw_soon` (when the adapter implements it) additionally coalesces
---- this request with any other redraw the adapter itself triggers around the
---- same moment (e.g. a folder collapse), so the two don't stack into an
---- extra, avoidable re-render.
+--- (`adapter.redraw()` — re-render from existing state, NO filesystem
+--- rescan) shortly after a buffer is added, deleted, wiped, or (un)displayed.
+--- Debounced (`debounce_ms`, default 60) so a burst of buffer events (e.g.
+--- `:bufdo`, session restore) collapses into a single redraw, and a no-op
+--- when the tree isn't open or the adapter can't redraw cheaply.
+---
+--- Deliberately calls `redraw()`, not `adapter.redraw_soon()`: this
+--- feature's OWN debounce already reduces a burst to exactly one call, so a
+--- second debounce layer on top would have nothing left to coalesce with —
+--- pure added latency (`debounce_ms` + `redraw_soon`'s own window, ~90ms
+--- instead of ~60ms by default) for zero benefit. `redraw_soon` exists for a
+--- caller whose own trigger is NOT already debounced against anything else
+--- (see `adapter/neotree.lua`'s doc comment on it).
 
 local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
@@ -46,15 +50,11 @@ local _cfg = {}
 local function redraw_now()
   if not _adapter then return end
   if not _adapter.is_open() then return end
-  -- Prefer the coalescing variant: several Buf* events landing close
-  -- together (session restore, :bufdo, a collapse that itself just redrew)
-  -- should collapse into one re-render, not stack several in quick
-  -- succession -- see adapter/neotree.lua's M.redraw_soon doc comment.
-  if type(_adapter.redraw_soon) == "function" then
-    pcall(_adapter.redraw_soon)
-  elseif type(_adapter.redraw) == "function" then
-    pcall(_adapter.redraw)
-  end
+  -- Not redraw_soon(): this module's own `_debounce` already collapses a
+  -- burst of Buf* events into exactly one call here, so a second debounce
+  -- layer around it would only ever add latency, never coalesce anything --
+  -- see the module doc comment above.
+  if type(_adapter.redraw) == "function" then pcall(_adapter.redraw) end
 end
 
 local function debounced_redraw()
@@ -66,7 +66,7 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
   -- Nothing to sync if the adapter can't cheaply re-render.
-  if type(adapter.redraw) ~= "function" and type(adapter.redraw_soon) ~= "function" then return end
+  if type(adapter.redraw) ~= "function" then return end
   _cfg = config
   _adapter = adapter
 
