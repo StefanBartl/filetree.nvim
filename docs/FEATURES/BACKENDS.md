@@ -147,6 +147,32 @@ hoisted-and-winning case against real `copy_to_clipboard`/`cut_to_clipboard`
 calls, in the same relative load order (filetree first, then neo-tree's
 `setup()`) a lazily-loaded neo-tree.nvim gives in practice.
 
+**Coalescing filetree's own redraw triggers (`M.redraw_soon`).** The bridge
+above keeps filetree's own decorations in sync with neo-tree's redraws; it
+does not stop filetree's own code from *adding* redraws. `collapse_node` /
+`expand_node` each fire an immediate `renderer.redraw` right after mutating
+the tree structure, and `opened_sync` independently fires its own debounced
+`adapter.redraw()` on buffer add/remove/show/hide — landing close together
+(e.g. collapsing a folder that also changes which buffers are visible)
+compounds into several narrow re-renders in a short window. Since neo-tree's
+native `enable_modified_markers`/`enable_opened_markers` icons are
+recomputed fresh on every one of those passes, a burst reads on screen as a
+brief flicker of the icon (most visibly: appearing to sit on the wrong node
+for a render or two before settling — see the collapse-flicker note on
+`M.collapse_node`'s own doc comment). `M.redraw_soon()` gives callers whose
+trigger isn't already synchronously tied to one structural mutation (today:
+`opened_sync`) a small (30ms) coalescing window via the same
+`lib.nvim.debounce` used elsewhere in this codebase, so a burst of such
+requests collapses into one re-render instead of several. `collapse_node`/
+`expand_node` themselves stay on the immediate, uncoalesced path — deferring
+their own redraw would risk `renderer.focus_node` landing on a stale line.
+**Disclosed limitation:** this only reduces filetree's *own* contribution to
+a redraw burst. It cannot coordinate with neo-tree's own internal redraw
+timing (`opened_buffers_changed`'s own debounce, watcher-driven redraws, the
+native marker recompute itself) — those live entirely inside the external
+neo-tree.nvim dependency. A residual flicker sourced purely from neo-tree's
+own internals can still occur.
+
 - **Module:** [`adapter/neotree.lua`](../../lua/filetree/adapter/neotree.lua) — `filetypes = {"neo-tree"}`
 - **Config:** `opts.adapter = "neotree"`
 

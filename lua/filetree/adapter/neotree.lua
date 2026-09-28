@@ -4,6 +4,7 @@
 local notify = require("filetree.util.notify").create("[filetree.adapter.neotree]")
 local registry = require("filetree.adapter")
 local au = require("filetree.util.autocmd")
+local lib_debounce = require("lib.nvim.debounce")
 
 -- Shared neo-tree node helpers live in lib.nvim (a hard dependency).
 local libnode = require("lib.nvim.neotree.node")
@@ -631,6 +632,18 @@ function M.get_node_line(path)
   return map and map[key_of(path)] or nil
 end
 
+---@internal
+---Narrow, no-rescan redraw of `state`'s tree — the single place
+---`expand_node`/`collapse_node`/`M.redraw()` reach `renderer.redraw` through,
+---so the require/field-check dance lives once instead of three times.
+---@param state neotree.State
+---@return boolean
+local function do_narrow_redraw(state)
+  local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
+  if not ok_r or type(renderer.redraw) ~= "function" then return false end
+  return (pcall(renderer.redraw, state))
+end
+
 ---@param node FiletreeNode
 ---@return boolean
 function M.expand_node(node)
@@ -642,8 +655,7 @@ function M.expand_node(node)
   if not ok2 or not tree_node then return false end
   if tree_node.is_expanded and not tree_node:is_expanded() and tree_node.expand then
     tree_node:expand()
-    local ok3, renderer = pcall(require, "neo-tree.ui.renderer")
-    if ok3 and renderer and renderer.redraw then pcall(renderer.redraw, state) end
+    do_narrow_redraw(state)
   end
   return true
 end
@@ -726,6 +738,19 @@ end
 ---before the tree root -- collapsing root would hide the whole tree, and (for
 ---an ordinary directory, unlike a merged one) there is nothing there to fix
 ---with a refresh either, so this is a no-op instead.
+---
+---Kept synchronous and immediate on purpose (`do_narrow_redraw` runs right
+---here, not through `M.redraw_soon()`): `renderer.focus_node` below needs the
+---tree's just-rendered line state, so deferring the redraw would risk the
+---cursor landing on a stale line -- worse than the flicker this trades
+---against. Known limitation: neo-tree's own native "modified"/"opened"
+---markers (`enable_modified_markers`/`enable_opened_markers`) are recomputed
+---and drawn by neo-tree itself on ITS OWN redraw schedule (its
+---`opened_buffers_changed` debounce, watcher-driven redraws, ...), entirely
+---outside this plugin. Routing filetree's OWN other redraw triggers (see
+---`opened_sync`) through `M.redraw_soon()` reduces filetree's contribution to
+---a redraw burst around a collapse, but cannot eliminate a residual blink
+---sourced purely from neo-tree's own internal timing.
 ---@param node FiletreeNode
 ---@return boolean
 function M.collapse_node(node)
@@ -769,12 +794,10 @@ function M.collapse_node(node)
 
   if target and target.collapse then
     target:collapse()
+    do_narrow_redraw(state)
     local ok3, renderer = pcall(require, "neo-tree.ui.renderer")
-    if ok3 and renderer then
-      if renderer.redraw then pcall(renderer.redraw, state) end
-      if renderer.focus_node and target.get_id then
-        pcall(renderer.focus_node, state, target:get_id())
-      end
+    if ok3 and renderer and renderer.focus_node and target.get_id then
+      pcall(renderer.focus_node, state, target:get_id())
     end
     return true
   end
@@ -935,9 +958,40 @@ end
 function M.redraw()
   local state = get_state()
   if not state or not state.tree then return false end
-  local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
-  if not ok_r or type(renderer.redraw) ~= "function" then return false end
-  return (pcall(renderer.redraw, state))
+  return do_narrow_redraw(state)
+end
+
+---@type table?  Built lazily on first use — see M.redraw_soon.
+local _redraw_soon = nil
+---Milliseconds within which repeated `M.redraw_soon()` calls collapse into
+---one `M.redraw()` — small and fixed: just enough to absorb a same-moment
+---burst of filetree's OWN redraw requests (today: `opened_sync`, on top of a
+---structural change like `collapse_node`'s own immediate redraw) without
+---adding perceptible latency to any single one of them.
+local REDRAW_COALESCE_MS = 30
+
+---Coalescing counterpart to `M.redraw()`: multiple calls within
+---`REDRAW_COALESCE_MS` collapse into a single `renderer.redraw(state)` pass,
+---for callers whose own trigger isn't already synchronously tied to a
+---structural tree mutation (unlike `collapse_node`/`expand_node`, which stay
+---on their own immediate, uncoalesced `do_narrow_redraw` — see those
+---functions' doc comments for why deferring THEIR redraw is not safe).
+---
+---This only coordinates FILETREE's own call sites against each other (today:
+---`opened_sync`). It cannot and does not coalesce with neo-tree's OWN
+---internal `renderer.redraw` callers (`opened_buffers_changed`'s own
+---debounce, filesystem-watcher-driven redraws, ...) — those live entirely in
+---the external neo-tree.nvim dependency, out of this plugin's reach. See
+---`docs/FEATURES/BACKENDS.md`'s render-event-bridge section.
+---@return boolean
+function M.redraw_soon()
+  if not _redraw_soon then
+    _redraw_soon = lib_debounce.new(function()
+      M.redraw()
+    end, REDRAW_COALESCE_MS)
+  end
+  _redraw_soon.call()
+  return true
 end
 
 ---@param line integer

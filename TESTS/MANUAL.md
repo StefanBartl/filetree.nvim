@@ -79,6 +79,21 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   Needs neo-tree, nui, plenary, nvim-web-devicons and lib.nvim — same
   resolution rules as `adapter_lines.lua`, skips (exit 0) without them.
 
+- **[neotree_collapse_redraw_coalesce.lua](neotree_collapse_redraw_coalesce.lua)** —
+  integration: `adapter/neotree.lua`'s `M.redraw_soon()` coalescing helper,
+  part of the fix for the "modified"/"opened" icon blinking near a folder
+  node right after it collapses (several of filetree's own narrow-redraw
+  triggers — `collapse_node`'s own immediate redraw, `opened_sync`'s
+  debounced one — landing close together). Against a real neo-tree: wraps
+  the real, already filetree-patched `renderer.redraw` with a counting shim
+  and asserts a burst of `redraw_soon()` calls settles into exactly one real
+  redraw once the coalescing window elapses, that `M.redraw()` itself (what
+  `collapse_node`/`expand_node` use directly) stays synchronous with no
+  coalescing delay, and that a real `<CR>`-expand-then-collapse via
+  `collapse_node` still redraws immediately. Needs neo-tree, nui, plenary,
+  nvim-web-devicons and lib.nvim — same resolution rules as
+  `adapter_lines.lua`, skips (exit 0) without them.
+
 - **[create_from_template.lua](create_from_template.lua)** — unit: the
   template-first flow of `create_from_template`. `M.move` never crossing the
   `[custom]`/`[builtin]` boundary (both ends, plus the persisted custom-then-builtin

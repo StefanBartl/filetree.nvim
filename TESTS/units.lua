@@ -363,6 +363,11 @@ do
       redrew = redrew + 1
       return true
     end,
+    -- Explicitly absent (not just missing): this stub models a backend that
+    -- only implements the plain `redraw`, so opened_sync must fall back to
+    -- it rather than silently resolving `redraw_soon` through `__index`
+    -- below (which would return a callable stub and mask this test).
+    redraw_soon = false,
   }, {
     __index = function()
       return function()
@@ -384,6 +389,48 @@ do
     return redrew > 0
   end, 10)
   check("opened_sync: a buffer event triggers adapter.redraw()", redrew > 0)
+end
+
+-- ── opened_sync ── prefers adapter.redraw_soon() when the backend has one ───
+do
+  local redrew_soon = 0
+  local stub = setmetatable({
+    name = "units-stub-opensync-soon",
+    is_available = function()
+      return true
+    end,
+    is_open = function()
+      return true, 1
+    end,
+    redraw = function()
+      check("opened_sync: redraw_soon present -- plain redraw must not be called", false)
+      return true
+    end,
+    redraw_soon = function()
+      redrew_soon = redrew_soon + 1
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  package.loaded["filetree.features.ui.opened_sync"] = nil
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-opensync-soon",
+    features = { opened_sync = { enabled = true, debounce_ms = 0 } },
+  })
+
+  vim.api.nvim_exec_autocmds("BufAdd", {})
+  vim.wait(80, function()
+    return redrew_soon > 0
+  end, 10)
+  check("opened_sync: a buffer event prefers adapter.redraw_soon()", redrew_soon > 0)
 end
 
 -- ── util.line_count ───────────────────────────────────────────────────────────
