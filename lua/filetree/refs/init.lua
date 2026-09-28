@@ -31,6 +31,7 @@ local scan = require("filetree.refs.scan")
 local apply = require("filetree.refs.apply")
 local ui = require("filetree.refs.ui")
 local outgoing = require("filetree.refs.outgoing")
+local own_links = require("filetree.refs.own_links")
 local assets = require("filetree.refs.assets")
 local ftpath = require("filetree.util.path")
 local notify = require("filetree.util.notify").create("[filetree.refs]")
@@ -118,6 +119,31 @@ function M.outgoing_assets_mode(override)
   local oa = _cfg.outgoing_assets
   if not oa or not oa.enabled then return "off" end
   return oa.on_delete or "ask"
+end
+
+---The configured mode for rewriting a moved/renamed/copied file's OWN
+---outgoing links, honouring a per-call override. Unset `outgoing_links.mode`
+---inherits `on_move`/`on_rename` for the same op (the common case: both
+---directions should behave the same way, so a move asks — or auto-applies —
+---once, not twice).
+---
+---For "copy" specifically this does NOT go through `M.mode("copy")`, which is
+---gated behind `_cfg.copy` — a DIFFERENT, unrelated switch for whether a copy
+---gets an INCOMING-ref scan at all (default off: a copy leaves the original
+---in place, so nothing points at it needs fixing). A copy's own outgoing
+---links are a real, separate problem (the pasted copy's relative links may
+---now be wrong even though nothing else references it), so an unset
+---`outgoing_links.mode` inherits `on_move` directly for a copy instead.
+---@param op "rename"|"move"|"copy"
+---@param override? "ask"|"auto"|"off"
+---@return "ask"|"auto"|"off"
+function M.outgoing_links_mode(op, override)
+  if override then return override end
+  local ol = _cfg.outgoing_links
+  if not ol or not ol.enabled or not _cfg.enabled then return "off" end
+  if ol.mode then return ol.mode end
+  if op == "copy" then return _cfg.on_move end
+  return M.mode(op)
 end
 
 -- ── Context ───────────────────────────────────────────────────────────────────
@@ -302,9 +328,17 @@ end
 ---Resolve a finished scan against the moves that just happened, then ask (or
 ---not, per config) and apply. The one call a mutating feature needs after its
 ---rename/move succeeded.
+---
+---Also collects `outgoing_links` edits — the moved file(s)' OWN outgoing
+---links, rewritten to still resolve from their new location (see
+---`filetree.refs.own_links`) — and folds them in alongside the incoming-refs
+---list: in the common case (both directions land on the same effective
+---mode), everything goes through ONE confirmation dialog and ONE undo token.
+---Only an explicitly configured divergent `outgoing_links.mode` splits it
+---into two independent applies.
 ---@param result FiletreeRefScanResult
 ---@param moves table<string, string>   old path → new path
----@param opts? { op?: "rename"|"move"|"copy", mode?: "ask"|"auto"|"off", picker?: string, title?: string, lsp_handled?: boolean }
+---@param opts? { op?: "rename"|"move"|"copy", mode?: "ask"|"auto"|"off", picker?: string, title?: string, lsp_handled?: boolean, root?: string, own_links_mode?: "ask"|"auto"|"off" }
 ---@param done? fun(applied: integer)
 function M.handle_result(result, moves, opts, done)
   opts = opts or {}
@@ -319,19 +353,75 @@ function M.handle_result(result, moves, opts, done)
       )
     )
   end
-  if #resolved == 0 then return done(0) end
+
+  local op = opts.op or "move"
+  local own_mode = M.outgoing_links_mode(op, opts.own_links_mode)
+  local own_edits = {}
+  local first_old = next(moves)
+  if own_mode ~= "off" and first_old then
+    local ok, edits = pcall(own_links.collect, moves, {
+      op = op,
+      root = opts.root or resolve_root(first_old),
+      cfg = _cfg,
+    })
+    if ok then
+      own_edits = edits
+    else
+      notify.debug("own_links.collect failed: " .. tostring(edits))
+    end
+  end
+
+  if #resolved == 0 and #own_edits == 0 then return done(0) end
 
   local names = {}
   for old in pairs(moves) do
     names[#names + 1] = ftpath.basename(old)
   end
 
-  ui.apply_with_confirmation(resolved, {
-    mode = M.mode(opts.op or "move", opts.mode),
-    picker = opts.picker or _cfg.picker,
-    title = opts.title or ("References to " .. table.concat(names, ", ")),
-    label = string.format("%s: %s", opts.op or "move", table.concat(names, ", ")),
-  }, done)
+  local incoming_mode = M.mode(op, opts.mode)
+  local picker = opts.picker or _cfg.picker
+  local title = opts.title or ("References to " .. table.concat(names, ", "))
+  local label = string.format("%s: %s", op, table.concat(names, ", "))
+
+  -- Common case: nothing to split, or both directions share one effective
+  -- mode — one dialog, one undo token for the whole operation. The mode to
+  -- apply under is whichever side actually has edits when only one does;
+  -- with both present they only reach this branch by already sharing one.
+  if #own_edits == 0 or #resolved == 0 or own_mode == incoming_mode then
+    local combined = {}
+    for _, r in ipairs(resolved) do
+      combined[#combined + 1] = r
+    end
+    for _, r in ipairs(own_edits) do
+      combined[#combined + 1] = r
+    end
+    local mode = #own_edits == 0 and incoming_mode or own_mode
+    ui.apply_with_confirmation(
+      combined,
+      { mode = mode, picker = picker, title = title, label = label },
+      done
+    )
+    return
+  end
+
+  -- Explicitly divergent modes: two independent applies/undo entries.
+  local pending, total_applied = 2, 0
+  local function one_done(n)
+    total_applied = total_applied + n
+    pending = pending - 1
+    if pending == 0 then done(total_applied) end
+  end
+  ui.apply_with_confirmation(
+    resolved,
+    { mode = incoming_mode, picker = picker, title = title, label = label },
+    one_done
+  )
+  ui.apply_with_confirmation(own_edits, {
+    mode = own_mode,
+    picker = picker,
+    title = "Links inside the moved file(s)",
+    label = string.format("%s (own links): %s", op, table.concat(names, ", ")),
+  }, one_done)
 end
 
 ---Await `handle` and hand its result to `handle_result` — the shorthand for
@@ -485,6 +575,14 @@ function M.status()
     -- the status line reflects what a scan would actually use.
     table.concat(oa.roots or assets.DEFAULT_ROOTS, ","),
     table.concat(oa.extensions or assets.DEFAULT_EXTENSIONS, ",")
+  )
+
+  local ol = _cfg.outgoing_links or {}
+  lines[#lines + 1] = string.format(
+    "outgoing_links: enabled=%s  mode=%s  env_vars=%s",
+    tostring(ol.enabled == true),
+    ol.mode or "(inherits move/rename)",
+    table.concat(ol.env_vars or {}, ",")
   )
 
   lines[#lines + 1] = apply.can_undo() and ("undo available: " .. (apply.last_label() or "?"))

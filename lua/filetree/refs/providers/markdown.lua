@@ -195,6 +195,40 @@ function M.each_link_target(text, cfg, fn)
   end)
 end
 
+---Retarget one outgoing link (found by `each_link_target`/
+---`filetree.refs.outgoing`) after the file that CONTAINS it moved, or after
+---the link's OWN resolved target moved too (or both) — the outgoing
+---counterpart of `plan().retarget` below, keyed off `link.style` (set by
+---`filetree.refs.outgoing`'s own resolve, via `pathutil.resolve_candidates`'
+---second return value) instead of a `FiletreeRef`'s `style` (set by
+---`plan().extract`'s resolve against one specific moved path) — computed the
+---same way, just from a different call site.
+---
+---Wiki links are not supported here: their vault-root-or-relative dual-base
+---and extension-omission trial (`wiki_match`) has no equivalent in the
+---generic outgoing-scan path this method serves, and `wiki_links` already
+---defaults off — returning nil (leave the link alone) is a documented v1
+---scope cut, not a silent wrong rewrite.
+---@param link FiletreeOutgoingLink
+---@param new_target_abs string
+---@param ctx { root: string, env?: FiletreeRefEnvRoots }
+---@return string|nil
+function M.retarget_link(link, new_target_abs, ctx)
+  if link.kind == "wiki" then return nil end
+  local out = pathutil.retarget({
+    style = link.style or "relative",
+    target = link.target,
+    from_file = link.file,
+    root = ctx.root,
+    new_path = new_target_abs,
+    env = ctx.env,
+  })
+  -- Only re-encode when the original target was encoded too; a link written
+  -- with a literal space keeps its literal space (mirrors `plan().retarget`).
+  if link.target:find("%%%x%x") then out = url_encode(out) end
+  return out
+end
+
 -- ── Provider ──────────────────────────────────────────────────────────────────
 
 ---@param old_path string

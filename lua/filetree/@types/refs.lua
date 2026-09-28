@@ -62,6 +62,16 @@
 ---                              are require()/import statements pointing at code, never
 ---                              at binary assets, so it has nothing to contribute here.
 ---                              Set by markdown; used by `filetree.refs.outgoing`.
+---@field retarget_link? fun(link: FiletreeOutgoingLink, new_target_abs: string, ctx: { root: string, env?: FiletreeRefEnvRoots }): string|nil
+---                              Re-render one outgoing link (found via `each_link_target`)
+---                              after ITS OWN containing file moved, or after `new_target_abs`
+---                              (its resolved target) moved too — the outgoing counterpart of
+---                              `plan()`'s `retarget` (which re-renders a reference to a
+---                              specific moved path; this re-renders a link found while
+---                              scanning a file's own content, whatever it points at). Returns
+---                              nil to leave the link untouched (e.g. a link kind this
+---                              provider does not support retargeting for). Set by markdown;
+---                              used by `filetree.refs.own_links`.
 
 ---One outgoing link found while scanning a file's own content for
 ---`filetree.refs.outgoing` — see that module for how it differs from `FiletreeRef`
@@ -77,6 +87,7 @@
 ---@field exists   boolean  Whether `resolved` names a file that exists on disk right now.
 ---@field provider string   Name of the provider that produced this link ("markdown").
 ---@field kind     string   Provider-specific link kind ("inline"|"refdef"|"html"|"wiki").
+---@field style?   string   How `target` was read to reach `resolved` ("env"|"fs"|"root"|"relative") — set by `filetree.refs.outgoing`, used by `retarget_link` to reproduce the same style.
 ---@field display  string   Picker/quickfix display text.
 
 ---One outgoing link, classified for the cascade-delete-assets concept
@@ -133,6 +144,18 @@
 ---@field roots?      string[]           Folder name(s) a link must resolve under, tried relative to the linking file's own directory first, then the project root (default `{"assets"}`).
 ---@field extensions? string[]           Allowlist of extensions that qualify as an asset (never a denylist).
 
+---Rewrite the OUTGOING links found inside a moved/renamed/copied file's OWN
+---content, so they still resolve correctly from its new location — the
+---mirror of the main incoming-refs pipeline above (which fixes OTHER files
+---that point AT the moved file), hence its own on/off switch. Handled by
+---`filetree.refs.own_links`, folded into `filetree.refs.handle_result`
+---alongside the incoming-refs list (one confirmation dialog, one undo token,
+---when both directions share the same effective mode).
+---@class FiletreeRefsOutgoingLinksConfig
+---@field enabled?  boolean            Turn the feature on (default false — opt-in, same posture as `outgoing_assets`/`experimental.plaintext`).
+---@field mode?     "ask"|"auto"|"off" Unset (default) inherits `on_move`/`on_rename` for the op in question — no separate prompt for the common case. Set explicitly to diverge (costs a second confirmation/undo entry when it does).
+---@field env_vars? string[]           Environment variable names (without the leading `$`) recognized in a `$VAR/...` link target. `$NVIM_CONFIG_DIR` (backed by `vim.fn.stdpath("config")`) is always recognized in addition, with no config needed.
+
 ---@class FiletreeRefsConfig
 ---@field enabled?         boolean
 ---@field providers?       FiletreeRefsProvidersConfig
@@ -144,6 +167,7 @@
 ---@field prefer_lsp?      boolean   Skip textual code providers when an LSP client applied a workspace edit.
 ---@field wiki_links?      boolean   Also rewrite `[[wiki]]`-style markdown links (default false).
 ---@field outgoing_assets? FiletreeRefsOutgoingAssetsConfig  Cascade-delete-assets, opt-in.
+---@field outgoing_links?  FiletreeRefsOutgoingLinksConfig   Rewrite the moved file's own outgoing links, opt-in.
 ---@field experimental?    FiletreeRefsExperimentalConfig  In-development reference features, each opt-in.
 ---@field scan?            FiletreeRefsScanConfig
 ---@field undo?            boolean   Keep an undo token per apply (default true).
