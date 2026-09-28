@@ -1594,6 +1594,66 @@ local function run_own_links_prune_dirs_check()
   refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
 end
 
+-- ── own_links: M.collect's cb() is always asynchronous, even the early-out ─
+-- Regression for a bug introduced (and caught before shipping) in the same
+-- review round as the three checks above: `M.collect` returns early, with an
+-- empty edit list, when no ENABLED provider implements `retarget_link` (e.g.
+-- markdown disabled). That branch used to call `cb` INLINE, breaking the
+-- "always asynchronous" contract every other exit path already follows.
+-- `refs/init.lua`'s `handle_result` pcall-wraps the INITIATING call to
+-- `own_links.collect` so a synchronous SETUP failure can fall back cleanly --
+-- but if `cb` itself throws while still running inside that same call stack
+-- (inline), the pcall reports the whole call as failed and its own fallback
+-- fires `cb` a SECOND time. Scheduling this branch like every other one
+-- closes that: `cb` is always invoked after `own_links.collect` itself has
+-- already returned, never from inside it.
+local function run_own_links_empty_retargetable_async_check()
+  print("\n== own_links: cb() is always async, even with no retarget-capable provider ==")
+
+  local cfg = vim.deepcopy(BASE_REFS_CFG)
+  cfg.outgoing_links = { enabled = true }
+  -- markdown is the only provider with retarget_link -- disabling it leaves
+  -- `retargetable` empty, hitting the early-out branch under test.
+  cfg.providers = vim.tbl_extend("force", vim.deepcopy(cfg.providers or {}), { markdown = false })
+  refs.setup(cfg)
+
+  local work = scratch_root .. "/own_links_empty_retargetable"
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "[tool.filetree]" }, work .. "/pyproject.toml")
+  vim.fn.writefile({ "# Note: [x](./other.md)" }, work .. "/note.md")
+
+  local own_links = require("filetree.refs.own_links")
+  local edits, done = nil, false
+  own_links.collect(
+    { [work .. "/note.md"] = work .. "/note2.md" },
+    { op = "rename", cfg = cfg },
+    function(e)
+      edits = e
+      done = true
+    end
+  )
+  -- Right here, own_links.collect() has already RETURNED, but not one tick of
+  -- the event loop has run yet -- an inline (buggy) cb() would already have
+  -- flipped `done` to true by this point.
+  check(
+    "own_links empty-retargetable: cb() was NOT called synchronously (still pending)",
+    done == false
+  )
+
+  vim.wait(2000, function()
+    return done
+  end, 10)
+  check("own_links empty-retargetable: cb() did eventually run", done)
+  check(
+    "own_links empty-retargetable: no edits (no enabled provider can retarget)",
+    edits ~= nil and #edits == 0,
+    vim.inspect(edits)
+  )
+
+  refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
+end
+
 -- ── Deleting a file and undoing it puts its REF! markers back ──────────────
 -- The delete flow is two mutations, not one: the file goes to the trash, and
 -- the references that pointed at it are rewritten to the provider's broken
@@ -2467,6 +2527,7 @@ run_own_links_copy_check()
 run_own_links_symlink_safety_check()
 run_own_links_multi_root_check()
 run_own_links_prune_dirs_check()
+run_own_links_empty_retargetable_async_check()
 run_delete_undo_refs_check()
 run_delete_undo_refs_chunked_race_check()
 run_cut_paste_undo_check()

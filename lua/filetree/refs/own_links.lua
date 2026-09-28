@@ -135,6 +135,17 @@ end
 ---marker file) must not have a file from one root's links resolved against
 ---another's, the same per-path discipline `refs/init.lua`'s own `make_ctx`
 ---already applies on the incoming-refs side.
+---
+---The whole body runs under one `pcall`: unlike the fast (`total <=
+---CHUNK_SIZE`) path, where an uncaught error here would still surface to
+---`M.collect`'s own caller via the synchronous call stack, a chunked batch
+---runs later chunks from inside their own `vim.schedule` tick -- an error
+---there would abort `step()` with nothing left to call `cb`, silently
+---hanging the whole batch's confirmation dialog and, through it, the
+---caller's own completion signal (a move/rename feature's tree refresh).
+---One bad file's root resolution or a bad link's retarget must cost that
+---file's edits, never the rest of the batch -- same discipline
+---`filetree.refs.outgoing`'s own scan already applies per line.
 ---@param pr { old: string, new: string }
 ---@param opts { root?: string, env: FiletreeRefEnvRoots }
 ---@param flat table<string, string>
@@ -142,35 +153,40 @@ end
 ---@param retargetable table<string, FiletreeRefProvider>
 ---@param out FiletreeRef[]
 local function process_one(pr, opts, flat, dirs, retargetable, out)
-  local file_root = opts.root or outgoing.resolve_root(pr.new)
-  outgoing.scan(pr.new, { root = file_root, base = pr.old, env = opts.env }, function(links)
-    for _, link in ipairs(links) do
-      local provider = retargetable[link.provider]
-      if provider then
-        local final_abs = remap_if_also_moved(link.resolved, flat, dirs)
-        local ok, new_target =
-          pcall(provider.retarget_link, link, final_abs, { root = file_root, env = opts.env })
-        if
-          ok
-          and type(new_target) == "string"
-          and new_target ~= ""
-          and new_target ~= link.target
-        then
-          out[#out + 1] = {
-            file = pr.new,
-            line = link.line,
-            col = link.col,
-            text = link.text,
-            target = link.target,
-            new_target = new_target,
-            provider = link.provider,
-            source = link.resolved,
-            display = link.display,
-          }
+  local ok, err = pcall(function()
+    local file_root = opts.root or outgoing.resolve_root(pr.new)
+    outgoing.scan(pr.new, { root = file_root, base = pr.old, env = opts.env }, function(links)
+      for _, link in ipairs(links) do
+        local provider = retargetable[link.provider]
+        if provider then
+          local final_abs = remap_if_also_moved(link.resolved, flat, dirs)
+          local rok, new_target =
+            pcall(provider.retarget_link, link, final_abs, { root = file_root, env = opts.env })
+          if
+            rok
+            and type(new_target) == "string"
+            and new_target ~= ""
+            and new_target ~= link.target
+          then
+            out[#out + 1] = {
+              file = pr.new,
+              line = link.line,
+              col = link.col,
+              text = link.text,
+              target = link.target,
+              new_target = new_target,
+              provider = link.provider,
+              source = link.resolved,
+              display = link.display,
+            }
+          end
         end
       end
-    end
+    end)
   end)
+  if not ok then
+    notify.debug(string.format("own_links: failed to process %s: %s", pr.new, tostring(err)))
+  end
 end
 
 ---Outgoing-link edit records for every file in `moves`, after its own move —
@@ -204,7 +220,16 @@ function M.collect(moves, opts, cb)
   for _, p in ipairs(registry.enabled(cfg)) do
     if type(p.retarget_link) == "function" then retargetable[p.name] = p end
   end
-  if not next(retargetable) then return cb({}) end
+  -- Scheduled, not called inline: every other exit from this function calls
+  -- `cb` from inside a `vim.schedule` (see below), and a caller (handle_result)
+  -- pcall-wraps the INITIATING call to catch a synchronous setup failure --
+  -- if `cb` ran inline here and itself raised, that pcall would report this
+  -- call as failed and invoke its own fallback, double-firing `cb`.
+  if not next(retargetable) then
+    return vim.schedule(function()
+      cb({})
+    end)
+  end
 
   local flat, dirs = moves_index(moves)
   local files = expand_files(moves)
