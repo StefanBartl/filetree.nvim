@@ -17,7 +17,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 > central tree-attach dispatcher, which is outside their help registry,
 > so their built-in help will not list them (the keymaps still work — check with
 > `:nmap` in the tree buffer). See
-> [neo-tree `?` cheatsheet integration](#neo-tree--cheatsheet-integration) for details.
+> [`?` cheatsheet integration](#the-cheatsheet) for details.
 
 ---
 
