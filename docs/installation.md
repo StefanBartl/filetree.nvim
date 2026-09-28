@@ -102,4 +102,4 @@ end)
 ## See also
 
 - [Configuration](configuration.md) — full option reference and adapter selection.
-- [Quick start](../README.md#quick-start) — the shortest possible setup snippet.
+- [Quick start](quickstart.md) — the shortest possible setup snippet.

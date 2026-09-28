@@ -31,7 +31,7 @@ what actually runs. Inspect it live with:
   - [Keymap prefixes at a glance](#keymap-prefixes-at-a-glance)
   - [Known conflicts](#known-conflicts)
   - [Remapping and disabling](#remapping-and-disabling)
-  - [The neo-tree `?` cheatsheet](#the-neo-tree--cheatsheet)
+  - [The `?` cheatsheet](#the--cheatsheet)
 
 ---
 
