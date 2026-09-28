@@ -87,9 +87,15 @@ _G.print = real_print
 local ok, decoded = pcall(vim.json.decode, printed[#printed] or "")
 check("json output decodes", ok, tostring(decoded))
 if ok then
-  check("json: probe reports EBUSY", decoded.probe.renameable == false and decoded.probe.error == "EBUSY")
+  check(
+    "json: probe reports EBUSY",
+    decoded.probe.renameable == false and decoded.probe.error == "EBUSY"
+  )
   check("json: holder listed", decoded.holders.list[1].pid == 42)
-  check("json: watchers ok, 2 total", decoded.watchers.status == "ok" and decoded.watchers.total == 2)
+  check(
+    "json: watchers ok, 2 total",
+    decoded.watchers.status == "ok" and decoded.watchers.total == 2
+  )
   check("json: only the file's folder matches", #decoded.watchers.entries == 1)
   check("json: buffer not open", decoded.buffer.open == false)
 end
