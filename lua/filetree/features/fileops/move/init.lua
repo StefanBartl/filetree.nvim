@@ -205,10 +205,15 @@ local function run(plan, resolution, scan_result)
   if prog then prog:finish(msg) end
   notify.info(msg)
 
-  refs.handle_result(scan_result, moves, { op = "move" })
-
-  clear_marks()
-  if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+  -- Refresh only once handle_result's own apply (incoming refs AND, when
+  -- enabled, the moved file(s)' own outgoing links -- own_links.collect is
+  -- asynchronous) has actually landed, not immediately after this call
+  -- returns: handle_result is fire-and-forget for a reason, but a refresh
+  -- that runs before the rewrite is on disk would show the tree mid-apply.
+  refs.handle_result(scan_result, moves, { op = "move" }, function()
+    clear_marks()
+    if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+  end)
 end
 
 ---@internal

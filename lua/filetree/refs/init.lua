@@ -336,6 +336,18 @@ end
 ---mode), everything goes through ONE confirmation dialog and ONE undo token.
 ---Only an explicitly configured divergent `outgoing_links.mode` splits it
 ---into two independent applies.
+---
+---`own_links.collect` is asynchronous (a large batch is chunked across
+---event-loop ticks, see its own doc comment), so everything after it is
+---known runs inside its callback — this function itself stays fire-and-
+---forget for its caller, same as it always has been (`done` is already the
+---only completion signal callers rely on).
+---
+---No batch-wide root is computed here (unlike the incoming-refs path just
+---above): `own_links.collect` resolves each file's project root on its own,
+---per file, since a batch can legitimately span more than one nested
+---project root and any single shared value would be wrong for every file
+---but the one it happened to be resolved from.
 ---@param result FiletreeRefScanResult
 ---@param moves table<string, string>   old path → new path
 ---@param opts? { op?: "rename"|"move"|"copy", mode?: "ask"|"auto"|"off", picker?: string, title?: string, lsp_handled?: boolean, root?: string, own_links_mode?: "ask"|"auto"|"off" }
@@ -356,72 +368,76 @@ function M.handle_result(result, moves, opts, done)
 
   local op = opts.op or "move"
   local own_mode = M.outgoing_links_mode(op, opts.own_links_mode)
-  local own_edits = {}
-  local first_old = next(moves)
-  if own_mode ~= "off" and first_old then
-    local ok, edits = pcall(own_links.collect, moves, {
-      op = op,
-      root = opts.root or resolve_root(first_old),
-      cfg = _cfg,
-    })
-    if ok then
-      own_edits = edits
-    else
-      notify.debug("own_links.collect failed: " .. tostring(edits))
+
+  ---@param own_edits FiletreeRef[]
+  local function continue_with_own_edits(own_edits)
+    if #resolved == 0 and #own_edits == 0 then return done(0) end
+
+    local names = {}
+    for old in pairs(moves) do
+      names[#names + 1] = ftpath.basename(old)
     end
-  end
 
-  if #resolved == 0 and #own_edits == 0 then return done(0) end
+    local incoming_mode = M.mode(op, opts.mode)
+    local picker = opts.picker or _cfg.picker
+    local title = opts.title or ("References to " .. table.concat(names, ", "))
+    local label = string.format("%s: %s", op, table.concat(names, ", "))
 
-  local names = {}
-  for old in pairs(moves) do
-    names[#names + 1] = ftpath.basename(old)
-  end
-
-  local incoming_mode = M.mode(op, opts.mode)
-  local picker = opts.picker or _cfg.picker
-  local title = opts.title or ("References to " .. table.concat(names, ", "))
-  local label = string.format("%s: %s", op, table.concat(names, ", "))
-
-  -- Common case: nothing to split, or both directions share one effective
-  -- mode — one dialog, one undo token for the whole operation. The mode to
-  -- apply under is whichever side actually has edits when only one does;
-  -- with both present they only reach this branch by already sharing one.
-  if #own_edits == 0 or #resolved == 0 or own_mode == incoming_mode then
-    local combined = {}
-    for _, r in ipairs(resolved) do
-      combined[#combined + 1] = r
+    -- Common case: nothing to split, or both directions share one effective
+    -- mode — one dialog, one undo token for the whole operation. The mode to
+    -- apply under is whichever side actually has edits when only one does;
+    -- with both present they only reach this branch by already sharing one.
+    if #own_edits == 0 or #resolved == 0 or own_mode == incoming_mode then
+      local combined = {}
+      for _, r in ipairs(resolved) do
+        combined[#combined + 1] = r
+      end
+      for _, r in ipairs(own_edits) do
+        combined[#combined + 1] = r
+      end
+      local mode = #own_edits == 0 and incoming_mode or own_mode
+      ui.apply_with_confirmation(
+        combined,
+        { mode = mode, picker = picker, title = title, label = label },
+        done
+      )
+      return
     end
-    for _, r in ipairs(own_edits) do
-      combined[#combined + 1] = r
+
+    -- Explicitly divergent modes: two independent applies/undo entries.
+    local pending, total_applied = 2, 0
+    local function one_done(n)
+      total_applied = total_applied + n
+      pending = pending - 1
+      if pending == 0 then done(total_applied) end
     end
-    local mode = #own_edits == 0 and incoming_mode or own_mode
     ui.apply_with_confirmation(
-      combined,
-      { mode = mode, picker = picker, title = title, label = label },
-      done
+      resolved,
+      { mode = incoming_mode, picker = picker, title = title, label = label },
+      one_done
     )
+    ui.apply_with_confirmation(own_edits, {
+      mode = own_mode,
+      picker = picker,
+      title = "Links inside the moved file(s)",
+      label = string.format("%s (own links): %s", op, table.concat(names, ", ")),
+    }, one_done)
+  end
+
+  if own_mode == "off" or not next(moves) then
+    continue_with_own_edits({})
     return
   end
 
-  -- Explicitly divergent modes: two independent applies/undo entries.
-  local pending, total_applied = 2, 0
-  local function one_done(n)
-    total_applied = total_applied + n
-    pending = pending - 1
-    if pending == 0 then done(total_applied) end
+  local ok, err = pcall(own_links.collect, moves, {
+    op = op,
+    root = opts.root,
+    cfg = _cfg,
+  }, continue_with_own_edits)
+  if not ok then
+    notify.debug("own_links.collect failed: " .. tostring(err))
+    continue_with_own_edits({})
   end
-  ui.apply_with_confirmation(
-    resolved,
-    { mode = incoming_mode, picker = picker, title = title, label = label },
-    one_done
-  )
-  ui.apply_with_confirmation(own_edits, {
-    mode = own_mode,
-    picker = picker,
-    title = "Links inside the moved file(s)",
-    label = string.format("%s (own links): %s", op, table.concat(names, ", ")),
-  }, one_done)
 end
 
 ---Await `handle` and hand its result to `handle_result` — the shorthand for
