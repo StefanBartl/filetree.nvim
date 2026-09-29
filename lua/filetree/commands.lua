@@ -14,6 +14,7 @@
 ---   :Filetree git refresh
 ---   :Filetree filter foo bar
 ---   :Filetree reveal pause 2000
+---   :Filetree traverse goto <dir>
 
 local usercmd = require("filetree.util.usercmd")
 local composer = require("lib.nvim.bindings.usercmd.composer")
@@ -633,6 +634,10 @@ local TREE = {
       local f = ft("tree_traverse")
       if f then f.down() end
     end,
+    ["goto"] = function(args)
+      local f = ft("tree_traverse")
+      if f then f.go_to(args[1]) end
+    end,
   },
 
   -- ── node_info ────────────────────────────────────────────────────────────────
@@ -737,6 +742,8 @@ local function build_routes()
   walked.cwd.mode = nil
   walked.cwd.scope = nil
   walked.cwd.lock = nil
+  walked.traverse = vim.tbl_extend("force", {}, TREE.traverse)
+  walked.traverse["goto"] = nil
   walk_tree(walked, {}, routes)
 
   routes[#routes + 1] = {
@@ -800,6 +807,15 @@ local function build_routes()
     desc = "Lock the cwd to a directory (default: the current one)",
     run = function(ctx)
       TREE.cwd.lock({ ctx.args.dir })
+    end,
+  }
+
+  routes[#routes + 1] = {
+    path = { "traverse", "goto" },
+    args = { { name = "dir", type = "DIR" } },
+    desc = "Change the tree root to a given directory",
+    run = function(ctx)
+      TREE.traverse["goto"]({ ctx.args.dir })
     end,
   }
 
