@@ -353,34 +353,31 @@ local function open_preview(node)
   local row = math.max(0, win_pos[1] + cur_row - math.floor(height / 2))
   row = math.min(row, vim.o.lines - height - 3)
 
-  _bufnr = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(_bufnr, 0, -1, false, lines)
-  vim.api.nvim_set_option_value("modifiable", false, { buf = _bufnr })
-  vim.api.nvim_set_option_value("buftype", "nofile", { buf = _bufnr })
-  if ft ~= "" then
-    pcall(vim.api.nvim_set_option_value, "filetype", ft, { buf = _bufnr })
-    apply_highlight(_bufnr, ft)
-  end
-
-  _win = vim.api.nvim_open_win(_bufnr, false, {
+  -- `ui.kit.surface` (a required dependency, see docs/installation.md), not a
+  -- raw `nvim_open_win` -- its border/colors come from the active
+  -- `ui.kit.theme` preset like every other popup in the fleet, instead of
+  -- being pinned to "always rounded, always NormalFloat/FloatBorder"
+  -- regardless of a preset switch (`:UI kit-preset ascii`, say).
+  local surface = require("ui.kit.surface")
+  local opened = surface.open({
+    lines = lines,
     relative = "editor",
     row = row,
     col = col,
     width = width,
     height = height,
-    style = "minimal",
-    border = "rounded",
+    focusable = false,
+    modifiable = false,
+    filetype = ft ~= "" and ft or nil,
     title = " " .. vim.fn.fnamemodify(path, ":t") .. " ",
     title_pos = "center",
-    focusable = false,
+    wo = { wrap = _cfg.wrap },
   })
+  if not opened then return end
 
-  vim.api.nvim_set_option_value(
-    "winhl",
-    "Normal:NormalFloat,FloatBorder:FloatBorder",
-    { win = _win }
-  )
-  vim.api.nvim_set_option_value("wrap", _cfg.wrap, { win = _win })
+  _win = opened.winid
+  _bufnr = opened.bufnr
+  if ft ~= "" then apply_highlight(_bufnr, ft) end
   pcall(vim.api.nvim_win_set_cursor, _win, { 1, 0 })
 end
 
