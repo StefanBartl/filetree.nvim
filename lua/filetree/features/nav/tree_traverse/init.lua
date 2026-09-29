@@ -81,6 +81,24 @@ function M.down()
   go_to(node.path)
 end
 
+---Navigate the tree root directly to an explicit directory path.
+---@param path string  Absolute (or CWD-relative) directory path.
+function M.go_to(path)
+  if not _adapter then return end
+
+  if type(path) ~= "string" or path == "" then
+    notify.warn("no directory given")
+    return
+  end
+
+  if vim.fn.isdirectory(path) ~= 1 then
+    notify.warn("not a directory: " .. path)
+    return
+  end
+
+  go_to(path)
+end
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---@type FiletreeTreeTraverseConfig

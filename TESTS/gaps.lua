@@ -2280,6 +2280,32 @@ do
   eq("tree_traverse.up(): notifies cwd_mode of the new manual root", notified_paths[1], root_dir)
   package.loaded["filetree.features.nav.cwd_mode"] = nil
 
+  -- go_to(): direct re-root to an arbitrary directory path.
+  current_root = root_dir .. "/child"
+  set_root_calls = {}
+  tt.go_to(root_dir)
+  eq(
+    "tree_traverse.go_to(): set_root() called with the given directory",
+    set_root_calls[1],
+    root_dir
+  )
+
+  set_root_calls = {}
+  local warned = false
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg)
+    if tostring(msg):find("not a directory", 1, true) then warned = true end
+  end
+  tt.go_to(root_dir .. "/does-not-exist-xyz")
+  vim.notify = orig_notify
+  check("tree_traverse.go_to(): a nonexistent directory warns instead of re-rooting", warned)
+  eq("tree_traverse.go_to(): no set_root call for a nonexistent directory", #set_root_calls, 0)
+
+  set_root_calls = {}
+  tt.go_to("")
+  eq("tree_traverse.go_to(): an empty path is a no-op (no set_root call)", #set_root_calls, 0)
+
   tt.teardown()
 end
 

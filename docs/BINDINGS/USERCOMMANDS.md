@@ -181,6 +181,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 |---------|--------|
 | `:Filetree traverse up` | Navigate to parent directory |
 | `:Filetree traverse down` | Set current dir as root |
+| `:Filetree traverse goto <dir>` | Change tree root to a given directory |
 
 ### Trash
 | Command | Action |
