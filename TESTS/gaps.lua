@@ -3207,6 +3207,17 @@ do
     float_win and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(float_win), 0, -1, false)[1],
     "return 1"
   )
+  -- Regression: this float used to hardcode border="rounded" plus
+  -- winhl="Normal:NormalFloat,FloatBorder:FloatBorder", so a ui.kit theme
+  -- preset switch (:UI kit-preset ascii) silently skipped it. It now opens
+  -- through ui.kit.surface, whose winhighlight references a scoped Kit*
+  -- group instead.
+  check(
+    "preview.toggle() [float]: is themed via ui.kit (winhighlight references a Kit* group)",
+    float_win
+      and vim.api.nvim_get_option_value("winhighlight", { win = float_win }):find("Kit", 1, true)
+        ~= nil
+  )
 
   preview.toggle()
   check("preview.toggle() [float]: a second toggle closes it again", open_float_win() == nil)
