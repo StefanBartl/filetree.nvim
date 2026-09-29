@@ -367,6 +367,14 @@ local function open_preview(node)
     width = width,
     height = height,
     focusable = false,
+    -- `focusable = false` alone does NOT stop the window from becoming
+    -- current on creation -- that is `enter`'s own, separate `nvim_open_win`
+    -- parameter, which `ui.kit.surface`/`lib.nvim.window.make_scratch`
+    -- default to true when omitted. Without this, opening the float moved
+    -- focus (and hence tree navigation, the CursorMoved live-update, and
+    -- the float-mode scroll keymaps) off the tree and onto the read-only
+    -- preview buffer on every `<Tab>`.
+    enter = false,
     modifiable = false,
     filetype = ft ~= "" and ft or nil,
     title = " " .. vim.fn.fnamemodify(path, ":t") .. " ",

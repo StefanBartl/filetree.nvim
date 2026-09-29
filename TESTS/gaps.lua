@@ -3199,9 +3199,21 @@ do
   }, stub)
 
   cur_node = { path = text_file, type = "file" }
+  local win_before_toggle = vim.api.nvim_get_current_win()
   preview.toggle()
   local float_win = open_float_win()
   check("preview.toggle() [float]: opens a real floating window for a text file", float_win ~= nil)
+  -- Regression: the migration to ui.kit.surface.open() omitted `enter =
+  -- false`, and surface.open()/make_scratch default `enter` to true when
+  -- it is not passed -- `focusable = false` alone does not stop the window
+  -- from becoming current on creation, so opening the float used to steal
+  -- focus off the tree (breaking tree navigation, the CursorMoved
+  -- live-update, and the float-mode scroll keymaps, all of which are bound
+  -- to/gated on the TREE window/buffer, not the preview's).
+  check(
+    "preview.toggle() [float]: does not steal focus -- current window is unchanged",
+    vim.api.nvim_get_current_win() == win_before_toggle
+  )
   eq(
     "preview.toggle() [float]: the float shows the file's real content",
     float_win and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(float_win), 0, -1, false)[1],
