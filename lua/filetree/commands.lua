@@ -15,6 +15,7 @@
 ---   :Filetree filter foo bar
 ---   :Filetree reveal pause 2000
 ---   :Filetree traverse goto <dir>
+---   :Filetree open <dir-or-file>
 
 local usercmd = require("filetree.util.usercmd")
 local composer = require("lib.nvim.bindings.usercmd.composer")
@@ -32,6 +33,15 @@ local function ft(name)
   local ok, main = pcall(require, "filetree")
   if not ok then return nil end
   return main.feature(name)
+end
+
+---@internal
+---Resolve the active adapter (nil before/without a completed setup()).
+---@return FiletreeAdapter?
+local function get_adapter()
+  local ok, main = pcall(require, "filetree")
+  if not ok then return nil end
+  return main.adapter()
 end
 
 -- ── Command tree ──────────────────────────────────────────────────────────────
@@ -410,7 +420,38 @@ local TREE = {
   },
 
   -- ── open_with ────────────────────────────────────────────────────────────────
+  -- :Filetree open <dir-or-file>  → open the tree focused/rooted on that path
+  -- :Filetree open system         → open current node with the OS default app
+  -- :Filetree open pick           → pick an app to open the current node with
+  -- :Filetree open app <name>     → open the current node with a named app
+  --
+  -- A literal path spelled exactly "system"/"pick"/"app" can't reach the default
+  -- branch below -- same collision class as symlink/mdlink noted above.
   open = {
+    [""] = function(args)
+      if #args == 0 then
+        notify.warn(
+          "Filetree open: give a directory/file path, or use 'system' | 'pick' | 'app <name>'"
+        )
+        return
+      end
+      local path = table.concat(args, " ")
+      if vim.fn.isdirectory(path) == 1 then
+        local f = ft("tree_traverse")
+        if f then f.go_to(path) end
+        return
+      end
+      if vim.fn.filereadable(path) == 1 then
+        local ad = get_adapter()
+        if not ad or type(ad.open_reveal) ~= "function" then
+          notify.warn("adapter does not support open_reveal")
+          return
+        end
+        ad.open_reveal(path, 0)
+        return
+      end
+      notify.warn("not a file or directory: " .. path)
+    end,
     system = function(_)
       local f = ft("open_with")
       if f then f.open_system() end

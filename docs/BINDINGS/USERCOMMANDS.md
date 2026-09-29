@@ -209,6 +209,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | Command | Action |
 |---------|--------|
 | `:Filetree template` | Create file from template — pick a template first, then a filename pre-filled with its extension |
+| `:Filetree open <dir-or-file>` | Open the tree focused on a directory or file |
 | `:Filetree open system` | Open with system default |
 | `:Filetree open pick` | Open with app picker |
 | `:Filetree open app <name>` | Open with named app |

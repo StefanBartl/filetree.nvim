@@ -3349,6 +3349,82 @@ do
   vim.cmd("silent! only")
 end
 
+-- ── commands: `:Filetree open <dir-or-file>` default branch ────────────────
+do
+  local open_root = (TMP_ROOT .. "/gaps27-cmdopen"):gsub("\\", "/")
+  vim.fn.delete(open_root, "rf")
+  vim.fn.mkdir(open_root, "p")
+  local open_file = open_root .. "/note.txt"
+  vim.fn.writefile({ "hello" }, open_file)
+
+  local set_root_calls = {}
+  local open_reveal_calls = {}
+  local stub = setmetatable({
+    name = "gaps27-cmdopen-stub",
+    is_available = function()
+      return true
+    end,
+    set_root = function(p)
+      set_root_calls[#set_root_calls + 1] = p
+      return true
+    end,
+    open_reveal = function(path, parent_levels, root_dir)
+      open_reveal_calls[#open_reveal_calls + 1] = { path, parent_levels, root_dir }
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = "gaps27-cmdopen-stub" })
+
+  vim.cmd("Filetree open " .. vim.fn.fnameescape(open_root))
+  eq(
+    "`:Filetree open <dir>`: set_root() was called with the given directory",
+    set_root_calls[1],
+    open_root
+  )
+  eq("`:Filetree open <dir>`: open_reveal() was NOT called", #open_reveal_calls, 0)
+
+  set_root_calls, open_reveal_calls = {}, {}
+  vim.cmd("Filetree open " .. vim.fn.fnameescape(open_file))
+  eq(
+    "`:Filetree open <file>`: open_reveal() was called with the given file",
+    open_reveal_calls[1] and open_reveal_calls[1][1],
+    open_file
+  )
+  eq("`:Filetree open <file>`: set_root() was NOT called", #set_root_calls, 0)
+
+  set_root_calls, open_reveal_calls = {}, {}
+  local warned = false
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg)
+    if tostring(msg):find("not a file or directory", 1, true) then warned = true end
+  end
+  vim.cmd("Filetree open " .. vim.fn.fnameescape(open_root .. "/does-not-exist-xyz"))
+  vim.notify = orig_notify
+  check("`:Filetree open <missing>`: a nonexistent path warns", warned)
+  eq("`:Filetree open <missing>`: set_root() was NOT called", #set_root_calls, 0)
+  eq("`:Filetree open <missing>`: open_reveal() was NOT called", #open_reveal_calls, 0)
+
+  warned = false
+  orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg)
+    if tostring(msg):find("give a directory/file path", 1, true) then warned = true end
+  end
+  vim.cmd("Filetree open")
+  vim.notify = orig_notify
+  check("`:Filetree open` (no argument): a usage warning fires instead of a silent no-op", warned)
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim gaps: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
