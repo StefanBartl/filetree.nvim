@@ -1578,7 +1578,11 @@ do
     return dest_node
   end -- cursor now on the destination dir
   copy_move.paste()
-  vim.wait(2000, function()
+  -- 5000ms, matching the "copy_move relocate" test above for the identical
+  -- stage+paste async chain: refs.prefetch's own scan.timeout_ms defaults to
+  -- 3000ms, so a shorter wait here could give up before a slow/cold-cache
+  -- scan finishes.
+  vim.wait(5000, function()
     return #captured >= 2 -- the stage-cut notice, plus at least the failure/summary
   end, 20)
 
@@ -1666,7 +1670,9 @@ do
     return dest_node
   end
   copy_move.paste()
-  vim.wait(2000, function()
+  -- Same reasoning as the lockfail (move) test above: 5000ms, not 2000ms,
+  -- to stay clear of refs.prefetch's own 3000ms scan.timeout_ms default.
+  vim.wait(5000, function()
     return #captured >= 2
   end, 20)
 
@@ -1688,6 +1694,105 @@ do
   check(
     "copy_move copy-lockfail: the underlying lock reason is surfaced, not swallowed",
     lower:find("ebusy", 1, true) ~= nil,
+    all
+  )
+end
+
+-- ── copy_move: a sharing lock deep inside a directory copy propagates too ───
+-- The two tests above only ever reach do_copy()'s flat, single-file
+-- fsops.copy_file branch. copy_dir()'s own recursive error propagation (a
+-- failure surfacing through a NESTED subdirectory's own copy_dir() call, not
+-- just a direct fsops.copy_file call) was untested -- this fakes copy_file to
+-- fail only for a file two levels deep, letting a sibling file at the top
+-- level copy for real, so the failure can only reach do_paste_impl by
+-- travelling back up through copy_dir's own recursive `return rc, err`.
+do
+  local tmp = (TMP_ROOT .. "/units-copymove-dircopylockfail"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/dest", "p")
+  vim.fn.mkdir(tmp .. "/src/sub", "p")
+  vim.fn.writefile({ "ok" }, tmp .. "/src/regular.txt")
+  vim.fn.writefile({ "locked" }, tmp .. "/src/sub/nested.txt")
+
+  local cur_node = { path = tmp .. "/src", type = "directory" }
+  local dest_node = { path = tmp .. "/dest", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-copymove-dircopylockfail",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-copymove-dircopylockfail",
+    features = { copy_move = { enabled = true, confirm = false, use_safety = false } },
+  })
+  local copy_move = ft.feature("copy_move")
+
+  -- Real copy_file for everything except the deeply-nested file, so the
+  -- top-level entry (regular.txt) genuinely succeeds and the failure can
+  -- only be observed if copy_dir's OWN recursive call correctly forwards it.
+  local fsops = require("lib.nvim.cross.fs.mutate")
+  local orig_copy_file = fsops.copy_file
+  ---@diagnostic disable-next-line: duplicate-set-field
+  fsops.copy_file = function(s, d)
+    if tostring(d):find("nested.txt", 1, true) then
+      return false, "EBUSY: resource busy or locked: fake"
+    end
+    return orig_copy_file(s, d)
+  end
+
+  local captured = {}
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(m)
+    captured[#captured + 1] = tostring(m)
+  end
+
+  copy_move.stage_copy()
+  stub.get_current_node = function()
+    return dest_node
+  end
+  copy_move.paste()
+  vim.wait(5000, function()
+    return #captured >= 2
+  end, 20)
+
+  vim.notify = orig_notify
+  fsops.copy_file = orig_copy_file
+  package.loaded["filetree.features.fileops.copy_move"] = nil
+
+  check(
+    "copy_move dir-copy-lockfail: the sibling file at the top level copied for real",
+    vim.fn.filereadable(tmp .. "/dest/src/regular.txt") == 1,
+    "readdir order may have skipped it -- see the comment above this block"
+  )
+  check(
+    "copy_move dir-copy-lockfail: the nested locked file was not copied",
+    vim.fn.filereadable(tmp .. "/dest/src/sub/nested.txt") == 0
+  )
+  local all = table.concat(captured, " | ")
+  local lower = all:lower()
+  check(
+    "copy_move dir-copy-lockfail: the failure surfaces even though it happened two levels deep",
+    lower:find("failed", 1, true) ~= nil and lower:find("ebusy", 1, true) ~= nil,
     all
   )
 end
