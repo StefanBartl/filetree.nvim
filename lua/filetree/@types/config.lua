@@ -795,6 +795,10 @@
 ---@field keymap             string?  Markdown link for current node (default "ML").
 ---@field keymap_recursive   string?  Markdown links recursively (default "MR").
 ---@field keymap_from_marked string?  Markdown links from marked nodes (default "MM").
+---@field keymap_insert      string?  INSERT link(s) into the window you came from -- marked nodes if any, else the current one -- and put the cursor into the first link (default "MI").
+---@field insert_path        "buffer"|"cwd"|"absolute"|"env"?  Link target spelling for `keymap_insert` (default "buffer": relative to the target buffer's directory; "env" = `$REPOS_DIR/…`/`$NVIM_CONFIG_DIR/…`, falling back to "buffer").
+---@field env_roots          string[]?  Env vars tried for `insert_path = "env"` (default { "REPOS_DIR" }; `$NVIM_CONFIG_DIR` is always tried too).
+---@field cursor             table?   lib.nvim.markdown.link_cursor options for the insert (`enable`, `startinsert`, `path_cursor`).
 
 -- ── smart_create ──────────────────────────────────────────────────────────────
 

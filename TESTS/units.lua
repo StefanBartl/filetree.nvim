@@ -6530,6 +6530,81 @@ do
       recursive_reg
     )
   end
+
+  -- ── MI: INSERT into the window we came from, cursor into the link ──
+  vim.fn.mkdir(tmp .. "/docs", "p")
+  vim.fn.writefile({ "intro" }, tmp .. "/docs/note.md")
+  ft.setup({
+    adapter = "units-stub5",
+    features = {
+      markdown_links = { enabled = true, cursor = { startinsert = false }, insert_path = "buffer" },
+    },
+  })
+  md = ft.feature("markdown_links")
+
+  vim.cmd("only")
+  vim.cmd("edit " .. vim.fn.fnameescape(tmp .. "/docs/note.md"))
+  local editor_win = vim.api.nvim_get_current_win()
+  vim.cmd("vsplit")
+  vim.cmd("enew") -- stands in for the tree window: we came FROM editor_win
+  local tree_win = vim.api.nvim_get_current_win()
+  vim.api.nvim_set_current_win(editor_win)
+  vim.api.nvim_win_set_cursor(editor_win, { 1, 5 })
+  vim.api.nvim_set_current_win(tree_win)
+
+  cur_node = { path = tmp .. "/sub/b.lua", type = "file" }
+  check("markdown_links: insert_current() does not error", pcall(md.insert_current))
+  local edited = vim.api.nvim_win_get_buf(editor_win)
+  local text = table.concat(vim.api.nvim_buf_get_lines(edited, 0, -1, false), "\n")
+  check(
+    "markdown_links: MI writes a link relative to the TARGET buffer, inline at its cursor",
+    text == "intr[b.lua](../sub/b.lua)o", -- a normal-mode cursor sits at most on the last character
+    text
+  )
+  check(
+    "markdown_links: MI leaves the cursor in the path of the filled link, in the editor window",
+    vim.api.nvim_get_current_win() == editor_win
+      and vim.api.nvim_win_get_cursor(editor_win)[2] == 24,
+    vim.inspect(vim.api.nvim_win_get_cursor(editor_win))
+  )
+
+  check(
+    "markdown_links: insert_path = absolute",
+    (function()
+      ft.setup({
+        adapter = "units-stub5",
+        features = {
+          markdown_links = {
+            enabled = true,
+            insert_path = "absolute",
+            cursor = { startinsert = false },
+          },
+        },
+      })
+      local links = ft.feature("markdown_links").build_insert_links({ tmp .. "/a.lua" }, edited)
+      return links[1] == "[a.lua](" .. tmp .. "/a.lua)"
+    end)()
+  )
+  check(
+    "markdown_links: insert_path = env folds a known root, else falls back to the buffer path",
+    (function()
+      vim.env.FT_TEST_ROOT = tmp
+      ft.setup({
+        adapter = "units-stub5",
+        features = {
+          markdown_links = { enabled = true, insert_path = "env", env_roots = { "FT_TEST_ROOT" } },
+        },
+      })
+      local m = ft.feature("markdown_links")
+      local inside = m.build_insert_links({ tmp .. "/a.lua" }, edited)[1]
+      local outside =
+        m.build_insert_links({ vim.fn.stdpath("data") .. "/zz-none/x.lua" }, edited)[1]
+      vim.env.FT_TEST_ROOT = nil
+      return inside == "[a.lua]($FT_TEST_ROOT/a.lua)" and outside:find("%$FT_TEST_ROOT") == nil
+    end)()
+  )
+
+  vim.cmd("only")
 end
 
 -- ── config.confirmations: boolean shorthand + per-action table ──────────────

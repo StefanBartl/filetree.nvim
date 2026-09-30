@@ -171,4 +171,14 @@ formatting. `ML` is mark-aware: with nodes marked it links all of them
 (one per line), same as `MM`; `MM` stays as an explicit marks-only keymap.
 
 - **Module:** `lua/filetree/features/paths/markdown_links/`
-- **Keymaps:** `ML`, `MR`, `MM`
+- **Keymaps:** `ML`, `MR`, `MM`, `MI`
+
+`MI` **inserts** instead of copying: marked nodes if any, else the current
+node, go as `[name](path)` into the window you came from (one link inline, several
+on lines of their own below the cursor line). The cursor lands in the first
+link — in its empty title, or in the path when the title is filled — in insert
+mode (`cursor = { enable, startinsert, path_cursor }`, see
+`lib.nvim.markdown.link_cursor`). The path is spelled by `insert_path`:
+`"buffer"` (default; relative to the *target* buffer, `./x` / `../x`), `"cwd"`,
+`"absolute"`, or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`, else `"buffer"`;
+`env_roots` adds variables).
