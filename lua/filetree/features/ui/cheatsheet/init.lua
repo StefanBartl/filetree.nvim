@@ -27,6 +27,7 @@
 
 local map = require("filetree.util.map")
 local kit = require("ui.kit")
+local kit_presets = require("ui.kit.presets")
 local bind = require("filetree.util.bind")
 local key_conflicts = require("filetree.util.key_conflicts")
 
@@ -44,7 +45,34 @@ local _cfg = {
 ---@type FiletreeSchema
 M.SCHEMA = {
   keymap = "keymap",
+  style = "string",
 }
+
+---Maps this ecosystem's shared chip vocabulary (`ui.kit.presets`) onto the
+---general `ui.kit.theme` preset names that actually carry a border/highlight
+---definition -- "chip" (flat, square-cornered) maps to "solid" (Neovim's
+---square-cornered `single` border style), matching `ui.kit.presets`' own
+---aliases (`rect`/`square`/`block` -> `"chip"`).
+---@type table<string, string>
+local CHIP_TO_THEME = {
+  classic = "minimal",
+  chip = "solid",
+  rounded_chip = "rounded",
+}
+
+---@internal
+---Resolve `_cfg.style` to a `ui.kit.theme` preset name, or nil (no override,
+---so a globally configured `ui.kit.theme.setup({default=...})` still wins).
+---One of this ecosystem's three shared chip names maps to its underlying
+---theme preset; anything else (a built-in `ui.kit.theme` preset this module
+---does not know by a special name, e.g. `"double"`/`"ascii"`/`"hacker"`/
+---`"menu"`, or a caller's own custom-registered one) passes through as-is.
+---@return string?
+local function resolve_theme()
+  if not _cfg.style then return nil end
+  local canonical = kit_presets.normalize(_cfg.style, "filetree.cheatsheet")
+  return CHIP_TO_THEME[canonical] or canonical
+end
 
 ---@type Ui.Kit.Surface|nil
 local _surf = nil
@@ -377,6 +405,30 @@ local function render(height)
   return lines
 end
 
+---@type integer  # Namespace for the active-tab highlight below.
+local _ns = vim.api.nvim_create_namespace("filetree_cheatsheet")
+
+---@internal
+---Highlight the active tab's `[N title]` bracket on the tab strip (line 1)
+---with `ui.kit.theme`'s "selection" role -- `"KitSelection"`, the same fixed
+---global group `ui.kit`'s other surfaces paint a currently-selected row
+---with. Already materialized for whatever theme this surface resolved to:
+---`kit.viewer()` -> `surface.open()` -> `theme.apply()` runs before this is
+---ever called, for every code path that opens or repaints the float.
+---@param bufnr integer
+local function paint_active_tab(bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then return end
+  vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, 1)
+  local line1 = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
+  local s, e = line1:find("%[%d+ [^%]]*%]")
+  if s then
+    pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, 0, s - 1, {
+      end_col = e,
+      hl_group = "KitSelection",
+    })
+  end
+end
+
 ---@internal
 ---@param delta integer
 ---@param height integer
@@ -384,6 +436,7 @@ local function turn(delta, height)
   if not _surf or not _surf:is_valid() then return end
   _page = (_page - 1 + delta) % #_pages + 1
   _surf:set_lines(render(height))
+  paint_active_tab(_surf.bufnr)
   vim.api.nvim_win_set_cursor(_surf.winid, { 1, 0 })
 end
 
@@ -414,11 +467,13 @@ function M.show()
     filetype = "filetree_cheatsheet",
     width = math.min(content_w + 2, max_w),
     height = math.min(#lines, max_h),
+    theme = resolve_theme(),
   })
   if not _surf then return end
   _surf:on_close(function()
     _surf = nil
   end)
+  paint_active_tab(_surf.bufnr)
 
   local opts = { buffer = _surf.bufnr, nowait = true, silent = true }
   map("n", "<Tab>", function()
