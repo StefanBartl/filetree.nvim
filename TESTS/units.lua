@@ -1510,6 +1510,101 @@ do
   )
 end
 
+-- ── copy_move: a move blocked by a sharing lock is NOT silent ───────────────
+-- Regression for a user report: cutting (x) a file whose containing folder
+-- was open elsewhere (Explorer, an indexer, an AV scan) and pasting (p) into
+-- another directory appeared to do nothing at all -- do_move() discarded
+-- mutate.move's error entirely, so a blocked move and a stale event loop
+-- looked identical, and the final "Pasted 0/1 item(s)" summary never even
+-- mentions a failure count.
+do
+  local tmp = (TMP_ROOT .. "/units-copymove-lockfail"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/dest", "p")
+  vim.fn.writefile({ "locked" }, tmp .. "/locked.txt")
+
+  local cur_node = { path = tmp .. "/locked.txt", type = "file" }
+  local dest_node = { path = tmp .. "/dest", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-copymove-lockfail",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-copymove-lockfail",
+    features = { copy_move = { enabled = true, confirm = false, use_safety = false } },
+  })
+  local copy_move = ft.feature("copy_move")
+
+  -- Fake the actual libuv rename call, not filetree.util.mutate itself --
+  -- exercising the real retry/backoff path `mutate.move` wraps it in, the
+  -- same way the EXDEV hardlink-fallback test above fakes `mutate.hardlink`
+  -- rather than a higher layer.
+  local fsops = require("lib.nvim.cross.fs.mutate")
+  local orig_rename = fsops.rename_file
+  ---@diagnostic disable-next-line: duplicate-set-field
+  fsops.rename_file = function(_, _)
+    return false, "EPERM: operation not permitted, rename 'fake' -> 'fake'"
+  end
+
+  local captured = {}
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(m)
+    captured[#captured + 1] = tostring(m)
+  end
+
+  copy_move.stage_cut()
+  stub.get_current_node = function()
+    return dest_node
+  end -- cursor now on the destination dir
+  copy_move.paste()
+  vim.wait(2000, function()
+    return #captured >= 2 -- the stage-cut notice, plus at least the failure/summary
+  end, 20)
+
+  vim.notify = orig_notify
+  fsops.rename_file = orig_rename
+  package.loaded["filetree.features.fileops.copy_move"] = nil
+
+  check(
+    "copy_move lockfail: the source is untouched (the move genuinely never landed)",
+    vim.fn.filereadable(tmp .. "/locked.txt") == 1
+      and vim.fn.filereadable(tmp .. "/dest/locked.txt") == 0
+  )
+  local all = table.concat(captured, " | ")
+  local lower = all:lower()
+  check(
+    "copy_move lockfail: a failure notification names the failed item",
+    lower:find("failed", 1, true) ~= nil and lower:find("locked.txt", 1, true) ~= nil,
+    all
+  )
+  check(
+    "copy_move lockfail: the underlying lock reason is surfaced, not swallowed",
+    lower:find("eperm", 1, true) ~= nil,
+    all
+  )
+end
+
 -- ── copy_move: reference engine -- cut updates refs, copy leaves them ───────
 do
   local tmp = (TMP_ROOT .. "/units-copymove-refs"):gsub("\\", "/")
