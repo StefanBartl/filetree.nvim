@@ -206,6 +206,29 @@ that lagged the features). `<Tab>` / `<S-Tab>` (or `1`..`4`) turn the pages:
 | 3 `commands` | the `:Filetree` sub-commands |
 | 4 `conflicts` | only when two actions claim one key: which one is live, free alternatives; `<CR>` moves one (`:Filetree keys`) |
 
+**Design presets (`style`).** The float's border and highlighting come from
+`ui.nvim`'s own `ui.kit.theme` preset system (the same one behind
+`sessions.nvim`'s and `casedesk.nvim`'s chips) — set
+`features.cheatsheet.style` to one of this ecosystem's three shared names:
+
+| `style` | Look |
+|---------|------|
+| `"classic"` | borderless, plain text |
+| `"chip"` | flat, square-cornered border |
+| `"rounded_chip"` (or leave `style` unset) | rounded border — today's default look |
+
+Any other `ui.kit.theme` preset name also works as-is — the built-ins are
+`"solid"`, `"double"`, `"ascii"`, `"hacker"`, `"menu"` (see `ui.nvim`'s own
+docs), or one you registered yourself via `ui.kit.theme.setup({presets =
+{...}})`. The active page's tab in the tab strip is always highlighted with
+the resolved theme's "selection" colour, regardless of `style`.
+
+```lua
+require("filetree").setup({
+  features = { cheatsheet = { style = "chip" } },
+})
+```
+
 - **Module:** `lua/filetree/features/ui/cheatsheet/`
 
 ## Context Menu
