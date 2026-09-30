@@ -45,6 +45,14 @@ a node (see [Backends](BACKENDS.md#line-resolved-decorations)): it shows on
 neo-tree and nvim-tree, and is absent on netrw, oil and mini.files. The
 staging and the paste itself work on all five either way.
 
+**A cut item that cannot actually be moved is reported, not silently
+dropped.** A Windows sharing lock (a file-explorer window, a search indexer
+or an AV scan still holding the item open) can outlast the automatic
+retry — when it does, the paste reports exactly which item failed and why
+(`Failed: <src> → <dst> (<reason>)`), instead of just showing a bare
+`Pasted 0/1 item(s)` with no indication that anything went wrong. A failed
+cut item stays staged so you can resolve the lock and paste it again.
+
 **Copying a symlink copies the link, not its target.** A staged symlink —
 file or directory — pastes as a new symlink pointing at the same target,
 instead of being silently dereferenced into an independent copy of whatever

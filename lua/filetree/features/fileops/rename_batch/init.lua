@@ -128,9 +128,9 @@ local function run_plan(plan, on_done)
     local moves = {}
 
     for _, op in ipairs(plan) do
-      local ok = mutate.move(op.src, op.dst)
+      local ok, err = mutate.move(op.src, op.dst)
       if not ok then
-        notify.error("Failed: " .. op.src .. " → " .. op.dst)
+        notify.error(string.format("Failed: %s → %s (%s)", op.src, op.dst, tostring(err)))
         errors = errors + 1
       else
         -- Repoint any open buffer(s) at the old path (or nested under it, for a
