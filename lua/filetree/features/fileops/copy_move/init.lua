@@ -310,13 +310,18 @@ end
 ---Move `src` to the already-resolved destination `dst`.
 ---@param src string
 ---@param dst string
----@return integer rc   0 on success, 1 on failure
----@return string? dst  the destination path actually used, when rc == 0
+---@return integer rc    0 on success, 1 on failure
+---@return string? dst   the destination path actually used, when rc == 0
+---@return string? err   the libuv-style failure reason, when rc == 1 (e.g. a
+---  Windows sharing lock that outlasted `mutate.move`'s own retries — a
+---  file-explorer window, an indexer or an AV scan still holding the source
+---  open — see the "silent no-op" bug this return value fixes below)
 local function do_move(src, dst)
   -- Windows sharing-lock retry and the cross-drive EXDEV fallback both live in
   -- util.mutate, shared with rename_batch/move/smart_rename.
-  if mutate.move(src, dst) then return 0, dst end
-  return 1
+  local ok, err = mutate.move(src, dst)
+  if ok then return 0, dst end
+  return 1, nil, err
 end
 
 ---@internal
@@ -431,8 +436,21 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
             copied_moves[e.path] = dst
           end
         else
-          local rc, moved_dst = do_move(e.path, dst)
+          local rc, moved_dst, err = do_move(e.path, dst)
           if rc ~= 0 or not moved_dst then
+            -- Previously silent: `errors` was incremented with no notify at
+            -- all, so a move blocked by a Windows sharing lock (a file
+            -- explorer window, an indexer or an AV scan still holding the
+            -- source open) looked exactly like nothing had happened —
+            -- matching `move`/`smart_rename`'s own per-item failure notify.
+            notify.error(
+              string.format(
+                "Failed: %s → %s (%s)",
+                vim.fn.fnamemodify(e.path, ":~"),
+                vim.fn.fnamemodify(dst, ":~"),
+                tostring(err)
+              )
+            )
             errors = errors + 1
           else
             done = done + 1
