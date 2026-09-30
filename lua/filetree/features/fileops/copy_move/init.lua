@@ -23,6 +23,12 @@
 
 local notify = require("filetree.util.notify").create("[filetree.copy_move]")
 
+-- cwd-relative, forward-slash display form -- this repo's canonical way to
+-- show a path in a message (see move/init.lua's identical use for the same
+-- "Failed: src -> dst (reason)" shape). Named `ftpath`, not `path`: this file
+-- already uses `path` as a parameter name for "the path under test" in
+-- several local helpers below (is_symlink, etc.).
+local ftpath = require("filetree.util.path")
 local bufevents = require("filetree.util.bufevents")
 local tree_attach = require("filetree.util.tree_attach")
 local buffer = require("filetree.util.buffer")
@@ -346,8 +352,8 @@ local function notify_transfer_failure(src, dst, err)
   notify.error(
     string.format(
       "Failed: %s → %s (%s)",
-      vim.fn.fnamemodify(src, ":~"),
-      vim.fn.fnamemodify(dst, ":~"),
+      ftpath.relative(src),
+      ftpath.relative(dst),
       tostring(err)
     )
   )
