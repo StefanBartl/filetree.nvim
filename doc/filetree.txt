@@ -1941,7 +1941,12 @@ doc directly from the tree, no manual path-to-link formatting. `ML` is
 mark-aware: with nodes marked it links all of them (one per line), same as
 `MM`; `MM` stays as an explicit marks-only keymap.
 
-Keymaps: ML MR MM
+`MI` inserts instead of copying: the marked nodes (else the current one) go
+into the window you came from, the cursor lands in the first link (empty
+title, else path) in insert mode. `insert_path` = "buffer" (default) |
+"cwd" | "absolute" | "env" spells the path; `env_roots`, `cursor` tune it.
+
+Keymaps: ML MR MM MI
 
 Module: lua/filetree/features/paths/markdown_links/
 

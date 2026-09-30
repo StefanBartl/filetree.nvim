@@ -66,6 +66,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `ML` | markdown_links | `keymap` | Copy `[name](path)` markdown link for the current node (or all marked) |
 | `MR` | markdown_links | `keymap_recursive` | Copy markdown links recursively |
 | `MM` | markdown_links | `keymap_from_marked` | Copy markdown links from all marked nodes |
+| `MI` | markdown_links | `keymap_insert` | Insert markdown link(s) (marked nodes, else current) into the window you came from; cursor goes into the first link, insert mode |
 | `a` | smart_create | `keymap` | Smart create file or directory |
 | `/` | filter | `keymap` | Enter tree filter mode |
 | `<C-c>` | filter | `keymap_clear` | Clear an applied filter directly |

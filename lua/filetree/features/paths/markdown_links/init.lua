@@ -9,10 +9,20 @@
 ---   ML   Markdown link for the current node
 ---   MR   Markdown links for every file under the current node, recursively
 ---   MM   Markdown links for all marked nodes
+---   MI   INSERT links (marked nodes if any, else the current one) into the
+---        window you came from, instead of the clipboard, and put the cursor
+---        into the first link -- its empty title, else its path -- in insert
+---        mode (lib.nvim.markdown.link_cursor)
+---
+--- The link path of `MI` is spelled by `insert_path`: `"buffer"` (default,
+--- relative to the TARGET buffer's directory, `./x` / `../x`), `"cwd"`,
+--- `"absolute"`, or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`, falling back
+--- to `"buffer"` for a file under no known root).
 
 local notify = require("filetree.util.notify").create("[filetree.markdown_links]")
 
 local fs = require("filetree.util.fs")
+local path_util = require("filetree.util.path")
 local ignore = require("filetree.util.ignore")
 local bind = require("filetree.util.bind")
 local M = {}
@@ -23,6 +33,10 @@ local _cfg = {
   keymap = "ML",
   keymap_recursive = "MR",
   keymap_from_marked = "MM",
+  keymap_insert = "MI",
+  insert_path = "buffer",
+  env_roots = { "REPOS_DIR" },
+  cursor = {},
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -33,6 +47,10 @@ M.SCHEMA = {
   keymap = "keymap",
   keymap_recursive = "keymap",
   keymap_from_marked = "keymap",
+  keymap_insert = "keymap",
+  insert_path = { "string", enum = { "buffer", "cwd", "absolute", "env" } },
+  env_roots = { "table", of = "string" },
+  cursor = "table",
 }
 
 ---@type FiletreeAdapter?
@@ -107,6 +125,86 @@ function M.link_recursive()
   copy_to_reg(lines)
 end
 
+---The link target for `path` as written into the buffer `buf`, per `insert_path`.
+---@param path string
+---@param buf integer  The buffer the link goes into.
+---@return string
+local function insert_target(path, buf)
+  local mode = _cfg.insert_path
+  if mode == "absolute" then return path_util.slashify(path) end
+
+  if mode == "env" then
+    local rooted, name = path_util.env_rooted(
+      path,
+      _cfg.env_roots,
+      { { name = "NVIM_CONFIG_DIR", root = vim.fn.stdpath("config") } }
+    )
+    if name then return rooted end
+  end
+
+  if mode == "cwd" then return path_util.slashify(vim.fn.fnamemodify(path, ":.")) end
+
+  -- "buffer" (and the "env" fallback): relative to where the link will live.
+  local name = vim.api.nvim_buf_get_name(buf)
+  if name == "" then return path_util.slashify(vim.fn.fnamemodify(path, ":.")) end
+  return path_util.dot_relative(path, vim.fn.fnamemodify(name, ":p:h"))
+end
+
+---The markdown links `paths` would produce for `buf` (one `[name](target)` each).
+---@param paths string[]
+---@param buf integer
+---@return string[]
+local function build_insert_links(paths, buf)
+  local links = {}
+  for _, path in ipairs(paths) do
+    links[#links + 1] =
+      string.format("[%s](%s)", vim.fn.fnamemodify(path, ":t"), insert_target(path, buf))
+  end
+  return links
+end
+M.build_insert_links = build_insert_links
+
+---Insert markdown links into the window the tree was opened from: one per
+---marked node when any are marked, else one for the current node. The cursor
+---ends up in the first link (empty title, else path) in insert mode, per
+---`cursor`/lib.nvim.markdown.link_cursor. Nothing is copied.
+function M.insert_current()
+  local paths ---@type string[]
+  local ok, marks = require("filetree.features").load("marks")
+  if ok and marks and marks.count() > 0 then
+    paths = marks.get_marked()
+  else
+    local node = current_node()
+    if not node then return end
+    paths = { node.path }
+  end
+
+  local fu_ok, find_usable = pcall(require, "lib.nvim.window.find_usable")
+  local lc_ok, link_cursor = pcall(require, "lib.nvim.markdown.link_cursor")
+  if not (fu_ok and lc_ok) or type(link_cursor.insert_links) ~= "function" then
+    notify.warn("Inserting links needs a newer lib.nvim (markdown.link_cursor.insert_links)")
+    return
+  end
+
+  local win = find_usable.previous_window()
+  if not win then
+    notify.warn("No editor window to insert into")
+    return
+  end
+  local buf = vim.api.nvim_win_get_buf(win)
+  if vim.bo[buf].buftype ~= "" or not vim.bo[buf].modifiable then
+    notify.warn("The window you came from is not an editable file buffer")
+    return
+  end
+
+  local links = build_insert_links(paths, buf)
+  if link_cursor.insert_links(buf, win, links, _cfg.cursor) then
+    notify.info(string.format("Inserted %d markdown link(s)", #links))
+  else
+    notify.warn("Could not insert the link(s)")
+  end
+end
+
 ---Markdown links for all marked nodes.
 function M.link_from_marked()
   local ok, marks = require("filetree.features").load("marks")
@@ -142,6 +240,12 @@ function M.setup(config, adapter)
       field = "keymap_recursive",
       rhs = M.link_recursive,
       desc = "markdown links recursively",
+    },
+    {
+      name = "link_insert",
+      field = "keymap_insert",
+      rhs = M.insert_current,
+      desc = "insert markdown link(s) into the editor window",
     },
     {
       name = "link_from_marked",

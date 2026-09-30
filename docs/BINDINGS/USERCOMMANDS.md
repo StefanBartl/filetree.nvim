@@ -204,6 +204,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree mdlink` | Markdown link for current node |
 | `:Filetree mdlink recursive` | Markdown links for every file under current node |
 | `:Filetree mdlink marked` | Markdown links for all marked nodes |
+| `:Filetree mdlink insert` | Insert markdown link(s) (marked nodes, else current) into the editor window instead of the clipboard |
 
 ### Misc
 | Command | Action |

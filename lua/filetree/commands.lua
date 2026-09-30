@@ -520,6 +520,10 @@ local TREE = {
       local f = ft("markdown_links")
       if f then f.link_from_marked() end
     end,
+    insert = function(_)
+      local f = ft("markdown_links")
+      if f then f.insert_current() end
+    end,
   },
 
   -- ── hooks_api ─────────────────────────────────────────────────────────────

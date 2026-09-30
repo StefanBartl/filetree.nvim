@@ -273,6 +273,12 @@ return {
       feature = "markdown_links",
       scope = "tree",
     },
+    {
+      lhs = "MI",
+      desc = "Insert markdown link(s) into the editor window",
+      feature = "markdown_links",
+      scope = "tree",
+    },
   },
   git = {},
   org = {
