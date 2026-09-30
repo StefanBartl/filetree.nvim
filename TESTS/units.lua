@@ -1605,6 +1605,93 @@ do
   )
 end
 
+-- ── copy_move: a copy blocked by a sharing lock is NOT silent either ────────
+-- do_copy() had the identical gap do_move() just got fixed for: a copy
+-- (c+p) that fails partway through (plain file, or the recursive directory
+-- walk) discarded fsops.copy_file's error just the same.
+do
+  local tmp = (TMP_ROOT .. "/units-copymove-copylockfail"):gsub("\\", "/")
+  vim.fn.delete(tmp, "rf")
+  vim.fn.mkdir(tmp .. "/dest", "p")
+  vim.fn.writefile({ "locked" }, tmp .. "/locked.txt")
+
+  local cur_node = { path = tmp .. "/locked.txt", type = "file" }
+  local dest_node = { path = tmp .. "/dest", type = "directory" }
+  local stub = setmetatable({
+    name = "units-stub-copymove-copylockfail",
+    is_available = function()
+      return true
+    end,
+    get_current_node = function()
+      return cur_node
+    end,
+    get_winid = function()
+      return nil
+    end,
+    refresh = function()
+      return true
+    end,
+  }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({
+    adapter = "units-stub-copymove-copylockfail",
+    features = { copy_move = { enabled = true, confirm = false, use_safety = false } },
+  })
+  local copy_move = ft.feature("copy_move")
+
+  local fsops = require("lib.nvim.cross.fs.mutate")
+  local orig_copy_file = fsops.copy_file
+  ---@diagnostic disable-next-line: duplicate-set-field
+  fsops.copy_file = function(_, _)
+    return false, "EBUSY: resource busy or locked: fake"
+  end
+
+  local captured = {}
+  local orig_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(m)
+    captured[#captured + 1] = tostring(m)
+  end
+
+  copy_move.stage_copy()
+  stub.get_current_node = function()
+    return dest_node
+  end
+  copy_move.paste()
+  vim.wait(2000, function()
+    return #captured >= 2
+  end, 20)
+
+  vim.notify = orig_notify
+  fsops.copy_file = orig_copy_file
+  package.loaded["filetree.features.fileops.copy_move"] = nil
+
+  check(
+    "copy_move copy-lockfail: no partial file was left at the destination",
+    vim.fn.filereadable(tmp .. "/dest/locked.txt") == 0
+  )
+  local all = table.concat(captured, " | ")
+  local lower = all:lower()
+  check(
+    "copy_move copy-lockfail: a failure notification names the failed item",
+    lower:find("failed", 1, true) ~= nil and lower:find("locked.txt", 1, true) ~= nil,
+    all
+  )
+  check(
+    "copy_move copy-lockfail: the underlying lock reason is surfaced, not swallowed",
+    lower:find("ebusy", 1, true) ~= nil,
+    all
+  )
+end
+
 -- ── copy_move: reference engine -- cut updates refs, copy leaves them ───────
 do
   local tmp = (TMP_ROOT .. "/units-copymove-refs"):gsub("\\", "/")
