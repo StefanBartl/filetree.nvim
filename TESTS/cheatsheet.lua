@@ -164,6 +164,98 @@ check("space leader shows as <leader>", body():find("<leader>sp%s+Space leader k
 check("an inner space shows as <Space>", body():find("x<Space>x%s+Inner space key") ~= nil, body())
 cheatsheet.close()
 
+-- ── Design presets: `style` maps onto a ui.kit.theme, active tab highlighted ─
+do
+  ---@return string|(string|table)[]
+  local function current_win_border()
+    local win = vim.api.nvim_get_current_win()
+    return vim.api.nvim_win_get_config(win).border or {}
+  end
+
+  ---@param border string|(string|table)[]
+  ---@param glyph string
+  ---@return boolean
+  local function has_glyph(border, glyph)
+    if type(border) ~= "table" then return false end
+    for _, cell in ipairs(border) do
+      local text = type(cell) == "table" and cell[1] or cell
+      if text == glyph then return true end
+    end
+    return false
+  end
+
+  ---@param border string|(string|table)[]
+  ---@return boolean  # "none" outright, or every cell an empty string, or an empty array
+  local function is_borderless(border)
+    if type(border) == "string" then return border == "none" end
+    for _, cell in ipairs(border) do
+      local text = type(cell) == "table" and cell[1] or cell
+      if text ~= "" then return false end
+    end
+    return true
+  end
+
+  -- No `style` configured at all -- run FIRST, before any test below ever
+  -- sets one: `M.setup()` merges onto the module's persistent `_cfg` (a
+  -- config a caller does not repeat stays as it was), so this is the only
+  -- point in this file where `_cfg.style` is genuinely still unset.
+  cheatsheet.setup({ enabled = true, keymap = "?" }, {})
+  cheatsheet.show()
+  check(
+    "no style configured: the cheatsheet still opens",
+    vim.api.nvim_win_is_valid(vim.api.nvim_get_current_win())
+  )
+  local ns = vim.api.nvim_create_namespace("filetree_cheatsheet")
+  local marks =
+    vim.api.nvim_buf_get_extmarks(vim.api.nvim_get_current_buf(), ns, 0, -1, { details = true })
+  check(
+    "the active tab is highlighted via one extmark on the tab strip",
+    #marks == 1 and marks[1][4].hl_group == "KitSelection",
+    vim.inspect(marks)
+  )
+  cheatsheet.close()
+
+  cheatsheet.setup({ enabled = true, keymap = "?", style = "classic" }, {})
+  cheatsheet.show()
+  check(
+    "style=classic: the window has no border at all",
+    is_borderless(current_win_border()),
+    vim.inspect(current_win_border())
+  )
+  cheatsheet.close()
+
+  cheatsheet.setup({ enabled = true, keymap = "?", style = "rounded_chip" }, {})
+  cheatsheet.show()
+  check(
+    "style=rounded_chip: a rounded corner glyph is present",
+    has_glyph(current_win_border(), "╭"),
+    vim.inspect(current_win_border())
+  )
+  cheatsheet.close()
+
+  cheatsheet.setup({ enabled = true, keymap = "?", style = "chip" }, {})
+  cheatsheet.show()
+  local chip_border = current_win_border()
+  check(
+    "style=chip: a square corner glyph is present, not a rounded one",
+    has_glyph(chip_border, "┌") and not has_glyph(chip_border, "╭"),
+    vim.inspect(chip_border)
+  )
+  cheatsheet.close()
+
+  -- An old ui.kit.presets alias still works (normalize()'s own job), and an
+  -- unrecognized name is passed straight through to ui.kit.theme rather than
+  -- rejected -- covers "any other ui.kit.theme preset also works".
+  cheatsheet.setup({ enabled = true, keymap = "?", style = "double" }, {})
+  cheatsheet.show()
+  check(
+    "style=double (a raw ui.kit.theme preset, not a chip alias): double-line glyph present",
+    has_glyph(current_win_border(), "═"),
+    vim.inspect(current_win_border())
+  )
+  cheatsheet.close()
+end
+
 -- -- pickers bridge: soft dependency, opt-out on both sides ---------------------
 
 local cfg_mod = require("filetree.config")

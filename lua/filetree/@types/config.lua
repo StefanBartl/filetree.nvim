@@ -761,6 +761,7 @@
 ---@class FiletreeCheatsheetConfig
 ---@field enabled boolean
 ---@field keymap  string?  Key inside tree (default "?"). No-op on the neotree adapter (native `?` already covers it via attach.lua).
+---@field style?  string  Visual preset for the floating window, passed through to `ui.kit`'s theme system. The three names shared across this ecosystem (sessions.nvim, casedesk.nvim, ui.context, ...): `"classic"` (borderless), `"chip"` (flat, square-cornered), `"rounded_chip"` (bordered capsule) -- see `ui.kit.presets`. Any other `ui.kit.theme` preset name (built-in: `"solid"`, `"double"`, `"ascii"`, `"hacker"`, `"menu"`; or one registered via `ui.kit.theme.setup({presets=...})`) also works, passed straight through. Unset (default) applies no theme override at all, so a globally configured `ui.kit.theme.setup({default=...})` still wins.
 
 -- ── tree_traverse ─────────────────────────────────────────────────────────────
 
