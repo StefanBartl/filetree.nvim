@@ -22,6 +22,10 @@
 
 local notify = require("filetree.util.notify").create("[filetree.rename_batch]")
 
+-- cwd-relative, forward-slash display form -- this repo's canonical way to
+-- show a path in a message (see move/init.lua's identical "Failed: src ->
+-- dst (reason)" shape).
+local path = require("filetree.util.path")
 local au = require("filetree.util.autocmd")
 local buffer = require("filetree.util.buffer")
 local ui_confirm = require("filetree.util.confirm")
@@ -130,7 +134,14 @@ local function run_plan(plan, on_done)
     for _, op in ipairs(plan) do
       local ok, err = mutate.move(op.src, op.dst)
       if not ok then
-        notify.error(string.format("Failed: %s → %s (%s)", op.src, op.dst, tostring(err)))
+        notify.error(
+          string.format(
+            "Failed: %s → %s (%s)",
+            path.relative(op.src),
+            path.relative(op.dst),
+            tostring(err)
+          )
+        )
         errors = errors + 1
       else
         -- Repoint any open buffer(s) at the old path (or nested under it, for a
