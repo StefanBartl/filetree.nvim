@@ -262,11 +262,11 @@ end
 ---@param src string
 ---@param dst string
 ---@return boolean ok
+---@return string? err  libuv-style failure reason, when not ok
 local function copy_symlink(src, dst)
   local target = (vim.uv or vim.loop).fs_readlink(src)
-  if not target then return false end
-  local ok = fsops.symlink(target, dst, vim.fn.isdirectory(src) == 1)
-  return ok == true
+  if not target then return false, "could not read the symlink's own target" end
+  return fsops.symlink(target, dst, vim.fn.isdirectory(src) == 1)
 end
 
 ---@internal
@@ -274,22 +274,25 @@ end
 ---works identically whether &shell is cmd.exe, PowerShell, or a POSIX shell).
 ---@param src string
 ---@param dst string
----@return integer  0 on success, 1 on any failure
+---@return integer rc   0 on success, 1 on any failure
+---@return string? err  libuv-style failure reason of whichever entry failed first
 local function copy_dir(src, dst)
-  if vim.fn.mkdir(dst, "p") == 0 then return 1 end
+  if vim.fn.mkdir(dst, "p") == 0 then return 1, "could not create directory: " .. dst end
   for _, name in ipairs(vim.fn.readdir(src)) do
     local s = src .. "/" .. name
     local d = dst .. "/" .. name
     if is_symlink(s) then
-      if not copy_symlink(s, d) then return 1 end
+      local ok, err = copy_symlink(s, d)
+      if not ok then return 1, err end
     elseif vim.fn.isdirectory(s) == 1 then
-      if copy_dir(s, d) ~= 0 then return 1 end
+      local rc, err = copy_dir(s, d)
+      if rc ~= 0 then return rc, err end
     else
-      local ok = fsops.copy_file(s, d)
-      if not ok then return 1 end
+      local ok, err = fsops.copy_file(s, d)
+      if not ok then return 1, err end
     end
   end
-  return 0
+  return 0, nil
 end
 
 ---@internal
@@ -298,12 +301,18 @@ end
 ---existing target before calling this.
 ---@param src string
 ---@param dst string
----@return integer rc  0 on success, 1 on failure
+---@return integer rc   0 on success, 1 on failure
+---@return string? err  libuv-style failure reason, when rc == 1 -- e.g. the
+---  same kind of Windows sharing lock `do_move` now reports (see that
+---  function's own doc comment); a copy can hit it exactly the same way.
 local function do_copy(src, dst)
-  if is_symlink(src) then return copy_symlink(src, dst) and 0 or 1 end
+  if is_symlink(src) then
+    local ok, err = copy_symlink(src, dst)
+    return ok and 0 or 1, err
+  end
   if vim.fn.isdirectory(src) == 1 then return copy_dir(src, dst) end
-  local ok = fsops.copy_file(src, dst)
-  return ok and 0 or 1
+  local ok, err = fsops.copy_file(src, dst)
+  return ok and 0 or 1, err
 end
 
 ---@internal
@@ -322,6 +331,26 @@ local function do_move(src, dst)
   local ok, err = mutate.move(src, dst)
   if ok then return 0, dst end
   return 1, nil, err
+end
+
+---@internal
+---Previously silent: a failed copy or move only incremented `errors`, with
+---no notify at all -- a transfer blocked by a Windows sharing lock (a file
+---explorer window, an indexer or an AV scan still holding the source open)
+---looked exactly like nothing had happened. Matches `move`/`smart_rename`'s
+---own per-item failure notify.
+---@param src string
+---@param dst string
+---@param err string?
+local function notify_transfer_failure(src, dst, err)
+  notify.error(
+    string.format(
+      "Failed: %s → %s (%s)",
+      vim.fn.fnamemodify(src, ":~"),
+      vim.fn.fnamemodify(dst, ":~"),
+      tostring(err)
+    )
+  )
 end
 
 ---@internal
@@ -428,8 +457,9 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
 
       if dst then
         if e.op == "copy" then
-          local rc = do_copy(e.path, dst)
+          local rc, err = do_copy(e.path, dst)
           if rc ~= 0 then
+            notify_transfer_failure(e.path, dst, err)
             errors = errors + 1
           else
             done = done + 1
@@ -438,19 +468,7 @@ local function do_paste_impl(dst_dir, conflict_mode, overrides)
         else
           local rc, moved_dst, err = do_move(e.path, dst)
           if rc ~= 0 or not moved_dst then
-            -- Previously silent: `errors` was incremented with no notify at
-            -- all, so a move blocked by a Windows sharing lock (a file
-            -- explorer window, an indexer or an AV scan still holding the
-            -- source open) looked exactly like nothing had happened —
-            -- matching `move`/`smart_rename`'s own per-item failure notify.
-            notify.error(
-              string.format(
-                "Failed: %s → %s (%s)",
-                vim.fn.fnamemodify(e.path, ":~"),
-                vim.fn.fnamemodify(dst, ":~"),
-                tostring(err)
-              )
-            )
+            notify_transfer_failure(e.path, dst, err)
             errors = errors + 1
           else
             done = done + 1
