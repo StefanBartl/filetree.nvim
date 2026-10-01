@@ -518,6 +518,17 @@ To enable these, uncomment the corresponding blocks in `minimal_neotree.lua`.
 | M.4 | Cursor on a file, `<leader>fm` | The system file manager opens at the file's directory (Explorer/Finder/Nautilus) |
 | M.5 | Cursor on a directory, `<leader>fm` | The file manager opens that directory |
 
+**file_clipboard** (keymap `gy` in the tree; `:Filetree clipfiles`; context menu "Copy to system clipboard"):
+
+| # | Test | Expected |
+|---|------|----------|
+| M.4a | Mark three `.png` files with `m`, press `gy` | A notification "Copied 3 file(s) to the system clipboard", listing the names; the marks stay |
+| M.4b | Switch to a chat app (e.g. a browser chat or Teams) and press Ctrl+V | The three images appear as attachments |
+| M.4c | Paste into an Explorer/Finder folder | The three files are copied there (the originals stay) |
+| M.4d | Unmark everything, cursor on a directory, `gy`, paste into a file manager | The directory is copied with its content |
+| M.4e | Mark a file, delete it outside nvim, `gy` | Warning "1 path(s) no longer exist"; if nothing else is marked, "No existing file to copy" |
+| M.4f | A file name with umlauts, spaces and `&` | Pastes under exactly that name |
+
 **shell_run** (keymap `i` in the tree — neo-tree's own `i` is nooped via `adapter_keymaps`):
 
 | # | Test | Expected |

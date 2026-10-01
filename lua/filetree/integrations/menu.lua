@@ -213,7 +213,8 @@ function M.items()
       out,
       entry("copy_move", "stage_copy", "Copy", "c", ICON.copy),
       entry("copy_move", "stage_cut", "Cut", "x", ICON.cut),
-      entry("copy_move", "paste", "Paste", "p", ICON.paste)
+      entry("copy_move", "paste", "Paste", "p", ICON.paste),
+      entry("file_clipboard", "copy", "Copy to system clipboard", "gy", ICON.copy)
     )
   end
 

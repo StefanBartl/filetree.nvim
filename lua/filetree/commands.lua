@@ -466,6 +466,14 @@ local TREE = {
     end,
   },
 
+  -- ── file_clipboard ───────────────────────────────────────────────────────────
+  -- :Filetree clipfiles  → copy the marked nodes (else the current one) to the OS
+  --                        clipboard as files, ready for Ctrl+V in another app
+  clipfiles = function(_)
+    local f = ft("file_clipboard")
+    if f then f.copy() end
+  end,
+
   -- ── open_variants ─────────────────────────────────────────────────────────────
   openas = {
     vsplit = function(_)

@@ -9,8 +9,8 @@ it is documented, and the handful of facts that are easy to get wrong.
 
 | Surface | Detail page | Count |
 | --- | --- | --- |
-| Keymaps | [`BINDINGS/KEYMAPS.md`](BINDINGS/KEYMAPS.md) | 72 tree-buffer keys across 33 features |
-| User commands | [`BINDINGS/USERCOMMANDS.md`](BINDINGS/USERCOMMANDS.md) | one `:Filetree` composer, 22 sub-command groups |
+| Keymaps | [`BINDINGS/KEYMAPS.md`](BINDINGS/KEYMAPS.md) | 77 tree-buffer keys across 37 features |
+| User commands | [`BINDINGS/USERCOMMANDS.md`](BINDINGS/USERCOMMANDS.md) | one `:Filetree` composer, 26 sub-command groups |
 | Autocommands | [`BINDINGS/AUTOCMDS.md`](BINDINGS/AUTOCMDS.md) | one shared attach autocmd + 12 behavioural ones |
 
 **Machine-readable:** [`docs/BINDINGS.lua`](BINDINGS.lua) returns the same data

@@ -14,6 +14,7 @@ Everything CI runs, plus the manual pass it cannot.
 | [`create_from_template.lua`](create_from_template.lua) | unit: `create_from_template`'s template-first flow — `M.move` never crossing the `[custom]`/`[builtin]` boundary, header rows only for mixed sets, filename pre-filled from the picked template, and the reorderable picker's cursor kept off header rows (against a `ui.kit` picker double that owns a real results window) |
 | [`cheatsheet.lua`](cheatsheet.lua) | unit: the paged `?` cheatsheet, the `integrations.pickers` opt-out (filetree keys / other buffer keys / commands, `<Tab>` paging and wrap-around, `<leader>` display) and the pickers.nvim bridge (`util/pickers`, soft dependency) against stand-in `pickers.*` modules |
 | [`keys.lua`](keys.lua) | unit: keys claimed twice (`util/key_conflicts`) — the shipped defaults claim none with every keymap feature on; a forced clash is found, the live owner identified (incl. Ctrl keys, whose `lhsraw` Vim tags), recommended alternatives are free (prefix-safe, family-first), moving a claim rebinds open and later trees and yields the `setup()` fragment; the cheatsheet's conflicts page and its `<CR>` flow |
+| [`file_clipboard.lua`](file_clipboard.lua) | unit: `features/system/file_clipboard` — what each platform's clipboard tool is handed (argv / stdin / environment) for awkward names (space, `&`, `'`, `$`, `[ ]`, umlauts), the target choice (marks else the cursor node, marks left alone, stale paths skipped) and the messages, against a stubbed backend; plus an opt-in real Windows round trip (`FILETREE_TEST_REAL_CLIPBOARD=1`, overwrites the clipboard) |
 | [`who_locks.lua`](who_locks.lua) | unit: `features/infra/who_locks` — the `--json` report against a stubbed neo-tree `fs_watch` upvalue and a `lib.nvim.cross.fs.lock` double (watchers ok / unreachable / not loaded) |
 | [`gaps.lua`](gaps.lua) | unit: fs-heavy and lifecycle modules `units.lua`/`smoke.lua` had not reached yet — see "gaps.lua" below |
 | [`adapter_lines.lua`](adapter_lines.lua) | integration: the adapter's line→node mapping, against a **real neo-tree and a real nvim-tree** — the only suite that needs a tree plugin — plus two neo-tree-only regression pins: a background-tab redraw resolving the tree's own per-tab state (not whichever tab is current), and two simultaneously live per-tab trees each resolving and decorating their own tree without bleeding into the other's |
@@ -24,7 +25,7 @@ Everything CI runs, plus the manual pass it cannot.
 | [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
 
 All of them are headless and exit 0 on a pass. `.github/workflows/ci.yml`'s
-`test` job gates on the ten stub-based suites above `adapter_lines.lua` in
+`test` job gates on the stub-based suites above `adapter_lines.lua` in
 the table, plus `refs/run.lua`; it does not install neo-tree/nui/devicons, so
 the four real-neo-tree suites (`adapter_lines.lua`, `group_empty_dirs_collapse.lua`,
 `neotree_redraw_hook.lua`, `neotree_collapse_redraw_coalesce.lua`) always

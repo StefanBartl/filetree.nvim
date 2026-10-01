@@ -304,6 +304,12 @@ return {
       feature = "open_with",
       scope = "tree",
     },
+    {
+      lhs = "gy",
+      desc = "Copy file(s) to the system clipboard (paste with Ctrl+V elsewhere)",
+      feature = "file_clipboard",
+      scope = "tree",
+    },
     { lhs = "i", desc = "Run shell command in dir", feature = "shell_run", scope = "tree" },
     {
       lhs = "go",

@@ -351,6 +351,7 @@ do
     { "copy_move", "stage_copy" },
     { "copy_move", "stage_cut" },
     { "copy_move", "paste" },
+    { "file_clipboard", "copy" },
     { "trash", "delete_current" },
     { "open_variants", "open_vsplit" },
     { "open_variants", "open_split" },

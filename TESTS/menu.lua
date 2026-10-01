@@ -99,6 +99,7 @@ do
   features.rename_batch = (stub_action("rename_batch", { "open" }))
   -- create_from_template intentionally omitted -> its entry must not appear.
   features.copy_move = (stub_action("copy_move", { "stage_copy", "stage_cut", "paste" }))
+  features.file_clipboard = (stub_action("file_clipboard", { "copy" }))
   features.trash = (stub_action("trash", { "delete_current" }))
   features.open_variants = (
     stub_action("open_variants", { "open_vsplit", "open_split", "open_tabnew" })
@@ -117,6 +118,7 @@ do
 
   check("menu: create entry present (feature enabled)", has(list, "Create file / dir"))
   check("menu: trash entry present", has(list, "Trash"))
+  check("menu: system-clipboard entry present", has(list, "Copy to system clipboard"))
   check("menu: path_copy entry present", has(list, "Copy path…"))
   check("menu: node_info entry present", has(list, "Node info"))
   check("menu: Inspect entry present (not feature-gated)", has(list, "Inspect"))
@@ -146,6 +148,10 @@ do
   local menu2 = install_stub({ enable = true, clipboard = false, search = false }, features)
   local list2 = names(menu2.items())
   check("menu opt-out: clipboard=false hides the copy entry", not has(list2, "Copy"))
+  check(
+    "menu opt-out: clipboard=false hides the system-clipboard entry too",
+    not has(list2, "Copy to system clipboard")
+  )
   check("menu opt-out: search=false hides find_files", not has(list2, "Find files"))
   check("menu opt-out: unrelated groups (delete) stay", has(list2, "Trash"))
 
