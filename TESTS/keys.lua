@@ -197,6 +197,53 @@ check(
   kc.config_path("pdf_open", "keymap_open") == "keymap_open"
 )
 
+-- ── 1b. file_clipboard: the key and the command really reach the feature ─────
+-- Section 1 proves no key is claimed twice; it does not prove `gy` is bound to
+-- the feature, nor that `:Filetree clipfiles` calls it. The backend is stubbed,
+-- so nothing touches the real clipboard.
+do
+  local fcb = require("filetree.features.system.file_clipboard.backend")
+  local real_copy = fcb.copy
+  local sent
+  fcb.copy = function(paths, on_done)
+    sent = vim.deepcopy(paths)
+    on_done(true, nil, #paths)
+  end
+  local node_path = vim.fn.fnamemodify(this, ":p")
+  stub.get_current_node = function()
+    return { path = node_path }
+  end
+  local real_notify = vim.notify
+  vim.notify = function() end
+
+  local cb
+  for _, m in ipairs(vim.api.nvim_buf_get_keymap(tree, "n")) do
+    if kc.canon_live(m) == kc.canon("gy") then cb = m.callback end
+  end
+  check("file_clipboard: `gy` is bound on a tree buffer", cb ~= nil)
+  if cb then
+    sent = nil
+    cb()
+    check("file_clipboard: `gy` copies the node under the cursor", sent and sent[1] == node_path)
+  end
+
+  sent = nil
+  vim.cmd("Filetree clipfiles")
+  check("file_clipboard: `:Filetree clipfiles` copies the node", sent and sent[1] == node_path)
+
+  local cat_lhs
+  for _, entries in pairs(require("filetree.bindings.keymaps")) do
+    for _, e in ipairs(entries) do
+      if e.feature == "file_clipboard" then cat_lhs = e.lhs end
+    end
+  end
+  check("file_clipboard: the binding catalog lists `gy`", cat_lhs == "gy", tostring(cat_lhs))
+
+  vim.notify = real_notify
+  fcb.copy = real_copy
+  stub.get_current_node = nil
+end
+
 -- ── 2. A forced clash is found ────────────────────────────────────────────────
 
 -- The old defaults: both on <C-c>.

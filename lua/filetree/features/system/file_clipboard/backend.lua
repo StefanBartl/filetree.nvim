@@ -28,10 +28,19 @@ local M = {}
 ---A file name cannot contain a newline on Windows, so the split is exact.
 M.ENV_VAR = "FILETREE_CLIPBOARD_PATHS"
 
----The whole Windows script: no path appears in it. `Stop` makes a failing
----`Set-Clipboard` (clipboard locked by another process) a non-zero exit instead
----of a silent success.
-M.WINDOWS_SCRIPT = "$ErrorActionPreference = 'Stop'; Set-Clipboard -LiteralPath ($env:"
+---How long a spawned tool may take before it is killed and reported (ms). A
+---cold `powershell.exe` start can take seconds; a hung one (clipboard owner
+---not answering) must not leave `gy` silent forever.
+M.TIMEOUT_MS = 15000
+
+---The whole Windows script: no path appears in it. The first statement makes
+---PowerShell write stderr as UTF-8 -- a redirected `powershell.exe` otherwise
+---uses the OEM codepage, and umlauts in an error message would reach Neovim as
+---invalid UTF-8; `try` keeps a host without a console from breaking the script.
+---`Stop` makes a failing `Set-Clipboard` (clipboard locked by another process)
+---a non-zero exit instead of a silent success.
+M.WINDOWS_SCRIPT = "try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}; "
+  .. "$ErrorActionPreference = 'Stop'; Set-Clipboard -LiteralPath ($env:"
   .. M.ENV_VAR
   .. " -split [char]10)"
 
@@ -39,8 +48,9 @@ M.WINDOWS_SCRIPT = "$ErrorActionPreference = 'Stop'; Set-Clipboard -LiteralPath 
 ---@field argv           string[]
 ---@field stdin?         string                  Fed to the tool's stdin.
 ---@field env?           table<string, string>   Added to the inherited environment.
----@field capture_stderr boolean                 false for `xclip`, which keeps the selection alive in a forked child holding the pipe open.
+---@field capture_stderr boolean                 false for tools that fork a selection-owning daemon (`xclip`, `wl-copy`): the daemon inherits stderr and keeps the pipe open, so `vim.system` would not call back until the clipboard is taken over.
 ---@field tool           string                  For messages: what ran.
+---@field count          integer                 How many distinct paths the command carries.
 
 ---@class FiletreeFileClipboardProbe
 ---@field has     fun(exe: string): boolean   Is the executable on PATH?
@@ -57,8 +67,10 @@ local function real_probe()
 end
 
 ---Absolute, de-duplicated, in the order given; empty entries dropped. Windows
----gets backslashes (what its clipboard expects), everything else forward ones.
----A directory loses its trailing separator.
+---gets backslashes (what its clipboard expects); every other platform's paths
+---are left as they are -- a backslash is an ordinary file-name character there,
+---and rewriting it would put a different file on the clipboard. A directory
+---loses its trailing separator.
 ---@param paths string[]
 ---@param windows boolean
 ---@return string[]
@@ -67,9 +79,11 @@ function M.normalize(paths, windows)
   for _, p in ipairs(paths) do
     if type(p) == "string" and p ~= "" then
       local abs = vim.fn.fnamemodify(p, ":p")
-      abs = windows and abs:gsub("/", "\\") or abs:gsub("\\", "/")
+      if windows then abs = abs:gsub("/", "\\") end
       -- Keep a bare root ("C:\", "/") intact; strip the separator off the rest.
-      if #abs > 1 and not abs:match("^%a:[\\/]?$") then abs = abs:gsub("[\\/]+$", "") end
+      if #abs > 1 and not abs:match("^%a:[\\/]?$") then
+        abs = abs:gsub(windows and "[\\/]+$" or "/+$", "")
+      end
       local key = windows and abs:lower() or abs
       if not seen[key] then
         seen[key] = true
@@ -115,6 +129,7 @@ function M.build(plat, paths, probe)
       env = { [M.ENV_VAR] = table.concat(list, "\n") },
       capture_stderr = true,
       tool = "PowerShell Set-Clipboard",
+      count = #list,
     }
   end
 
@@ -137,64 +152,110 @@ function M.build(plat, paths, probe)
       "end run",
     }
     vim.list_extend(argv, list)
-    return { argv = argv, capture_stderr = true, tool = "osascript" }
+    return { argv = argv, capture_stderr = true, tool = "osascript", count = #list }
   end
 
   if plat == "linux" then
     probe = probe or real_probe()
     local body = uri_list(list)
-    if probe.wayland and probe.has("wl-copy") then
-      return {
-        argv = { "wl-copy", "--type", "text/uri-list" },
-        stdin = body,
-        capture_stderr = true,
-        tool = "wl-copy",
-      }
-    end
+    local wl_copy = {
+      argv = { "wl-copy", "--type", "text/uri-list" },
+      stdin = body,
+      -- wl-copy forks a daemon that owns the selection and inherits stderr.
+      capture_stderr = false,
+      tool = "wl-copy",
+      count = #list,
+    }
+    if probe.wayland and probe.has("wl-copy") then return wl_copy end
     if probe.has("xclip") then
       return {
         argv = { "xclip", "-selection", "clipboard", "-t", "text/uri-list" },
         stdin = body,
         capture_stderr = false,
         tool = "xclip",
+        count = #list,
       }
     end
-    if probe.has("wl-copy") then
-      return {
-        argv = { "wl-copy", "--type", "text/uri-list" },
-        stdin = body,
-        capture_stderr = true,
-        tool = "wl-copy",
-      }
-    end
+    if probe.has("wl-copy") then return wl_copy end
     return nil, "needs wl-copy (Wayland) or xclip (X11) on PATH"
   end
 
   return nil, "copying files to the clipboard is not supported on WSL"
 end
 
+---Windows PowerShell by absolute path under `%SystemRoot%`, or nil when it is
+---not there. Never a bare name and no `exepath()` fallback: with
+---`NoDefaultCurrentDirectoryInExePath` unset (the Windows default) the lookup
+---tries the CURRENT DIRECTORY first, so a cloned repo that ships its own
+---`powershell.exe` would run instead, with the user's rights.
+---@return string?
+function M.windows_powershell()
+  local root = vim.env.SystemRoot or vim.env.windir
+  if not root or root == "" then return nil end
+  local exe = root .. "\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+  return (vim.uv or vim.loop).fs_stat(exe) and exe or nil
+end
+
+---The part of a failing tool's stderr worth a notification: its first line,
+---capped. PowerShell prints a localized multi-line error record (message,
+---`At line:1 char:..`, the echoed script, CategoryInfo, ...); the full text
+---goes to the caller separately, for the debug log.
+---@param stderr string?
+---@return string first, string raw
+local function first_line(stderr)
+  local raw = vim.trim(stderr or "")
+  local first = raw:match("[^\r\n]+") or ""
+  if vim.fn.strchars(first) > 200 then first = vim.fn.strcharpart(first, 0, 200) .. "…" end
+  return first, raw
+end
+
 ---Run a built command. `on_done` is called on the main loop, never from a
----libuv callback.
+---libuv callback; `raw` is the tool's complete stderr, for a debug log.
 ---@param cmd FiletreeFileClipboardCmd
----@param on_done fun(ok: boolean, err: string?)
+---@param on_done fun(ok: boolean, err: string?, raw: string?)
 function M.run(cmd, on_done)
-  local ok, err = pcall(vim.system, cmd.argv, {
+  local argv = cmd.argv
+  if argv[1] == "powershell.exe" and platform.is_windows() then
+    local exe = M.windows_powershell()
+    if not exe then
+      vim.schedule(function()
+        on_done(
+          false,
+          ("%s could not be started: Windows PowerShell not found under %%SystemRoot%%"):format(
+            cmd.tool
+          )
+        )
+      end)
+      return
+    end
+    argv = vim.list_extend({ exe }, argv, 2)
+  end
+
+  local ok, err = pcall(vim.system, argv, {
     stdin = cmd.stdin,
     env = cmd.env,
     text = true,
     stdout = false,
     stderr = cmd.capture_stderr or false,
+    timeout = M.TIMEOUT_MS,
   }, function(res)
     vim.schedule(function()
-      if res.code == 0 then
+      -- libuv reports a death by signal as exit status 0 plus a term signal.
+      local signal = res.signal or 0
+      if res.code == 0 and signal == 0 then
         on_done(true, nil)
         return
       end
-      local detail = vim.trim(res.stderr or "")
-      on_done(
-        false,
-        ("%s exited with %d%s"):format(cmd.tool, res.code, detail ~= "" and (": " .. detail) or "")
-      )
+      local first, raw = first_line(res.stderr)
+      local how
+      if res.code == 124 then
+        how = ("timed out after %d s"):format(M.TIMEOUT_MS / 1000)
+      elseif signal ~= 0 then
+        how = ("was killed by signal %d"):format(signal)
+      else
+        how = ("exited with %d"):format(res.code)
+      end
+      on_done(false, ("%s %s%s"):format(cmd.tool, how, first ~= "" and (": " .. first) or ""), raw)
     end)
   end)
   -- A missing executable throws out of vim.system itself, before any callback.
@@ -207,19 +268,17 @@ end
 
 ---Put `paths` on the clipboard as a file list.
 ---@param paths string[]
----@param on_done fun(ok: boolean, err: string?, count: integer)  `count` is how many distinct paths went out.
+---@param on_done fun(ok: boolean, err: string?, count: integer, raw: string?)  `count` is how many distinct paths went out; `raw` the tool's full stderr on failure.
 function M.copy(paths, on_done)
-  local plat = platform.current()
-  local cmd, err = M.build(plat, paths)
+  local cmd, err = M.build(platform.current(), paths)
   if not cmd then
     vim.schedule(function()
       on_done(false, err, 0)
     end)
     return
   end
-  local count = #M.normalize(paths, plat == "windows")
-  M.run(cmd, function(ok, run_err)
-    on_done(ok, run_err, ok and count or 0)
+  M.run(cmd, function(ok, run_err, raw)
+    on_done(ok, run_err, ok and cmd.count or 0, raw)
   end)
 end
 
