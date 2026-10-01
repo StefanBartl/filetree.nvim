@@ -226,6 +226,17 @@ local function neotree()
   return ok and nt or nil
 end
 
+---@internal
+---Is neo-tree-tests-source.nvim installed? The plugin ships no module of its
+---own name, only the source itself (`neo-tree.sources.tests`) and a neotest
+---consumer -- so the source module is what gets probed. Requiring it pulls in
+---neo-tree's source manager and nothing of neotest, which a host may load
+---only right before the source first renders; never probe `neotest` here.
+---@return boolean
+local function has_tests_source()
+  return (pcall(require, "neo-tree.sources.tests"))
+end
+
 ---The sources to switch between: the config's override, else what neo-tree
 ---was set up with, else a fallback of the four built-ins plus whatever
 ---optional source modules are installed.
@@ -237,7 +248,7 @@ function M.sources()
   if type(configured) == "table" and #configured > 0 then return vim.deepcopy(configured) end
   local out = { "filesystem", "buffers", "git_status", "document_symbols" }
   if pcall(require, "neo-tree.sources.diagnostics") then out[#out + 1] = "diagnostics" end
-  if pcall(require, "neo-tree-tests-source") then out[#out + 1] = "tests" end
+  if has_tests_source() then out[#out + 1] = "tests" end
   if pcall(require, "netman") then out[#out + 1] = "netman.ui.neo-tree" end
   return out
 end
@@ -264,9 +275,7 @@ function M.loadable(source)
       return false, "neo-tree-diagnostics.nvim is not installed"
     end
   elseif source == "tests" then
-    if not pcall(require, "neo-tree-tests-source") then
-      return false, "neo-tree-tests-source.nvim is not installed"
-    end
+    if not has_tests_source() then return false, "neo-tree-tests-source.nvim is not installed" end
   elseif source:find("netman", 1, true) then
     if not pcall(require, "netman") then return false, "netman.nvim is not installed" end
   end
