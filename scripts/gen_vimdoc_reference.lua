@@ -96,6 +96,10 @@ local function inline(s)
   end)
   s = s:gsub("%[([^%]]*)%]%([^%)]*%)", "%1") -- [text](link) -> text
   s = s:gsub("%*%*([^%*]+)%*%*", "%1") -- **bold** -> bold (a `*` would be a tag)
+  -- *word* -> word: a star-delimited word with whitespace on both sides is a
+  -- help tag, so every markdown emphasis would become a global `:help <word>`.
+  -- The space prepended here lets the frontier also match a word at the start.
+  s = (" " .. s):gsub("%f[%S]%*([^%*%s|]+)%*%f[%s%z]", "%1"):sub(2)
   s = s:gsub("<!%-%-.-%-%->", "")
   s = s:gsub("\1(%d+)\1", function(n)
     return spans[tonumber(n)]
