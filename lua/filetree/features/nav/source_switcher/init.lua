@@ -226,6 +226,13 @@ local function neotree()
   return ok and nt or nil
 end
 
+---The first real failure of the `tests` source module, kept because LuaJIT
+---leaves a "loading" sentinel in `package.loaded` behind a throwing `require`:
+---only the FIRST probe sees the real error, every later one gets "loop or
+---previous error loading module".
+---@type string|nil
+local tests_failure = nil
+
 ---@internal
 ---Can neo-tree's `tests` source (neo-tree-tests-source.nvim) be used, and if
 ---not, why? The plugin ships no module of its own name, only the source itself
@@ -239,17 +246,27 @@ end
 ---`pcall(require, "neo-tree.sources.tests")` in that config (the host's
 ---on-demand neotest wrapper does exactly that) would then hit "loop or
 ---previous error loading module". And only "module not found" means "not
----installed"; a module that exists but throws is reported as that.
+---installed"; a module that exists but throws is reported as that -- its first
+---failure line, remembered (see `tests_failure`), since a missing dependency's
+---error is the whole search-path dump.
 ---@return boolean ok
 ---@return string|nil why
 local function tests_source_status()
   if not neotree() then return false, "neo-tree is not loaded" end
   local ok, err = pcall(require, "neo-tree.sources.tests")
-  if ok then return true, nil end
-  if tostring(err):find("module 'neo-tree.sources.tests' not found", 1, true) then
+  if ok then
+    tests_failure = nil
+    return true, nil
+  end
+  local text = tostring(err)
+  if text:find("module 'neo-tree.sources.tests' not found", 1, true) then
     return false, "neo-tree-tests-source.nvim is not installed"
   end
-  return false, "neo-tree.sources.tests failed to load: " .. tostring(err)
+  if tests_failure and text:find("loop or previous error loading module", 1, true) then
+    return false, tests_failure
+  end
+  tests_failure = "neo-tree.sources.tests failed to load: " .. text:match("^[^\n]*")
+  return false, tests_failure
 end
 
 ---@internal

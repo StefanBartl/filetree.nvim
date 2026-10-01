@@ -35,8 +35,6 @@ for _, candidate in ipairs(lib_candidates) do
   end
 end
 
-local TMP_ROOT = vim.env.TEMP or vim.env.TMPDIR or vim.env.TMP or "/tmp"
-
 local passed, failed = 0, 0
 local function check(name, ok, detail)
   if ok then
@@ -233,7 +231,9 @@ end
 -- The check must also leave neotest alone: a host may load neotest only right
 -- before the source first renders, and listing the sources is not rendering.
 do
-  local dir = (TMP_ROOT .. "/nt-tests-source-rtp"):gsub("\\", "/")
+  -- A name unique to this process: two runs at once (two terminals, parallel
+  -- agents) would otherwise delete and rewrite each other's stand-in plugin.
+  local dir = (vim.fn.tempname() .. "-nt-tests-source-rtp"):gsub("\\", "/")
   vim.fn.delete(dir, "rf")
   vim.fn.mkdir(dir .. "/lua/neo-tree/sources/tests", "p")
   vim.fn.writefile({ 'return { name = "tests" }' }, dir .. "/lua/neo-tree/sources/tests/init.lua")
@@ -305,7 +305,53 @@ do
       and tostring(why_throws):find("not installed", 1, true) == nil,
     why_throws
   )
+
+  -- LuaJIT leaves a "loading" sentinel behind a throwing require, so only the
+  -- FIRST probe sees the real error. The reason must survive the later probes
+  -- (pick() probes every entry, then switch() probes again), not degrade to
+  -- "loop or previous error loading module".
+  local _, why_again = sw.loadable("tests")
+  local _, why_third = sw.loadable("tests")
+  for i, why in ipairs({ why_again, why_third }) do
+    check(
+      "tests source: probe #" .. (i + 1) .. " of a throwing module keeps the real reason",
+      tostring(why):find("boom from the source module", 1, true) ~= nil
+        and tostring(why):find("loop or previous error", 1, true) == nil,
+      why
+    )
+  end
+  sw.setup({ enabled = true, sources = { "filesystem", "tests" } }, stub_adapter)
+  local ok_sw_throws, err_sw_throws = sw.switch("tests")
+  check(
+    "tests source: switch() after earlier probes carries the real reason",
+    ok_sw_throws == false
+      and tostring(err_sw_throws):find("boom from the source module", 1, true) ~= nil,
+    err_sw_throws
+  )
+  sw.setup({ enabled = true }, stub_adapter)
+
+  -- 3b. The source module is there but ITS OWN dependency is missing: a
+  -- "module 'X' not found" for some other X is a load failure, not "not
+  -- installed" -- and only its first line is reported (the rest is the whole
+  -- search-path dump).
+  package.loaded["neo-tree.sources.tests"] = nil
+  vim.fn.writefile(
+    { 'require("neotest-missing-dep")' },
+    dir .. "/lua/neo-tree/sources/tests/init.lua"
+  )
+  local ok_dep, why_dep = sw.loadable("tests")
+  eq("tests source: a missing dependency is not loadable", ok_dep, false)
+  check(
+    "tests source: ... and the reason is the failure, not 'not installed'",
+    tostring(why_dep):find("failed to load", 1, true) ~= nil
+      and tostring(why_dep):find("not installed", 1, true) == nil,
+    why_dep
+  )
+  check("tests source: ... on one line", tostring(why_dep):find("\n", 1, true) == nil, why_dep)
+
   vim.fn.writefile({ 'return { name = "tests" }' }, dir .. "/lua/neo-tree/sources/tests/init.lua")
+  package.loaded["neo-tree.sources.tests"] = nil
+  check("tests source: a source that loads again is loadable again", (sw.loadable("tests")))
   package.loaded["neo-tree.sources.tests"] = nil
 
   -- 4. neo-tree itself comes first: probing a source module before neo-tree is
@@ -325,6 +371,33 @@ do
     "tests source: ... without having required the source module",
     package.loaded["neo-tree.sources.tests"],
     nil
+  )
+
+  -- 4b. A lazy-loaded neo-tree is only a LOADER until its first require (lazy.nvim
+  -- is a package searcher, not an entry in package.loaded): the probe has to
+  -- require it -- not peek at package.loaded -- and before the source module.
+  local order = {}
+  _G.__ft_order = order
+  vim.fn.writefile(
+    { 'table.insert(_G.__ft_order, "source") return { name = "tests" }' },
+    dir .. "/lua/neo-tree/sources/tests/init.lua"
+  )
+  package.loaded["neo-tree"] = nil
+  package.loaded["neo-tree.sources.tests"] = nil
+  package.preload["neo-tree"] = function()
+    order[#order + 1] = "neo-tree"
+    return stub_neotree
+  end
+  local ok_lazy, why_lazy = sw.loadable("tests")
+  package.loaded["neo-tree"], package.preload["neo-tree"] = loaded_nt, preload_nt
+  vim.fn.writefile({ 'return { name = "tests" }' }, dir .. "/lua/neo-tree/sources/tests/init.lua")
+  package.loaded["neo-tree.sources.tests"] = nil
+  _G.__ft_order = nil
+  check("tests source: a lazy-loaded neo-tree is loadable", ok_lazy == true, why_lazy)
+  eq(
+    "tests source: ... neo-tree was loaded before the source module",
+    table.concat(order, ","),
+    "neo-tree,source"
   )
 
   stub_neotree.config.sources = configured
@@ -649,7 +722,7 @@ do
   -- install retries above trigger by requiring the renderer early -- so
   -- neo-tree's OWN later require died with "loop or previous error loading
   -- module" for the rest of the session.
-  local dir = (TMP_ROOT .. "/nt-late-rtp"):gsub("\\", "/")
+  local dir = (vim.fn.tempname() .. "-nt-late-rtp"):gsub("\\", "/")
   vim.fn.delete(dir, "rf")
   vim.fn.mkdir(dir .. "/lua/neo-tree/ui", "p")
   vim.fn.writefile(
