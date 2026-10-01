@@ -6547,6 +6547,7 @@ do
   local editor_win = vim.api.nvim_get_current_win()
   vim.cmd("vsplit")
   vim.cmd("enew") -- stands in for the tree window: we came FROM editor_win
+  vim.bo.filetype = "neo-tree" -- a real tree window is a sidebar, never an insertion target
   local tree_win = vim.api.nvim_get_current_win()
   vim.api.nvim_set_current_win(editor_win)
   vim.api.nvim_win_set_cursor(editor_win, { 1, 5 })
@@ -6567,6 +6568,38 @@ do
       and vim.api.nvim_win_get_cursor(editor_win)[2] == 24,
     vim.inspect(vim.api.nvim_win_get_cursor(editor_win))
   )
+
+  -- A directory path with a trailing separator must not give an empty title.
+  check(
+    "markdown_links: a directory with a trailing slash still gets a title",
+    (function()
+      local links = ft.feature("markdown_links").build_insert_links({ tmp .. "/sub/" }, edited)
+      return links[1]:match("^%[sub%]%(") ~= nil
+    end)(),
+    vim.inspect(ft.feature("markdown_links").build_insert_links({ tmp .. "/sub/" }, edited))
+  )
+
+  -- Typed in the editor (not from the tree): the CURRENT window gets the link, not
+  -- whichever split was visited before.
+  do
+    vim.cmd("only")
+    vim.cmd("vsplit")
+    local other = vim.api.nvim_get_current_win()
+    vim.cmd("enew")
+    vim.api.nvim_set_current_win(editor_win)
+    vim.api.nvim_buf_set_lines(edited, 0, -1, false, { "intro" })
+    vim.api.nvim_win_set_cursor(editor_win, { 1, 0 })
+    vim.api.nvim_set_current_win(other)
+    vim.api.nvim_set_current_win(editor_win) -- previous window is now `other`
+    cur_node = { path = tmp .. "/sub/b.lua", type = "file" }
+    pcall(md.insert_current)
+    local got = table.concat(vim.api.nvim_buf_get_lines(edited, 0, -1, false), "\n")
+    check(
+      "markdown_links: inserted into the current editing window, not the previously visited split",
+      got:find("[b.lua](", 1, true) ~= nil,
+      got
+    )
+  end
 
   check(
     "markdown_links: insert_path = absolute",
