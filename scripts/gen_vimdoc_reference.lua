@@ -80,13 +80,26 @@ end
 
 ---Strip the inline markdown that has no vimdoc equivalent. Backticks stay:
 ---the hand-written sections already use them for literals, so keeping them
----makes the generated text read like its neighbours.
+---makes the generated text read like its neighbours. Code spans are kept
+---verbatim: `[name](path)` between backticks is the thing being described,
+---not a link to flatten.
 ---@param s string
 ---@return string
 local function inline(s)
+  -- Park each span behind a placeholder (control bytes never occur in the
+  -- markdown) so the rewrites below cannot reach into it, then put it back.
+  -- A span inside a link text or bold run, `[`x`](p)`, survives the same way.
+  local spans = {}
+  s = s:gsub("`[^`]*`", function(span)
+    spans[#spans + 1] = span
+    return "\1" .. #spans .. "\1"
+  end)
   s = s:gsub("%[([^%]]*)%]%([^%)]*%)", "%1") -- [text](link) -> text
   s = s:gsub("%*%*([^%*]+)%*%*", "%1") -- **bold** -> bold (a `*` would be a tag)
   s = s:gsub("<!%-%-.-%-%->", "")
+  s = s:gsub("\1(%d+)\1", function(n)
+    return spans[tonumber(n)]
+  end)
   return s
 end
 
