@@ -152,8 +152,17 @@ do
     ) ~= nil
   )
   check(
-    "windows: a failing Set-Clipboard fails loudly (ErrorActionPreference Stop)",
-    backend.WINDOWS_SCRIPT:find("$ErrorActionPreference = 'Stop'; Set-Clipboard", 1, true) ~= nil
+    "windows: a failing Set-Clipboard is a terminating error (ErrorActionPreference Stop)",
+    backend.WINDOWS_SCRIPT:find("$ErrorActionPreference = 'Stop'; try { Set-Clipboard", 1, true)
+      ~= nil
+  )
+  check(
+    "windows: ... caught and reported as ONE stderr line with exit 1",
+    backend.WINDOWS_SCRIPT:find(
+      "catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }",
+      1,
+      true
+    ) ~= nil
   )
   check(
     "windows: the script splits the variable on the character the paths are joined with",
@@ -190,6 +199,32 @@ do
         "windows probe: the script hands over exactly the built paths, split as intended",
         ok_json and vim.deep_equal(got, want_paths),
         res.stdout
+      )
+    end
+
+    -- A failing cmdlet, for real (Get-Item on a path that does not exist stands
+    -- in for a locked clipboard): the reason must arrive as ONE unwrapped line,
+    -- readable, with the umlauts of the path intact. Without the catch,
+    -- PowerShell wraps its message at the console width mid-path, and the toast
+    -- (first line only) would lose the reason.
+    local failing, nf =
+      backend.WINDOWS_SCRIPT:gsub("Set%-Clipboard %-LiteralPath", "Get-Item -LiteralPath", 1)
+    eq("windows failure probe: the cmdlet was swapped out", nf, 1)
+    if nf == 1 then
+      local long = TMP_ROOT:gsub("/", "\\")
+        .. "\\Ärger-mit-einem-sehr-langen-Ordnernamen-damit-PowerShell-umbricht"
+        .. "\\und-noch-einem-Unterordner-Öl-Übung\\Bildschirmfoto 2026-10-01.png"
+      local argv = vim.deepcopy(cmd.argv)
+      argv[1] = ps
+      argv[#argv] = failing
+      local res = vim.system(argv, { text = true, env = { [backend.ENV_VAR] = long } }):wait()
+      local lines = vim.split(vim.trim(res.stderr or ""), "\r?\n")
+      eq("windows failure probe: exits 1", res.code, 1)
+      eq("windows failure probe: stderr is ONE line", #lines, 1)
+      check(
+        "windows failure probe: ... that carries the whole path, umlauts intact (UTF-8)",
+        (lines[1] or ""):find(long, 1, true) ~= nil,
+        res.stderr
       )
     end
   end
@@ -252,6 +287,8 @@ do
   end
   check("mac: no path is part of the AppleScript source", not script_has_path)
   check("mac: the script reads its paths from argv", in_argv(cmd, "on run argv"))
+  eq("mac: osascript's stderr is captured for the error message", cmd.capture_stderr, true)
+  eq("mac: nothing goes to stdin", cmd.stdin, nil)
 end
 
 -- ── build: Linux ──────────────────────────────────────────────────────────────
@@ -287,6 +324,9 @@ do
   eq("linux/x11: ... writing the clipboard selection", x.argv[3], "clipboard")
   eq("linux/x11: ... as a file list", x.argv[#x.argv], "text/uri-list")
   check("linux/x11: the exact argv", vim.deep_equal(x.argv, XCLIP_ARGV), vim.inspect(x.argv))
+  -- wl-copy takes the file list from stdin exactly like xclip; an empty stdin
+  -- would "succeed" (exit 0, "Copied N file(s)") with an empty clipboard.
+  eq("linux/wayland: wl-copy reads the same URI list from stdin as xclip", wl.stdin, x.stdin)
   check(
     "linux/x11: xclip's stderr is not captured (its forked child would hold the pipe)",
     x.capture_stderr == false
@@ -316,6 +356,11 @@ do
   check(
     "linux: the wl-copy fallback does not capture stderr either",
     only_wl.capture_stderr == false
+  )
+  eq(
+    "linux: the wl-copy fallback feeds the URI list on stdin",
+    only_wl.stdin,
+    vim.uri_from_fname(vim.fn.fnamemodify(PLAIN, ":p")) .. "\r\n"
   )
   local wl_missing = backend.build("linux", { PLAIN }, probe(true, { xclip = true }))
   eq("linux/wayland without wl-copy: falls back to xclip", wl_missing.argv[1], "xclip")
@@ -582,9 +627,24 @@ do
   r = run_stubbed(fake, { code = 3, signal = 0, stderr = string.rep("x", 500) })
   check(
     "run: an enormous first line is capped",
-    vim.fn.strchars(r.err) < 260,
+    vim.fn.strchars(r.err) < 360,
     tostring(vim.fn.strchars(r.err))
   )
+  r = run_stubbed(fake, { code = 3, signal = 0, stderr = string.rep("x", 250) })
+  check(
+    "run: ... but a long message (a deep path in the reason) is kept whole",
+    (r.err or ""):find(string.rep("x", 250), 1, true) ~= nil
+  )
+
+  -- A NUL in stderr (powershell.exe's loader errors are UTF-16, i.e. NUL-
+  -- interleaved) used to make strchars() throw E976 inside the scheduled
+  -- callback, so on_done never ran and the user saw no toast at all.
+  r = run_stubbed(fake, { code = 2, signal = 0, stderr = "E\0r\0r\0" })
+  eq("run: a NUL in stderr still reports the failure", r.ok, false)
+  eq("run: ... exactly once", r.calls, 1)
+  eq("run: ... UTF-16 ASCII text becomes readable", r.err, "fake exited with 2: Err")
+  r = run_stubbed(fake, { code = 2, signal = 0, stderr = "\0\0" })
+  eq("run: a NUL-only stderr has no trailing colon", r.err, "fake exited with 2")
 
   -- libuv reports a death by signal as exit status 0 plus a term signal.
   r = run_stubbed(fake, { code = 0, signal = 9 })
@@ -636,10 +696,14 @@ do
       call.argv[1],
       ps_path
     )
-    eq(
-      "windows: ... with the flags and the fixed script after it",
-      call.argv[#call.argv],
-      backend.WINDOWS_SCRIPT
+    -- The WHOLE argv, not its ends: a shifted list_extend start would drop
+    -- -NoProfile (the user's profile then runs on every `gy`) or duplicate the
+    -- executable, and both still exit 0.
+    local want_argv = vim.list_extend({ ps_path }, vim.list_slice(win_cmd.argv, 2))
+    check(
+      "windows: ... with exactly the built flags and the fixed script after it",
+      vim.deep_equal(call.argv, want_argv),
+      vim.inspect(call.argv)
     )
 
     vim.env.SystemRoot, vim.env.windir = nil, nil
@@ -719,6 +783,90 @@ do
     eq("real spawn: a tool killed by SIGKILL is not a success", r.ok, false)
   end
   os.remove(tool)
+end
+
+-- ── backend.copy: build and run composed, and the probe of this machine ───────
+-- The feature tests replace copy() by a stub, so the production entry point
+-- (build with the real probe, run, hand `count` and `raw` on) would otherwise
+-- never run in a default suite. macOS stands in for "some platform": its
+-- command does not depend on PowerShell or on what is installed here.
+do
+  local platform = require("filetree.util.platform")
+  local real_current, real_has, real_system = platform.current, platform.has_executable, vim.system
+  local saved_wayland = vim.env.WAYLAND_DISPLAY
+  local call
+  local reply = { code = 0, signal = 0 }
+  vim.system = function(argv, opts, on_exit)
+    call = { argv = argv, opts = opts }
+    on_exit(reply)
+    return {}
+  end
+  local function copy_via(plat, paths)
+    platform.current = function()
+      return plat
+    end
+    local out
+    backend.copy(paths, function(ok, err, count, raw)
+      out = { ok = ok, err = err, count = count, raw = raw }
+    end)
+    vim.wait(2000, function()
+      return out ~= nil
+    end, 10)
+    platform.current = real_current
+    return out or {}
+  end
+
+  local r = copy_via("mac", { PLAIN, TRICKY, PLAIN })
+  eq("copy: a successful run reports success", r.ok, true)
+  eq("copy: ... with the number of DISTINCT paths", r.count, 2)
+  eq("copy: ... through the command built for the platform", call and call.argv[1], "osascript")
+
+  reply = { code = 1, signal = 0, stderr = "boom first\nsecond line" }
+  r = copy_via("mac", { PLAIN })
+  eq("copy: a failing tool is a failure", r.ok, false)
+  eq("copy: ... with count 0", r.count, 0)
+  eq("copy: ... the first stderr line in err", r.err, "osascript exited with 1: boom first")
+  check(
+    "copy: ... and the full stderr handed through as raw",
+    (r.raw or ""):find("second line", 1, true) ~= nil,
+    r.raw
+  )
+  reply = { code = 0, signal = 0 }
+
+  call = nil
+  r = copy_via("wsl", { PLAIN })
+  eq("copy: an unsupported platform fails", r.ok, false)
+  check("copy: ... saying why", (r.err or ""):find("WSL", 1, true) ~= nil, r.err)
+  eq("copy: ... with count 0", r.count, 0)
+  eq("copy: ... and nothing is spawned", call, nil)
+
+  r = copy_via("mac", {})
+  eq("copy: nothing to copy is a failure, not a spawn", r.ok, false)
+  eq("copy: ... that says so", r.err, "nothing to copy")
+  eq("copy: ... and nothing is spawned", call, nil)
+
+  -- The probe of THIS machine (no stand-in passed): a Wayland session and
+  -- wl-copy choose wl-copy; otherwise xclip.
+  platform.has_executable = function(exe)
+    return exe == "wl-copy" or exe == "xclip"
+  end
+  vim.env.WAYLAND_DISPLAY = "wayland-0"
+  eq(
+    "probe: a Wayland session with wl-copy installed uses it",
+    backend.build("linux", { PLAIN }).argv[1],
+    "wl-copy"
+  )
+  vim.env.WAYLAND_DISPLAY = ""
+  eq("probe: no Wayland session uses xclip", backend.build("linux", { PLAIN }).argv[1], "xclip")
+  vim.env.WAYLAND_DISPLAY = nil
+  platform.has_executable = function()
+    return false
+  end
+  local none = backend.build("linux", { PLAIN })
+  eq("probe: no tool installed builds nothing", none, nil)
+
+  platform.current, platform.has_executable, vim.system = real_current, real_has, real_system
+  vim.env.WAYLAND_DISPLAY = saved_wayland
 end
 
 -- ── real round trip (Windows, opt-in) ─────────────────────────────────────────
