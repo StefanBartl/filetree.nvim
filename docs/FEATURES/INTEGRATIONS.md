@@ -133,13 +133,15 @@ feed `path_copy` or `markdown_links` next.
 
 | Platform | Tool | Status |
 |----------|------|--------|
-| Windows | `powershell.exe` → `Set-Clipboard -LiteralPath` | tested, incl. umlauts, `&`, `'`, `[ ]`, `$` |
+| Windows | `powershell.exe` (started by absolute path under `%SystemRoot%`) → `Set-Clipboard -LiteralPath` | tested, incl. umlauts, `&`, `'`, `[ ]`, `$` |
 | macOS | `osascript` (`set the clipboard to {POSIX file …}`) | implemented, not yet run on a Mac |
 | Linux | `wl-copy` (Wayland) or `xclip` (X11), MIME `text/uri-list` | implemented, not yet run on Linux; GNOME Files may want its own `x-special/gnome-copied-files` format |
 | WSL | — | refused with a message |
 
 No path is ever spliced into a script or a shell string; the tools receive
-them as argv, stdin or an environment variable. The Windows round trip can be
+them as argv, stdin or an environment variable. A tool that does not finish
+within 15 seconds is stopped and reported, and a failure shows the tool's first
+error line (the full text goes to the debug log, `debug = true`). The Windows round trip can be
 re-run with `FILETREE_TEST_REAL_CLIPBOARD=1` (see `TESTS/file_clipboard.lua`;
 it overwrites the clipboard).
 

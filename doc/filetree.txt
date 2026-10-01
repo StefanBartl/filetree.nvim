@@ -1313,7 +1313,7 @@ buffer numbers, and those only ever increase — a file opened now can never
 sort ahead of one opened earlier, and no API moves it, because there is
 nothing to move: the order isn't stored, it's derived. Tabline plugins in the
 NvChad lineage keep `vim.t.bufs`, a per-tabpage list they order themselves,
-and that one *can* be rewritten — so the new buffer is put back at the index
+and that one can be rewritten — so the new buffer is put back at the index
 the replaced one held. Without such a list the swap still swaps; the new file
 simply lands where its buffer number puts it, which is last. Nothing errors,
 and there is nothing to configure for it — the list is either there or it
@@ -1366,7 +1366,7 @@ with no way back to `personal`.
 `<S-CR>` collapses the node when it is expanded, and falls back to its nearest
 collapsible ancestor when it isn't (the same fallback neo-tree's own
 `close_node` command — bound to `C` by default — uses). Each merge step
-re-parents the replacement node onto the *grandparent* of whatever it just
+re-parents the replacement node onto the grandparent of whatever it just
 absorbed, so a chain merged all the way from a top-level directory ends up
 parented directly on the tree root — nothing left to structurally collapse
 without hiding the whole tree. For that case `<S-CR>` falls back once more, to
@@ -1410,10 +1410,10 @@ SMART RENAME                                           *filetree-smart-rename*
 project-wide, the same guarantee an IDE's "rename symbol" gives you, applied
 to a file/module rename instead of a variable.
 
-Whatever the language server does *not* rewrite — markdown links always,
-plus `require()`/`import` statements when no server handled the rename (for
-Lua that is always, since lua_ls never implements `workspace/willRenameFiles`)
-— is picked up by the reference engine.
+Whatever the language server does not rewrite — markdown links always, plus
+`require()`/`import` statements when no server handled the rename (for Lua
+that is always, since lua_ls never implements `workspace/willRenameFiles`) —
+is picked up by the reference engine.
 
 Keymaps: r
 
@@ -1462,9 +1462,9 @@ references it touched and points at `:Filetree refs undo` to revert those
 separately.
 
 `:Filetree trash dry-run` covers that reference rewrite too, not just the
-delete: it reports what *would* be marked and writes nothing. It is the one
-part of a delete that touches files the user did not select, so a dry-run has
-even less business making it than the delete itself — and every line of a
+delete: it reports what would be marked and writes nothing. It is the one part
+of a delete that touches files the user did not select, so a dry-run has even
+less business making it than the delete itself — and every line of a
 dry-run, down to the closing summary, reports in the conditional, so nothing
 in the output reads as though it had happened.
 
@@ -1598,10 +1598,10 @@ attempt to index local 'node' (a nil value)
 
 — followed by a dump of the entire tree, on every render from then on.
 
-nui's node initialization is not idempotent: it *consumes* a node's
+nui's node initialization is not idempotent: it consumes a node's
 `__children`, keeping only their ids in `_child_ids`. `Tree:set_nodes()` first
 deletes the parent's whole subtree from its `by_id` index and then
-re-initializes whatever it was handed, so handing it *live* nodes re-registers
+re-initializes whatever it was handed, so handing it live nodes re-registers
 those nodes but not their children — `by_id` loses them while `_child_ids`
 still lists them. The next `set_nodes()` over that subtree indexes a nil node
 and throws, and because it throws before `_child_ids` is reset, the
@@ -1684,7 +1684,7 @@ Module: lua/filetree/features/nav/auto_resize/
 ------------------------------------------------------------------------------
 BUFFER CYCLE                                           *filetree-buffer-cycle*
 
-`<C-n>`/`<C-p>` cycle the buffer shown in the *adjacent* editor window (like
+`<C-n>`/`<C-p>` cycle the buffer shown in the adjacent editor window (like
 `:bnext`/`:bprevious`) while focus stays in the tree — verified against a
 live neo-tree buffer to not collide with neo-tree's own default
 `window.mappings` (unlike `<C-f>`/`<C-b>`, which neo-tree claims natively for
@@ -1710,15 +1710,15 @@ SIDEBAR GUARD                                         *filetree-sidebar-guard*
 
 Keeps the tree in its sidebar. A buffer that lands in the tree window — a
 stray `:buffer N`, a mouse click on a tabline buffer (NvChad's tabufline,
-bufferline, …) while the cursor is *inside* the tree, or another plugin's
+bufferline, …) while the cursor is inside the tree, or another plugin's
 `:edit` — is moved to a real editor window, and the tree is put back where
 it was.
 
 Without that, the swap displaces the tree, and neo-tree's own recovery
 (`buffer_enter_event`) reopens the sidebar through a bare `:vsplit`: with the
-default `splitright = false` the new file window lands to the *left* of the
-tree and shoves the sidebar to the right. The repro is exactly "tree open on
-the left, click a tabline buffer, tree jumps to the right".
+default `splitright = false` the new file window lands to the left of the tree
+and shoves the sidebar to the right. The repro is exactly "tree open on the
+left, click a tabline buffer, tree jumps to the right".
 
 The redirect serves both cases at once, because they are the same thing at the
 API level: the only difference is what the caller meant, and nobody ever means
@@ -1758,7 +1758,7 @@ SOURCE SWITCHER                                     *filetree-source-switcher*
 
 neo-tree renders its filesystem, buffer list, git status, symbol outline,
 diagnostics and (with neo-tree-tests-source) tests through one window. Its own
-`<`/`>` re-open the tree at the *configured* position — not where it is when
+`<`/`>` re-open the tree at the configured position — not where it is when
 you press the key in a float. This feature keeps the position: `"`/`!` cycle
 to the next/previous source in place, `:Filetree source` (or a global key)
 opens a floating list with each source's icon and name, the current one marked
@@ -1875,13 +1875,13 @@ Auto-clear on idle (2026-09-25)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Marks used to live forever until an explicit `<leader>mc`, or until a batch op
-that *consumed* them cleared them itself (trash/move/copy_move/diff do this;
-the read-only consumers — PDF-from-marks, markdown_links, path_copy,
+that consumed them cleared them itself (trash/move/copy_move/diff do this; the
+read-only consumers — PDF-from-marks, markdown_links, path_copy,
 copy_file_list — deliberately don't, so the same marks can feed several of
 those in a row). That is a footgun on its own: mark a batch, run one of the
 read-only actions, get pulled away, come back much later and run an unrelated
 single-node action expecting it to act on just the node under the cursor —
-trash/move/copy_move all *prefer* the marked set over the cursor node whenever
+trash/move/copy_move all prefer the marked set over the cursor node whenever
 anything is marked, so it silently acts on the long-stale marks instead, with
 no visible reason why.
 
@@ -1956,9 +1956,9 @@ on lines of their own below the cursor line). The cursor lands in the first
 link — in its empty title, or in the path when the title is filled — in
 insert mode (`cursor = { enable, startinsert, path_cursor }`, see
 `lib.nvim.markdown.link_cursor`). The path is spelled by `insert_path`:
-`"buffer"` (default; relative to the *target* buffer, `./x` / `../x`),
-`"cwd"`, `"absolute"`, or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`,
-else `"buffer"`; `env_roots` adds variables).
+`"buffer"` (default; relative to the target buffer, `./x` / `../x`), `"cwd"`,
+`"absolute"`, or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`, else
+`"buffer"`; `env_roots` adds variables).
 
 Keymaps: ML MR MM MI
 
@@ -2123,8 +2123,9 @@ reported. The marks are left alone, so the same selection can feed `path_copy`
 or `markdown_links` next.
 
   Platform · Tool · Status
-  Windows · `powershell.exe` → `Set-Clipboard -LiteralPath` · tested,
-     incl. umlauts, `&`, `'`, `[ ]`, `$`
+  Windows · `powershell.exe` (started by absolute path under `%SystemRoot%`)
+     → `Set-Clipboard -LiteralPath` · tested, incl. umlauts, `&`, `'`, `[
+     ]`, `$`
   macOS · `osascript` (`set the clipboard to {POSIX file …}`) ·
      implemented, not yet run on a Mac
   Linux · `wl-copy` (Wayland) or `xclip` (X11), MIME `text/uri-list` ·
@@ -2133,9 +2134,11 @@ or `markdown_links` next.
   WSL · — · refused with a message
 
 No path is ever spliced into a script or a shell string; the tools receive
-them as argv, stdin or an environment variable. The Windows round trip can be
-re-run with `FILETREE_TEST_REAL_CLIPBOARD=1` (see `TESTS/file_clipboard.lua`;
-it overwrites the clipboard).
+them as argv, stdin or an environment variable. A tool that does not finish
+within 15 seconds is stopped and reported, and a failure shows the tool's
+first error line (the full text goes to the debug log, `debug = true`). The
+Windows round trip can be re-run with `FILETREE_TEST_REAL_CLIPBOARD=1` (see
+`TESTS/file_clipboard.lua`; it overwrites the clipboard).
 
 Keymaps: gy
 
@@ -2364,9 +2367,9 @@ node.
 
 Hard links are not decorated here. Telling a file with more than one name
 apart from an ordinary one needs an actual `stat`, and every one of its names
-is an equal hard link — there is no single dirent to flag as *the* hard
-link. See Node Info's `I` window for that instead, on demand rather than on
-every rendered line.
+is an equal hard link — there is no single dirent to flag as the hard link.
+See Node Info's `I` window for that instead, on demand rather than on every
+rendered line.
 
 Backend support. Same line-resolved-decoration contract as `size_info` below:
 neo-tree and nvim-tree draw it, netrw/oil.nvim/mini.files don't. Whether a
