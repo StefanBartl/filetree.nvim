@@ -61,7 +61,7 @@ local _adapter = nil
 ---@param path string
 ---@return string
 local function link_name(path)
-  local trimmed = path:gsub("[/]+$", "")
+  local trimmed = path:gsub("[/\\]+$", "")
   local name = vim.fn.fnamemodify(trimmed, ":t")
   return name ~= "" and name or path
 end
