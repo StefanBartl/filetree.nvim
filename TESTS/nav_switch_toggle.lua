@@ -222,6 +222,80 @@ do
   vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(true, false))
 end
 
+-- ── source_switcher: the optional `tests` source ──────────────────────────────
+-- neo-tree-tests-source.nvim ships no Lua module of its own name -- only
+-- `neo-tree.sources.tests` (plus a neotest consumer). The availability check
+-- used to `require("neo-tree-tests-source")`, which resolves nowhere, so the
+-- switcher called the source "not installed" on every machine that had it.
+-- The stand-in plugin below has the real one's layout: the source module and
+-- nothing named after the plugin.
+--
+-- The check must also leave neotest alone: a host may load neotest only right
+-- before the source first renders, and listing the sources is not rendering.
+do
+  local dir = (TMP_ROOT .. "/nt-tests-source-rtp"):gsub("\\", "/")
+  vim.fn.delete(dir, "rf")
+  vim.fn.mkdir(dir .. "/lua/neo-tree/sources/tests", "p")
+  vim.fn.writefile({ 'return { name = "tests" }' }, dir .. "/lua/neo-tree/sources/tests/init.lua")
+
+  local neotest_required = false
+  package.preload["neotest"] = function()
+    neotest_required = true
+    return {}
+  end
+  local configured = stub_neotree.config.sources
+
+  -- 1. the plugin is absent: refused with the reason, not offered by default
+  sw.setup({ enabled = true, sources = { "filesystem", "tests" } }, stub_adapter)
+  local ok_absent, why_absent = sw.loadable("tests")
+  check(
+    "tests source: not loadable while its plugin is absent",
+    ok_absent == false and tostring(why_absent):find("not installed", 1, true) ~= nil,
+    why_absent
+  )
+  executed = {}
+  local ok_sw_absent, err_absent = sw.switch("tests")
+  check(
+    "tests source: ... and a switch to it is refused with that reason",
+    ok_sw_absent == false and tostring(err_absent):find("not installed", 1, true) ~= nil,
+    err_absent
+  )
+  eq("tests source: ... without asking neo-tree for anything", #executed, 0)
+
+  sw.setup({ enabled = true }, stub_adapter)
+  stub_neotree.config.sources = nil -- no configured list: the fallback decides
+  check(
+    "tests source: the fallback list leaves it out while absent",
+    not vim.tbl_contains(sw.sources(), "tests"),
+    table.concat(sw.sources(), ", ")
+  )
+
+  -- 2. the plugin is installed
+  vim.opt.rtp:prepend(dir)
+  check(
+    "tests source: the fallback list offers it once installed",
+    vim.tbl_contains(sw.sources(), "tests"),
+    table.concat(sw.sources(), ", ")
+  )
+  local ok_present, why_present = sw.loadable("tests")
+  check("tests source: loadable once installed", ok_present == true, why_present)
+  eq("tests source: info reports it as ok", sw.info().loadable.tests, "ok")
+
+  executed = {}
+  local ok_sw, err_sw = sw.switch("tests")
+  check("tests source: a switch to it succeeds", ok_sw, err_sw)
+  eq("tests source: ... asking neo-tree to show it", last() and last().source, "tests")
+
+  check("tests source: none of this required neotest", not neotest_required)
+  eq("tests source: ... nor left it loaded", package.loaded["neotest"], nil)
+
+  stub_neotree.config.sources = configured
+  package.preload["neotest"] = nil
+  package.loaded["neo-tree.sources.tests"] = nil
+  vim.opt.rtp:remove(dir)
+  vim.fn.delete(dir, "rf")
+end
+
 -- ── tree_toggle ───────────────────────────────────────────────────────────────
 
 local tt = require("filetree.features.nav.tree_toggle")
