@@ -1183,6 +1183,14 @@ node (see Backends): it shows on neo-tree and nvim-tree, and is absent on
 netrw, oil and mini.files. The staging and the paste itself work on all five
 either way.
 
+A cut or copy item that cannot actually be transferred is reported, not
+silently dropped. A Windows sharing lock (a file-explorer window, a search
+indexer or an AV scan still holding the item open) can outlast the automatic
+retry — when it does, the paste reports exactly which item failed and why
+(`Failed: <src> → <dst> (<reason>)`), instead of just showing a bare `Pasted
+0/1 item(s)` with no indication that anything went wrong. A failed cut item
+stays staged so you can resolve the lock and paste it again.
+
 Copying a symlink copies the link, not its target. A staged symlink — file
 or directory — pastes as a new symlink pointing at the same target, instead
 of being silently dereferenced into an independent copy of whatever it points
@@ -1941,10 +1949,15 @@ doc directly from the tree, no manual path-to-link formatting. `ML` is
 mark-aware: with nodes marked it links all of them (one per line), same as
 `MM`; `MM` stays as an explicit marks-only keymap.
 
-`MI` inserts instead of copying: the marked nodes (else the current one) go
-into the window you came from, the cursor lands in the first link (empty
-title, else path) in insert mode. `insert_path` = "buffer" (default) |
-"cwd" | "absolute" | "env" spells the path; `env_roots`, `cursor` tune it.
+`MI` inserts instead of copying: marked nodes if any, else the current node,
+go as `name` into the window you came from (one link inline, several on lines
+of their own below the cursor line). The cursor lands in the first link — in
+its empty title, or in the path when the title is filled — in insert mode
+(`cursor = { enable, startinsert, path_cursor }`, see
+`lib.nvim.markdown.link_cursor`). The path is spelled by `insert_path`:
+`"buffer"` (default; relative to the *target* buffer, `./x` / `../x`),
+`"cwd"`, `"absolute"`, or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`,
+else `"buffer"`; `env_roots` adds variables).
 
 Keymaps: ML MR MM MI
 
@@ -2222,6 +2235,29 @@ the features). `<Tab>` / `<S-Tab>` (or `1`..`4`) turn the pages:
   3 `commands` · the `:Filetree` sub-commands
   4 `conflicts` · only when two actions claim one key: which one is live,
      free alternatives; `<CR>` moves one (`:Filetree keys`)
+
+Design presets (`style`). The float's border and highlighting come from
+`ui.nvim`'s own `ui.kit.theme` preset system (the same one behind
+`sessions.nvim`'s and `casedesk.nvim`'s chips) — set
+`features.cheatsheet.style` to one of this ecosystem's three shared names:
+
+  `style` · Look
+  `"classic"` · borderless, plain text
+  `"chip"` · flat, square-cornered border
+  `"rounded_chip"` (or leave `style` unset) · rounded border — today's
+     default look
+
+Any other `ui.kit.theme` preset name also works as-is — the built-ins are
+`"solid"`, `"double"`, `"ascii"`, `"hacker"`, `"menu"` (see `ui.nvim`'s own
+docs), or one you registered yourself via `ui.kit.theme.setup({presets =
+{...}})`. The active page's tab in the tab strip is always highlighted with
+the resolved theme's "selection" colour, regardless of `style`.
+
+>lua
+require("filetree").setup({
+  features = { cheatsheet = { style = "chip" } },
+})
+<
 
 Keymaps: ?
 
