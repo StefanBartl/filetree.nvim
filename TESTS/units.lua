@@ -6601,6 +6601,15 @@ do
     )
   end
 
+  if vim.fn.has("win32") == 1 then
+    check(
+      "markdown_links: a directory with a trailing backslash still gets a title (Windows)",
+      ft.feature("markdown_links")
+        .build_insert_links({ ((tmp .. "/sub/"):gsub("/", "\\")) }, edited)[1]
+        :match("^%[sub%]%(") ~= nil
+    )
+  end
+
   check(
     "markdown_links: insert_path = absolute",
     (function()
