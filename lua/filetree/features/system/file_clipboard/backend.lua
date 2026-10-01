@@ -38,11 +38,16 @@ M.TIMEOUT_MS = 15000
 ---uses the OEM codepage, and umlauts in an error message would reach Neovim as
 ---invalid UTF-8; `try` keeps a host without a console from breaking the script.
 ---`Stop` makes a failing `Set-Clipboard` (clipboard locked by another process)
----a non-zero exit instead of a silent success.
+---a terminating error, and the `catch` turns it into ONE line on stderr plus
+---exit 1: left alone, PowerShell prints a multi-line error record whose message
+---it hard-wraps at the console width (mid-path), so a toast built from "the
+---first line" would lose the actual reason.
 M.WINDOWS_SCRIPT = "try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}; "
-  .. "$ErrorActionPreference = 'Stop'; Set-Clipboard -LiteralPath ($env:"
+  .. "$ErrorActionPreference = 'Stop'; "
+  .. "try { Set-Clipboard -LiteralPath ($env:"
   .. M.ENV_VAR
-  .. " -split [char]10)"
+  .. " -split [char]10) } "
+  .. "catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }"
 
 ---@class FiletreeFileClipboardCmd
 ---@field argv           string[]
@@ -187,25 +192,34 @@ end
 ---not there. Never a bare name and no `exepath()` fallback: with
 ---`NoDefaultCurrentDirectoryInExePath` unset (the Windows default) the lookup
 ---tries the CURRENT DIRECTORY first, so a cloned repo that ships its own
----`powershell.exe` would run instead, with the user's rights.
+---`powershell.exe` would run instead, with the user's rights. No `windir`
+---fallback either: a child started without `SystemRoot` in its environment
+---cannot run PowerShell (it dies with a UTF-16 loader error), so a clean "not
+---found" is the better answer.
 ---@return string?
 function M.windows_powershell()
-  local root = vim.env.SystemRoot or vim.env.windir
+  local root = vim.env.SystemRoot
   if not root or root == "" then return nil end
   local exe = root .. "\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
   return (vim.uv or vim.loop).fs_stat(exe) and exe or nil
 end
 
 ---The part of a failing tool's stderr worth a notification: its first line,
----capped. PowerShell prints a localized multi-line error record (message,
----`At line:1 char:..`, the echoed script, CategoryInfo, ...); the full text
----goes to the caller separately, for the debug log.
+---capped. A tool may print a multi-line error record (the Windows script
+---above prints one line); the full text goes to the caller separately, for the
+---debug log.
+---
+---NULs are dropped before anything else: a Lua string with a NUL reaches
+---Vimscript as a Blob, so `strchars()` would throw E976 inside the scheduled
+---callback and `on_done` would never run -- no toast at all. A tool that writes
+---UTF-16 (powershell.exe's loader errors) is NUL-interleaved ASCII, which this
+---also turns into readable text.
 ---@param stderr string?
 ---@return string first, string raw
 local function first_line(stderr)
   local raw = vim.trim(stderr or "")
-  local first = raw:match("[^\r\n]+") or ""
-  if vim.fn.strchars(first) > 200 then first = vim.fn.strcharpart(first, 0, 200) .. "…" end
+  local first = (raw:match("[^\r\n]+") or ""):gsub("%z", "")
+  if vim.fn.strchars(first) > 300 then first = vim.fn.strcharpart(first, 0, 300) .. "…" end
   return first, raw
 end
 
