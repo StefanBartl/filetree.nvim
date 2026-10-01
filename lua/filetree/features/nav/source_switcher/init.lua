@@ -227,14 +227,48 @@ local function neotree()
 end
 
 ---@internal
----Is neo-tree-tests-source.nvim installed? The plugin ships no module of its
----own name, only the source itself (`neo-tree.sources.tests`) and a neotest
----consumer -- so the source module is what gets probed. Requiring it pulls in
----neo-tree's source manager and nothing of neotest, which a host may load
----only right before the source first renders; never probe `neotest` here.
----@return boolean
-local function has_tests_source()
-  return (pcall(require, "neo-tree.sources.tests"))
+---Can neo-tree's `tests` source (neo-tree-tests-source.nvim) be used, and if
+---not, why? The plugin ships no module of its own name, only the source itself
+---(`neo-tree.sources.tests`) and a neotest consumer -- so the source module is
+---what gets probed. Requiring it pulls in neo-tree's source manager and nothing
+---of neotest, which a host may load only right before the source first
+---renders; never probe `neotest` here.
+---
+---neo-tree comes first: that module requires neo-tree's manager, which makes a
+---lazy-loaded neo-tree run its own `config()` in the middle of the probe, and a
+---`pcall(require, "neo-tree.sources.tests")` in that config (the host's
+---on-demand neotest wrapper does exactly that) would then hit "loop or
+---previous error loading module". And only "module not found" means "not
+---installed"; a module that exists but throws is reported as that.
+---@return boolean ok
+---@return string|nil why
+local function tests_source_status()
+  if not neotree() then return false, "neo-tree is not loaded" end
+  local ok, err = pcall(require, "neo-tree.sources.tests")
+  if ok then return true, nil end
+  if tostring(err):find("module 'neo-tree.sources.tests' not found", 1, true) then
+    return false, "neo-tree-tests-source.nvim is not installed"
+  end
+  return false, "neo-tree.sources.tests failed to load: " .. tostring(err)
+end
+
+---@internal
+---The `sources` list neo-tree was set up with, or nil. neo-tree v3 merges its
+---config lazily, on the first command, so `nt.config` is nil until then (and
+---the fallback list below would be used for a configured neo-tree);
+---`peek_config()` is its cheap way to read a key in the meantime -- the user's
+---unmerged config, or the merged one once it exists.
+---@return string[]|nil
+local function configured_sources()
+  local nt = neotree()
+  if not nt then return nil end
+  local cfg = nt.config
+  if type(nt.peek_config) == "function" then
+    local ok, peeked = pcall(nt.peek_config)
+    if ok and type(peeked) == "table" then cfg = peeked end
+  end
+  local list = type(cfg) == "table" and cfg.sources or nil
+  return type(list) == "table" and #list > 0 and list or nil
 end
 
 ---The sources to switch between: the config's override, else what neo-tree
@@ -243,12 +277,11 @@ end
 ---@return string[]
 function M.sources()
   if type(_cfg.sources) == "table" and #_cfg.sources > 0 then return vim.deepcopy(_cfg.sources) end
-  local nt = neotree()
-  local configured = nt and nt.config and nt.config.sources
-  if type(configured) == "table" and #configured > 0 then return vim.deepcopy(configured) end
+  local configured = configured_sources()
+  if configured then return vim.deepcopy(configured) end
   local out = { "filesystem", "buffers", "git_status", "document_symbols" }
   if pcall(require, "neo-tree.sources.diagnostics") then out[#out + 1] = "diagnostics" end
-  if has_tests_source() then out[#out + 1] = "tests" end
+  if tests_source_status() then out[#out + 1] = "tests" end
   if pcall(require, "netman") then out[#out + 1] = "netman.ui.neo-tree" end
   return out
 end
@@ -275,7 +308,8 @@ function M.loadable(source)
       return false, "neo-tree-diagnostics.nvim is not installed"
     end
   elseif source == "tests" then
-    if not has_tests_source() then return false, "neo-tree-tests-source.nvim is not installed" end
+    local ok, why = tests_source_status()
+    if not ok then return false, why end
   elseif source:find("netman", 1, true) then
     if not pcall(require, "netman") then return false, "netman.nvim is not installed" end
   end
@@ -395,7 +429,6 @@ end
 ---current source and position, the loadability of each source.
 ---@return table
 function M.info()
-  local nt = neotree()
   local status = {}
   for _, s in ipairs(M.sources()) do
     local ok, why = M.loadable(s)
@@ -404,7 +437,7 @@ function M.info()
   return {
     sources = M.sources(),
     source_list_from = (type(_cfg.sources) == "table" and #_cfg.sources > 0) and "config"
-      or (nt and nt.config and nt.config.sources and "neo-tree")
+      or (configured_sources() and "neo-tree")
       or "fallback",
     current = M.current(),
     position = _adapter and type(_adapter.get_position) == "function" and _adapter.get_position()
