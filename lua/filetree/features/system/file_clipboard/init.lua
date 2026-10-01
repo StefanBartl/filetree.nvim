@@ -105,8 +105,10 @@ function M.copy_paths(paths)
     return
   end
 
-  backend.copy(existing, function(ok, err, count)
+  backend.copy(existing, function(ok, err, count, raw)
     if not ok then
+      -- The toast carries the first line; the tool's full stderr is for the debug log.
+      if raw and raw ~= "" then notify.debug("clipboard tool stderr:\n" .. raw) end
       notify.error("Could not copy to the system clipboard: " .. (err or "unknown error"))
       return
     end
