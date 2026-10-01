@@ -100,6 +100,7 @@ local KEY_FEATURES = {
   "live_search",
   "open_in_fm",
   "open_with",
+  "file_clipboard",
   "pdf_create",
   "pdf_open",
   "shell_run",

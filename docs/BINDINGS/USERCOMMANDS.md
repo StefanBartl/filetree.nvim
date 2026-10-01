@@ -123,6 +123,11 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree filelist dirs abs` | Copy recursive dir list (absolute) |
 | `:Filetree filelist dirs rel` | Copy recursive dir list (relative) |
 
+### Files to the system clipboard
+| Command | Action |
+|---------|--------|
+| `:Filetree clipfiles` | Copy the marked nodes (else the current one) to the OS clipboard as files, ready for Ctrl+V in another app |
+
 ### Lua require copy
 | Command | Action |
 |---------|--------|

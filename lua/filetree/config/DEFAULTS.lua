@@ -43,7 +43,7 @@ return {
   menu = {
     enable = true,
     fileops = true, -- create / rename / batch rename / move / template
-    clipboard = true, -- copy / cut / paste
+    clipboard = true, -- copy / cut / paste / copy to the system clipboard
     delete = true, -- trash
     open = true, -- vsplit / split / tab / system app / file manager
     paths = true, -- copy path / markdown link

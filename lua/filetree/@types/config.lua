@@ -130,7 +130,8 @@
 ---@field file_watcher         FiletreeFileWatcherConfig?
 ---@field hooks_api            FiletreeHooksApiConfig?
 ---@field open_with               FiletreeOpenWithConfig?
----@field pdf_open                FiletreePdfOpenConfig?
+---@field file_clipboard          FiletreeFileClipboardConfig?
+---@field pdf_open               FiletreePdfOpenConfig?
 ---@field pdf_create              FiletreePdfCreateConfig?
 ---@field move                    FiletreeMoveConfig?
 ---@field smart_rename            FiletreeSmartRenameConfig?
@@ -667,6 +668,13 @@
 ---@field enabled  boolean
 ---@field keymap   string?              System-default open key (default "<leader>sm").
 ---@field apps     FiletreeOpenWithApp[]  Custom application entries.
+
+-- ── file_clipboard ────────────────────────────────────────────────────────────
+
+---@class FiletreeFileClipboardConfig
+---@field enabled?        boolean
+---@field keymap?         string    Copy the marked nodes (else the current one) to the OS clipboard as files (default "gy").
+---@field preview_limit?  integer   Names listed in the notification (default 5).
 
 -- ── pdf_open ──────────────────────────────────────────────────────────────────
 

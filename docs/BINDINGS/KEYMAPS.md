@@ -78,6 +78,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `<PageDown>` | preview | `keymap_scroll_down10` | Same as above, downward |
 | `D` | diff | `keymap` | Diff current node |
 | `<leader>sm` | open_with | `keymap` | Open with system default |
+| `gy` | file_clipboard | `keymap` | Copy the FILES (all marked, else the current node) to the OS clipboard, so Ctrl+V pastes them into a chat, mail or file manager |
 | `r` | smart_rename | `keymap` | Rename with LSP reference update |
 | `M` | move | `keymap` | Move current node (or all marked) to a prompted destination |
 | `A` | create_from_template | `keymap` | Create from template — pick a template first, then a filename pre-filled with its extension |

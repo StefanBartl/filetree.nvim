@@ -170,6 +170,12 @@ require("filetree").setup({
       -- reuse_existing = false, -- Windows: navigate an open Explorer window instead
     },
 
+    file_clipboard = {
+      enabled       = true,      -- default: on
+      keymap        = "gy",      -- copy the FILES (marked, else the cursor node) to the OS clipboard
+      preview_limit = 5,         -- names listed in the notification
+    },
+
     shell_run = {
       enabled     = true,        -- default: on
       keymap      = "i",         -- prompt + run shell command in node directory

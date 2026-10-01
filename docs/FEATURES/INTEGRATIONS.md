@@ -114,6 +114,40 @@ Neovim's own `preview`/`open` path.
 - **Keymaps:** `<leader>sm`
 - **Config:** external-app mapping — see [configuration.md](../configuration.md)
 
+## File Clipboard
+
+`gy` puts the **files themselves** on the operating system's clipboard, so
+Ctrl+V pastes them into a chat window, a mail, an upload dialog or a file
+manager — without opening the OS file manager first. Mark three screenshots
+with `m`, press `gy`, switch to the chat, Ctrl+V: three images.
+
+It copies what Ctrl+C does in Explorer or Finder: a *file list*. That is
+neither the text of the paths (`[a`, `[f` — see
+[SEARCH_AND_PATHS.md](SEARCH_AND_PATHS.md)) nor filetree's own copy/cut
+staging (`c`/`x`/`p`, which only `p` inside the tree can paste).
+
+Targets: every marked node when any is marked, else the node under the
+cursor. Directories go as directories; entries that no longer exist are
+skipped and reported. The marks are left alone, so the same selection can
+feed `path_copy` or `markdown_links` next.
+
+| Platform | Tool | Status |
+|----------|------|--------|
+| Windows | `powershell.exe` → `Set-Clipboard -LiteralPath` | tested, incl. umlauts, `&`, `'`, `[ ]`, `$` |
+| macOS | `osascript` (`set the clipboard to {POSIX file …}`) | implemented, not yet run on a Mac |
+| Linux | `wl-copy` (Wayland) or `xclip` (X11), MIME `text/uri-list` | implemented, not yet run on Linux; GNOME Files may want its own `x-special/gnome-copied-files` format |
+| WSL | — | refused with a message |
+
+No path is ever spliced into a script or a shell string; the tools receive
+them as argv, stdin or an environment variable. The Windows round trip can be
+re-run with `FILETREE_TEST_REAL_CLIPBOARD=1` (see `TESTS/file_clipboard.lua`;
+it overwrites the clipboard).
+
+- **Module:** `lua/filetree/features/system/file_clipboard/`
+- **Keymaps:** `gy` (config field `keymap`)
+- **Commands:** `:Filetree clipfiles`
+- **Config:** `opts.features.file_clipboard.keymap`, `.preview_limit` (names listed in the notification, default 5)
+
 ## Shell Run
 
 `i` prompts for a shell command and runs it in the node's directory —
