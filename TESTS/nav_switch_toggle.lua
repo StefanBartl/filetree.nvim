@@ -289,11 +289,90 @@ do
   check("tests source: none of this required neotest", not neotest_required)
   eq("tests source: ... nor left it loaded", package.loaded["neotest"], nil)
 
+  -- 3. only "module not found" means "not installed": a source module that is
+  -- there but throws while loading is reported as exactly that.
+  package.loaded["neo-tree.sources.tests"] = nil
+  vim.fn.writefile(
+    { 'error("boom from the source module")' },
+    dir .. "/lua/neo-tree/sources/tests/init.lua"
+  )
+  local ok_throws, why_throws = sw.loadable("tests")
+  eq("tests source: a module that throws is not loadable", ok_throws, false)
+  check(
+    "tests source: ... and the reason is the failure, not 'not installed'",
+    tostring(why_throws):find("failed to load", 1, true) ~= nil
+      and tostring(why_throws):find("boom from the source module", 1, true) ~= nil
+      and tostring(why_throws):find("not installed", 1, true) == nil,
+    why_throws
+  )
+  vim.fn.writefile({ 'return { name = "tests" }' }, dir .. "/lua/neo-tree/sources/tests/init.lua")
+  package.loaded["neo-tree.sources.tests"] = nil
+
+  -- 4. neo-tree itself comes first: probing a source module before neo-tree is
+  -- up would make a lazy-loaded neo-tree run its own config() in the middle of
+  -- the probe, and a require of that module from there hits a require loop.
+  local loaded_nt, preload_nt = package.loaded["neo-tree"], package.preload["neo-tree"]
+  package.loaded["neo-tree"], package.preload["neo-tree"] = nil, nil
+  local ok_no_nt, why_no_nt = sw.loadable("tests")
+  package.loaded["neo-tree"], package.preload["neo-tree"] = loaded_nt, preload_nt
+  eq("tests source: not loadable without neo-tree", ok_no_nt, false)
+  check(
+    "tests source: ... and the reason names neo-tree",
+    tostring(why_no_nt):find("neo-tree is not loaded", 1, true) ~= nil,
+    why_no_nt
+  )
+  eq(
+    "tests source: ... without having required the source module",
+    package.loaded["neo-tree.sources.tests"],
+    nil
+  )
+
   stub_neotree.config.sources = configured
   package.preload["neotest"] = nil
   package.loaded["neo-tree.sources.tests"] = nil
   vim.opt.rtp:remove(dir)
   vim.fn.delete(dir, "rf")
+end
+
+-- ── source_switcher: neo-tree merges its config lazily ────────────────────────
+-- neo-tree v3 only stores what `setup()` was given; `config` stays nil until
+-- the first command merges it. `peek_config()` is its cheap way to read a key
+-- meanwhile. Without it the switcher offered its hard-coded fallback list (and
+-- `switch()` handed neo-tree a source it does not know) until the first :Neotree.
+do
+  local saved_config, saved_peek = stub_neotree.config, stub_neotree.peek_config
+  sw.setup({ enabled = true }, stub_adapter)
+
+  stub_neotree.config = nil
+  stub_neotree.peek_config = function()
+    return { sources = { "filesystem", "git_status" } }
+  end
+  local list = sw.sources()
+  eq("lazy config: the user's configured list is used before the first merge", #list, 2)
+  eq("lazy config: ... in its order", list[2], "git_status")
+  eq("lazy config: info names neo-tree as the origin", sw.info().source_list_from, "neo-tree")
+
+  -- Already merged: peek_config hands the merged table back.
+  stub_neotree.peek_config = function()
+    return { sources = { "buffers" } }
+  end
+  eq("lazy config: a merged list is read the same way", sw.sources()[1], "buffers")
+
+  -- A user config without a `sources` key: the fallback decides, as before.
+  stub_neotree.peek_config = function()
+    return {}
+  end
+  eq("lazy config: no `sources` key falls back to the built-ins", sw.sources()[1], "filesystem")
+  eq("lazy config: ... and info says so", sw.info().source_list_from, "fallback")
+
+  -- A peek_config that throws never takes the switcher down with it.
+  stub_neotree.peek_config = function()
+    error("neo-tree is mid-setup")
+  end
+  stub_neotree.config = { sources = { "filesystem", "buffers", "git_status" } }
+  eq("lazy config: a throwing peek_config falls back to `config`", #sw.sources(), 3)
+
+  stub_neotree.config, stub_neotree.peek_config = saved_config, saved_peek
 end
 
 -- ── tree_toggle ───────────────────────────────────────────────────────────────
