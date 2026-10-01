@@ -56,11 +56,21 @@ M.SCHEMA = {
 ---@type FiletreeAdapter?
 local _adapter = nil
 
+---The link text for `path`: its last segment. A trailing separator (`dir/`) must
+---not leave the title empty -- `:t` of `dir/` is "".
+---@param path string
+---@return string
+local function link_name(path)
+  local trimmed = path:gsub("[/]+$", "")
+  local name = vim.fn.fnamemodify(trimmed, ":t")
+  return name ~= "" and name or path
+end
+
 ---@param path string
 ---@return string  markdown link "[name](relative/path)"
 local function to_link(path)
   local rel = vim.fn.fnamemodify(path, ":."):gsub("\\", "/")
-  local name = vim.fn.fnamemodify(path, ":t")
+  local name = link_name(path)
   return string.format("[%s](%s)", name, rel)
 end
 
@@ -157,8 +167,7 @@ end
 local function build_insert_links(paths, buf)
   local links = {}
   for _, path in ipairs(paths) do
-    links[#links + 1] =
-      string.format("[%s](%s)", vim.fn.fnamemodify(path, ":t"), insert_target(path, buf))
+    links[#links + 1] = string.format("[%s](%s)", link_name(path), insert_target(path, buf))
   end
   return links
 end
@@ -186,7 +195,9 @@ function M.insert_current()
     return
   end
 
-  local win = find_usable.previous_window()
+  -- The current window when the command was typed in the editor, the previous
+  -- one when the key was pressed in the tree (older lib.nvim: previous only).
+  local win = (find_usable.insertion_window or find_usable.previous_window)()
   if not win then
     notify.warn("No editor window to insert into")
     return
