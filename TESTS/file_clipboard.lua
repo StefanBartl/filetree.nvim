@@ -122,7 +122,7 @@ do
     })
     check(
       "linux: a backslash name is percent-encoded, not turned into a slash",
-      lin.stdin:find("%5C", 1, true) ~= nil and not lin.stdin:find("back/slash", 1, true),
+      lin.stdin:lower():find("%5c", 1, true) ~= nil and not lin.stdin:find("back/slash", 1, true),
       lin.stdin
     )
   end
