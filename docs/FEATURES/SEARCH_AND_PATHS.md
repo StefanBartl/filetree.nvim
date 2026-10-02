@@ -72,6 +72,13 @@ Copies the node's absolute path or its parent directory's path
 (`[a`/`]a`), or the path relative to the project root (`[R`/`]R`) — keys
 covering the "I need this path somewhere else" cases without a prompt.
 
+`absolute`, `dirname` and `project_root` write an **absolute** path, so they go
+through the top-level [`env_roots`](../configuration.md#env-roots) option:
+a path under `$REPOS_DIR`, `$NVIM_CONFIG_DIR` or a root of your own is copied
+as `$NAME/rest` (default on). `:Filetree copy absolute_raw` is the plain
+absolute path, `env_roots = { enable = false }` turns the folding off for
+good, and `uri` always keeps the real path.
+
 Every format copies with forward slashes, on every OS — `sub/b.lua`, never
 `sub\b.lua`. That is the same separator the tree, its prompts and its
 notifications use, and the one this feature's own examples have always shown;

@@ -58,6 +58,22 @@ require("filetree").setup({
   -- "Progress indicators" below.
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
+  -- Named roots that ABSOLUTE paths are written with — see "Env roots" below.
+  -- A copied absolute path, the project root, an absolute file list, an
+  -- inserted Markdown link (insert_path = "absolute") and a created symlink's
+  -- messages come out as `$REPOS_DIR/foo.nvim/x.lua` / `$NVIM_CONFIG_DIR/lua/x.lua`
+  -- instead of `E:/repos/foo.nvim/x.lua`.
+  env_roots = {
+    enable      = true,                 -- false → plain absolute paths everywhere
+    -- vars     = { "REPOS_DIR" },      -- environment variables whose value is a root
+    --                                  -- (the default; setting it REPLACES the list)
+    nvim_config = true,                 -- $NVIM_CONFIG_DIR = stdpath("config"), no env var needed
+    extra       = {                     -- more roots: name = path | function
+      -- WKDBOOKS = "E:/repos/WKDBooks",
+      -- NOTES    = function() return vim.fn.expand("~/notes") end,
+    },
+  },
+
   -- Cap on how many nodes one walk of the rendered tree collects. Only a
   -- guard against a single directory expanded with tens of thousands of
   -- entries; the walk is already bounded by what is expanded.
@@ -285,6 +301,50 @@ require("filetree").setup({
   integrations = {
     pickers = true,   -- false keeps find_files / grep_in_dir off pickers.nvim
     ui_menu = true,   -- false keeps ui.nvim's right-click menu from offering "Open/Close filetree"
+  },
+})
+```
+
+## Env roots
+
+`env_roots` names the directories that **absolute paths are written with**.
+A path under one of them is written `$NAME/rest` instead of `E:/repos/rest`,
+so the text — a copied path, a pasted link, a message — means the same on a
+machine where that directory sits on another drive or under another home.
+
+| Root | Where it comes from |
+|---|---|
+| `$REPOS_DIR` | the environment variable of that name (`vars`) |
+| `$NVIM_CONFIG_DIR` | `vim.fn.stdpath("config")` — no environment variable needed (`nvim_config = false` drops it) |
+| your own | `extra = { NAME = "/abs/path" }`, a plain path or a function returning one — no environment variable needed; a name here overrides a `vars` entry of the same name |
+
+An unset variable is skipped, and when roots nest the **longest** match wins.
+
+What goes through it — the actions that hand an *absolute* path to you:
+
+- `:Filetree copy absolute` / `dirname` / `project_root` (`[a`, `]a`, `[R`)
+- `:Filetree filelist files abs` / `dirs abs`
+- Markdown links inserted with `insert_path = "absolute"` (and `"env"`)
+- `:Filetree symlink` — the typed target is expanded (`$REPOS_DIR/x`,
+  `$NVIM_CONFIG_DIR/x`, `$YOURS/x`), the messages show the env form, and the
+  link's own target text is chosen portably — see
+  [Link Create](FEATURES/FILEOPS.md#link-create)
+
+What does **not**: everything relative by definition (`relative`,
+`buffer_relative`, `project_relative`, Markdown links relative to the buffer),
+and everything that needs the real path (`uri`, open-with, the file manager,
+the OS file clipboard, shell commands).
+
+Switch it off with `env_roots = { enable = false }` — every action above then
+writes the plain absolute path again. `:Filetree copy absolute_raw` is the
+plain path on demand while it is on, and `:Filetree copy env_rooted` folds on
+demand while it is off.
+
+```lua
+require("filetree").setup({
+  env_roots = {
+    vars  = { "REPOS_DIR", "WORK_DIR" },      -- replaces the default { "REPOS_DIR" }
+    extra = { WKDBOOKS = "E:/repos/WKDBooks" },
   },
 })
 ```

@@ -1229,6 +1229,27 @@ symlink) and a symlink elsewhere. Marking again replaces the previous source;
 pasting does not clear it, so one marked source can be linked into several
 places in a row.
 
+Env roots and portable links. The target may be written with a root —
+`$REPOS_DIR/x`, `$NVIM_CONFIG_DIR/x` (no environment variable needed for that
+one) or a root of your own (see Env roots) — and the messages show targets
+in that form. What the link itself stores is decided by
+`features.link_create.relative`:
+
+• `"auto"` (default): when the link and its target live under the same
+root, the target is stored relative (`../../proj/dir_a`). Such a link keeps
+working on another machine where that root is on another drive or under
+another home — an absolute `E:/repos/…` would not. (On Windows the
+relative text is written with backslashes: Windows does not resolve a relative
+symlink target written with `/`.)
+• Across two roots (link under `$REPOS_DIR`, target under
+`$NVIM_CONFIG_DIR`) there is no portable form: a symlink cannot carry an
+environment variable, and the two roots have no fixed layout between them. The
+target stays absolute and the message says so — see `repair` below for
+getting it back on another machine.
+• `"always"`: relative whenever a relative form exists (same drive).
+`"never"`: always absolute. Hardlinks are never relative. With `env_roots = {
+enable = false }`, `"auto"` stores absolute targets.
+
 Usercmd-first, like Path Copy's format picker: no key is bound by default, so
 set `features.link_create.keymap` (or `.keymap_mark` / `.keymap_paste`) if you
 want one.
@@ -1251,6 +1272,16 @@ PDF Open's pdfport.nvim bridge. Found candidates are offered in a picker (plus
 found, it falls back to the delete-or-keep choice directly. `:Filetree symlink
 repairall` runs this over every broken symlink among the marked nodes (else
 the node under the cursor), one at a time.
+
+Before any search, `repair` tries the cheapest candidate first: the same path
+under this machine's roots. A link recorded on another machine as
+`E:/repos/casedesk.nvim/x.md` is re-anchored by its root's folder name —
+everything after a `repos` segment is looked up under this machine's
+`$REPOS_DIR` (likewise `nvim` for `$NVIM_CONFIG_DIR`, or the folder name of a
+root of your own). This is what makes a cross-root link — which has to be
+stored absolute — usable on a second device: `:Filetree symlink repairall`
+on the marked links and pick the candidate. When it finds one the disk search
+is skipped. (Switched off with the rest of `env_roots` by `enable = false`.)
 
 The search never widens into Neovim's own cache/data/state directories (that's
 where the undo/swap/shada directories live — a stray file there could
@@ -1278,9 +1309,10 @@ or this command) only ever removes the link itself; the confirm prompt says so
 explicitly rather than reading like an ordinary file delete.
 
 Config: `features.link_create.keymap` / `.keymap_mark` / `.keymap_paste` (all
-        unset by default), `.repair_roots` (default `{ "$REPOS_DIR" }`),
-        `.repair_nvim_config_root` (default `true`), `.repair_search_progress`
-        (default `"auto"`), `.repair_search_slow_hint_ms` (default `2000`)
+        unset by default), `.relative` (default `"auto"`), `.repair_roots`
+        (default `{ "$REPOS_DIR" }`), `.repair_nvim_config_root` (default
+        `true`), `.repair_search_progress` (default `"auto"`),
+        `.repair_search_slow_hint_ms` (default `2000`)
 
 Commands: `:Filetree symlink`, `:Filetree symlink mark [path]`, `:Filetree
           symlink paste`, `:Filetree symlink check [path]`, `:Filetree symlink
@@ -1970,6 +2002,13 @@ PATH COPY                                                 *filetree-path-copy*
 Copies the node's absolute path or its parent directory's path (`[a`/`]a`), or
 the path relative to the project root (`[R`/`]R`) — keys covering the "I
 need this path somewhere else" cases without a prompt.
+
+`absolute`, `dirname` and `project_root` write an absolute path, so they go
+through the top-level `env_roots` option: a path under `$REPOS_DIR`,
+`$NVIM_CONFIG_DIR` or a root of your own is copied as `$NAME/rest` (default
+on). `:Filetree copy absolute_raw` is the plain absolute path, `env_roots = {
+enable = false }` turns the folding off for good, and `uri` always keeps the
+real path.
 
 Every format copies with forward slashes, on every OS — `sub/b.lua`, never
 `sub\b.lua`. That is the same separator the tree, its prompts and its

@@ -131,6 +131,9 @@ function M.info_lines(path)
 
   local lines = {}
   lines[#lines + 1] = "  Path:     " .. path
+  -- The same path as it would be copied (`$REPOS_DIR/...`), when it differs.
+  local folded = require("filetree.util.env_roots").fold(path)
+  if folded ~= path then lines[#lines + 1] = "  Env path: " .. folded end
 
   local type_str = stat.type or "unknown"
   if is_link then

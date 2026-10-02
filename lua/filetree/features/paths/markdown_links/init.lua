@@ -23,6 +23,7 @@ local notify = require("filetree.util.notify").create("[filetree.markdown_links]
 
 local fs = require("filetree.util.fs")
 local path_util = require("filetree.util.path")
+local env_roots = require("filetree.util.env_roots")
 local ignore = require("filetree.util.ignore")
 local bind = require("filetree.util.bind")
 local M = {}
@@ -141,14 +142,13 @@ end
 ---@return string
 local function insert_target(path, buf)
   local mode = _cfg.insert_path
-  if mode == "absolute" then return path_util.slashify(path) end
+  -- Absolute, so folded per the top-level `env_roots` option (a no-op when it
+  -- is off); "env" asks for it by name and folds even then.
+  if mode == "absolute" then return path_util.slashify((env_roots.fold(path))) end
 
   if mode == "env" then
-    local rooted, name = path_util.env_rooted(
-      path,
-      _cfg.env_roots,
-      { { name = "NVIM_CONFIG_DIR", root = vim.fn.stdpath("config") } }
-    )
+    local rooted, name =
+      env_roots.fold(path, { names = _cfg.env_roots, nvim_config = true, force = true })
     if name then return rooted end
   end
 

@@ -18,6 +18,19 @@
 --- `M.paste`). Marking again replaces the previous source; pasting does not
 --- clear it, so the same source can be linked into several places in a row
 --- (mirrors copy_move's copy-stays-staged behaviour).
+---
+--- Env roots (`filetree.util.env_roots`, the top-level `env_roots` option):
+---   * a target typed as `$REPOS_DIR/x`, `$NVIM_CONFIG_DIR/x` (no environment
+---     variable needed for that one) or any user-defined root is expanded;
+---   * a symlink whose link and target live under the SAME root is created with
+---     a RELATIVE target (`relative = "auto"`), so it keeps working on another
+---     machine where that root sits on another drive/home -- an absolute
+---     `E:/repos/x` would not;
+---   * a symlink across two roots (link in `$REPOS_DIR`, target in
+---     `$NVIM_CONFIG_DIR`) has no portable form -- a symlink cannot carry an
+---     environment variable -- so it stays absolute, the message names the env
+---     form, and `repair` re-anchors it on the other machine (it looks the
+---     recorded path up under THIS machine's roots before searching the disk).
 
 local confirm_choice = require("filetree.util.confirm_choice")
 local ui_select = require("filetree.util.select")
@@ -26,6 +39,7 @@ local platform = require("filetree.util.platform")
 local buffer = require("filetree.util.buffer")
 local symlink_util = require("filetree.util.symlink")
 local progress = require("filetree.util.progress")
+local env_roots = require("filetree.util.env_roots")
 local mutate = require("lib.nvim.cross.fs.mutate")
 
 local M = {}
@@ -36,6 +50,7 @@ local _cfg = {
   keymap = nil, -- off by default; set e.g. keymap = "gl" to bind one
   keymap_mark = nil,
   keymap_paste = nil,
+  relative = "auto",
   -- On by default: a real measurement (5.8k files/737MB Neovim config,
   -- worst case -- nothing found, full walk) came back in ~0.1s, so the
   -- earlier worry about gopath.nvim's async walker being slow here doesn't
@@ -61,6 +76,7 @@ M.SCHEMA = {
   keymap = "keymap",
   keymap_mark = "keymap",
   keymap_paste = "keymap",
+  relative = { "string", enum = { "auto", "always", "never" } },
   repair_roots = { "table", of = "string" },
   repair_nvim_config_root = "boolean",
   repair_search_progress = {
@@ -104,7 +120,10 @@ end
 ---@param raw string
 ---@return string
 local function to_target(raw)
-  local target = path.slashify(path.to_absolute(path.slashify(raw)))
+  -- `$REPOS_DIR/x` / `$NVIM_CONFIG_DIR/x` / user-defined roots first: they
+  -- need no real environment variable, which `to_absolute`'s generic `$VAR`
+  -- expansion does.
+  local target = path.slashify(path.to_absolute(path.slashify(env_roots.expand(raw))))
   if #target > 1 and target:sub(-1) == "/" then target = target:sub(1, -2) end
   return target
 end
@@ -126,6 +145,45 @@ local function friendly_error(err)
 end
 
 ---@internal
+---The target text a SYMLINK is created with (see the header and the `relative`
+---option): relative to the link's directory when `target` and `link_path` sit
+---under the same env root -- or always, with `relative = "always"` -- else the
+---absolute path. `nil` second value = a relative form was used.
+---@param target string    Absolute path the link points to.
+---@param link_path string Absolute path of the link to create.
+---@return string text
+---@return boolean relative
+local function symlink_text(target, link_path)
+  local mode = _cfg.relative or "auto"
+  if mode == "never" then return target, false end
+  if mode == "auto" then
+    local t_root = env_roots.root_of(target)
+    if not t_root or t_root ~= env_roots.root_of(link_path) then return target, false end
+  end
+  local rel = path.dot_relative(target, path.parent(link_path))
+  -- No relative form exists across drive letters: dot_relative hands the
+  -- absolute path back.
+  if rel:match("^%a:/") or rel:sub(1, 1) == "/" then return target, false end
+  rel = rel:gsub("^%./", "")
+  -- Windows resolves a RELATIVE symlink target only with backslashes: with `/`
+  -- the link is created and `readlink` shows it, but `stat` fails -- an
+  -- absolute target does not have this problem, a relative one does.
+  if platform.is_windows() then rel = rel:gsub("/", "\\") end
+  return rel, true
+end
+
+---@internal
+---A path for a message: its env form when it sits under a root, else relative
+---to the cwd like everywhere else in this plugin.
+---@param p string
+---@return string
+local function display(p)
+  local folded, name = env_roots.fold(p)
+  if name then return folded end
+  return path.relative(p)
+end
+
+---@internal
 ---@param target string    Absolute path the link points to.
 ---@param link_path string Absolute path of the link to create.
 ---@param kind "Symlink"|"Hardlink"
@@ -133,6 +191,7 @@ end
 local function do_create(target, link_path, kind, is_dir)
   local ok, err
   local fell_back = false
+  local text, is_relative = target, false
   if kind == "Hardlink" then
     ok, err = mutate.hardlink(target, link_path)
     if not ok and type(err) == "string" and err:match("^EXDEV") then
@@ -145,10 +204,12 @@ local function do_create(target, link_path, kind, is_dir)
       -- user-chosen one, on any platform.
       kind = "Symlink"
       fell_back = true
-      ok, err = mutate.symlink(target, link_path, is_dir)
+      text, is_relative = symlink_text(target, link_path)
+      ok, err = mutate.symlink(text, link_path, is_dir)
     end
   else
-    ok, err = mutate.symlink(target, link_path, is_dir)
+    text, is_relative = symlink_text(target, link_path)
+    ok, err = mutate.symlink(text, link_path, is_dir)
   end
 
   if not ok then
@@ -156,7 +217,16 @@ local function do_create(target, link_path, kind, is_dir)
     return
   end
 
-  local msg = kind .. " created: " .. path.relative(link_path) .. " -> " .. path.relative(target)
+  local msg = kind .. " created: " .. path.relative(link_path) .. " -> " .. display(target)
+  if kind == "Symlink" and is_relative then
+    msg = msg .. " (stored relative: " .. text .. " -- survives a moved root)"
+  elseif kind == "Symlink" and env_roots.root_of(target) then
+    -- Absolute, with the target under a root: the link text itself cannot say
+    -- `$ROOT/...`, so say what can be done about it.
+    msg = msg
+      .. " (stored absolute -- link and target are under different roots; on another machine"
+      .. " `:Filetree symlink repair` re-anchors it)"
+  end
   if fell_back then
     msg = msg .. " (hardlink not possible across drives/filesystems, used a symlink instead)"
   end
@@ -169,15 +239,15 @@ end
 function M.create()
   local parent = resolve_parent_dir()
 
-  local display = path.relative(parent)
-  if display == "" or display == "." then
-    display = "./"
+  local shown = path.relative(parent)
+  if shown == "" or shown == "." then
+    shown = "./"
   else
-    display = display .. "/"
+    shown = shown .. "/"
   end
 
   require("ui.kit").input({
-    title = "Link target (path to link to), created in " .. display .. ": ",
+    title = "Link target (path or $ROOT/path to link to), created in " .. shown .. ": ",
     on_submit = function(input)
       if not input or input == "" then return end
 
@@ -783,6 +853,16 @@ local function repair_one(link_path, on_done)
   if not raw_target then
     notify.error("Could not read link target: " .. path.relative(link_path))
     return on_done()
+  end
+
+  -- A link recorded on another machine: the same path under THIS machine's
+  -- roots (`E:/repos/x` -> `$REPOS_DIR/x` here) is far likelier right than
+  -- anything a disk search turns up, and costs a stat -- so it goes first and,
+  -- when it exists, spares the search.
+  local remapped = env_roots.remap(raw_target)
+  if #remapped > 0 then
+    offer_repair(link_path, remapped, on_done)
+    return
   end
 
   local ok_ts, tailsearch = pcall(require, "gopath.resolvers.common.tailsearch")

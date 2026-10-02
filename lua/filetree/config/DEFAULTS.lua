@@ -31,6 +31,24 @@ return {
   -- entries; the walk is already bounded by what is expanded.
   max_visible_nodes = 5000,
 
+  -- Named root directories that ABSOLUTE paths are written with: a copied
+  -- absolute path, the project root, a file list, an inserted Markdown link
+  -- (insert_path = "absolute"), a symlink's target and its messages come out as
+  -- `$REPOS_DIR/foo.nvim/x.lua` / `$NVIM_CONFIG_DIR/lua/x.lua` instead of
+  -- `E:/repos/foo.nvim/x.lua`, so the text (and the link) means the same on a
+  -- machine where the checkout sits on another drive. Explicitly relative
+  -- actions (`relative`, `buffer_relative`, Markdown links relative to the
+  -- buffer) and ones that need a real path (`uri`, open-with, the OS
+  -- clipboard) are not affected; `:Filetree copy absolute_raw` is the plain
+  -- absolute path on demand. See docs/configuration.md.
+  env_roots = {
+    enable = true, -- false: never fold, write plain absolute paths
+    -- vars = { "REPOS_DIR" },  -- environment variables whose value is a root
+    --                          -- (default; setting it REPLACES the list)
+    nvim_config = true, -- $NVIM_CONFIG_DIR = stdpath("config"), no env var needed
+    extra = {}, -- more roots: { WKDBOOKS = "E:/repos/WKDBooks", NOTES = function() ... end }
+  },
+
   -- Reference engine: keeps markdown links and require()/import statements
   -- pointing at the right file after a rename/move/delete. One block for every
   -- fileops feature; see lua/filetree/refs/DEFAULTS.lua for the annotated

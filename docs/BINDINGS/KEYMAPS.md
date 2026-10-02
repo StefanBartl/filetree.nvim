@@ -47,8 +47,8 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `gp` | cwd_mode | `keymap_lock_here` | Lock the cwd to the node under the cursor |
 | `<C-n>` | buffer_cycle | `keymap_next` | Next buffer in the adjacent editor window (tree keeps focus) |
 | `<C-p>` | buffer_cycle | `keymap_prev` | Previous buffer in the adjacent editor window (tree keeps focus) |
-| `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard (or all marked) |
-| `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard (or all marked) |
+| `[a` | path_copy | `keymap_abs` | Copy absolute path to clipboard, `$REPOS_DIR/…`-folded per `env_roots` (or all marked) |
+| `]a` | path_copy | `keymap_dirname` | Copy absolute parent directory to clipboard, folded like `[a` (or all marked) |
 | `[R` | path_copy | `keymap_project_root` | Copy absolute project root path to clipboard (or all marked) |
 | `]R` | path_copy | `keymap_project_rel` | Copy path relative to project root, cwd-independent (or all marked) |
 | `]b` | path_copy | `keymap_buffer_rel` | Copy path relative to the buffer open in the editor, `./x`/`../x` (or all marked) |

@@ -68,6 +68,25 @@ function M.check()
     vim.health.ok("Config validated")
   end
 
+  -- Named roots absolute paths are written with (`env_roots`): say which are
+  -- live on this machine, so a `$REPOS_DIR` that silently is not set is visible.
+  do
+    local env_roots = require("filetree.util.env_roots")
+    if not env_roots.enabled() then
+      vim.health.info("env_roots: off -- absolute paths are written as plain absolute paths")
+    else
+      local names = {}
+      for _, r in ipairs(env_roots.roots()) do
+        names[#names + 1] = ("$%s = %s"):format(r.name, r.root)
+      end
+      if #names == 0 then
+        vim.health.info("env_roots: on, but no root has a value on this machine")
+      else
+        vim.health.ok("env_roots: " .. table.concat(names, "; "))
+      end
+    end
+  end
+
   -- Unknown top-level option / feature name from the last setup() call
   -- (ERR-50) -- dropped before the merge, reported here.
   local cfg_issues = type(config_mod.issues) == "function" and config_mod.issues() or {}

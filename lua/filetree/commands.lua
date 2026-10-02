@@ -585,6 +585,10 @@ local TREE = {
       local f = ft("path_copy")
       if f then f.copy_name() end
     end,
+    absolute_raw = function(_)
+      local f = ft("path_copy")
+      if f then f.copy_absolute_raw() end
+    end,
     dirname = function(_)
       local f = ft("path_copy")
       if f then f.copy_dirname() end
