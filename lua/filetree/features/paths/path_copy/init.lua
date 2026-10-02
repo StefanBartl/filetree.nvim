@@ -5,18 +5,28 @@
 --- both the "+" (system) register and the unnamed '"' register.
 ---
 --- Formats:
----   absolute  /home/user/project/src/foo.lua
+---   absolute  /home/user/project/src/foo.lua  (folded to `$REPOS_DIR/...` /
+---             `$NVIM_CONFIG_DIR/...` when under an `env_roots` root -- see below)
+---   absolute_raw  the same, never folded: the plain absolute path
 ---   relative  src/foo.lua             (relative to cwd)
 ---   name      foo.lua                 (filename only)
----   dirname   /home/user/project/src  (parent directory)
+---   dirname   /home/user/project/src  (parent directory; folded like `absolute`)
 ---   uri       file:///home/user/...   (file:// URI)
 ---   line      src/foo.lua:42          (path + cursor line in tree win)
 ---   stem      foo                     (filename without extension)
----   project_root      /home/user/project        (detected project root, cwd-independent)
+---   project_root      /home/user/project        (detected project root, cwd-independent; folded like `absolute`)
 ---   project_relative  src/foo.lua               (path relative to that root)
 ---   buffer_relative   ./ROADMAP.md              (relative to the OPEN buffer's directory)
 ---   env_rooted        $REPOS_DIR/foo.nvim/x.lua (absolute, with an env-var root folded in;
 ---                     $NVIM_CONFIG_DIR/lua/x.lua under stdpath("config"), see nvim_config_root)
+---
+--- `absolute`, `dirname` and `project_root` write an ABSOLUTE path, so they go
+--- through the top-level `env_roots` option (default on): a path under
+--- `$REPOS_DIR`, `$NVIM_CONFIG_DIR` or a user-defined root comes out as
+--- `$NAME/rest`, which means the same on a machine where the checkout sits on
+--- another drive. `env_roots = { enable = false }` writes plain absolute paths
+--- again, and `absolute_raw` is the plain path on demand. `uri` always needs
+--- the real path; the relative formats are relative by definition.
 ---
 --- Config:
 ---   enabled              boolean
@@ -36,7 +46,7 @@
 ---   notify               boolean  Show a notification after copying (default true).
 ---
 --- Commands (via :Filetree dispatcher):
----   :Filetree copy absolute|relative|name|dirname|uri|line|stem|project_root|project_relative|buffer_relative|env_rooted|pick
+---   :Filetree copy absolute|absolute_raw|relative|name|dirname|uri|line|stem|project_root|project_relative|buffer_relative|env_rooted|pick
 
 local notify = require("filetree.util.notify").create("[filetree.path_copy]")
 
@@ -45,6 +55,7 @@ local bind = require("filetree.util.bind")
 -- Copied paths follow the plugin's canonical separator, like everything else
 -- the user sees -- see `build()` below.
 local ftpath = require("filetree.util.path")
+local env_roots = require("filetree.util.env_roots")
 local find_root = require("lib.nvim.fs.find_root")
 local lib_relpath = require("lib.nvim.fs.relpath")
 local M = {}
@@ -157,9 +168,20 @@ local function cursor_line()
   return nil
 end
 
+---Fold an absolute path into its `$NAME/rest` form per the top-level
+---`env_roots` option; unchanged when it is off or nothing matches.
+---@param path string
+---@return string
+local function folded(path)
+  return (env_roots.fold(path))
+end
+
 ---@type table<string, fun(path: string): string>
 local FORMATS = {
-  absolute = function(path)
+  absolute = folded,
+  -- Never folded: the plain absolute path (also what `absolute` gives with
+  -- `env_roots.enable = false`).
+  absolute_raw = function(path)
     return path
   end,
   relative = function(path)
@@ -169,7 +191,7 @@ local FORMATS = {
     return vim.fn.fnamemodify(path, ":t")
   end,
   dirname = function(path)
-    return vim.fn.fnamemodify(path, ":h")
+    return folded(vim.fn.fnamemodify(path, ":h"))
   end,
   stem = function(path)
     return vim.fn.fnamemodify(path, ":t:r")
@@ -190,7 +212,7 @@ local FORMATS = {
   end,
   -- Absolute path of the detected project root ([R). cwd-independent.
   project_root = function(path)
-    return resolve_root(path)
+    return folded(resolve_root(path))
   end,
   -- Relative to the directory of the buffer open in the editor (]b), in the
   -- `./x` / `../x` form a Markdown link target needs. See `editor_dir`.
@@ -203,12 +225,17 @@ local FORMATS = {
   -- is turned off -- otherwise a node inside the Neovim config itself always
   -- fell through every `env_roots` entry (it typically lives nowhere near
   -- `$REPOS_DIR`) straight to the plain absolute path.
+  -- Asked for by name, so it folds even with `env_roots.enable = false`; the
+  -- roots are the central `env_roots` ones plus this feature's own
+  -- `env_roots` / `nvim_config_root`.
   env_rooted = function(path)
-    local extra = nil
-    if _cfg.nvim_config_root ~= false then
-      extra = { { name = "NVIM_CONFIG_DIR", root = vim.fn.stdpath("config") } }
-    end
-    return (ftpath.env_rooted(path, _cfg.env_roots or {}, extra))
+    return (
+      env_roots.fold(path, {
+        names = _cfg.env_roots or {},
+        nvim_config = _cfg.nvim_config_root ~= false,
+        force = true,
+      })
+    )
   end,
   -- Path relative to the project root (]R), independent of the current cwd.
   project_relative = function(path)
@@ -219,6 +246,7 @@ local FORMATS = {
 
 local FORMAT_ORDER = {
   "absolute",
+  "absolute_raw",
   "relative",
   "name",
   "dirname",

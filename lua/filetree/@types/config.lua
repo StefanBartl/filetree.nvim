@@ -51,6 +51,15 @@
 ---@field refs              FiletreeRefsConfig               Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style    Lib.Progress.Style               Style for batch-operation progress indicators (trash, paste, ...): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress -- a no-op without it.
 ---@field max_visible_nodes integer                          Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
+---@field env_roots         FiletreeEnvRoots                 Named roots (`$REPOS_DIR`, `$NVIM_CONFIG_DIR`, your own) that absolute paths are written with: copied absolute paths, inserted links, symlink targets. `enable = false` turns it off; `extra` adds roots. See docs/configuration.md.
+
+---Named root directories folded into (and expanded out of) absolute paths --
+---see `filetree.util.env_roots`. All fields optional.
+---@class FiletreeEnvRoots
+---@field enable?      boolean  Master switch (default true). false = every action that would write `$REPOS_DIR/x` writes the plain absolute path again.
+---@field vars?        string[] Environment variable names whose value is a root (default `{ "REPOS_DIR" }`). Replaces the default list; an unset variable is skipped.
+---@field nvim_config? boolean  Also fold `$NVIM_CONFIG_DIR`, backed by `vim.fn.stdpath("config")` -- no environment variable of that name needs to exist (default true).
+---@field extra?       table<string, string|(fun(): string)>  More named roots, `NAME = "/abs/path"` (or a function returning one) -- no environment variable needed. A name here overrides a `vars` entry of the same name.
 
 ---@class FiletreeIntegrationsConfig
 ---@field pickers? boolean  Let find_files / grep_in_dir (and `tf`/`tg`) run through pickers.nvim when it is installed (default true). pickers.nvim has the matching switch `filetree = { enabled = false }`.
@@ -73,6 +82,7 @@
 ---@field refs              FiletreeRefsConfig?              Reference engine: what happens to markdown links and require()/import statements when a file is renamed, moved or deleted. See @types/refs.lua.
 ---@field progress_style    Lib.Progress.Style?              Style for batch-operation progress indicators (trash, paste, …): "auto" (default) | "notify" | "statusline" | "fidget" | "float" | "kit". Needs lib.nvim.progress — a no-op without it.
 ---@field max_visible_nodes integer?                        Cap on nodes collected from the rendered tree in one walk (default 5000). Only a guard against a pathologically large expanded directory; raise it if a picker or a marks operation ever reports being capped.
+---@field env_roots         FiletreeEnvRoots?                Named roots (`$REPOS_DIR`, `$NVIM_CONFIG_DIR`, your own) that absolute paths are written with: copied absolute paths, inserted links, symlink targets. `enable = false` turns it off; `extra` adds roots. See docs/configuration.md.
 
 ---@class FiletreeConfirmationsConfig
 ---@field paste        boolean?  copy_move's paste-staged-nodes prompt (default false).
@@ -836,6 +846,14 @@
 ---                                Link kind is picked automatically, not prompted: directories
 ---                                always get a symlink; files get a hardlink on Windows (no
 ---                                elevation needed) and a symlink elsewhere.
+---@field relative      "auto"|"always"|"never"?  What a created symlink stores as its target (default
+---                                `"auto"`). `"auto"`: a RELATIVE target when the link and its target
+---                                live under the same `env_roots` root (`$REPOS_DIR`, ...) -- the
+---                                link then survives the checkout sitting on another drive or
+---                                under another home on another machine; an absolute target
+---                                otherwise (a symlink cannot carry an environment variable).
+---                                `"always"`: relative whenever a relative form exists (same drive).
+---                                `"never"`: always absolute. Hardlinks are never relative.
 ---@field repair_roots   string[]?  Extra directories `:Filetree symlink repair`/`repairall`
 ---                                  searches for a broken link's moved target, on top of the
 ---                                  usual buffer dir/cwd/git root (default `{ "$REPOS_DIR" }`,

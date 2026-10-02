@@ -102,14 +102,15 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 ### Path copy
 | Command | Action |
 |---------|--------|
-| `:Filetree copy absolute` | Copy absolute path |
+| `:Filetree copy absolute` | Copy absolute path (as `$REPOS_DIR/…` / `$NVIM_CONFIG_DIR/…` under an `env_roots` root) |
+| `:Filetree copy absolute_raw` | Copy the plain absolute path, never folded |
 | `:Filetree copy relative` | Copy relative path |
 | `:Filetree copy name` | Copy filename |
-| `:Filetree copy dirname` | Copy absolute parent directory |
+| `:Filetree copy dirname` | Copy absolute parent directory (folded like `absolute`) |
 | `:Filetree copy uri` | Copy as `file://` URI |
 | `:Filetree copy line` | Copy path with line number |
 | `:Filetree copy stem` | Copy stem (no extension) |
-| `:Filetree copy project_root` | Copy the detected project root (cwd-independent) |
+| `:Filetree copy project_root` | Copy the detected project root (cwd-independent; folded like `absolute`) |
 | `:Filetree copy project_relative` | Copy path relative to the project root |
 | `:Filetree copy buffer_relative` | Copy path relative to the buffer open in the editor (`./x`, `../x`) |
 | `:Filetree copy env_rooted` | Copy absolute path with an env-var root folded in (`$REPOS_DIR/…`) |

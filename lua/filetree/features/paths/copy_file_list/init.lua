@@ -12,6 +12,7 @@ local notify = require("filetree.util.notify").create("[filetree.copy_file_list]
 local fs = require("filetree.util.fs")
 local ignore = require("filetree.util.ignore")
 local bind = require("filetree.util.bind")
+local env_roots = require("filetree.util.env_roots")
 
 ---Recursively collect all file paths under a path. Skips `.git`,
 ---`node_modules`, etc. per the ignore_list feature (see filetree.util.ignore).
@@ -133,13 +134,25 @@ local function collect_dirs_multi(targets, relative)
   return out
 end
 
+---Absolute entries written as `$NAME/rest` per the top-level `env_roots`
+---option (see `filetree.util.env_roots`); unchanged when it is off.
+---@param list string[]
+---@return string[]
+local function folded(list)
+  local out = {}
+  for i, p in ipairs(list) do
+    out[i] = (env_roots.fold(p))
+  end
+  return out
+end
+
 function M.copy_files_abs()
   local targets = get_targets()
   if #targets == 0 then
     notify.warn("No current node")
     return
   end
-  copy_to_reg(collect_files_multi(targets, false))
+  copy_to_reg(folded(collect_files_multi(targets, false)))
 end
 
 function M.copy_files_rel()
@@ -157,7 +170,7 @@ function M.copy_dirs_abs()
     notify.warn("No current node")
     return
   end
-  copy_to_reg(collect_dirs_multi(targets, false))
+  copy_to_reg(folded(collect_dirs_multi(targets, false)))
 end
 
 function M.copy_dirs_rel()

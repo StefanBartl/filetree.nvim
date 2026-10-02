@@ -60,6 +60,7 @@ local KNOWN_TOP = {
   refs = true,
   progress_style = true,
   max_visible_nodes = true,
+  env_roots = true,
 }
 
 ---What the last `M.setup()` call had to drop, for `:checkhealth`. Reset on
@@ -80,6 +81,15 @@ local KNOWN_MENU = {
   info = true,
   marks = true,
   window = true,
+}
+
+---Known sub-keys of the top-level `env_roots` table (see `DEFAULTS.lua`).
+---@type table<string, boolean>
+local KNOWN_ENV_ROOTS = {
+  enable = true,
+  vars = true,
+  nvim_config = true,
+  extra = true,
 }
 
 ---Known sub-keys of the top-level `integrations` table (see `DEFAULTS.lua`).
@@ -151,6 +161,32 @@ local function sanitize(opts)
           end
         end
         clean[key] = clean_menu
+      end
+    elseif key == "env_roots" then
+      if type(value) ~= "table" then
+        found_issues[#found_issues + 1] = ("option 'env_roots' must be a table, got %s -- using the default"):format(
+          type(value)
+        )
+      else
+        local clean_env = {}
+        for ekey, eval in pairs(value) do
+          if not KNOWN_ENV_ROOTS[ekey] then
+            found_issues[#found_issues + 1] = describe_unknown(ekey, KNOWN_ENV_ROOTS, "env_roots.")
+          elseif (ekey == "enable" or ekey == "nvim_config") and type(eval) ~= "boolean" then
+            found_issues[#found_issues + 1] = ("option 'env_roots.%s' must be a boolean, got %s -- using the default"):format(
+              ekey,
+              type(eval)
+            )
+          elseif (ekey == "vars" or ekey == "extra") and type(eval) ~= "table" then
+            found_issues[#found_issues + 1] = ("option 'env_roots.%s' must be a table, got %s -- using the default"):format(
+              ekey,
+              type(eval)
+            )
+          else
+            clean_env[ekey] = eval
+          end
+        end
+        clean[key] = clean_env
       end
     elseif key == "integrations" then
       if type(value) ~= "table" then

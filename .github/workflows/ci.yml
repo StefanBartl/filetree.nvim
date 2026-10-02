@@ -105,6 +105,7 @@ jobs:
           nvim -n --clean --headless -u NONE -l TESTS/cwd_mode.lua
           nvim -n --clean --headless -u NONE -l TESTS/sidebar_guard.lua
           nvim -n --clean --headless -u NONE -l TESTS/gaps.lua
+          nvim -n --clean --headless -u NONE -l TESTS/env_roots.lua
           nvim -n --clean --headless -u NONE -l TESTS/who_locks.lua
           nvim -n --clean --headless -u NONE -l TESTS/cheatsheet.lua
           nvim -n --clean --headless -u NONE -l TESTS/keys.lua

@@ -120,6 +120,12 @@ function M.setup(user_config)
   -- own progress_style option.
   require("filetree.util.progress").set_style(cfg.progress_style)
 
+  -- Named roots ($REPOS_DIR, $NVIM_CONFIG_DIR, user-defined) that absolute
+  -- paths are written with. Before any feature sets up: every one of them
+  -- reads it at call time, but a re-setup() must not leave the old roots in
+  -- place.
+  require("filetree.util.env_roots").setup(cfg.env_roots)
+
   -- Configure the reference engine before any feature sets up: every fileops
   -- feature that mutates paths reads its scan/ask/apply policy from here
   -- rather than carrying its own copy (see filetree/refs/init.lua).
