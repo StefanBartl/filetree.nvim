@@ -173,6 +173,22 @@ local function symlink_text(target, link_path)
 end
 
 ---@internal
+---Whether `link_path` (just created) resolves to the same place as `target`.
+---@param link_path string
+---@param target string
+---@return boolean
+local function resolves_to(link_path, target)
+  local uv = vim.uv or vim.loop
+  local real_link, real_target = uv.fs_realpath(link_path), uv.fs_realpath(target)
+  if not real_link or not real_target then return false end
+  local function norm(p)
+    p = path.slashify(p)
+    return platform.is_windows() and vim.fn.tolower(p) or p
+  end
+  return norm(real_link) == norm(real_target)
+end
+
+---@internal
 ---A path for a message: its env form when it sits under a root, else relative
 ---to the cwd like everywhere else in this plugin.
 ---@param p string
@@ -217,15 +233,41 @@ local function do_create(target, link_path, kind, is_dir)
     return
   end
 
+  -- A relative target is resolved by the OS against the link's PHYSICAL
+  -- directory, but `symlink_text` worked it out from the path as written: when
+  -- some ancestor of the link is itself a symlink (`WKDBooks/x -> elsewhere`)
+  -- the two differ and the link would dangle. Check it really lands on the
+  -- target, and store the absolute path instead when it does not.
+  if kind == "Symlink" and is_relative and not resolves_to(link_path, target) then
+    local ok_del = mutate.delete_file(link_path)
+    if not ok_del then
+      notify.error(
+        "Created a relative symlink that does not resolve, and could not remove it: " .. link_path
+      )
+      return
+    end
+    text, is_relative = target, false
+    ok, err = mutate.symlink(text, link_path, is_dir)
+    if not ok then
+      notify.error("Failed to create symlink: " .. friendly_error(err))
+      return
+    end
+  end
+
   local msg = kind .. " created: " .. path.relative(link_path) .. " -> " .. display(target)
   if kind == "Symlink" and is_relative then
     msg = msg .. " (stored relative: " .. text .. " -- survives a moved root)"
-  elseif kind == "Symlink" and env_roots.root_of(target) then
+  elseif
+    kind == "Symlink"
+    and (_cfg.relative or "auto") ~= "never"
+    and env_roots.root_of(target)
+  then
     -- Absolute, with the target under a root: the link text itself cannot say
     -- `$ROOT/...`, so say what can be done about it.
     msg = msg
-      .. " (stored absolute -- link and target are under different roots; on another machine"
-      .. " `:Filetree symlink repair` re-anchors it)"
+      .. " (stored absolute -- a symlink cannot carry $"
+      .. env_roots.root_of(target)
+      .. " and no relative form fits; on another machine `:Filetree symlink repair` re-anchors it)"
   end
   if fell_back then
     msg = msg .. " (hardlink not possible across drives/filesystems, used a symlink instead)"

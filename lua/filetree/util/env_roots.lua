@@ -98,7 +98,10 @@ function M.roots(opts)
   local function add(name, value)
     if type(name) ~= "string" or name == "" or seen[name] then return end
     local root = resolve_value(value)
-    if not root then return end
+    -- An absolute value only: a relative one would be resolved against
+    -- whatever the cwd happens to be, and a root that moves with `:cd` is no
+    -- root. (`~` and a leading `$VAR` are expanded by `to_unix` below.)
+    if not root or not (root:match("^%a:[/\\]") or root:match("^[/\\~$]")) then return end
     local abs = path.to_unix(root):gsub("/+$", "")
     if abs == "" then return end
     seen[name] = true
@@ -114,10 +117,10 @@ function M.roots(opts)
     add(name, _cfg.extra[name])
   end
   for _, name in ipairs(_cfg.vars) do
-    add(name, vim.env[name])
+    if type(name) == "string" then add(name, vim.env[name]) end
   end
   for _, name in ipairs(opts.names or {}) do
-    add(name, vim.env[name])
+    if type(name) == "string" then add(name, vim.env[name]) end
   end
   local want_nvim = opts.nvim_config
   if want_nvim == nil then want_nvim = _cfg.nvim_config end
@@ -125,22 +128,62 @@ function M.roots(opts)
   return out
 end
 
+---A function that folds absolute paths into `$NAME/rest` (see `fold`) with
+---the roots resolved ONCE -- for a caller folding many paths (a recursive file
+---list): `fold` resolves them per call, which is several `fnamemodify` calls a
+---path. The paths must be absolute; anything else comes back unchanged.
+---@param opts? FiletreeEnvRootsOpts
+---@return fun(p: string): string, string|nil
+function M.folder(opts)
+  if not (_cfg.enable or (type(opts) == "table" and opts.force)) then
+    return function(p)
+      return p, nil
+    end
+  end
+
+  local win = platform.is_windows()
+  local prepared = {}
+  for _, r in ipairs(M.roots(opts)) do
+    prepared[#prepared + 1] = {
+      name = r.name,
+      root = r.root,
+      key = win and vim.fn.tolower(r.root) or r.root,
+      len = #r.root,
+    }
+  end
+  -- Longest root first, so a nested root beats the one around it.
+  table.sort(prepared, function(a, b)
+    return a.len > b.len
+  end)
+
+  return function(p)
+    if type(p) ~= "string" or p == "" then return p, nil end
+    local abs = p:gsub("\\", "/")
+    if not (abs:match("^%a:/") or abs:sub(1, 1) == "/") then return p, nil end
+    abs = abs:gsub("/+$", "")
+    -- `vim.fn.tolower`, not `string.lower`: the latter only folds ASCII, which
+    -- would leave this broken for a non-ASCII profile path on Windows.
+    local key = win and vim.fn.tolower(abs) or abs
+    for _, r in ipairs(prepared) do
+      if key == r.key then return "$" .. r.name, r.name end
+      if key:sub(1, r.len + 1) == r.key .. "/" then
+        return "$" .. r.name .. "/" .. abs:sub(r.len + 2), r.name
+      end
+    end
+    return p, nil
+  end
+end
+
 ---Absolute `p` as `$NAME/rest` when it lives under one of the roots (the
 ---longest match wins, so a nested root beats the one around it); `p`
 ---unchanged otherwise. With `enable = false` (and no `opts.force`) always `p`
----unchanged. `p` must
----be absolute -- a relative path is returned as is.
+---unchanged. `p` must be absolute -- a relative path is returned as is.
 ---@param p string
 ---@param opts? FiletreeEnvRootsOpts
 ---@return string result
 ---@return string|nil name  The root that matched, when one did.
 function M.fold(p, opts)
-  if not (_cfg.enable or (opts and opts.force)) or type(p) ~= "string" or p == "" then
-    return p, nil
-  end
-  local folded, name = path.env_rooted(p, {}, M.roots(opts))
-  if not name then return p, nil end
-  return folded, name
+  return M.folder(opts)(p)
 end
 
 ---The name of the root `p` lives under (see `fold`), or nil.

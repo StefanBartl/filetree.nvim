@@ -663,6 +663,9 @@ decided by `features.link_create.relative`:
   under another home — an absolute `E:/repos/…` would not. (On Windows the
   relative text is written with backslashes: Windows does not resolve a
   relative symlink target written with `/`.)
+  The created link is checked: a relative target is resolved against the
+  link's *physical* directory, so a link inside a symlinked folder would
+  dangle — such a link is stored absolute instead.
 - Across two roots (link under `$REPOS_DIR`, target under
   `$NVIM_CONFIG_DIR`) there is no portable form: a symlink cannot carry an
   environment variable, and the two roots have no fixed layout between them.

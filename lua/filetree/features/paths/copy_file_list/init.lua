@@ -139,9 +139,10 @@ end
 ---@param list string[]
 ---@return string[]
 local function folded(list)
+  local fold = env_roots.folder() -- roots resolved once, not per path
   local out = {}
   for i, p in ipairs(list) do
-    out[i] = (env_roots.fold(p))
+    out[i] = (fold(p))
   end
   return out
 end

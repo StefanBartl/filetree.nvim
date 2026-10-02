@@ -527,6 +527,90 @@ do
   vim.fn.delete(tmp, "rf")
 end
 
+-- ── review fixes ─────────────────────────────────────────────────────────────
+do
+  local tmp, repos, notes, outside = scratch("review")
+  vim.env.REPOS_DIR = repos
+
+  -- A root value must be absolute; junk in `vars` must not throw.
+  ER.setup({ vars = { "FT_REL_ROOT", 42, "REPOS_DIR" }, extra = { REL = "relative/dir", NUM = 7 } })
+  vim.env.FT_REL_ROOT = "relative/dir"
+  local ok, roots = pcall(ER.roots)
+  check("roots: a non-string entry in vars does not throw", ok, tostring(roots))
+  local names = {}
+  for _, r in ipairs(ok and roots or {}) do
+    names[r.name] = true
+  end
+  check(
+    "roots: a relative value is no root",
+    not names.FT_REL_ROOT and not names.REL and not names.NUM
+  )
+  check("roots: the valid sibling survives", names.REPOS_DIR == true)
+  vim.env.FT_REL_ROOT = nil
+
+  -- folder(): same answers as fold(), roots resolved once.
+  ER.setup({ extra = { INNER = repos .. "/proj", NOTES = notes } })
+  local fold = ER.folder()
+  for _, p in ipairs({
+    repos .. "/proj/sub/file.md",
+    repos .. "/other",
+    notes .. "/a/n.md",
+    outside .. "/f",
+    (repos .. "/proj/x"):gsub("/", "\\"),
+    repos .. "/proj/",
+    "relative/x",
+  }) do
+    eq("folder == fold: " .. p, (fold(p)), (ER.fold(p)))
+  end
+  eq("folder: longest root wins", (fold(repos .. "/proj/sub/file.md")), "$INNER/sub/file.md")
+  eq("folder: a trailing slash is dropped", (fold(repos .. "/other/")), "$REPOS_DIR/other")
+  eq("folder: a relative path is returned as is", (fold("proj/x")), "proj/x")
+  ER.setup({ enable = false })
+  eq("folder: enable = false is the identity", (ER.folder()(repos .. "/proj")), repos .. "/proj")
+  eq("folder: ...unless forced", (ER.folder({ force = true })(repos .. "/proj")), "$REPOS_DIR/proj")
+
+  -- A relative symlink is checked against where the OS really resolves it: a
+  -- link inside a symlinked directory falls back to the absolute path.
+  ER.setup(nil)
+  setup({})
+  vim.fn.mkdir(repos .. "/proj/dir_a", "p")
+  vim.fn.mkdir(repos .. "/phys/deep/links", "p")
+  local via = repos .. "/via"
+  local ok_via = uv.fs_symlink(repos .. "/phys/deep/links", via, { dir = true })
+  if not ok_via then
+    print(
+      "  note link_create: directory symlink not created in this environment (needs elevation on Windows)"
+    )
+  else
+    local seen = {}
+    local orig_notify = vim.notify
+    vim.notify = function(m)
+      seen[#seen + 1] = m
+    end
+    local lc = ft.feature("link_create")
+    lc.mark(repos .. "/proj/dir_a")
+    cur_node = { path = via, type = "directory" }
+    lc.paste()
+    vim.notify = orig_notify
+    local made = uv.fs_readlink(repos .. "/phys/deep/links/dir_a")
+    check("link_create: the link exists", made ~= nil)
+    check(
+      "link_create: a link under a symlinked ancestor still resolves to its target",
+      uv.fs_stat(via .. "/dir_a") ~= nil
+        and uv.fs_realpath(via .. "/dir_a"):gsub("\\", "/"):lower()
+          == uv.fs_realpath(repos .. "/proj/dir_a"):gsub("\\", "/"):lower(),
+      tostring(made)
+    )
+    check(
+      "link_create: ...by falling back to an absolute target",
+      made ~= nil and made:gsub("\\", "/") == repos .. "/proj/dir_a",
+      tostring(made)
+    )
+  end
+
+  vim.fn.delete(tmp, "rf")
+end
+
 vim.env.REPOS_DIR = saved_repos
 ER.setup(nil)
 
