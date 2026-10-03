@@ -240,8 +240,9 @@ themed `ui.kit.menu` (no third-party plugin needed) otherwise —
 either way, right-click works out of the box. With the kit renderer, the
 clicked node's line is highlighted for as long as the menu stays open, and
 with the tree docked left/right the menu opens beside it rather than on top
-of it. See [docs/menu.md](../menu.md) for the entries offered and the full
-detail on both.
+of it. A right-click that does not land on a node — the empty area below the
+last one — does nothing: no menu, and the cursor stays where it was. See
+[docs/menu.md](../menu.md) for the entries offered and the full detail on both.
 
 - **Module:** `lua/filetree/features/ui/context_menu/`
 - **Keymaps:** `<RightMouse>`

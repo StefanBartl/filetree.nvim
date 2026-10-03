@@ -44,6 +44,10 @@ Right-click a node — that's the whole setup, with or without
 degrades to a single notify (not repeated, and not an error) only if
 `ui.nvim` itself predates `ui.contextmenu`.
 
+The menu acts on the node you clicked, not on wherever the cursor was. A
+right-click that does not land on a node — the empty area below the last one —
+does nothing: no menu opens and the cursor stays put.
+
 Every entry carries an icon (via `lib.nvim.ui.nerd_font`; a one-cell ASCII
 fallback when `vim.g.have_nerd_font` isn't set), so the icon column lines up
 whether or not a given entry has a glyph the same way `ui.contextmenu`
