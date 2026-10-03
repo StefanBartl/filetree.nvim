@@ -986,6 +986,33 @@ local function run_outgoing_assets_gate_check()
     status
   )
 
+  -- The experimental plaintext provider is gated by `experimental.plaintext`,
+  -- not by the `providers` map: status must say "off" by default and "on"
+  -- only when enabled (it used to report it on in both cases).
+  local function plaintext_line()
+    for _, l in ipairs(refs.status()) do
+      if l:find("plaintext", 1, true) and l:find("(experimental)", 1, true) then return l end
+    end
+  end
+  local default_cfg = vim.deepcopy(BASE_REFS_CFG)
+  default_cfg.experimental = nil -- the suite's baseline switches it on
+  refs.setup(default_cfg)
+  local default_line = plaintext_line()
+  check(
+    "status: the experimental plaintext provider is off by default",
+    default_line ~= nil and default_line:find("○", 1, true) ~= nil,
+    tostring(default_line)
+  )
+  local on_cfg = vim.deepcopy(BASE_REFS_CFG)
+  on_cfg.experimental = { plaintext = { enabled = true } }
+  refs.setup(on_cfg)
+  local on_line = plaintext_line()
+  check(
+    "status: ...and on once experimental.plaintext.enabled is set",
+    on_line ~= nil and on_line:find("●", 1, true) ~= nil,
+    tostring(on_line)
+  )
+
   refs.setup(vim.deepcopy(BASE_REFS_CFG)) -- restore the baseline for later suites
 end
 
