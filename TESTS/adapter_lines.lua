@@ -1926,6 +1926,152 @@ local function want(name)
   return wanted == nil or wanted == "" or wanted:find(name, 1, true) ~= nil
 end
 
+-- ── neo-tree: right-click menu acts on the CLICKED node ─────────────────────
+--
+-- `features/ui/context_menu` moves the tree cursor to the pointer and opens
+-- the menu in the same breath. neo-tree remembers the cursor line from a
+-- `CursorMoved` autocmd and restores it on every `WinEnter` of the tree
+-- window; creating the menu's float re-enters the tree window synchronously,
+-- i.e. BEFORE that autocmd could have seen the jump, so the cursor was put
+-- back on the line it had before the click and the menu acted on the wrong
+-- node -- in practice one further down than the one clicked.
+--
+-- Driven through the real buffer-local `<RightMouse>` mapping and the real
+-- kit menu, with `getmousepos` standing in for the pointer (this runner has no
+-- main loop to deliver a mouse event). The `CursorMoved` below is what that
+-- main loop would have fired after the cursor's previous move.
+local function run_neotree_context_menu_click_check()
+  print("\n== neo-tree: the right-click menu acts on the clicked node, not a stale one ==")
+
+  local ok_cm, contextmenu = pcall(require, "ui.contextmenu")
+  if not ok_cm then
+    print("  --   ui.nvim not resolvable; skipping")
+    skipped = skipped + 1
+    return
+  end
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-ctxmenu-click")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  for _, f in ipairs({ "a.txt", "b.txt", "c.txt", "d.txt" }) do
+    vim.fn.writefile({ "x" }, work .. "/" .. f)
+  end
+
+  require("filetree").setup({
+    adapter = "neotree",
+    features = { auto_reveal = { enabled = false } },
+  })
+
+  local adapter = require("filetree.adapter.neotree")
+  -- A tree left open by the previous check would otherwise still be showing
+  -- ITS directory when this one looks for its files.
+  pcall(adapter.close)
+  vim.wait(300, function()
+    return false
+  end, 50)
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  vim.wait(6000, function()
+    local b = adapter.get_bufnr()
+    if not b then return false end
+    local text = table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n")
+    return text:find("a.txt", 1, true) ~= nil and text:find("d.txt", 1, true) ~= nil
+  end, 50)
+  vim.wait(500, function()
+    return false
+  end, 50)
+
+  local bufnr, winid = adapter.get_bufnr(), adapter.get_winid()
+  check("ctx-click: the tree exists", bufnr ~= nil and winid ~= nil)
+  if not (bufnr and winid) then
+    pcall(adapter.close)
+    return
+  end
+
+  -- The buffer-local binding is made by the FileType dispatcher on a schedule.
+  vim.api.nvim_set_current_win(winid)
+  local function rhs()
+    local m = vim.api.nvim_buf_call(bufnr, function()
+      return vim.fn.maparg("<RightMouse>", "n", false, true)
+    end)
+    return m and m.callback
+  end
+  vim.wait(500, function()
+    return rhs() ~= nil
+  end, 20)
+  local open_menu = rhs()
+  check("ctx-click: the tree buffer has the <RightMouse> mapping", open_menu ~= nil)
+  if not open_menu then
+    pcall(adapter.close)
+    return
+  end
+
+  local function line_of(name)
+    for i, l in ipairs(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)) do
+      if l:find(name, 1, true) then return i end
+    end
+  end
+  local stale_line, target_line = line_of("a.txt"), line_of("d.txt")
+  check(
+    "ctx-click: the stale and the clicked line differ",
+    stale_line and target_line and stale_line < target_line,
+    tostring(stale_line) .. " / " .. tostring(target_line)
+  )
+
+  local saved_mousemodel, real_getmousepos = vim.o.mousemodel, vim.fn.getmousepos
+  contextmenu.setup({ renderer = "kit" })
+
+  ---Right-click `target` while the cursor (as neo-tree last saw it) sits on `from`.
+  local function click(from, target)
+    vim.api.nvim_set_current_win(winid)
+    vim.api.nvim_win_set_cursor(winid, { from, 0 })
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = bufnr, modeline = false })
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.getmousepos = function()
+      return { winid = winid, line = target, column = 6, screenrow = target, screencol = 6 }
+    end
+    local ok, err = pcall(open_menu)
+    local cursor = vim.api.nvim_win_get_cursor(winid)[1]
+    local node = adapter.get_node_at_line(bufnr, cursor - 1)
+    -- Close the menu again (and put the mouse stub back) before the next round.
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(w).relative ~= "" then
+        pcall(vim.api.nvim_win_close, w, true)
+      end
+    end
+    vim.fn.getmousepos = real_getmousepos
+    return ok, err, cursor, node
+  end
+
+  local ok, err, cursor, node = click(stale_line, target_line)
+  check("ctx-click: the mapping ran without error", ok, tostring(err))
+  check(
+    "ctx-click: the cursor is on the clicked line, not the stale one",
+    cursor == target_line,
+    ("cursor on line %s, clicked line %s"):format(tostring(cursor), tostring(target_line))
+  )
+  check(
+    "ctx-click: ...and that line resolves to the clicked node",
+    node ~= nil and node.name == "d.txt",
+    node and node.name or "nil"
+  )
+
+  -- And the other way round, so a fix that merely pins the cursor to the
+  -- bottom (or to "wherever the menu last was") cannot pass.
+  local ok_up, err_up, _, node_up = click(target_line, line_of("b.txt"))
+  check("ctx-click: a click upward works too", ok_up, tostring(err_up))
+  check(
+    "ctx-click: ...and lands on the clicked node",
+    node_up ~= nil and node_up.name == "b.txt",
+    node_up and node_up.name or "nil"
+  )
+
+  vim.o.mousemodel = saved_mousemodel
+  pcall(adapter.close)
+  vim.wait(300, function()
+    return false
+  end, 50)
+end
+
 local ran = 0
 
 if has_neotree and has_nui and want("neotree") then
@@ -1949,6 +2095,7 @@ if has_neotree and has_nui and want("neotree") then
   run_neotree_cache_tier_isolation_check()
   run_neotree_two_live_trees_check()
   run_neotree_opened_buffers_redraw_check()
+  run_neotree_context_menu_click_check()
   ran = ran + 1
 else
   print("\nneo-tree: not installed (or excluded) -- skipping that pass.")
