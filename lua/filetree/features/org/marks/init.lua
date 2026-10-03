@@ -370,7 +370,10 @@ function M.mark_visual(unmark)
   for _, node in ipairs(_adapter.get_visible_nodes()) do
     local ln = node.line_number
     if ln and ln >= s_line and ln <= e_line then
-      local now = unmark and nil or true
+      -- Not `unmark and nil or true`: `x and nil or y` is always `y`, which
+      -- made unmarking a selection mark it instead.
+      local now ---@type boolean?
+      if not unmark then now = true end
       if _marks[node.path] ~= now then
         _marks[node.path] = now
         changed = changed + 1
