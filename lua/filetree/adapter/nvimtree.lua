@@ -153,6 +153,10 @@ local function to_filetree_node(node, line_number)
   -- to tell a broken link from a working one here -- `link_broken` is left
   -- nil (unknown) rather than guessed.
   local is_link = node.type == "link"
+  -- true / false for a directory (open / closed), nil for a file. Spelled out:
+  -- `is_dir and <maybe false> or nil` collapses a closed directory to nil.
+  local expanded ---@type boolean?
+  if is_dir then expanded = node.open == true end
   return {
     id = path,
     name = node.name or vim.fn.fnamemodify(path, ":t"),
@@ -160,7 +164,7 @@ local function to_filetree_node(node, line_number)
     type = is_dir and "directory" or "file",
     depth = depth_of(node),
     line_number = line_number,
-    is_expanded = is_dir and (node.open or false) or nil,
+    is_expanded = expanded,
     is_link = is_link or nil,
     link_to = (is_link and type(node.link_to) == "string" and node.link_to) or nil,
   }

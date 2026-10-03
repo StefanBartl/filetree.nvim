@@ -10,8 +10,10 @@
 --- the trigger; which entries appear is still controlled entirely by the
 --- top-level `menu` config (group-level opt-out — see @types/config.lua).
 ---
---- A click on the empty area below the last node opens no menu and leaves the
---- cursor alone.
+--- Only a click on a text row of the tree opens it. A click anywhere else --
+--- the empty area below the last node, the tree's statusline / winbar /
+--- vertical separator, another window -- opens no menu and leaves the cursor
+--- alone. `keymap` is a MOUSE trigger: it reads the pointer position.
 ---
 --- `ui.contextmenu` resolves its own renderer -- nvzone/menu when it is
 --- installed, `ui.kit.menu` (no third-party dependency) otherwise --
@@ -55,35 +57,57 @@ local _adapter = nil
 ---Whether the pointer is on the empty area below the last line of the tree.
 ---`getmousepos().line` is clamped to the last line there, so the line alone
 ---cannot tell a click on the last node from one below it -- the screen row
----can: it lies past the last line's final (possibly wrapped) row.
+---can: it lies past the bottom of the buffer text drawn from the top line.
+---
+---The screen row where the text starts is taken from the CURSOR line, which is
+---always on screen. `screenpos()` of the last line is not usable for that: it
+---reports row 0 whenever the window is scrolled sideways past the first
+---column of that line (trees are `nowrap`), which silently disabled this.
+---
+---Needs the pointer's window to be the current one (`resolve_click` checks).
 ---@param pos table  `getmousepos()` result
 ---@return boolean
 local function is_below_last_line(pos)
-  if not pos or pos.winid == 0 or not vim.api.nvim_win_is_valid(pos.winid) then return false end
-  local last = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(pos.winid))
+  local win = pos.winid
+  local last = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(win))
   if pos.line < last then return false end
-  local last_row = vim.fn.screenpos(pos.winid, last, 1).row
-  if last_row == 0 then return false end -- last line is scrolled out of view
-  local ok, h = pcall(vim.api.nvim_win_text_height, pos.winid, {
-    start_row = last - 1,
-    end_row = last - 1,
+  local cur = vim.api.nvim_win_get_cursor(win)
+  local cursor_row = vim.fn.screenpos(win, cur[1], cur[2] + 1).row
+  if cursor_row == 0 then return false end
+  local view = vim.fn.winsaveview()
+  local ok, h = pcall(vim.api.nvim_win_text_height, win, {
+    start_row = view.topline - 1,
+    start_vcol = view.skipcol,
   })
-  return pos.screenrow > last_row + (ok and h.all or 1) - 1
+  if not ok then return false end
+  local first_text_row = cursor_row - vim.fn.winline() + 1
+  return pos.screenrow > first_text_row + h.all - 1
 end
 
----Move the tree cursor to the node under the mouse pointer, best-effort.
+---The pointer position, when it is on a text row of the tree window that this
+---mapping fired in -- i.e. when "the node under the mouse" means something.
+---Everything else is not a click on a node and is ignored by the caller:
+---the empty area below the last node, the tree's statusline / winbar /
+---vertical separator (`line == 0`), the tabline or command line (`winid == 0`),
+---and any other window (a buffer-local mapping fires for the CURRENT buffer,
+---whichever window the pointer is over).
+---@return table?
+local function resolve_click()
+  local ok, pos = pcall(vim.fn.getmousepos)
+  if not ok or type(pos) ~= "table" then return nil end
+  if pos.winid ~= vim.api.nvim_get_current_win() or pos.line < 1 then return nil end
+  if is_below_last_line(pos) then return nil end
+  return pos
+end
+
+---Move the tree cursor to the clicked node (`pos` from `resolve_click`).
 ---A mapped `<RightMouse>` replaces Neovim's own click handling, so nothing
 ---else moves the cursor to the pointer: this has to, or the menu would act on
 ---wherever the cursor happened to be.
-local function move_to_click()
-  local ok, pos = pcall(vim.fn.getmousepos)
-  if not ok or not pos or pos.winid == 0 then return end
-  if pos.winid ~= vim.api.nvim_get_current_win() then return end
-  local ok_set = pcall(
-    vim.api.nvim_win_set_cursor,
-    pos.winid,
-    { math.max(1, pos.line), math.max(0, pos.column - 1) }
-  )
+---@param pos table
+local function move_to_click(pos)
+  local ok_set =
+    pcall(vim.api.nvim_win_set_cursor, pos.winid, { pos.line, math.max(0, pos.column - 1) })
   if not ok_set then return end
 
   -- Tell whoever tracks the cursor about the jump NOW. neo-tree remembers the
@@ -150,6 +174,13 @@ end
 local function apply_highlight_now(path, generation, announce)
   if generation ~= _hl_generation then return end
   if not _adapter or not _adapter.highlight_node then return end
+  -- Replace this click's own earlier application instead of stacking another
+  -- extmark: adapters track one mark id per path, so the older ones could
+  -- never be removed again. Only when WE put it there (`_highlighted_path`):
+  -- the slot is shared with other features highlighting the same node.
+  if _highlighted_path == path and _adapter.unhighlight_node then
+    pcall(_adapter.unhighlight_node, path)
+  end
   local ok = _adapter.highlight_node(path, NODE_HL)
   if ok then
     _highlighted_path = path
@@ -264,13 +295,10 @@ local function beside_tree_opts()
 end
 
 local function open_menu()
-  -- Empty space below the last node is not a node: no menu, and the cursor
-  -- stays where it was (clamping it onto the last node would make the menu
-  -- act on a node nobody clicked).
-  local ok_pos, pos = pcall(vim.fn.getmousepos)
-  if ok_pos and is_below_last_line(pos) then return end
+  local pos = resolve_click()
+  if not pos then return end
 
-  move_to_click()
+  move_to_click(pos)
   highlight_current_node()
 
   local ok_items, items_mod = pcall(require, "filetree.integrations.menu")

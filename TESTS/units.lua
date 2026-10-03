@@ -7349,6 +7349,32 @@ do
   check("breadcrumbs float: teardown closes it", #floats() == before)
 end
 
+-- The <RightMouse> handler only acts on a click that is on a text row of the
+-- current window, and this runner has no pointer (getmousepos() reports
+-- winid = 0), so every call below is made with a pointer standing on the
+-- cursor's own row.
+local function click_here(callback)
+  local real = vim.fn.getmousepos
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.fn.getmousepos = function()
+    local win = vim.api.nvim_get_current_win()
+    local line = vim.api.nvim_win_get_cursor(win)[1]
+    local row = vim.fn.screenpos(win, line, 1).row
+    return {
+      winid = win,
+      line = line,
+      column = 1,
+      screenrow = row,
+      screencol = 1,
+      winrow = row,
+      wincol = 1,
+    }
+  end
+  local ok, err = pcall(callback)
+  vim.fn.getmousepos = real
+  return ok, err
+end
+
 -- ── context_menu: right-click binding, opt-out default, via ui.contextmenu ──
 do
   local stub = setmetatable({
@@ -7397,7 +7423,7 @@ do
   package.loaded["menu"] = nil
   local kit_menu = require("ui.kit.menu")
   kit_menu.close() -- in case an earlier test left one open
-  local ok_no_menu = pcall(km["<RightMouse>"].callback)
+  local ok_no_menu = click_here(km["<RightMouse>"].callback)
   check("context_menu: click without nvzone/menu installed does not error", ok_no_menu)
   check("context_menu: falls back to the kit renderer and actually opens it", kit_menu.is_open())
   kit_menu.close()
@@ -7413,7 +7439,7 @@ do
       captured = { items = items, opts = opts }
     end,
   }
-  local ok_menu = pcall(km["<RightMouse>"].callback)
+  local ok_menu = click_here(km["<RightMouse>"].callback)
   check("context_menu: click with nvzone/menu present does not error", ok_menu)
   check("context_menu: calls menu.open()", captured ~= nil)
   if captured then
@@ -7428,7 +7454,7 @@ do
     error("simulated: ui.nvim too old to have contextmenu")
   end
   package.loaded["ui.contextmenu"] = nil
-  local ok_no_lib = pcall(km["<RightMouse>"].callback)
+  local ok_no_lib = click_here(km["<RightMouse>"].callback)
   package.preload["ui.contextmenu"] = nil
   package.loaded["ui.contextmenu"] = nil
   require("ui.contextmenu") -- restore the real module for later tests
@@ -7532,7 +7558,7 @@ do
   end
 
   package.loaded["menu"] = nil -- force the kit fallback, which returns a surf
-  local ok_click = pcall(km["<RightMouse>"].callback)
+  local ok_click = click_here(km["<RightMouse>"].callback)
   check("context_menu extras: click does not error", ok_click)
   check(
     "context_menu extras: highlighted exactly the clicked node's path",
@@ -7597,11 +7623,114 @@ do
   end
 
   kit_menu.close()
+  -- Each re-application first removes this click's previous mark (adapters
+  -- keep one mark id per path, so a stacked one could never be removed), and
+  -- closing removes the last: every highlight is balanced by one removal.
+  local all_same = #unhl_calls > 0
+  for _, path in ipairs(unhl_calls) do
+    if path ~= cur_node.path then all_same = false end
+  end
   check(
     "context_menu extras: unhighlight_node called (via on_close) when the menu closed",
-    #unhl_calls == 1 and unhl_calls[1] == cur_node.path,
-    vim.inspect(unhl_calls)
+    all_same and #unhl_calls == #hl_calls,
+    ("highlights %d, removals %s"):format(#hl_calls, vim.inspect(unhl_calls))
   )
+
+  -- ── Which clicks count: only a text row of the tree window ──────────────
+  -- Everything else is "not on a node" and must do nothing: no menu, and the
+  -- cursor stays where it was (clamping it onto a node would make the menu act
+  -- on one nobody clicked).
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "aaa", "bbb", "ccc" })
+  vim.cmd("redraw")
+  local win = vim.api.nvim_get_current_win()
+  local last_row = vim.fn.screenpos(win, 3, 1).row
+  check("context_menu clicks: the last line is drawn", last_row > 0, tostring(last_row))
+
+  ---Right-click with the pointer described by `pos` (defaults: this window,
+  ---line 3, on its row). Returns whether a menu opened, and the cursor line.
+  local function click_with(pos)
+    vim.api.nvim_win_set_cursor(win, { 1, 0 })
+    local real = vim.fn.getmousepos
+    local p = vim.tbl_extend(
+      "force",
+      { winid = win, line = 3, column = 1, screenrow = last_row, screencol = 1 },
+      pos
+    )
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.getmousepos = function()
+      return p
+    end
+    local ok, err = pcall(km["<RightMouse>"].callback)
+    vim.fn.getmousepos = real
+    local opened = kit_menu.is_open()
+    kit_menu.close()
+    return ok, err, opened, vim.api.nvim_win_get_cursor(win)[1]
+  end
+
+  local ok_c, err_c, opened, cursor = click_with({})
+  check("context_menu clicks: a click on the last row runs", ok_c, tostring(err_c))
+  check("context_menu clicks: ...opens the menu", opened)
+  eq("context_menu clicks: ...on the clicked line", cursor, 3)
+
+  local function no_menu(label, pos)
+    local ok_n, err_n, opened_n, cursor_n = click_with(pos)
+    check("context_menu clicks: " .. label .. " runs", ok_n, tostring(err_n))
+    check("context_menu clicks: " .. label .. " opens no menu", not opened_n)
+    eq("context_menu clicks: " .. label .. " leaves the cursor alone", cursor_n, 1)
+  end
+  no_menu("the row right below the last line", { screenrow = last_row + 1 })
+  no_menu("far below the last line", { screenrow = last_row + 8 })
+  no_menu("the statusline / separator / winbar (line 0)", { line = 0, column = 0 })
+  no_menu("the tabline or command line (winid 0)", { winid = 0, line = 0, column = 0 })
+
+  vim.cmd("vsplit")
+  local other = vim.api.nvim_get_current_win()
+  vim.api.nvim_set_current_win(win)
+  no_menu("another window", { winid = other, line = 2 })
+  vim.api.nvim_win_close(other, true)
+
+  -- A wrapped last line spans several screen rows, all of them on the node.
+  vim.wo[win].wrap = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+    "aaa",
+    "bbb",
+    string.rep("x", vim.api.nvim_win_get_width(win) * 2 + 5),
+  })
+  vim.cmd("redraw")
+  last_row = vim.fn.screenpos(win, 3, 1).row
+  local height = vim.api.nvim_win_text_height(win, { start_row = 2, end_row = 2 }).all
+  check("context_menu clicks: the last line wraps onto several rows", height >= 3, tostring(height))
+  for r = 0, height - 1 do
+    local _, _, opened_r, cursor_r = click_with({ screenrow = last_row + r })
+    check(
+      "context_menu clicks: wrapped row " .. r .. " of the last line opens the menu",
+      opened_r and cursor_r == 3
+    )
+  end
+  no_menu("the row after a wrapped last line", { screenrow = last_row + height })
+
+  -- Trees are 'nowrap' and get scrolled sideways: screenpos() of the last
+  -- line's first column is off screen then, which must not disable this.
+  vim.wo[win].wrap = false
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, {
+    string.rep("a", 200),
+    string.rep("b", 200),
+    string.rep("c", 200),
+  })
+  vim.cmd("redraw")
+  vim.fn.winrestview({ lnum = 3, col = 150, leftcol = 120 })
+  vim.cmd("redraw")
+  check("context_menu clicks: the window is scrolled sideways", vim.fn.winsaveview().leftcol > 0)
+  last_row = vim.fn.screenpos(win, 3, 151).row
+  check("context_menu clicks: the last line is still on screen", last_row > 0, tostring(last_row))
+  check(
+    "context_menu clicks: ...while its first column is not (the case that broke the guard)",
+    vim.fn.screenpos(win, 3, 1).row == 0
+  )
+  local _, _, opened_s = click_with({ screenrow = last_row })
+  check("context_menu clicks: sideways scrolled, a click on the last row opens", opened_s)
+  no_menu("a sideways scrolled tree, below its last line", { screenrow = last_row + 1 })
+  vim.wo[win].wrap = true
 
   package.loaded["menu"] = nil
   vim.cmd("bwipeout! " .. buf)

@@ -366,6 +366,10 @@ local function to_filetree_node(node, line_number)
 
   local is_dir = node_is_dir(node, path)
   local is_link = node.is_link == true
+  -- true / false for a directory (open / closed), nil for a file. Spelled out:
+  -- `is_dir and <maybe false> or nil` collapses a closed directory to nil.
+  local expanded ---@type boolean?
+  if is_dir then expanded = (node.is_expanded and node:is_expanded()) == true end
   return {
     id = (node.get_id and node:get_id()) or node.id or path,
     name = node.name or vim.fn.fnamemodify(path, ":t"),
@@ -373,7 +377,7 @@ local function to_filetree_node(node, line_number)
     type = is_dir and "directory" or "file",
     depth = (node.get_depth and node:get_depth()) or 0,
     line_number = line_number,
-    is_expanded = is_dir and ((node.is_expanded and node:is_expanded()) or false) or nil,
+    is_expanded = expanded,
     is_link = is_link or nil,
     link_to = (is_link and type(node.link_to) == "string" and node.link_to) or nil,
     link_broken = (is_link and node.type == "link") or nil,
@@ -539,6 +543,10 @@ function M.get_visible_nodes(filter, bufnr)
 
       if include then
         local id = (node.get_id and node:get_id()) or node.id or ""
+        local node_expanded ---@type boolean?
+        if ntype == "directory" then
+          node_expanded = (node.is_expanded and node:is_expanded()) == true
+        end
         nodes[#nodes + 1] = {
           id = id,
           name = node.name or "",
@@ -546,9 +554,7 @@ function M.get_visible_nodes(filter, bufnr)
           type = ntype,
           depth = depth,
           line_number = line_nr,
-          is_expanded = ntype == "directory"
-              and ((node.is_expanded and node:is_expanded()) or false)
-            or nil,
+          is_expanded = node_expanded,
         }
       end
       line_nr = line_nr + 1

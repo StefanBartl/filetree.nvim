@@ -147,7 +147,7 @@ return {
     },
     {
       lhs = "<RightMouse>",
-      desc = "Open context menu (nvzone/menu, soft dependency)",
+      desc = "Open context menu via ui.contextmenu (nvzone/menu or its kit renderer)",
       feature = "context_menu",
       scope = "tree",
     },

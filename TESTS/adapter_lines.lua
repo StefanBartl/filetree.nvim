@@ -232,6 +232,39 @@ local function run_backend(spec)
   end
   check("it resolved nodes for the rendered lines", resolved >= 4, "resolved=" .. resolved)
 
+  -- `is_expanded` is a tri-state: true / false for a directory (open / closed),
+  -- nil for a file. A closed directory used to come back nil (`x and false or
+  -- nil`), indistinguishable from a file.
+  local function expanded_contract(label, node)
+    if node.type == "directory" then
+      return type(node.is_expanded) == "boolean",
+        label .. ": directory " .. node.name .. " has is_expanded=" .. tostring(node.is_expanded)
+    end
+    return node.is_expanded == nil,
+      label .. ": file " .. node.name .. " has is_expanded=" .. tostring(node.is_expanded)
+  end
+  local dirs_seen, expanded_bad = 0, {}
+  for _, n in pairs(by_line) do
+    local ok_e, msg = expanded_contract("line", n)
+    if n.type == "directory" then dirs_seen = dirs_seen + 1 end
+    if not ok_e then expanded_bad[#expanded_bad + 1] = msg end
+  end
+  for _, n in ipairs(adapter.get_visible_nodes()) do
+    local ok_e, msg = expanded_contract("visible", n)
+    if not ok_e then expanded_bad[#expanded_bad + 1] = msg end
+  end
+  check(
+    "is_expanded is boolean for directories and nil for files",
+    #expanded_bad == 0,
+    table.concat(expanded_bad, "; ")
+  )
+  check("...with directories actually in the tree", dirs_seen > 0, "dirs=" .. dirs_seen)
+  local closed_dir = false
+  for _, n in pairs(by_line) do
+    if n.type == "directory" and n.is_expanded == false then closed_dir = true end
+  end
+  check("...and a closed directory reads as false, not nil", closed_dir)
+
   -- The mapping must be RIGHT, not merely non-nil. Both backends render the
   -- root line as a path label rather than the node's `name`, so line 0 is
   -- compared by path instead.
@@ -2031,19 +2064,19 @@ local function run_neotree_context_menu_click_check()
   ---Right-click `target` while the cursor (as neo-tree last saw it) sits on
   ---`from`. `screenrow` defaults to where `target` is drawn, like the real
   ---`getmousepos()`; `getmousepos().line` is the clamped one past the buffer end.
-  local function click(from, target, screenrow)
+  local function click(from, target, screenrow, extra)
     vim.api.nvim_set_current_win(winid)
     vim.api.nvim_win_set_cursor(winid, { from, 0 })
     vim.api.nvim_exec_autocmds("CursorMoved", { buffer = bufnr, modeline = false })
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.fn.getmousepos = function()
-      return {
+      return vim.tbl_extend("force", {
         winid = winid,
         line = target,
         column = 6,
         screenrow = screenrow or vim.fn.screenpos(winid, target, 1).row,
         screencol = 6,
-      }
+      }, extra or {})
     end
     local floats_before = float_count()
     local ok, err = pcall(open_menu)
@@ -2102,6 +2135,26 @@ local function run_neotree_context_menu_click_check()
     cur_b == stale_line,
     ("cursor on line %s, was on %s"):format(tostring(cur_b), tostring(stale_line))
   )
+
+  -- Nothing else that is not a text row of the tree may open it either.
+  local function expect_nothing(label, ...)
+    local ok_n, err_n, cur_n, _, opened_n = click(stale_line, last_line, ...)
+    check("ctx-click: " .. label .. " runs without error", ok_n, tostring(err_n))
+    check("ctx-click: " .. label .. " opens no menu", not opened_n)
+    check(
+      "ctx-click: " .. label .. " leaves the cursor where it was",
+      cur_n == stale_line,
+      ("cursor on line %s, was on %s"):format(tostring(cur_n), tostring(stale_line))
+    )
+  end
+  expect_nothing("the row right below the last node", last_row + 1)
+  expect_nothing("the tree's statusline / separator (line 0)", last_row, { line = 0, column = 0 })
+
+  vim.cmd("botright new")
+  local editor_win = vim.api.nvim_get_current_win()
+  vim.api.nvim_set_current_win(winid)
+  expect_nothing("a click in another window", last_row, { winid = editor_win, line = 1 })
+  pcall(vim.api.nvim_win_close, editor_win, true)
 
   vim.o.mousemodel = saved_mousemodel
   pcall(adapter.close)

@@ -44,9 +44,12 @@ Right-click a node — that's the whole setup, with or without
 degrades to a single notify (not repeated, and not an error) only if
 `ui.nvim` itself predates `ui.contextmenu`.
 
-The menu acts on the node you clicked, not on wherever the cursor was. A
-right-click that does not land on a node — the empty area below the last one —
-does nothing: no menu opens and the cursor stays put.
+The menu acts on the node you clicked, not on wherever the cursor was. Only a
+click on a node row counts: a right-click on the empty area below the last
+node, on the tree's statusline or separator, or in another window does
+nothing — no menu opens and the cursor stays put. `keymap` is a mouse trigger
+(it reads the pointer position); to open the menu from a keyboard key, build
+the trigger yourself as described below.
 
 Every entry carries an icon (via `lib.nvim.ui.nerd_font`; a one-cell ASCII
 fallback when `vim.g.have_nerd_font` isn't set), so the icon column lines up
