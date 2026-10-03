@@ -252,7 +252,8 @@ Exercises: `nvim_buf_set_extmark`, end-of-line virtual text.
 | C.1 | Cursor on a file in the tree, press `m` | A green `✓` appears at the end of the line |
 | C.2 | Press `m` again on the same file | The `✓` disappears (toggle) |
 | C.3 | Mark several files | All of them show `✓` at once |
-| C.4 | Close and reopen the tree | The marks are gone — no persistence is expected here, and that is correct |
+| C.4 | Close and reopen the tree within the idle timeout | The marks are still there — closing/reopening neither clears them nor restarts the idle countdown (see C.4c) |
+| C.4c | Mark several files, then do nothing with the marks for `marks.auto_clear_ms` (60 s by default; set it lower to save time). Don't press any mark key, `gm`, `]M`/`[M` or `<leader>ms` in the meantime | A `[filetree.marks]` notification "Marks auto-cleared after 60s idle" appears, the `✓` disappear, and `<leader>ms` then says "No nodes marked". Pressing any mark key before the time is up (e.g. `m` on another file) restarts the full countdown. `auto_clear_ms = 0` keeps the marks until `<leader>mc` |
 | C.4b | Mark a file, then trigger a neo-tree-initiated redraw that filetree didn't ask for (`:Neotree refresh`, or just wait out an async git-status refresh) | The `✓` is still there — it must survive any render, not just filetree's own BufEnter/BufWritePost, and not just until "a second or so" passes |
 
 **git_status** (automatic, no keymap needed):
