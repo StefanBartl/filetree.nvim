@@ -2020,18 +2020,36 @@ local function run_neotree_context_menu_click_check()
   local saved_mousemodel, real_getmousepos = vim.o.mousemodel, vim.fn.getmousepos
   contextmenu.setup({ renderer = "kit" })
 
-  ---Right-click `target` while the cursor (as neo-tree last saw it) sits on `from`.
-  local function click(from, target)
+  local function float_count()
+    local n = 0
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(w).relative ~= "" then n = n + 1 end
+    end
+    return n
+  end
+
+  ---Right-click `target` while the cursor (as neo-tree last saw it) sits on
+  ---`from`. `screenrow` defaults to where `target` is drawn, like the real
+  ---`getmousepos()`; `getmousepos().line` is the clamped one past the buffer end.
+  local function click(from, target, screenrow)
     vim.api.nvim_set_current_win(winid)
     vim.api.nvim_win_set_cursor(winid, { from, 0 })
     vim.api.nvim_exec_autocmds("CursorMoved", { buffer = bufnr, modeline = false })
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.fn.getmousepos = function()
-      return { winid = winid, line = target, column = 6, screenrow = target, screencol = 6 }
+      return {
+        winid = winid,
+        line = target,
+        column = 6,
+        screenrow = screenrow or vim.fn.screenpos(winid, target, 1).row,
+        screencol = 6,
+      }
     end
+    local floats_before = float_count()
     local ok, err = pcall(open_menu)
     local cursor = vim.api.nvim_win_get_cursor(winid)[1]
     local node = adapter.get_node_at_line(bufnr, cursor - 1)
+    local opened = float_count() > floats_before
     -- Close the menu again (and put the mouse stub back) before the next round.
     for _, w in ipairs(vim.api.nvim_list_wins()) do
       if vim.api.nvim_win_get_config(w).relative ~= "" then
@@ -2039,7 +2057,7 @@ local function run_neotree_context_menu_click_check()
       end
     end
     vim.fn.getmousepos = real_getmousepos
-    return ok, err, cursor, node
+    return ok, err, cursor, node, opened
   end
 
   local ok, err, cursor, node = click(stale_line, target_line)
@@ -2063,6 +2081,26 @@ local function run_neotree_context_menu_click_check()
     "ctx-click: ...and lands on the clicked node",
     node_up ~= nil and node_up.name == "b.txt",
     node_up and node_up.name or "nil"
+  )
+
+  -- The empty area below the last node is not a node: no menu, cursor stays.
+  local last_line = vim.api.nvim_buf_line_count(bufnr)
+  local last_row = vim.fn.screenpos(winid, last_line, 1).row
+  check("ctx-click: the last line is on screen", last_row > 0, tostring(last_row))
+  local ok_l, err_l, cur_l, node_l, opened_l = click(stale_line, last_line)
+  check("ctx-click: a click ON the last node opens the menu", ok_l and opened_l, tostring(err_l))
+  check(
+    "ctx-click: ...on that node",
+    cur_l == last_line and node_l ~= nil,
+    "cursor " .. tostring(cur_l)
+  )
+  local ok_b, err_b, cur_b, _, opened_b = click(stale_line, last_line, last_row + 2)
+  check("ctx-click: a click below the last node runs without error", ok_b, tostring(err_b))
+  check("ctx-click: ...opens no menu", not opened_b)
+  check(
+    "ctx-click: ...and leaves the cursor where it was",
+    cur_b == stale_line,
+    ("cursor on line %s, was on %s"):format(tostring(cur_b), tostring(stale_line))
   )
 
   vim.o.mousemodel = saved_mousemodel

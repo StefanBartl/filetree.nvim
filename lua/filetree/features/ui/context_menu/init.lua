@@ -10,6 +10,9 @@
 --- the trigger; which entries appear is still controlled entirely by the
 --- top-level `menu` config (group-level opt-out — see @types/config.lua).
 ---
+--- A click on the empty area below the last node opens no menu and leaves the
+--- cursor alone.
+---
 --- `ui.contextmenu` resolves its own renderer -- nvzone/menu when it is
 --- installed, `ui.kit.menu` (no third-party dependency) otherwise --
 --- so this feature needs neither directly. It is never require()d until the
@@ -48,6 +51,25 @@ local _warned_missing = false
 
 ---@type FiletreeAdapter?
 local _adapter = nil
+
+---Whether the pointer is on the empty area below the last line of the tree.
+---`getmousepos().line` is clamped to the last line there, so the line alone
+---cannot tell a click on the last node from one below it -- the screen row
+---can: it lies past the last line's final (possibly wrapped) row.
+---@param pos table  `getmousepos()` result
+---@return boolean
+local function is_below_last_line(pos)
+  if not pos or pos.winid == 0 or not vim.api.nvim_win_is_valid(pos.winid) then return false end
+  local last = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(pos.winid))
+  if pos.line < last then return false end
+  local last_row = vim.fn.screenpos(pos.winid, last, 1).row
+  if last_row == 0 then return false end -- last line is scrolled out of view
+  local ok, h = pcall(vim.api.nvim_win_text_height, pos.winid, {
+    start_row = last - 1,
+    end_row = last - 1,
+  })
+  return pos.screenrow > last_row + (ok and h.all or 1) - 1
+end
 
 ---Move the tree cursor to the node under the mouse pointer, best-effort.
 ---A mapped `<RightMouse>` replaces Neovim's own click handling, so nothing
@@ -242,6 +264,12 @@ local function beside_tree_opts()
 end
 
 local function open_menu()
+  -- Empty space below the last node is not a node: no menu, and the cursor
+  -- stays where it was (clamping it onto the last node would make the menu
+  -- act on a node nobody clicked).
+  local ok_pos, pos = pcall(vim.fn.getmousepos)
+  if ok_pos and is_below_last_line(pos) then return end
+
   move_to_click()
   highlight_current_node()
 
