@@ -25,19 +25,18 @@ local this = debug.getinfo(1, "S").source:sub(2)
 local root_dir = vim.fn.fnamemodify(this, ":p:h:h")
 vim.opt.rtp:prepend(root_dir)
 
+-- One ordered list, first hit wins: the environment overrides a sibling
+-- checkout, which overrides lazy.nvim's copy.
+local lib_candidates = {}
 for _, env in ipairs({ "FILETREE_LIB_NVIM", "LIB_NVIM_PATH" }) do
   local v = vim.env[env]
-  if v and v ~= "" and vim.fn.isdirectory(v .. "/lua/lib") == 1 then
-    vim.opt.rtp:prepend(v)
-    break
-  end
+  if v and v ~= "" then lib_candidates[#lib_candidates + 1] = v end
 end
-for _, c in ipairs({
-  vim.fn.fnamemodify(root_dir, ":h") .. "/lib.nvim",
-  vim.fn.stdpath("data") .. "/lazy/lib.nvim",
-}) do
-  if vim.fn.isdirectory(c .. "/lua/lib") == 1 then
-    vim.opt.rtp:prepend(c)
+lib_candidates[#lib_candidates + 1] = vim.fn.fnamemodify(root_dir, ":h") .. "/lib.nvim"
+lib_candidates[#lib_candidates + 1] = vim.fn.stdpath("data") .. "/lazy/lib.nvim"
+for _, candidate in ipairs(lib_candidates) do
+  if vim.fn.isdirectory(candidate .. "/lua/lib") == 1 then
+    vim.opt.rtp:prepend(candidate)
     break
   end
 end
@@ -89,6 +88,22 @@ package.loaded["ui.kit"] = {
 local TREE_BUF = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_lines(TREE_BUF, 0, -1, false, { "a.lua", "b.lua", "c.lua", "d.lua" })
 vim.api.nvim_set_current_buf(TREE_BUF)
+
+---Checkmarks currently drawn in the tree buffer.
+local function shown()
+  local ns = vim.api.nvim_create_namespace("filetree_marks")
+  return #vim.api.nvim_buf_get_extmarks(TREE_BUF, ns, 0, -1, {})
+end
+
+---Armed libuv timers in this process. Only ever compared against a baseline
+---taken in the same synchronous stretch, so unrelated timers cancel out.
+local function active_timers()
+  local n = 0
+  uv.walk(function(h)
+    if h:get_type() == "timer" and h:is_active() then n = n + 1 end
+  end)
+  return n
+end
 
 local NODES = {}
 for i, name in ipairs({ "a.lua", "b.lua", "c.lua", "d.lua" }) do
@@ -362,8 +377,10 @@ do
 
   M.toggle("/proj/a.lua")
   M.toggle("/proj/b.lua")
+  eq("two checkmarks are drawn", shown(), 2)
   h.fn()
   eq("firing clears every mark", M.count(), 0)
+  eq("...and their checkmarks are gone from the tree", shown(), 0)
   eq("...with exactly one notification", auto_clear_notes(), 1)
   check(
     "...that names the idle time",
@@ -444,11 +461,13 @@ do
     local t0 = now_ms()
     M.toggle("/proj/a.lua")
     M.toggle("/proj/b.lua")
+    eq("two checkmarks are drawn", shown(), 2)
     local cleared = wait_for(MS * 10, function()
       return M.count() == 0
     end)
     local elapsed = now_ms() - t0
     check("idle marks are cleared", cleared)
+    eq("...and so are their checkmarks", shown(), 0)
     check(
       "...not before the delay has passed",
       elapsed >= MS * 0.9,
@@ -466,24 +485,28 @@ do
   end
 
   -- Activity: a second toggle part-way through pushes the clear a full delay
-  -- past *that* toggle, not past the first one.
+  -- past *that* toggle, not past the first one. A longer delay and an early
+  -- second toggle than elsewhere: the first timer must not fire inside the
+  -- wait, so an event loop that runs late by up to ~400ms still passes.
   do
     notes = {}
+    local MS2 = 600
     local M = real_marks()
-    M.setup({ enabled = true, auto_clear_ms = MS }, adapter)
+    M.setup({ enabled = true, auto_clear_ms = MS2 }, adapter)
     M.toggle("/proj/a.lua")
-    vim.wait(math.floor(MS * 0.6))
+    vim.wait(math.floor(MS2 * 0.3))
+    uv.update_time()
     local t_touch = now_ms()
     M.toggle("/proj/b.lua")
-    local cleared = wait_for(MS * 10, function()
+    local cleared = wait_for(MS2 * 10, function()
       return M.count() == 0
     end)
     local since_touch = now_ms() - t_touch
     check("re-armed marks are still cleared eventually", cleared)
     check(
       "a toggle part-way through restarts the full delay",
-      since_touch >= MS * 0.85,
-      ("cleared %.0fms after the last toggle, delay %dms"):format(since_touch, MS)
+      since_touch >= MS2 * 0.85,
+      ("cleared %.0fms after the last toggle, delay %dms"):format(since_touch, MS2)
     )
     eq("...with a single notification", auto_clear_notes(), 1)
     M.teardown()
@@ -494,8 +517,11 @@ do
     notes = {}
     local M = real_marks()
     M.setup({ enabled = true, auto_clear_ms = MS }, adapter)
+    local baseline = active_timers()
     M.toggle("/proj/a.lua")
+    eq("a mark arms the countdown", active_timers(), baseline + 1)
     M.clear_all()
+    eq("clear_all disarms it", active_timers(), baseline)
     vim.wait(MS * 2)
     eq("a manual clear leaves no countdown behind", auto_clear_notes(), 0)
     M.toggle("/proj/a.lua")
@@ -536,8 +562,11 @@ do
     notes = {}
     local M = real_marks()
     M.setup({ enabled = true, auto_clear_ms = MS }, adapter)
+    local baseline = active_timers()
     M.toggle("/proj/a.lua")
+    eq("a mark arms the countdown", active_timers(), baseline + 1)
     M.teardown()
+    eq("teardown disarms it", active_timers(), baseline)
     vim.wait(MS * 2)
     eq("teardown stops a pending countdown", auto_clear_notes(), 0)
   end
