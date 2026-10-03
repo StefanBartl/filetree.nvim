@@ -576,7 +576,15 @@ function M.status()
   for _, p in ipairs(registry.all()) do
     -- `plaintext` is gated by `experimental.plaintext.enabled`, not by the
     -- `providers` map every other provider reads, so report its real state.
-    local on = p.name == "plaintext" and plaintext_on or flags[p.name] ~= false
+    -- Branch explicitly: `cond and plaintext_on or <other>` falls through to
+    -- the other branch whenever plaintext_on is false/nil -- i.e. exactly when
+    -- the provider is off -- and reported it as on.
+    local on
+    if p.name == "plaintext" then
+      on = plaintext_on == true
+    else
+      on = flags[p.name] ~= false
+    end
     local tag = p.name == "plaintext" and "  (experimental)" or ""
     lines[#lines + 1] = string.format("  %s %s%s", on and "●" or "○", p.name, tag)
   end
