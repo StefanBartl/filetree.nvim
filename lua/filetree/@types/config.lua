@@ -787,7 +787,7 @@
 ---@field enabled?      boolean
 ---@field keymap_up     string?   Navigate to parent directory (default "-").
 ---@field keymap_down   string?   Set current dir as root (default "+").
----@field sync_cwd?     boolean   Also change Vim's cwd (default true).
+---@field sync_cwd?     boolean   Also change Vim's cwd (default false).
 
 -- ── lua_require_copy ─────────────────────────────────────────────────────────
 
@@ -823,10 +823,10 @@
 ---@class FiletreeSmartCreateConfig
 ---@field enabled?             boolean
 ---@field keymap               string?   Key inside tree (default "a").
----@field auto_init_lua?       boolean   Dirs → create init.lua (default true).
----@field auto_types_template? boolean   @types dirs → ---@meta template (default true).
----@field auto_module_annot?   boolean   .lua files → ---@module annotation (default true).
----@field ask_clipboard?       boolean   Ask whether to paste clipboard content (default true).
+---@field auto_init_lua?       boolean   Dirs → create init.lua (default false).
+---@field auto_types_template? boolean   @types dirs → ---@meta template (default false).
+---@field auto_module_annot?   boolean   .lua files → ---@module annotation (default false).
+---@field ask_clipboard?       boolean   Ask whether to paste clipboard content (default false).
 ---@field notify_level?        "verbose"|"short"|"off"  Success-message verbosity (default "verbose").
 ---                                     "verbose": "Created file/directory: <path>". "short": just
 ---                                     "Path: <path>". "off": no notification at all.
