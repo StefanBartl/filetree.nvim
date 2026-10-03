@@ -106,6 +106,10 @@ function M.get_current_node()
 
   local win = M.get_winid()
   local line_nr = win and vim.api.nvim_win_get_cursor(win)[1] or 0
+  -- A directory is `false` (never open here), a file nil -- spelled out because
+  -- `is_dir and false or nil` is always nil.
+  local is_expanded ---@type boolean?
+  if ntype == "directory" then is_expanded = false end
 
   return {
     id = entry.path,
@@ -114,7 +118,7 @@ function M.get_current_node()
     type = ntype,
     depth = 1,
     line_number = line_nr,
-    is_expanded = ntype == "directory" and false or nil,
+    is_expanded = is_expanded,
   }
 end
 

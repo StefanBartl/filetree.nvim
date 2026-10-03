@@ -411,10 +411,13 @@
 ---@field enabled? boolean          Bind the mouse trigger (default true — opt-out).
 ---@field keymap   string|false?    Mouse trigger inside the tree buffer (default "<RightMouse>").
 ---                                 false disables the binding without disabling the feature outright.
----                                 Opens nvzone/menu (soft dependency — a single notify, not an
----                                 error, if it isn't installed) with the entries from
+---                                 Opens the menu through `ui.contextmenu` (nvzone/menu when it is
+---                                 installed, `ui.kit.menu` otherwise) with the entries from
 ---                                 `filetree.integrations.menu.items()`; which entries appear is
 ---                                 controlled by the top-level `menu` config, not this one.
+---                                 Only a click on a node row opens it; a click below the last
+---                                 node, on the tree's statusline / separator or in another
+---                                 window does nothing.
 
 -- ── project_root ──────────────────────────────────────────────────────────────
 

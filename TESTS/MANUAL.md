@@ -135,16 +135,17 @@ $TEMP, so two instances of the same suite (or two suites sharing a fixture
 root) race each other over the same files -- concurrent runs fail with
 buffer/path mismatches that look like feature bugs and are not.
 
-These are the suites CI gates on, in this order:
+CI's exact list and order is the `test` job in `.github/workflows/ci.yml`
+(every stub-based suite plus `refs/run.lua`). The suites that need a real
+neo-tree (`adapter_lines.lua` and the other `neotree_*`/`group_empty_dirs_*`
+ones) are NOT run there — run them locally:
 
 ```
 cd /path/to/filetree.nvim
 nvim --clean --headless -u NONE -l TESTS/smoke.lua
 nvim --clean --headless -u NONE -l TESTS/units.lua
 nvim --clean --headless -u NONE -l TESTS/menu.lua
-nvim --clean --headless -u NONE -l TESTS/cwd_mode.lua
-nvim --clean --headless -u NONE -l TESTS/sidebar_guard.lua
-nvim --clean --headless -u NONE -l TESTS/adapter_lines.lua
+nvim --clean --headless -u NONE -l TESTS/adapter_lines.lua   # local only: needs neo-tree
 nvim --clean --headless -u NONE -l TESTS/refs/run.lua
 ```
 
@@ -603,6 +604,22 @@ bufferline.nvim, …).
 | P.5 | Focus **inside the tree**, then run a plugin that opens a file from a callback — `:Reposcope dashboard` → pick a repo → open its README, or any `:lua vim.cmd.edit("…")` | The file opens in an editor window, focus follows it, the tree stays put. No `E1513`. This is what the old `winfixbuf` default broke. |
 | P.6 | Repeat P.5 with `sidebar_guard = { winfixbuf = true }` | The refusal is back by choice: `E1513: Cannot switch buffer` and the file does not open. The tree still stays put. |
 | P.7 | `require("filetree").setup({ features = { sidebar_guard = { enabled = false } } })`, then repeat P.2 | The old bug is back: the tree jumps to the other side. |
+
+### Q. context_menu — the right-click menu
+
+The wiring is pinned headlessly (`units.lua`: which clicks count, wrapped and
+sideways-scrolled last lines; `adapter_lines.lua`: real neo-tree). What a
+headless run cannot judge is how it looks and feels with a real pointer.
+
+| # | Test | Expected |
+|---|------|----------|
+| Q.1 | Put the cursor far from a node (e.g. on the root), right-click a node further down | The menu opens at/beside the click, the clicked row is highlighted while it stays open, and picking an entry acts on THAT node, not the one the cursor was on |
+| Q.2 | Close the menu with `<Esc>` | The highlight is gone |
+| Q.3 | Right-click the empty area right below the last node, then far below it | Nothing happens: no menu, the cursor stays where it was |
+| Q.4 | Right-click the tree window's statusline (if shown), its vertical separator and (with a winbar) the winbar | Nothing happens |
+| Q.5 | With the tree focused, right-click in the editor window | Nothing opens from the tree's mapping, the cursor in the tree stays |
+| Q.6 | Scroll the tree sideways (`zL`/wheel-right, long names), then right-click right below the last node | Still nothing; a click on the last node itself still opens the menu |
+| Q.7 | Dock the tree left, then right (`:Filetree` window position) and right-click a node | The menu opens beside the tree and never covers the highlighted row |
 
 ---
 
