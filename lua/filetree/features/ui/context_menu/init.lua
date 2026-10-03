@@ -50,19 +50,31 @@ local _warned_missing = false
 local _adapter = nil
 
 ---Move the tree cursor to the node under the mouse pointer, best-effort.
----Neovim already repositions the cursor for a plain buffer-local mouse
----mapping under the default 'mousemodel' (extend), but this is done
----explicitly too so the menu targets the right node even if the user has
----'mousemodel' set to "popup" or something else non-default.
+---A mapped `<RightMouse>` replaces Neovim's own click handling, so nothing
+---else moves the cursor to the pointer: this has to, or the menu would act on
+---wherever the cursor happened to be.
 local function move_to_click()
   local ok, pos = pcall(vim.fn.getmousepos)
   if not ok or not pos or pos.winid == 0 then return end
   if pos.winid ~= vim.api.nvim_get_current_win() then return end
-  pcall(
+  local ok_set = pcall(
     vim.api.nvim_win_set_cursor,
     pos.winid,
     { math.max(1, pos.line), math.max(0, pos.column - 1) }
   )
+  if not ok_set then return end
+
+  -- Tell whoever tracks the cursor about the jump NOW. neo-tree remembers the
+  -- cursor line from a `CursorMoved` autocmd and puts it back on every
+  -- `WinEnter` of the tree window. That autocmd only fires once this mapping
+  -- has returned, but the menu opens synchronously below, and creating its
+  -- window briefly re-enters the tree window -- so neo-tree restored the line
+  -- it had remembered BEFORE the click, and the menu acted on the node the
+  -- cursor was last on (usually further down) instead of the one clicked.
+  pcall(vim.api.nvim_exec_autocmds, "CursorMoved", {
+    buffer = vim.api.nvim_win_get_buf(pos.winid),
+    modeline = false,
+  })
 end
 
 -- ── Clicked-node highlight, for the life of the menu ────────────────────────
