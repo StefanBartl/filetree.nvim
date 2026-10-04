@@ -93,6 +93,20 @@ return {
       scope = "global",
       opt_in = true,
     },
+    {
+      lhs = "<leader>;",
+      desc = "Numbered quick-pick: number the tree entries, type a number to open (a count roots the tree above the file)",
+      feature = "quickpick",
+      scope = "global",
+      opt_in = true,
+    },
+    {
+      lhs = "<leader>:",
+      desc = "Numbered quick-pick with the tree rooted at the cwd",
+      feature = "quickpick",
+      scope = "global",
+      opt_in = true,
+    },
   },
   ui = {
     {

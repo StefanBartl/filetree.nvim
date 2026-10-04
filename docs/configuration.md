@@ -286,6 +286,33 @@ require("filetree").setup({
       silent  = true,   -- false → debug note whenever a corrupt subtree is healed
     },
 
+    -- Numbered quick-pick mode: label the visible entries, type a number to open
+    -- it. See docs/FEATURES/NAVIGATION.md#quickpick-opt-in.
+    quickpick = {
+      enabled = false,              -- default: off (two global keys + a mode that silences the tree's keys)
+      keymap = "<leader>;",         -- global; a count roots the tree that many folders above the file
+      keymap_cwd = "<leader>:",     -- global; tree rooted at the cwd. false = leave a trigger unmapped
+      content = "all",              -- numbered at start: "all" | "files" | "folders"
+      open_mode = "edit",           -- without a prefix key: "edit" | "split" | "vsplit" | "tab"
+      width = 2,                    -- digits per label, 1..3 (2 = 00..99 on screen)
+      timeout_ms = 5000,            -- idle time that ends the mode; 0 = never
+      silence_nvim_mappings = true, -- every other tree-buffer key is <Nop> while the mode runs
+      label_pos = "overlay",        -- "overlay" | "inline" | "right_align" | "eol"
+      indicator = true,             -- badge showing open mode, content kind, typed digits
+      indicator_position = { "nvim", "top", "center" }, -- { "nvim"|"filetree", "top"|"bottom", "left"|"center"|"right" }
+      keys = {                      -- each: a key, a list of keys, or false
+        edit = "e", split = "s", vsplit = "v", tab = "t",
+        cycle = "c",                -- all -> files -> folders
+        cancel = { "<Esc>", "<C-c>" },
+        backspace = { "<BS>", "<C-h>" },
+        scroll_down = "j", scroll_up = "k",
+        page_down = "<C-d>", page_up = "<C-u>",
+      },
+      hl_number = "FiletreeQuickpickNumber",       -- default link: Search
+      hl_typed = "FiletreeQuickpickTyped",         -- default link: IncSearch
+      hl_indicator = "FiletreeQuickpickIndicator", -- default link: PmenuSel
+    },
+
     -- auto_resize is also off by default — see "Default-disabled features".
   },
 

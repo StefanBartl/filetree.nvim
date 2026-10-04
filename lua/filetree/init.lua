@@ -42,6 +42,8 @@ local FEATURES = registry.FEATURES
 --   handle_guard          Patches a neo-tree internal and closes libuv handles
 --                         to fix a Windows watcher-lock; opt-in until the user
 --                         wants that behaviour.
+--   quickpick             Two global leader keys, and a temporary mode that takes over
+--                         (and silences) the tree buffer's keys; the user opts in.
 --   size_info             Purely cosmetic — an eol extmark next to every node —
 --                         and `dir_async = true` runs `du`/`Get-ChildItem` per
 --                         directory node by default; better opted into than
@@ -56,6 +58,7 @@ local DEFAULT_DISABLED = {
   handle_guard = true, -- patches a neo-tree internal + closes uv handles; opt-in.
   size_info = true, -- cosmetic clutter + per-node `du`/`Get-ChildItem` by default; opt-in.
   tree_toggle = true, -- four global Alt keys; a claim on the keyboard the user makes, not the plugin.
+  quickpick = true, -- two global leader keys and a mode that takes over the tree's keys; opt-in.
 }
 
 ---@type table<string, table>  name → loaded feature module
