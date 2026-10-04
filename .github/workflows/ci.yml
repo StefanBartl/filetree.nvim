@@ -114,6 +114,7 @@ jobs:
           nvim -n --clean --headless -u NONE -l TESTS/create_from_template.lua
           nvim -n --clean --headless -u NONE -l TESTS/file_clipboard.lua
           nvim -n --clean --headless -u NONE -l TESTS/marks_auto_clear.lua
+          nvim -n --clean --headless -u NONE -l TESTS/quickpick.lua
           nvim -n --clean --headless -u NONE -l TESTS/refs/run.lua
 
       # The FEATURE REFERENCE section of doc/filetree.txt is generated from

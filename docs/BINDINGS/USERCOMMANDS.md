@@ -53,6 +53,13 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 |---------|--------|
 | `:Filetree toggle [left\|right\|float\|current]` | Toggle the tree at that position (default `left`), revealing the current file |
 
+### Quickpick (opt-in feature)
+| Command | Action |
+|---------|--------|
+| `:Filetree quickpick [levels]` | Number the tree's visible entries and open one by typing its number; with the tree closed, reveal the current file first, rooted `levels` folders above it |
+| `:Filetree quickpick cwd` | The same, with the tree rooted at the cwd |
+| `:Filetree quickpick cancel` | Leave the mode |
+
 ### Diff
 | Command | Action |
 |---------|--------|

@@ -621,6 +621,29 @@ headless run cannot judge is how it looks and feels with a real pointer.
 | Q.6 | Scroll the tree sideways (`zL`/wheel-right, long names), then right-click right below the last node | Still nothing; a click on the last node itself still opens the menu |
 | Q.7 | Dock the tree left, then right (`:Filetree` window position) and right-click a node | The menu opens beside the tree and never covers the highlighted row |
 
+### R. quickpick — the numbered quick-pick mode (opt-in)
+
+Needs `features = { quickpick = { enabled = true } }`. The lifecycle is pinned
+headlessly (`quickpick.lua` against a fake tree, `quickpick_neotree.lua` against
+a real neo-tree). What no headless run reaches is a real terminal: how the
+labels and the badge look over a real colorscheme, key timing, and the keys a
+terminal actually sends.
+
+| # | Test | Expected |
+|---|------|----------|
+| R.1 | Tree closed, in a file: `<leader>;` | The tree opens on the file's folder, every visible entry carries `00`, `01`, ... in front of its icon (and not over the icon), the tree has focus, the badge ` edit \| all \| __ ` shows where `indicator_position` says |
+| R.2 | Type two digits of a file | The file opens in the editor window, the mode is gone: no labels, no badge, `j`/`k`/`s`/`<CR>` behave as neo-tree's again |
+| R.3 | `<leader>;`, then `v`, then two digits | Opens in a vertical split; the badge showed `vsplit` after `v` |
+| R.4 | `<leader>;`, type one digit, then `s` | Nothing changes mode (locked); `<BS>` then `s` switches to split |
+| R.5 | `<leader>;`, type a folder's number | The folder expands, the entries below it are renumbered, the mode is still on; typing its number again collapses it |
+| R.6 | `c` repeatedly | Labels move to files only, folders only, back to all; the badge follows |
+| R.7 | Many entries (more than the window is high): `<C-d>`, `<C-u>`, `j`, `k`, and the mouse wheel | Labels follow what is on screen, restarting at `00` at the top |
+| R.8 | Resize the terminal / the tree window while the mode is on | Labels and badge are redrawn for the new size |
+| R.9 | Press `<Esc>`; separately wait out `timeout_ms`; separately click into the editor window | Each ends the mode cleanly: labels, badge and the silenced keys are gone |
+| R.10 | While the mode is on press `a`, `d`, `<Space>`, `:` | Nothing happens (silenced) -- no neo-tree create/delete prompt, no command line |
+| R.11 | `2<leader>;` from a file two folders deep, and `<leader>:` | The tree is rooted two folders above the file / at the cwd, then numbered |
+| R.12 | Inside tmux and in a plain terminal: `<Esc>` ends the mode at once, and `<C-h>` / `<BS>` both drop a digit | Neither feels delayed or does the wrong thing |
+
 ---
 
 ## Known limits of this test environment

@@ -98,6 +98,7 @@
 ---@field reveal_alt          FiletreeRevealAltConfig?
 ---@field source_switcher     FiletreeSourceSwitcherConfig?
 ---@field tree_toggle         FiletreeTreeToggleConfig?
+---@field quickpick           FiletreeQuickpickConfig?
 ---@field buffer_save         FiletreeBufferSaveConfig?
 ---@field window_size_cycler  FiletreeWindowSizeCyclerConfig?
 ---@field open_in_fm          FiletreeOpenInFmConfig?
@@ -970,6 +971,47 @@
 ---@field keymap_float?     string|string[]|false  Global key: toggle as a float (default "<M-f>").
 ---@field keymap_left?      string|string[]|false  Global key: toggle on the left (default "<M-l>").
 ---@field keymap_right?     string|string[]|false  Global key: toggle on the right (default "<M-r>").
+
+-- ── quickpick (opt-in) ────────────────────────────────────────────────────────
+
+---@alias FiletreeQuickpickLabelPos "overlay"|"inline"|"right_align"|"eol"
+
+---Where the open-mode badge sits: `{ reference, vertical, horizontal }`.
+---  reference   "nvim" (the whole editor) | "filetree" (the tree window)
+---  vertical    "top" | "bottom"
+---  horizontal  "left" | "center" | "right"
+---@alias FiletreeQuickpickPosition string[]
+
+---Keys that work while the mode runs. Each a key, a list of keys or `false`.
+---@class FiletreeQuickpickKeys
+---@field edit?        string|string[]|false  Open mode edit (default "e").
+---@field split?       string|string[]|false  Open mode split (default "s").
+---@field vsplit?      string|string[]|false  Open mode vsplit (default "v").
+---@field tab?         string|string[]|false  Open mode tab (default "t").
+---@field cycle?       string|string[]|false  Cycle all -> files -> folders (default "c").
+---@field cancel?      string|string[]|false  Leave the mode (default { "<Esc>", "<C-c>" }).
+---@field backspace?   string|string[]|false  Drop the last typed digit (default { "<BS>", "<C-h>" }).
+---@field scroll_down? string|string[]|false  One line down in the tree (default "j").
+---@field scroll_up?   string|string[]|false  One line up (default "k").
+---@field page_down?   string|string[]|false  Half a page down (default "<C-d>").
+---@field page_up?     string|string[]|false  Half a page up (default "<C-u>").
+
+---@class FiletreeQuickpickConfig
+---@field enabled?               boolean  Default false: two global leader keys and a mode that takes over the tree's keys are opt-in.
+---@field keymap?                string|string[]|false  Global key: number the tree (default "<leader>;"). A count roots it that many folders above the file.
+---@field keymap_cwd?            string|string[]|false  Global key: number the tree rooted at the cwd (default "<leader>:").
+---@field content?               "all"|"files"|"folders"  Which entries are numbered at start (default "all").
+---@field open_mode?             "edit"|"split"|"vsplit"|"tab"  Open mode without a prefix key (default "edit").
+---@field width?                 integer  Digits per label, 1..3 (default 2: 00..99 on screen).
+---@field timeout_ms?            integer  Idle time that ends the mode; 0 = never (default 5000).
+---@field silence_nvim_mappings? boolean  Map every other tree-buffer key to <Nop> while the mode runs (default true).
+---@field label_pos?             FiletreeQuickpickLabelPos  Where a label is drawn (default "overlay").
+---@field indicator?             boolean  Show the open-mode badge (default true).
+---@field indicator_position?    FiletreeQuickpickPosition  Badge position (default { "nvim", "top", "center" }).
+---@field keys?                  FiletreeQuickpickKeys
+---@field hl_number?             string   Highlight group of a label (default "FiletreeQuickpickNumber", a link to Search).
+---@field hl_typed?              string   Highlight group of the digits already typed (default "FiletreeQuickpickTyped", IncSearch).
+---@field hl_indicator?          string   Highlight group of the badge (default "FiletreeQuickpickIndicator", PmenuSel).
 
 -- ── buffer_save ───────────────────────────────────────────────────────────────
 

@@ -40,6 +40,8 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `<M-f>` | tree_toggle | `keymap_float` | **global**, opt-in feature: toggle the tree as a float |
 | `<M-l>` | tree_toggle | `keymap_left` | **global**, opt-in feature: toggle the tree on the left |
 | `<M-r>` | tree_toggle | `keymap_right` | **global**, opt-in feature: toggle the tree on the right |
+| `<leader>;` | quickpick | `keymap` | **global**, opt-in feature: number the tree's visible entries, type a number to open it (`N<leader>;` roots the tree N folders above the file) |
+| `<leader>:` | quickpick | `keymap_cwd` | **global**, opt-in feature: the same, with the tree rooted at the cwd |
 | `-` | tree_traverse | `keymap_up` | Navigate to parent directory (×count) |
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root (×count) |
 | `B` | reveal_alt | `keymap` | Reveal the alternate buffer (`#`) in the tree |
@@ -119,6 +121,28 @@ than one keypress per line.
 |-----|---------|-------------|--------|
 | `m` | marks | `keymap` | Mark every node in the selection |
 | `[m` | marks | `keymap_unmark_all` | Unmark every node in the selection |
+
+### Quickpick mode keys
+
+Only while the opt-in [quickpick](../FEATURES/NAVIGATION.md#quickpick-opt-in)
+mode runs (started by `<leader>;` / `<leader>:` above): temporary buffer-local
+keys on the tree buffer, taken over for the duration and restored exactly
+afterwards. They live in `features.quickpick.keys`; each is a key, a list of
+keys or `false`. With `silence_nvim_mappings` (default) every other key in the
+tree buffer does nothing until the mode ends.
+
+| Key | Config field | Action |
+|-----|--------------|--------|
+| `0`-`9` | — | Type the label; the last digit (`width`, default 2) opens the entry, or expands/collapses it when it is a folder |
+| `e` | `keys.edit` | Open mode: edit (the default) |
+| `s` | `keys.split` | Open mode: horizontal split (only before the first digit) |
+| `v` | `keys.vsplit` | Open mode: vertical split (only before the first digit) |
+| `t` | `keys.tab` | Open mode: new tab (only before the first digit) |
+| `c` | `keys.cycle` | Cycle the numbered entries: all → files → folders |
+| `<BS>`, `<C-h>` | `keys.backspace` | Drop the last typed digit |
+| `<Esc>`, `<C-c>` | `keys.cancel` | Leave the mode |
+| `j` / `k` | `keys.scroll_down` / `keys.scroll_up` | One line down / up in the tree |
+| `<C-d>` / `<C-u>` | `keys.page_down` / `keys.page_up` | Half a page down / up |
 
 ---
 

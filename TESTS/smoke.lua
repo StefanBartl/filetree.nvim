@@ -120,6 +120,7 @@ local DEFAULT_OFF = {
   "handle_guard",
   "size_info",
   "tree_toggle",
+  "quickpick",
 }
 do
   local warnings = 0

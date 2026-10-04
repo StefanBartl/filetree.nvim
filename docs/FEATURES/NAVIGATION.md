@@ -112,6 +112,77 @@ makes, not the plugin.
 - **Usercmds:** `:Filetree toggle [left|right|float|current]`
 - **Config:** `opts.features.tree_toggle.enabled` (default **false**), `reveal` (true), `reveal_force_cwd` (true)
 
+## Quickpick (opt-in)
+
+A temporary *numbered quick-pick mode* over the tree. `<leader>;` puts a
+two-digit label (`00`..`99`) on every entry that is visible in the tree
+window; typing the number opens that entry, with no cursor movement and no
+`<CR>`. Meant for "open that file, I can see it" — the common case where
+moving the cursor to it is the slow part.
+
+- **Open modes.** `s` / `v` / `t` before the first digit pick split / vsplit /
+  new tab instead of the plain edit (`e` goes back); a badge shows the
+  current choice. Once a digit is typed the mode is locked for that number;
+  `<BS>` drops the digit and unlocks it.
+- **Folders.** The number of a folder expands it (or collapses it, when it is
+  open) and renumbers whatever is visible afterwards; the mode keeps running.
+- **Content kind.** `c` cycles which entries carry a number: files and
+  folders → files only → folders only. `content` sets the start value.
+- **Typed digits narrow the labels.** After the first digit only labels that
+  begin with it stay on screen, the typed part highlighted.
+- **Starting it.** `<leader>;` numbers an open tree as it is; with the tree
+  closed it opens it on the current file's folder first (reveal) and numbers
+  it once it has rendered. A count roots it higher: `2<leader>;` puts the
+  root two folders above the file (`parent_levels`). `<leader>:` roots it at
+  the cwd. Both are also `:Filetree quickpick [levels]` / `:Filetree
+  quickpick cwd`; `:Filetree quickpick cancel` leaves the mode.
+- **Leaving.** `<Esc>` or `<C-c>`, `timeout_ms` (default 5 s) without a key,
+  moving focus off the tree, closing it, or opening an entry. Everything is
+  put back: the labels (extmarks), the badge, the timer, the autocmds, and
+  every buffer-local key the tree plugin had on the keys the mode used —
+  restored with its callback, `desc`, `nowait`, `silent` and `expr` intact.
+  Focus returns to the window the mode was started from.
+- **Silencing.** While the mode runs, `silence_nvim_mappings` (default true)
+  maps every other key in the tree buffer to `<Nop>`, so a stray press cannot
+  fire the tree plugin's own action (neo-tree binds `s`, `t`, `<CR>`, `a`, `d`
+  there) or a global mapping. `false` takes over only the mode's own keys.
+  `<Esc>` is never silenced.
+- **Scrolling.** `j` / `k` / `<C-d>` / `<C-u>` move inside the tree without
+  leaving the mode. Only entries inside the window's visible lines are
+  numbered, and the numbers are redrawn from scratch — never patched — on
+  scroll, resize, expand/collapse and whenever the tree re-renders itself.
+- **Open target.** A file is opened from an *editor* window (a new one when
+  there is none), never from the tree window, through `adapter.open_file(path,
+  mode)`. The tree's own root line is never numbered.
+
+It is built on the adapter contract alone (`get_visible_nodes`,
+`expand_node`, `collapse_node`, `open_file`, `open_reveal`, `open_cwd`), so it
+works on every backend that implements them; mini.files cannot expand
+folders, so a folder number there says so and does nothing.
+
+Off by default: two global leader keys and a mode that takes over the tree's
+keys are a claim the user makes, not the plugin.
+
+- **Module:** [`features/nav/quickpick/init.lua`](../../lua/filetree/features/nav/quickpick/init.lua) (lifecycle), [`logic.lua`](../../lua/filetree/features/nav/quickpick/logic.lua) (numbering and the input parser, pure), [`keys.lua`](../../lua/filetree/features/nav/quickpick/keys.lua) (buffer-local keys with exact restore)
+- **Keymaps:** `<leader>;`, `<leader>:` (global; config fields `keymap`, `keymap_cwd`); in-mode keys in [KEYMAPS.md](../BINDINGS/KEYMAPS.md#quickpick-mode-keys)
+- **Usercmds:** `:Filetree quickpick [levels]`, `:Filetree quickpick cwd`, `:Filetree quickpick cancel`
+- **Config:** `opts.features.quickpick.enabled` (default **false**), `content` ("all"), `open_mode` ("edit"), `width` (2), `timeout_ms` (5000; 0 = never), `silence_nvim_mappings` (true), `label_pos` ("overlay"), `indicator` (true), `indicator_position` (`{ "nvim", "top", "center" }` = reference `nvim`|`filetree`, `top`|`bottom`, `left`|`center`|`right`), `keys` (see KEYMAPS.md), `hl_number` / `hl_typed` / `hl_indicator`
+- **Highlights:** `FiletreeQuickpickNumber` (→ `Search`), `FiletreeQuickpickTyped` (→ `IncSearch`), `FiletreeQuickpickIndicator` (→ `PmenuSel`), all `default` links
+
+```lua
+require("filetree").setup({
+  features = {
+    quickpick = {
+      enabled = true,
+      content = "files", -- start with files only; `c` cycles
+      timeout_ms = 3000,
+      indicator_position = { "filetree", "bottom", "right" },
+      keys = { cancel = { "<Esc>", "q" } },
+    },
+  },
+})
+```
+
 ## Auto Resize (opt-in)
 
 Responsive tree sidebar width driven by `VimResized`: breakpoints map

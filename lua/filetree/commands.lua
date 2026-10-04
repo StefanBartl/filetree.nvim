@@ -365,6 +365,33 @@ local TREE = {
     if not ok then notify.warn(err or "toggle failed") end
   end,
 
+  -- ── quickpick (opt-in) ──────────────────────────────────────────────────────
+  -- :Filetree quickpick [levels]   number the tree (levels = folders above the file to root at)
+  -- :Filetree quickpick cwd        number the tree rooted at the cwd
+  -- :Filetree quickpick cancel     leave the mode
+  quickpick = {
+    [""] = function(a)
+      local f = ft("quickpick")
+      if not f then
+        notify.warn("quickpick is off (features.quickpick.enabled = true turns it on)")
+        return
+      end
+      f.start({ parent_levels = tonumber(a[1]) or 0 })
+    end,
+    cwd = function(_)
+      local f = ft("quickpick")
+      if not f then
+        notify.warn("quickpick is off (features.quickpick.enabled = true turns it on)")
+        return
+      end
+      f.start({ cwd = true })
+    end,
+    cancel = function(_)
+      local f = ft("quickpick")
+      if f then f.cancel() end
+    end,
+  },
+
   -- ── resize ──────────────────────────────────────────────────────────────────
   -- :Filetree resize [width]
   resize = function(args)
