@@ -28,6 +28,28 @@ Everything CI runs, plus the manual pass it cannot.
 | [`refs/`](refs/) | fixture-based: real on-disk multi-file projects, described below |
 | [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
 
+## Running
+
+The suite is run by [testing.nvim](https://github.com/StefanBartl/testing.nvim),
+configured in [`.testing.lua`](../.testing.lua) (the `spec_pattern` lists the
+files CI gates on: the files here carry no `_spec` suffix, and
+`refs/run.lua` is a spec, not a runner). Every file is a self-running script
+(dialect `script`): one child nvim per file, exit code and printed `[FAIL]`
+lines are the verdict.
+
+```
+bash scripts/test.sh                      # every gated spec
+bash scripts/test.sh --file keys          # only files whose name contains "keys"
+bash scripts/test.sh --json ir.json       # also write the machine-readable result
+```
+
+`scripts/test.sh` finds testing.nvim, lib.nvim and ui.nvim via
+`$TESTING_NVIM_DIR` / `$LIB_NVIM_DIR` / `$UI_NVIM_DIR`, `.deps/<name>`, a
+sibling checkout `../<name>` or `stdpath("data")/lazy/<name>`, and exits 1
+when one is missing. A single file can still be run directly, e.g.
+`nvim -n --clean --headless -u NONE -l TESTS/keys.lua`; the real-neo-tree
+suites below are not part of the gated set and are started that way.
+
 All of them are headless and exit 0 on a pass. `.github/workflows/ci.yml`'s
 `test` job gates on the stub-based suites above `adapter_lines.lua` in
 the table, plus `refs/run.lua`; it does not install neo-tree/nui/devicons, so

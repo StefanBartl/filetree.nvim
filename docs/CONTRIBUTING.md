@@ -79,10 +79,12 @@ support, measured rather than assumed.
 
 ## Tests
 
-`TESTS/` is a [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
-busted-style suite that fakes the adapters, so no tree plugin has to be
-installed. [GitHub Actions](../.github/workflows/ci.yml) runs it on every push
-and PR to `main`.
+`TESTS/` holds self-running headless specs that fake the adapters, so no tree
+plugin has to be installed. Run them with `bash scripts/test.sh`
+([testing.nvim](https://github.com/StefanBartl/testing.nvim) is the runner,
+see [`TESTS/README.md`](../TESTS/README.md)).
+[GitHub Actions](../.github/workflows/ci.yml) runs them on every push and PR
+to `main`.
 
 ## Workflow
 
