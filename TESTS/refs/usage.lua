@@ -216,6 +216,132 @@ end
 run("walk fallback")
 vim.fn.executable = real_executable
 
+-- ── refs.report ───────────────────────────────────────────────────────────────
+local function run_report()
+  print("\n== refs.report (:Filetree references) ==")
+
+  -- The popup goes through `filetree.util.select`; record what it is handed
+  -- instead of opening a float.
+  local popup
+  package.loaded["filetree.util.select"] = function(items, opts, on_choice)
+    popup = { items = items, opts = opts, on_choice = on_choice }
+  end
+  local report = require("filetree.refs.report")
+
+  local notes = {}
+  local real_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg, level)
+    notes[#notes + 1] = { msg = tostring(msg), level = level }
+  end
+
+  local function wait_for(pred)
+    vim.wait(20000, pred, 10)
+  end
+
+  check(
+    "report: an explicit path resolves to an absolute path",
+    report.resolve_target(p("assets/used.png")) == p("assets/used.png")
+  )
+
+  -- popup view
+  report.references(p("assets/twice.png"), { view = "popup" })
+  wait_for(function()
+    return popup ~= nil
+  end)
+  check("report: popup lists all 3 sites", popup and #popup.items == 3)
+  check(
+    "report: popup title carries the total and the file name",
+    popup and popup.opts.prompt == "3 References: twice.png",
+    popup and popup.opts.prompt
+  )
+  local line = popup and popup.opts.format_item(popup.items[1]) or ""
+  check(
+    "report: a popup row reads `relative/path:line  text`",
+    line:match("^[%w%._/%-]+:%d+  ") ~= nil and line:find("twice.png", 1, true) ~= nil,
+    line
+  )
+  check("report: popup is centred, not cursor-anchored", popup and popup.opts.relative == "editor")
+
+  -- Enter jumps: the file opens at the line of the chosen site.
+  local first = popup.items[1]
+  popup.on_choice(first, 1)
+  check(
+    "report: <CR> opens the referencing file",
+    vim.api.nvim_buf_get_name(0):gsub("\\", "/") == first.file
+  )
+  check("report: ...at the referencing line", vim.api.nvim_win_get_cursor(0)[1] == first.line)
+
+  -- cancel does not jump
+  local before = vim.api.nvim_buf_get_name(0)
+  popup.on_choice(nil, nil)
+  check("report: cancelling the popup stays put", vim.api.nvim_buf_get_name(0) == before)
+
+  -- picker view (quickfix backend: no plugin needed)
+  refs.setup({
+    providers = { markdown = true, lua = true, python = false, ts_js = false },
+    picker = "quickfix",
+  })
+  vim.fn.setqflist({}, "r")
+  report.references(p("assets/twice.png"), { view = "picker" })
+  wait_for(function()
+    return #vim.fn.getqflist() > 0
+  end)
+  check("report: picker view fills the quickfix list with every site", #vim.fn.getqflist() == 3)
+  check(
+    "report: the list carries the total in its title",
+    vim.fn.getqflist({ title = 1 }).title:find("3 References", 1, true) ~= nil
+  )
+  vim.cmd("cclose")
+
+  -- configured default view
+  refs.setup({
+    providers = { markdown = true, lua = true, python = false, ts_js = false },
+    report = { view = "picker" },
+    picker = "quickfix",
+  })
+  vim.fn.setqflist({}, "r")
+  report.references(p("assets/twice.png"))
+  wait_for(function()
+    return #vim.fn.getqflist() > 0
+  end)
+  check("report: refs.report.view = picker is honoured without a flag", #vim.fn.getqflist() == 3)
+  vim.cmd("cclose")
+
+  -- unreferenced file: a plain message, no list
+  popup = nil
+  notes = {}
+  report.references(p("assets/orphan.png"), { view = "popup" })
+  wait_for(function()
+    return #notes > 0
+  end)
+  check("report: a file nobody references only notifies", popup == nil and #notes == 1)
+  check(
+    "report: ...with the zero count",
+    notes[1] and notes[1].msg:find("0 references", 1, true) ~= nil,
+    notes[1] and notes[1].msg
+  )
+
+  -- directory / missing path
+  notes = {}
+  report.references(work .. "/assets")
+  check(
+    "report: a directory is pointed at `refs unused`",
+    notes[1] and notes[1].msg:find("refs unused", 1, true) ~= nil
+  )
+  notes = {}
+  report.references(p("assets/nope.png"))
+  check(
+    "report: a missing file is reported",
+    notes[1] and notes[1].msg:find("no such file", 1, true)
+  )
+
+  vim.notify = real_notify
+  package.loaded["filetree.util.select"] = nil
+end
+
+run_report()
+
 print(("\nrefs.usage: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")
