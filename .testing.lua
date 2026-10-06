@@ -32,6 +32,11 @@ return {
   -- Dependencies (directory names) put on the runtimepath: $<NAME>_DIR, .deps/<name>, ../<name>,
   -- stdpath('data')/lazy/<name>.
   deps = { "lib.nvim", "ui.nvim" },
+  -- Guards (fs / state / scheduled_error / prompt / deprecation / process_net) and `guard_allow`
+  -- are intentionally left at their defaults: every spec here runs in the "script" dialect (its own
+  -- `nvim -l` process), where testing.nvim installs NO guard ("guards: not installed in a script
+  -- file"). Nothing is measured, so no guard mode or allowlist entry can be justified yet. Revisit
+  -- this once the specs run in a dialect that supports guards.
   -- "none" = all specs in one nvim, "file" = one nvim per spec file
   -- (nothing leaks from one file into the next).
   isolated = "none",
