@@ -105,6 +105,11 @@ require("filetree").setup({
       max_files         = 5000,       -- cap for the ripgrep-free fallback walk
       timeout_ms        = 3000,
     },
+    report = {            -- `:Filetree references` / `:Filetree refs unused`
+      view = "popup",     -- "popup" | "picker" (telescope / fzf-lua / quickfix)
+      -- extensions = { "png", "jpg" },  -- what `refs unused` considers (default: asset allowlist)
+      max_files = 5000,   -- files one `refs unused` sweep checks at most
+    },
     undo = true,          -- `:Filetree refs undo` reverts the last rewrite
     undo_depth = 10,      -- how many rewrites stay undoable; the stack holds
                           -- only the replaced line content, so raising is cheap

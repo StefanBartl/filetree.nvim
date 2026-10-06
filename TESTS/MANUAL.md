@@ -292,6 +292,10 @@ Exercises: `nvim_open_win`, buffer-local keymaps, close-on-`q`.
 | D.6 | `I` on a symlink | `Type:` reads `... (symlink)`, and a `Link to:` line names the target |
 | D.7 | `I` on a symlink whose target does not exist | The `Link to:` line adds `(broken — target missing)` |
 | D.8 | `I` on a file with a second hard-linked name (`:Filetree symlink` → Hardlink, or `mklink /H` / `ln`) | `Type:` reads `... (hardlink, 2 names)` |
+| D.8a | `I` on a screenshot that a markdown file links to | The float opens at once; a moment later it is reopened with a `References (N)` section listing the linking file(s) with line numbers |
+| D.8b | `I` on a file nobody references, and on a directory | No `References` text at all (no heading, no placeholder) |
+| D.8c | Run `:Filetree references` on the screenshot from D.8a, then `<CR>` on a row | A popup `N References: name`; `<CR>` opens the linking file in an editor window (not the tree) at that line |
+| D.8d | `:Filetree refs unused assets` in a project with unreferenced screenshots | A picker of the unused files with their sizes; picking one and confirming asks the trash confirmation, and `U` restores it |
 
 **preview** (keymap `<Tab>` in the tree — the default since phase 4):
 

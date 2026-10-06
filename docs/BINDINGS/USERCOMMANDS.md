@@ -188,6 +188,8 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 |---------|--------|
 | `:Filetree refs undo` | Revert the last reference rewrite |
 | `:Filetree refs status` | Show engine state: modes, providers, ripgrep, pending undo |
+| `:Filetree references [path]` | List where the file under the cursor (or `path`) is referenced; `<CR>` jumps to the site. `--picker` / `--popup` override `refs.report.view`. Same as `:Filetree refs list`. Given a directory it runs `refs unused` |
+| `:Filetree refs unused [dir]` | List the files under `dir` (default: the cursor node, else the asset roots) that nothing references and trash a selection of them. Only asset-like files by default; `--all` lifts the filter |
 
 ### Tree traverse
 | Command | Action |

@@ -35,8 +35,20 @@ is an equal hard link, so this reads as "shares its data with N-1 other
 name(s)", not "this one IS the hard link" — there is no single dirent to
 single out that way.
 
+**References.** For a file that something references, the float ends with a
+`References (N)` section — one row per referencing file with its line
+numbers (`docs/guide.md:12,40`), cut after 12 files / 6 lines each with a
+pointer to `:Filetree references` for the full list. A file nobody
+references gets no section at all, not even a heading. The scan is
+asynchronous (a project-wide search): the float opens at once and is
+reopened with the section when the count arrives; the count is cached for
+30 seconds. Directories never scan. `node_info.references = false` turns the
+section off. What counts as a reference is the reference engine's
+(`refs.providers`).
+
 - **Module:** `lua/filetree/features/ui/node_info/`
 - **Keymaps:** `I`
+- **Config:** `node_info.references` (default `true`)
 
 ## Link Marker
 

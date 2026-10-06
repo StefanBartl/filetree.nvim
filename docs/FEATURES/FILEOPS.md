@@ -341,6 +341,45 @@ References that can no longer be restored — already reverted by hand with
 `:Filetree refs undo`, or dropped off the bottom of the `refs.undo_depth`
 stack — are reported instead of silently skipped, since those stay broken.
 
+### Reference reports
+
+The same engine, asked on demand instead of at the moment of a rename or
+delete. Both reports are read-only and run whatever `refs.enabled` /
+`refs.on_*` say; only `refs.providers` decides which languages count.
+
+`:Filetree references [path]` lists every site that references the file
+under the cursor (or `path`, or the focused buffer's file) — a popup headed
+`N References: name`, one row per site (`relative/path:line  text`), `<CR>`
+jumps there (into an editor window, never the tree's). A file nobody
+references only gets a `0 references` message. `--picker` (or
+`refs.report.view = "picker"`) shows the same list in telescope / fzf-lua /
+the quickfix list instead, following `refs.picker`. A directory as target
+runs the unused report below.
+
+`:Filetree refs unused [dir]` answers "which screenshots does nothing point
+at any more": it sweeps `dir` (default: the node under the cursor, else the
+asset roots `assets/` under the project root), counts the references to
+every file in one pass and offers the files with none in a picker. Select
+some (`<Tab>`, `<C-a>` for all; in the quickfix fallback delete the lines
+you want to keep and run `:Filetree mdrefs confirm`) and they go through the
+trash feature — its confirmation, undo history and buffer cleanup apply,
+never a bare unlink.
+
+- Only asset-like files are considered by default (`refs.report.extensions`,
+  else the extension list of `refs.outgoing_assets`); `--all` lifts the
+  filter.
+- A file only counts as referenced when a scanned file points at it. A
+  screenshot referenced from, say, a `.rst` page shows up as unused: the
+  summary names the providers that ran (`[scanned: markdown, lua]`), so the
+  blind spot is visible. Review the list before trashing.
+- `refs.report.max_files` (default 5000) caps one sweep; past it the list is
+  cut and a warning says so.
+- A cancelled sweep, or a setup with every provider turned off, never offers
+  anything — a partial result would call referenced files unused. A ripgrep
+  run that dies falls back to the walk for the same reason.
+
+The `I` popup shows the same count for a file: see [Node Info](UI.md#node-info).
+
 ### Cascade-delete-assets
 
 The opposite direction of the same delete: `refs.outgoing_assets` looks at
@@ -529,7 +568,8 @@ See `lua/filetree/@types/refs.lua` for the full contract and
 `lua/filetree/refs/providers/` for four worked examples.
 
 - **Module:** `lua/filetree/refs/`
-- **Commands:** `:Filetree refs undo`, `:Filetree refs status`
+- **Commands:** `:Filetree refs undo`, `:Filetree refs status`,
+  `:Filetree references` (`refs list`), `:Filetree refs unused`
 
 ## Open Replace
 

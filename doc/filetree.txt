@@ -1014,6 +1014,18 @@ whole scan.
 Commands:
   :Filetree refs undo      Revert the last reference rewrite
   :Filetree refs status    Modes, providers, ripgrep, pending undo
+  :Filetree references [path]
+                           Where the file is referenced (popup or picker,
+                           <CR> jumps). Also `:Filetree refs list`;
+                           --picker / --popup override refs.report.view
+  :Filetree refs unused [dir]
+                           Files under `dir` nothing references, with a
+                           pick-and-trash step; --all lifts the asset
+                           extension filter
+
+Reports are read-only and independent of refs.enabled / refs.on_*. Only
+files referenced by something a provider can read count: the summary names
+the providers that ran. refs.report = { view, extensions, max_files }.
 
 Third-party providers register through the same contract the built-ins use:
 `require("filetree.refs").register({ name = …, plan = … })`. See
@@ -2530,6 +2542,11 @@ N names)` note on its Type line instead: every one of its names is an equal
 hard link, so this reads as "shares its data with N-1 other name(s)", not
 "this one IS the hard link" — there is no single dirent to single out that
 way.
+
+A referenced file also gets a "References (N)" section (one row per
+referencing file with its line numbers); none at all when nothing points at
+it. The scan is async, so the float is reopened with the section when it
+arrives. Disable with node_info.references = false.
 
 Keymaps: I
 

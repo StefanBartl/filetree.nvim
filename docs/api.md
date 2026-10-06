@@ -20,6 +20,13 @@ refs.config()            -- → FiletreeRefsConfig
 refs.status()            -- → string[]  (what `:Filetree refs status` prints)
 refs.undo()              -- revert the last reference rewrite
 refs.register(provider)  -- add a language provider
+
+-- How often is each of these files referenced, and where? One sweep for the
+-- whole set (a folder of screenshots), not one scan per path.
+refs.usage.count(paths, { root = nil }, function(by_path, meta)
+  -- by_path[path] = { count = n, refs = FiletreeRef[], files = string[] }
+  -- meta = { providers = string[], files_scanned = n, cancelled = boolean }
+end)
 ```
 
 Driving it from your own file operation is a three-step contract — scan
