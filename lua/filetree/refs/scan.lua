@@ -150,6 +150,9 @@ local function candidates_rg(root, needles, exts, cfg, cb)
         -- rg: 0 = matches, 1 = no matches, >1 = error (including a timeout kill)
         if result.code > 1 then
           notify.debug("ripgrep scan failed (code " .. tostring(result.code) .. ")")
+          -- A caller that must not mistake "the search died" for "nothing
+          -- matches" (the unused-files report) asks for the walk instead.
+          if cfg.scan and cfg.scan.strict then return cb(nil) end
           return cb({})
         end
         local files = {}

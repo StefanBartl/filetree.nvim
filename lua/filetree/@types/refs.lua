@@ -109,6 +109,7 @@
 ---@field respect_gitignore boolean          Pass ripgrep's ignore rules (default true).
 ---@field max_files         integer          Cap for the no-ripgrep fallback walk (default 5000).
 ---@field timeout_ms        integer          Per-scan timeout (default 3000).
+---@field strict?           boolean          Internal: a failed ripgrep run falls back to the walk instead of reporting no matches (set by `filetree.refs.usage`).
 
 ---@class FiletreeRefsProvidersConfig
 ---@field markdown? boolean
@@ -159,6 +160,7 @@
 ---@class FiletreeRefsReportConfig
 ---@field view?       "popup"|"picker"  How `:Filetree references` lists the sites (default "popup").
 ---@field extensions? string[]          Extensions `:Filetree refs unused` considers (default: the asset allowlist of `filetree.refs.assets`).
+---@field max_files?  integer           Files one `refs unused` sweep checks at most (default 5000).
 
 ---@class FiletreeRefsConfig
 ---@field enabled?         boolean

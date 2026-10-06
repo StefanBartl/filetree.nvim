@@ -46,14 +46,16 @@ end
 
 ---@internal
 ---Split the arguments of a report command into its optional path and its
----flags (`--picker` / `--popup`). A path with spaces arrives as several
----words and is re-joined.
+---flags (`--picker` / `--popup` / `--all`). A path with spaces arrives as
+---several words and is re-joined.
 ---@param args string[]
----@return string? path, { view?: "popup"|"picker" } opts
+---@return string? path, { view?: "popup"|"picker", all?: boolean } opts
 local function parse_report_args(args)
   local words, opts = {}, {}
   for _, a in ipairs(args) do
-    if a == "--picker" then
+    if a == "--all" then
+      opts.all = true
+    elseif a == "--picker" then
       opts.view = "picker"
     elseif a == "--popup" then
       opts.view = "popup"
@@ -565,6 +567,13 @@ local TREE = {
     list = function(args)
       local path, opts = parse_report_args(args)
       require("filetree.refs.report").references(path, opts)
+    end,
+    -- :Filetree refs unused [--all] [dir]  → files under `dir` (default: the
+    -- node under the cursor, else the asset roots) that nothing references;
+    -- pick some and they go to the trash. --all lifts the asset-extension filter.
+    unused = function(args)
+      local path, opts = parse_report_args(args)
+      require("filetree.refs.report").unused(path, opts)
     end,
     undo = function(_)
       require("filetree.refs").undo()

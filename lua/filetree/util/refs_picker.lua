@@ -56,13 +56,13 @@ local function via_telescope(refs, title, on_confirm, on_cancel)
         entry_maker = function(r)
           return {
             value = r,
-            display = string.format(
+            display = r.label or string.format(
               "%s:%d  %s",
               path.relative(r.file, vim.fn.getcwd()),
               r.line,
               r.display
             ),
-            ordinal = r.file .. " " .. r.display,
+            ordinal = r.file .. " " .. (r.label or r.display),
             filename = r.file,
             lnum = r.line,
           }
@@ -163,18 +163,20 @@ local _qf_pending = nil
 ---@param refs table[]
 ---@param title string
 ---@param on_confirm fun(selected: table[])
-local function via_quickfix(refs, title, on_confirm)
+---@param hint? string  Explanation of the confirm step; default talks about reference cleanup.
+local function via_quickfix(refs, title, on_confirm, hint)
   local items = {}
   for _, r in ipairs(refs) do
-    items[#items + 1] = { filename = r.file, lnum = r.line, text = r.display }
+    items[#items + 1] = { filename = r.file, lnum = r.line, text = r.label or r.display }
   end
   list.qf(items, title, { action = "r" })
   _qf_pending = { refs = refs, on_confirm = on_confirm }
-  notify.info(
-    "References in the quickfix list. Delete lines (e.g. `dd`) for "
-      .. "references you do NOT want cleaned up, then run `:Filetree mdrefs confirm`.\n"
-      .. "To back out instead: `:Filetree mdrefs cancel`."
-  )
+  local explanation = hint
+    or (
+      "References in the quickfix list. Delete lines (e.g. `dd`) for "
+      .. "references you do NOT want cleaned up, then run `:Filetree mdrefs confirm`."
+    )
+  notify.info(explanation .. "\nTo back out instead: `:Filetree mdrefs cancel`.")
 end
 
 ---Confirm the quickfix-fallback flow: whatever remains in the quickfix list
@@ -219,6 +221,10 @@ end
 ---@class FiletreeRefsPickerOpts
 ---@field prefer? "auto"|"telescope"|"fzf-lua"|"quickfix"
 ---@field title?  string
+---@field qf_hint? string  Replaces the quickfix fallback's explanation of its confirm step.
+
+-- An entry may carry `label`: shown instead of the "file:line  display" row
+-- (telescope, quickfix) -- for entries that are files, not sites in a file.
 
 ---Show `refs` in a picker and let the user choose a subset.
 ---@param refs table[]  {file, line, target, display}[]
@@ -243,14 +249,14 @@ function M.pick(refs, opts, on_confirm, on_cancel)
     return
   end
   if prefer == "quickfix" then
-    via_quickfix(refs, title, on_confirm)
+    via_quickfix(refs, title, on_confirm, opts.qf_hint)
     return
   end
 
   -- auto: telescope -> fzf-lua -> quickfix (always available, no plugin needed)
   if via_telescope(refs, title, on_confirm, on_cancel) then return end
   if via_fzflua(refs, title, on_confirm, on_cancel) then return end
-  via_quickfix(refs, title, on_confirm)
+  via_quickfix(refs, title, on_confirm, opts.qf_hint)
 end
 
 -- ── Browse (jump, no selection) ───────────────────────────────────────────────
