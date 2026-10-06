@@ -464,6 +464,128 @@ end
 
 run_report()
 
+-- ── node_info: the References section of `I` ─────────────────────────────────
+local function run_node_info()
+  print("\n== node_info (References section) ==")
+  refs.setup({
+    providers = { markdown = true, lua = true, python = false, ts_js = false },
+  })
+  local node_info = require("filetree.features.ui.node_info")
+
+  -- formatting (pure)
+  check("node_info: no usage -> no section", #node_info.references_lines(nil) == 0)
+  check(
+    "node_info: zero references -> no section at all (not even a heading)",
+    #node_info.references_lines({ count = 0, refs = {}, files = {} }) == 0
+  )
+
+  local u = (count({ p("assets/twice.png") }))[p("assets/twice.png")]
+  local lines = node_info.references_lines(u, work)
+  check("node_info: section starts with a blank separator line", lines[1] == "")
+  check(
+    "node_info: heading carries the total number of references",
+    lines[2] == "  References (3)",
+    lines[2]
+  )
+  check(
+    "node_info: one row per file with its line numbers, two sites on one line shown once",
+    #lines == 4 and lines[3]:find("doc.md:2$") ~= nil and lines[4]:find("other.md:1$") ~= nil,
+    table.concat(lines, " | ")
+  )
+
+  local many = { count = 40, refs = {}, files = {} }
+  for i = 1, 20 do
+    for line = 1, 8 do
+      many.refs[#many.refs + 1] = { file = work .. "/f" .. i .. ".md", line = line }
+    end
+  end
+  local capped = node_info.references_lines(many, work)
+  check(
+    "node_info: long lists are cut with an `and N more` row",
+    capped[#capped]:find("and 8 more file", 1, true) ~= nil and #capped == 2 + 12 + 1,
+    capped[#capped]
+  )
+  check("node_info: per-file line numbers are cut too", capped[3]:find(",…$") ~= nil, capped[3])
+
+  -- the popup itself
+  local current
+  local stub_adapter = {
+    get_current_node = function()
+      return current
+    end,
+  }
+  node_info.setup({ keymap = false }, stub_adapter)
+
+  local function viewer_text()
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.bo[b].filetype == "filetree_node_info" and vim.api.nvim_buf_is_valid(b) then
+        return table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n")
+      end
+    end
+    return nil
+  end
+  local function show(path)
+    node_info.close()
+    current = { path = path, type = "file" }
+    node_info.show_current()
+  end
+
+  show(p("assets/twice.png"))
+  check("node_info: the popup opens at once", viewer_text() ~= nil)
+  vim.wait(20000, function()
+    local t = viewer_text()
+    return t ~= nil and t:find("References (3)", 1, true) ~= nil
+  end, 20)
+  local text = viewer_text() or ""
+  check(
+    "node_info: the section is added once the scan answers",
+    text:find("References (3)", 1, true) ~= nil and text:find("Path:", 1, true) ~= nil
+  )
+
+  -- second time: cached, the section is there synchronously
+  show(p("assets/twice.png"))
+  check(
+    "node_info: a cached count is in the very first render",
+    (viewer_text() or ""):find("References (3)", 1, true) ~= nil
+  )
+
+  -- unreferenced: nothing appended
+  show(p("assets/orphan.png"))
+  vim.wait(1500, function()
+    return false
+  end, 50)
+  check(
+    "node_info: an unreferenced file gets no References text at all",
+    viewer_text() ~= nil and viewer_text():find("Reference", 1, true) == nil
+  )
+
+  -- opt-out and directories never scan
+  local real_count = refs.usage.count
+  local scans = 0
+  ---@diagnostic disable-next-line: duplicate-set-field
+  refs.usage.count = function(...)
+    scans = scans + 1
+    return real_count(...)
+  end
+  node_info.setup({ keymap = false, references = false }, stub_adapter)
+  show(p("assets/used.png"))
+  check("node_info: references = false starts no scan", scans == 0)
+  node_info.setup({ keymap = false }, stub_adapter)
+  show(work .. "/assets")
+  check("node_info: a directory starts no scan", scans == 0)
+  show(p("assets/shot.png"))
+  check("node_info: a plain file does start one", scans == 1)
+  vim.wait(20000, function()
+    return viewer_text() ~= nil
+  end, 20)
+  ---@diagnostic disable-next-line: duplicate-set-field
+  refs.usage.count = real_count
+
+  node_info.teardown()
+end
+
+run_node_info()
+
 print(("\nrefs.usage: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")
