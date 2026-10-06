@@ -146,6 +146,7 @@ return {
     -- `outgoing_assets`): `refs unused` then falls back to the asset
     -- allowlist of `filetree.refs.assets`; `--all` lifts the filter.
     -- extensions = { "png", "jpg", … }
+    max_files = 5000, -- files one `refs unused` sweep checks at most
   },
 
   -- Keep the previous content of every rewritten line so `:Filetree refs undo`

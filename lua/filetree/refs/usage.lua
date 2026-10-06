@@ -33,6 +33,9 @@ local CHUNK_SIZE = 20
 -- single-path case).
 local MIN_TIMEOUT_MS = 15000
 
+-- Walk-fallback cap for a sweep (the default `scan.max_files` suits one rename).
+local MIN_WALK_FILES = 50000
+
 ---@class FiletreeRefUsage
 ---@field count integer      Number of reference sites (several in one file count several times).
 ---@field refs  FiletreeRef[]  Sorted by file, line, column.
@@ -171,7 +174,13 @@ function M.count(paths, opts, cb)
   local root = opts.root or refs.resolve_root(paths[1])
   local groups = build_groups(paths, root, cfg)
   local scan_cfg = vim.tbl_deep_extend("force", cfg, {
-    scan = { timeout_ms = math.max((cfg.scan and cfg.scan.timeout_ms) or 0, MIN_TIMEOUT_MS) },
+    scan = {
+      timeout_ms = math.max((cfg.scan and cfg.scan.timeout_ms) or 0, MIN_TIMEOUT_MS),
+      -- A count must not read a dead ripgrep as "no references", nor stop at
+      -- the rename-sized walk cap: both would report referenced files as unused.
+      strict = true,
+      max_files = math.max((cfg.scan and cfg.scan.max_files) or 0, MIN_WALK_FILES),
+    },
   })
 
   local seen = {}

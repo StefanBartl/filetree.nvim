@@ -322,19 +322,141 @@ local function run_report()
     notes[1] and notes[1].msg
   )
 
-  -- directory / missing path
-  notes = {}
-  report.references(work .. "/assets")
-  check(
-    "report: a directory is pointed at `refs unused`",
-    notes[1] and notes[1].msg:find("refs unused", 1, true) ~= nil
-  )
+  -- missing path
   notes = {}
   report.references(p("assets/nope.png"))
   check(
     "report: a missing file is reported",
     notes[1] and notes[1].msg:find("no such file", 1, true)
   )
+
+  -- ── unused ──────────────────────────────────────────────────────────────────
+  print("\n== refs.report (:Filetree refs unused) ==")
+  refs.setup({
+    providers = { markdown = true, lua = true, python = false, ts_js = false },
+    picker = "quickfix",
+  })
+
+  -- The picker and the trash hand-off are recorded, not opened.
+  local refs_picker = require("filetree.util.refs_picker")
+  local real_pick = refs_picker.pick
+  local picked
+  ---@diagnostic disable-next-line: duplicate-set-field
+  refs_picker.pick = function(entries, opts, on_confirm, on_cancel)
+    picked = { entries = entries, opts = opts, on_confirm = on_confirm, on_cancel = on_cancel }
+  end
+  local trashed
+  report.delete_paths = function(paths)
+    trashed = paths
+  end
+
+  local function names(entries)
+    local set = {}
+    for _, e in ipairs(entries) do
+      set[e.file:match("([^/\\]+)$")] = true
+    end
+    return set
+  end
+
+  notes = {}
+  report.unused(work .. "/assets")
+  wait_for(function()
+    return picked ~= nil
+  end)
+  local n = picked and names(picked.entries) or {}
+  check(
+    "unused: exactly the two never-referenced images are offered",
+    picked and #picked.entries == 2 and n["orphan.png"] and n["shot.png"]
+  )
+  check(
+    "unused: referenced and twice-referenced images are not offered",
+    not n["used.png"] and not n["twice.png"] and not n["my shot.png"] and not n["self.png"]
+  )
+  check("unused: the non-asset note.md is outside the default extension filter", not n["note.md"])
+  check(
+    "unused: the title states how many are unused",
+    picked and picked.opts.title:find("^2 unused: ") ~= nil,
+    picked and picked.opts.title
+  )
+  check(
+    "unused: a row is labelled with its size, not a line number",
+    picked and picked.entries[1].label:find("%(%d+ B%)") ~= nil,
+    picked and picked.entries[1].label
+  )
+  local summary = notes[#notes] and notes[#notes].msg or ""
+  check(
+    "unused: the summary names the count and the scanned providers",
+    summary:find("2 of 6", 1, true) ~= nil and summary:find("markdown", 1, true) ~= nil,
+    summary
+  )
+
+  -- confirming hands exactly the selection to the trash
+  picked.on_confirm({ picked.entries[1] })
+  check(
+    "unused: confirming trashes only the selected file",
+    trashed and #trashed == 1 and trashed[1] == picked.entries[1].file
+  )
+  trashed = nil
+  picked.on_cancel()
+  check("unused: cancelling trashes nothing", trashed == nil)
+
+  -- --all lifts the extension filter
+  picked = nil
+  report.unused(work .. "/assets", { all = true })
+  wait_for(function()
+    return picked ~= nil
+  end)
+  check(
+    "unused: --all also offers the unreferenced note.md",
+    picked and names(picked.entries)["note.md"] and #picked.entries == 3
+  )
+
+  -- the same report from `:Filetree references <dir>`
+  picked = nil
+  report.references(work .. "/assets")
+  wait_for(function()
+    return picked ~= nil
+  end)
+  check("unused: `references <dir>` runs the unused report", picked and #picked.entries == 2)
+
+  -- a dead ripgrep must not turn every file into an "unused" one
+  local real_system = vim.system
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function(cmd, o, on_exit)
+    if cmd[1] == "rg" and on_exit then
+      on_exit({ code = 2, stdout = "", stderr = "boom" })
+      return {}
+    end
+    return real_system(cmd, o, on_exit)
+  end
+  picked = nil
+  report.unused(work .. "/assets")
+  wait_for(function()
+    return picked ~= nil
+  end)
+  vim.system = real_system
+  check(
+    "unused: a failing ripgrep falls back to the walk, results unchanged",
+    picked and #picked.entries == 2 and names(picked.entries)["orphan.png"]
+  )
+
+  -- nothing to look at / wrong target
+  vim.fn.mkdir(work .. "/empty", "p")
+  notes = {}
+  report.unused(work .. "/empty")
+  check(
+    "unused: an empty folder says so",
+    notes[1] and notes[1].msg:find("No candidate files", 1, true) ~= nil
+  )
+  notes = {}
+  report.unused(p("doc.md"))
+  check(
+    "unused: a file argument is refused and pointed at `references`",
+    notes[1] and notes[1].msg:find("not a directory", 1, true) ~= nil
+  )
+
+  ---@diagnostic disable-next-line: duplicate-set-field
+  refs_picker.pick = real_pick
 
   vim.notify = real_notify
   package.loaded["filetree.util.select"] = nil

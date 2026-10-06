@@ -4,11 +4,16 @@
 ---
 ---   :Filetree references [path]      who points at this file -- a popup (or a
 ---                                    picker) of every site, <CR> jumps there
+---   :Filetree refs unused [dir]      which files under a folder nobody points
+---                                    at, with a pick-and-trash step
 ---
 --- Counting itself lives in `filetree.refs.usage`; this module resolves the
 --- target, picks the view and does the jump.
 
 local usage = require("filetree.refs.usage")
+local assets = require("filetree.refs.assets")
+local scan = require("filetree.refs.scan")
+local ftfs = require("filetree.util.fs")
 local ftpath = require("filetree.util.path")
 local buffer = require("filetree.util.buffer")
 local window = require("filetree.util.window")
@@ -118,10 +123,7 @@ function M.references(arg, opts)
     notify.warn("Nothing to check: not on a tree node, no file buffer focused, and no path given")
     return
   end
-  if vim.fn.isdirectory(target) == 1 then
-    notify.warn("a directory has no single reference count -- use `:Filetree refs unused <dir>`")
-    return
-  end
+  if vim.fn.isdirectory(target) == 1 then return M.unused(target) end
   if vim.uv.fs_stat(target) == nil then
     notify.warn("no such file: " .. ftpath.relative(target))
     return
@@ -141,6 +143,216 @@ function M.references(arg, opts)
       return
     end
     M.present(target, u, opts)
+  end)
+end
+
+-- ── Unused files ──────────────────────────────────────────────────────────────
+
+-- Files one `refs unused` sweep will count at most; past it the list is cut
+-- (and says so) rather than the editor churning through a whole monorepo.
+local DEFAULT_MAX_FILES = 5000
+
+---@internal
+---@param bytes integer
+---@return string
+local function human_size(bytes)
+  if bytes < 1024 then return string.format("%d B", bytes) end
+  if bytes < 1024 * 1024 then return string.format("%.0f KB", bytes / 1024) end
+  return string.format("%.1f MB", bytes / 1024 / 1024)
+end
+
+---@internal
+---The directories a sweep covers: the argument, else the node under the
+---cursor (its own directory, or a file's parent), else the configured asset
+---roots under the project root.
+---@param arg string?
+---@return string[]
+local function resolve_dirs(arg)
+  if arg and arg ~= "" then
+    local target = M.resolve_target(arg)
+    return target and { target } or {}
+  end
+
+  local ad = adapter()
+  if ad and buffer.is_tree_buffer() then
+    local node = ad.get_current_node()
+    if node and node.path then
+      local node_path = ftpath.slashify(node.path)
+      return { vim.fn.isdirectory(node_path) == 1 and node_path or ftpath.parent(node_path) }
+    end
+  end
+
+  local refs = require("filetree.refs")
+  local cfg = refs.config()
+  local roots = (cfg.outgoing_assets and cfg.outgoing_assets.roots) or assets.DEFAULT_ROOTS
+  local base = (refs.resolve_root(vim.fn.getcwd()):gsub("/+$", ""))
+  local dirs = {}
+  for _, r in ipairs(roots) do
+    local dir = ftpath.slashify(base .. "/" .. r)
+    if vim.fn.isdirectory(dir) == 1 then dirs[#dirs + 1] = dir end
+  end
+  return dirs
+end
+
+---@internal
+---Every file under `dirs` that passes the extension filter, capped.
+---@param dirs string[]
+---@param extensions string[]?  nil = every file
+---@param max_files integer
+---@return string[] files, boolean truncated, integer total
+local function collect_files(dirs, extensions, max_files)
+  local wanted
+  if extensions then
+    wanted = {}
+    for _, e in ipairs(extensions) do
+      wanted[e:lower()] = true
+    end
+  end
+
+  local files, seen = {}, {}
+  for _, dir in ipairs(dirs) do
+    local found = ftfs.collect_recursive(dir, "files", function(name)
+      return scan.PRUNE_DIRS[name] == true
+    end)
+    for _, f in ipairs(found) do
+      local file = ftpath.slashify(f)
+      local ext = file:match("%.([%w_]+)$")
+      if not seen[file] and (not wanted or (ext and wanted[ext:lower()])) then
+        seen[file] = true
+        files[#files + 1] = file
+      end
+    end
+  end
+  table.sort(files)
+
+  local total = #files
+  if total > max_files then
+    for i = total, max_files + 1, -1 do
+      files[i] = nil
+    end
+  end
+  return files, total > max_files, total
+end
+
+---Move `paths` to the trash through the trash feature (its confirmation,
+---undo history and buffer cleanup apply). Replaceable so a caller or test can
+---intercept it.
+---@param paths string[]
+function M.delete_paths(paths)
+  local ok, main = pcall(require, "filetree")
+  local trash = ok and main.feature and main.feature("trash") or nil
+  if not trash or type(trash.delete_current) ~= "function" then
+    notify.warn("the trash feature is not enabled -- nothing was deleted")
+    return
+  end
+  trash.delete_current({ paths = paths })
+end
+
+---`:Filetree refs unused [dir] [--all] [--picker|--popup]` -- list the files
+---under a folder that no scanned file references, and offer to trash a
+---selection of them.
+---
+---By default only asset-like files are considered (`refs.report.extensions`,
+---else the asset allowlist of `filetree.refs.assets`); `--all` lifts that.
+---A file referenced only from a kind of file no enabled provider can read
+---shows up as unused -- the summary names the providers that did run.
+---@param arg string?  Directory; default the node under the cursor, else the asset roots.
+---@param opts? { all?: boolean }
+function M.unused(arg, opts)
+  opts = opts or {}
+  local refs = require("filetree.refs")
+  local cfg = refs.config()
+  local report_cfg = cfg.report or {}
+
+  local dirs = resolve_dirs(arg)
+  for i = #dirs, 1, -1 do
+    if vim.fn.isdirectory(dirs[i]) ~= 1 then
+      notify.warn(
+        "not a directory: " .. ftpath.relative(dirs[i]) .. " -- see `:Filetree references`"
+      )
+      table.remove(dirs, i)
+    end
+  end
+  if #dirs == 0 then
+    notify.warn("No directory to check: give one, or put the cursor on a tree node")
+    return
+  end
+
+  local extensions
+  if not opts.all then
+    extensions = report_cfg.extensions
+      or (cfg.outgoing_assets and cfg.outgoing_assets.extensions)
+      or assets.DEFAULT_EXTENSIONS
+  end
+  local files, truncated, total =
+    collect_files(dirs, extensions, report_cfg.max_files or DEFAULT_MAX_FILES)
+  local where = ftpath.relative(dirs[1]) .. (#dirs > 1 and string.format(" (+%d)", #dirs - 1) or "")
+  if #files == 0 then
+    notify.info("No candidate files in " .. where)
+    return
+  end
+  if truncated then
+    notify.warn(
+      string.format(
+        "%d files in %s -- only the first %d are checked (refs.report.max_files)",
+        total,
+        where,
+        #files
+      )
+    )
+  end
+
+  local root = refs.resolve_root(dirs[1])
+  usage.count(files, { root = root }, function(by_path, meta)
+    -- A partial or blind sweep would call referenced files unused -- never
+    -- offer those for deletion.
+    if meta.cancelled then
+      notify.warn("Cancelled -- no result, nothing is offered for deletion")
+      return
+    end
+    if #meta.providers == 0 then
+      notify.warn("No reference provider is enabled (refs.providers) -- cannot tell what is unused")
+      return
+    end
+
+    local entries = {}
+    for _, f in ipairs(files) do
+      if by_path[f] and by_path[f].count == 0 then
+        local stat = vim.uv.fs_stat(f)
+        local rel = ftpath.relative(f, root)
+        entries[#entries + 1] = {
+          file = f,
+          line = 1,
+          col = 1,
+          display = rel,
+          label = string.format("%s  (%s)", rel, human_size(stat and stat.size or 0)),
+        }
+      end
+    end
+
+    notify.info(
+      string.format(
+        "%d of %d file(s) unused in %s  [scanned: %s]",
+        #entries,
+        #files,
+        where,
+        table.concat(meta.providers, ", ")
+      )
+    )
+    if #entries == 0 then return end
+
+    refs_picker.pick(entries, {
+      prefer = cfg.picker,
+      title = string.format("%d unused: %s", #entries, where),
+      qf_hint = "Unused files in the quickfix list. Delete lines (e.g. `dd`) for files you "
+        .. "want to KEEP, then run `:Filetree mdrefs confirm` to move the rest to the trash.",
+    }, function(selected)
+      local paths = {}
+      for _, entry in ipairs(selected) do
+        paths[#paths + 1] = entry.file
+      end
+      if #paths > 0 then M.delete_paths(paths) end
+    end, function() end)
   end)
 end
 
