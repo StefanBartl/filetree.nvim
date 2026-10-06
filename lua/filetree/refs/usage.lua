@@ -45,6 +45,7 @@ local MIN_WALK_FILES = 50000
 ---@field providers     string[]  Providers that took part.
 ---@field files_scanned integer   Candidate files that were verified.
 ---@field cancelled     boolean   The user cancelled the progress indicator; results are partial.
+---@field incomplete     boolean   The candidate search was cut short (walk fallback capped or cancelled); results are partial.
 
 ---@internal
 ---@param lowered string  Already-lowercased haystack.
@@ -168,7 +169,7 @@ function M.count(paths, opts, cb)
     out[p] = { count = 0, refs = {}, files = {} }
   end
   ---@type FiletreeRefUsageMeta
-  local meta = { providers = {}, files_scanned = 0, cancelled = false }
+  local meta = { providers = {}, files_scanned = 0, cancelled = false, incomplete = false }
   if #paths == 0 then return cb(out, meta) end
 
   local root = opts.root or refs.resolve_root(paths[1])
@@ -212,7 +213,8 @@ function M.count(paths, opts, cb)
     if not group then return finish() end
     meta.providers[#meta.providers + 1] = group.provider.name
 
-    scan.candidates(root, group.needles, group.exts, scan_cfg, function(files)
+    scan.candidates(root, group.needles, group.exts, scan_cfg, function(files, incomplete)
+      if incomplete then meta.incomplete = true end
       local total = #files
       local h = total > CHUNK_SIZE
           and progress.create({ title = "[filetree.refs] " .. group.provider.name })

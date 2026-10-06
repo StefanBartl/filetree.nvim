@@ -201,7 +201,7 @@ end
 ---@param needles string[]
 ---@param exts string[]
 ---@param cfg FiletreeRefsConfig
----@param cb fun(files: string[])
+---@param cb fun(files: string[], incomplete?: boolean)  `incomplete`: the cap cut the walk short or it was cancelled
 local function candidates_walk(root, needles, exts, cfg, cb)
   local max_files = (cfg.scan and cfg.scan.max_files) or 5000
   local wanted = ext_set(exts)
@@ -235,7 +235,7 @@ local function candidates_walk(root, needles, exts, cfg, cb)
       if file_hits(candidates[i], needles) then out[#out + 1] = candidates[i] end
     end
     return vim.schedule(function()
-      cb(out)
+      cb(out, capped)
     end)
   end
 
@@ -245,8 +245,9 @@ local function candidates_walk(root, needles, exts, cfg, cb)
   local function step()
     if h and h.cancelled then
       -- Candidates found so far are still reported -- a partial reference
-      -- scan is more useful than none.
-      return cb(out)
+      -- scan is more useful than none. Flagged incomplete so a counting
+      -- caller (`filetree.refs.usage`) does not mistake it for a full answer.
+      return cb(out, true)
     end
 
     local last = math.min(i + WALK_CHUNK_SIZE, total)
@@ -263,7 +264,7 @@ local function candidates_walk(root, needles, exts, cfg, cb)
     end
 
     if h then h:finish(string.format("%d candidate(s) found", #out)) end
-    cb(out)
+    cb(out, capped)
   end
 
   step()
@@ -274,7 +275,7 @@ end
 ---@param needles string[]
 ---@param exts string[]
 ---@param cfg FiletreeRefsConfig
----@param cb fun(files: string[])
+---@param cb fun(files: string[], incomplete?: boolean)  `incomplete` only ever comes from the walk fallback (capped or cancelled)
 function M.candidates(root, needles, exts, cfg, cb)
   if #needles == 0 or #exts == 0 then return cb({}) end
 
@@ -292,17 +293,17 @@ function M.candidates(root, needles, exts, cfg, cb)
   -- something dedups on it. `slashify` is this repo's canonical separator, so
   -- candidates get it once, here, rather than at each of the places that
   -- would otherwise have to remember.
-  local function normalized(files, next_cb)
+  local function normalized(files, next_cb, incomplete)
     for i = 1, #files do
       files[i] = ftpath.slashify(files[i])
     end
-    return next_cb(files)
+    return next_cb(files, incomplete)
   end
 
   candidates_rg(root, needles, exts, cfg, function(files)
     if files then return normalized(files, cb) end
-    candidates_walk(root, needles, exts, cfg, function(walked)
-      return normalized(walked, cb)
+    candidates_walk(root, needles, exts, cfg, function(walked, incomplete)
+      return normalized(walked, cb, incomplete)
     end)
   end)
 end
