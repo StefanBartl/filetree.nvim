@@ -773,7 +773,7 @@
 
 ---@class FiletreeNodeInfoConfig
 ---@field enabled?         boolean
----@field keymap           string?   Key inside tree (default "I").
+---@field keymap           string|false?   Key inside tree (default "I"); false = no key.
 ---@field show_lines?      boolean   Show line count for files (default true).
 ---@field max_lines_size?  integer   Skip line count for files larger than this in bytes (default 5MB).
 ---@field max_entries      integer?  Cap for the recursive directory scan behind Items/Size (default 100000).
