@@ -2,6 +2,7 @@
 ---@brief Toggleable hover window showing filesystem metadata for the current tree node.
 
 local line_count = require("filetree.util.line_count")
+local ftpath = require("filetree.util.path")
 
 local notify = require("filetree.util.notify").create("[filetree]")
 local kit = require("ui.kit")
@@ -193,6 +194,129 @@ function M.info_lines(path)
   return lines
 end
 
+-- ── References section ────────────────────────────────────────────────────────
+-- "Who points at this file", appended to the info only when somebody does. The
+-- scan is asynchronous (a project-wide search), so it is cached for a while
+-- and the popup does not wait for it.
+
+-- Files listed in the section before "… and N more", and line numbers shown
+-- per file. The full list is one command away (`:Filetree references`).
+local MAX_REF_FILES = 12
+local MAX_REF_LINES = 6
+-- How long a count stays valid, in ms. A save elsewhere can change it, so it
+-- is short rather than invalidated precisely.
+local REFS_TTL_MS = 30000
+
+---@type table<string, { at: integer, u: FiletreeRefUsage }>
+local _refs_cache = {}
+
+---@param path string
+---@return FiletreeRefUsage?
+local function cache_get(path)
+  local hit = _refs_cache[path]
+  if hit and (vim.uv or vim.loop).now() - hit.at < REFS_TTL_MS then return hit.u end
+  _refs_cache[path] = nil
+  return nil
+end
+
+---Lines of the references section for `u`, or `{}` when nothing references
+---the file (no heading, no placeholder).
+---@param u FiletreeRefUsage?
+---@param root? string  Paths are shown relative to this (default: the cwd).
+---@return string[]
+function M.references_lines(u, root)
+  if not u or u.count == 0 then return {} end
+
+  local lines = { "", string.format("  References (%d)", u.count) }
+  local order, by_file = {}, {}
+  for _, r in ipairs(u.refs) do
+    if not by_file[r.file] then
+      by_file[r.file] = {}
+      order[#order + 1] = r.file
+    end
+    local nums = by_file[r.file]
+    if nums[#nums] ~= r.line then nums[#nums + 1] = r.line end
+  end
+
+  for i, file in ipairs(order) do
+    if i > MAX_REF_FILES then
+      lines[#lines + 1] =
+        string.format("    … and %d more file(s)  (:Filetree references)", #order - MAX_REF_FILES)
+      break
+    end
+    local nums = by_file[file]
+    local shown = {}
+    for j = 1, math.min(#nums, MAX_REF_LINES) do
+      shown[j] = tostring(nums[j])
+    end
+    lines[#lines + 1] = string.format(
+      "    %s:%s%s",
+      ftpath.relative(file, root),
+      table.concat(shown, ","),
+      #nums > MAX_REF_LINES and ",…" or ""
+    )
+  end
+  return lines
+end
+
+---Whether `path` gets a references section at all: the option is on and it is
+---a file (a directory would mean a scan over everything beneath it per `I`).
+---@param path string
+---@return boolean
+local function wants_references(path)
+  if _cfg.references == false then return false end
+  local stat = (vim.uv or vim.loop).fs_stat(path)
+  return stat ~= nil and stat.type == "file"
+end
+
+---Open the viewer for `path` with `lines` and track it as the current one.
+---@param path string
+---@param lines string[]
+---@return boolean ok
+local function open_viewer(path, lines)
+  local surf = kit.viewer({
+    lines = lines,
+    title = "Node Info",
+    filetype = "filetree_node_info",
+  })
+  if not surf then
+    _surf, _last_path = nil, nil
+    return false
+  end
+  _surf = surf
+  _last_path = path
+  surf:on_close(function()
+    -- A reopen replaces the surface; the old one closing late must not
+    -- clear the state of the new one.
+    if _surf == surf then
+      _surf = nil
+      _last_path = nil
+    end
+  end)
+  return true
+end
+
+---Count the references to `path` and, when the popup for it is still the
+---open one and the count is above zero, reopen it with the section appended.
+---@param path string  Slashified key.
+---@param node_path string  The path as the tree reported it (what `_last_path` holds).
+---@param base_lines string[]  The info lines without a references section.
+local function request_references(path, node_path, base_lines)
+  require("filetree.refs.usage").count({ path }, nil, function(by_path, meta)
+    local u = by_path[path]
+    if meta.cancelled or not u then return end
+    _refs_cache[path] = { at = (vim.uv or vim.loop).now(), u = u }
+
+    if _last_path ~= node_path or not _surf or not _surf:is_valid() then return end
+    local root = require("filetree.refs").resolve_root(path)
+    local section = M.references_lines(u, root)
+    if #section == 0 then return end
+
+    close_win()
+    open_viewer(node_path, vim.list_extend(vim.deepcopy(base_lines), section))
+  end)
+end
+
 ---Show or toggle the hover window for the current node.
 function M.show_current()
   if not _adapter then return end
@@ -212,22 +336,18 @@ function M.show_current()
   -- Close any existing window first
   close_win()
 
+  local path = ftpath.slashify(node.path)
   local lines = M.info_lines(node.path)
-  _last_path = node.path
+  local want_refs = wants_references(path)
+  local cached = want_refs and cache_get(path) or nil
+  local base_lines = lines
+  if cached then lines = vim.list_extend(vim.deepcopy(lines), M.references_lines(cached)) end
 
-  _surf = kit.viewer({
-    lines = lines,
-    title = "Node Info",
-    filetype = "filetree_node_info",
-  })
-  if not _surf then
-    _last_path = nil
-    return
-  end
-  _surf:on_close(function()
-    _surf = nil
-    _last_path = nil
-  end)
+  if not open_viewer(node.path, lines) then return end
+
+  -- Not cached: the popup is already up; the section is added (by reopening
+  -- with the longer text) as soon as the scan answers, if it found anything.
+  if want_refs and not cached then request_references(path, node.path, base_lines) end
 end
 
 ---Close any open node_info hover window.
@@ -242,6 +362,7 @@ local DEFAULTS = {
   keymap = "I",
   show_lines = true,
   max_entries = 100000, -- cap for the recursive directory scan behind Items/Size
+  references = true, -- append a "References (N)" section for a file somebody references
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -251,6 +372,7 @@ local DEFAULTS = {
 M.SCHEMA = {
   keymap = "keymap",
   show_lines = "boolean",
+  references = "boolean",
   -- The line count is read synchronously on the main loop, so it is capped: a
   -- typo of a few zeros must not freeze Neovim on a large file.
   max_lines_size = { "number", min = 1, max = 256 * 1024 * 1024 },
@@ -278,6 +400,7 @@ end
 
 function M.teardown()
   close_win()
+  _refs_cache = {}
   _adapter = nil
 end
 
