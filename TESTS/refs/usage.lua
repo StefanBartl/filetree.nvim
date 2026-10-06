@@ -1,4 +1,4 @@
----@diagnostic disable: need-check-nil
+---@diagnostic disable: need-check-nil, missing-fields, redundant-parameter, duplicate-set-field
 -- usage.lua -- regression test for `filetree.refs.usage`, the batched
 -- reference counter behind `:Filetree references`, `:Filetree refs unused` and
 -- the `I` node info section.
@@ -632,6 +632,34 @@ local function run_review_fixes()
     return done
   end, 10)
   check("fix: a complete walk does not", done and not incomplete and #got > 0)
+
+  -- a walk whose progress indicator was cancelled (400 png files take the
+  -- chunked path) reports a partial result as incomplete too
+  local progress = require("filetree.util.progress")
+  local real_create = progress.create
+  ---@diagnostic disable-next-line: duplicate-set-field
+  progress.create = function()
+    return {
+      cancelled = true,
+      update = function() end,
+      finish = function() end,
+    }
+  end
+  done, incomplete = false, nil
+  scan.candidates(
+    work,
+    { "screenshot" },
+    { "png" },
+    { scan = { max_files = 5000, timeout_ms = 1000 } },
+    function(_, inc)
+      incomplete, done = inc, true
+    end
+  )
+  vim.wait(5000, function()
+    return done
+  end, 10)
+  progress.create = real_create
+  check("fix: a cancelled walk says it is incomplete", done and incomplete == true)
   vim.fn.executable = walk_real_executable
 
   -- an incomplete candidate search must stop `refs unused` from offering anything

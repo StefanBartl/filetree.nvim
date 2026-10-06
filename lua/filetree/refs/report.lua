@@ -235,6 +235,22 @@ local function collect_files(dirs, extensions, max_files)
   return files, total > max_files, total
 end
 
+---@internal
+---Whether `dir` lies under `root` once both are resolved on disk. A lexical
+---compare alone refuses an 8.3 short-name spelling of an in-project folder
+---and accepts a junction/symlink inside the project that leads elsewhere
+---(which the search does not follow). Falls back to the lexical answer for a
+---path that cannot be resolved.
+---@param dir string
+---@param root string
+---@return boolean
+local function contained(dir, root)
+  local uv = vim.uv or vim.loop
+  local real_dir, real_root = uv.fs_realpath(dir), uv.fs_realpath(root)
+  if real_dir and real_root then return pathutil.under(real_dir, real_root) end
+  return pathutil.under(dir, root)
+end
+
 ---Move `paths` to the trash through the trash feature (its confirmation,
 ---undo history and buffer cleanup apply). Replaceable so a caller or test can
 ---intercept it.
@@ -308,7 +324,7 @@ function M.unused(arg, opts)
   -- as unreferenced -- refuse instead of offering them for deletion.
   local root = refs.resolve_root(dirs[1])
   for _, dir in ipairs(dirs) do
-    if not pathutil.under(dir, root) then
+    if not contained(dir, root) then
       notify.warn(
         string.format(
           "%s is outside the search root %s -- references there would be missed; "
