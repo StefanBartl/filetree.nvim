@@ -92,6 +92,9 @@ local function ext_set(exts)
   return set
 end
 
+-- Needle bytes above which `candidates_rg` feeds its patterns through stdin.
+local STDIN_PATTERN_BYTES = 6000
+
 ---@internal
 ---ripgrep-based candidate search.
 ---@param root string
@@ -115,28 +118,48 @@ local function candidates_rg(root, needles, exts, cfg, cb)
     cmd[#cmd + 1] = "-g"
     cmd[#cmd + 1] = "!" .. dir .. "/*"
   end
+  -- A sweep over a whole folder (`filetree.refs.usage`) hands over one needle
+  -- per file; hundreds of `-e` arguments would blow Windows' command-line
+  -- limit. Past `STDIN_PATTERN_BYTES` the patterns travel through stdin
+  -- (`-f -`) instead -- ordinary renames never get near it.
+  local pattern_bytes = 0
   for _, n in ipairs(needles) do
-    cmd[#cmd + 1] = "-e"
-    cmd[#cmd + 1] = n
+    pattern_bytes = pattern_bytes + #n + 4
+  end
+  local stdin
+  if pattern_bytes > STDIN_PATTERN_BYTES then
+    cmd[#cmd + 1] = "-f"
+    cmd[#cmd + 1] = "-"
+    stdin = table.concat(needles, "\n") .. "\n"
+  else
+    for _, n in ipairs(needles) do
+      cmd[#cmd + 1] = "-e"
+      cmd[#cmd + 1] = n
+    end
   end
   cmd[#cmd + 1] = "--"
   cmd[#cmd + 1] = root
 
   local timeout = (cfg.scan and cfg.scan.timeout_ms) or 3000
-  local ok_spawn = pcall(vim.system, cmd, { text = true, timeout = timeout }, function(result)
-    vim.schedule(function()
-      -- rg: 0 = matches, 1 = no matches, >1 = error (including a timeout kill)
-      if result.code > 1 then
-        notify.debug("ripgrep scan failed (code " .. tostring(result.code) .. ")")
-        return cb({})
-      end
-      local files = {}
-      for line in (result.stdout or ""):gmatch("[^\r\n]+") do
-        files[#files + 1] = ftpath.to_absolute(line)
-      end
-      cb(files)
-    end)
-  end)
+  local ok_spawn = pcall(
+    vim.system,
+    cmd,
+    { text = true, timeout = timeout, stdin = stdin },
+    function(result)
+      vim.schedule(function()
+        -- rg: 0 = matches, 1 = no matches, >1 = error (including a timeout kill)
+        if result.code > 1 then
+          notify.debug("ripgrep scan failed (code " .. tostring(result.code) .. ")")
+          return cb({})
+        end
+        local files = {}
+        for line in (result.stdout or ""):gmatch("[^\r\n]+") do
+          files[#files + 1] = ftpath.to_absolute(line)
+        end
+        cb(files)
+      end)
+    end
+  )
   if not ok_spawn then cb(nil) end
 end
 

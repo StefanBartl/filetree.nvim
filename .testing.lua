@@ -28,6 +28,7 @@ return {
     "^TESTS/marks_auto_clear%.lua$",
     "^TESTS/quickpick%.lua$",
     "^TESTS/refs/run%.lua$",
+    "^TESTS/refs/usage%.lua$",
   },
   -- Dependencies (directory names) put on the runtimepath: $<NAME>_DIR, .deps/<name>, ../<name>,
   -- stdpath('data')/lazy/<name>.
