@@ -33,6 +33,7 @@ local ui = require("filetree.refs.ui")
 local outgoing = require("filetree.refs.outgoing")
 local own_links = require("filetree.refs.own_links")
 local assets = require("filetree.refs.assets")
+local usage = require("filetree.refs.usage")
 local ftpath = require("filetree.util.path")
 local notify = require("filetree.util.notify").create("[filetree.refs]")
 
@@ -42,6 +43,7 @@ M.registry = registry
 M.apply = apply
 M.ui = ui
 M.assets = assets
+M.usage = usage
 
 -- ── Config ────────────────────────────────────────────────────────────────────
 
@@ -148,7 +150,6 @@ end
 
 -- ── Context ───────────────────────────────────────────────────────────────────
 
----@internal
 ---Search root for `path`: the nearest project root, or the cwd.
 ---@param path string
 ---@return string
@@ -162,7 +163,6 @@ local function resolve_root(path)
   return vim.fn.getcwd()
 end
 
----@internal
 ---@param path string
 ---@param opts? { root?: string }
 ---@return FiletreeRefCtx
@@ -175,6 +175,21 @@ local function make_ctx(path, opts)
     is_dir = vim.fn.isdirectory(path) == 1,
     cfg = _cfg,
   }
+end
+
+---The search root `refs` would use for `path` (nearest project root, or the cwd).
+---@param path string
+---@return string
+function M.resolve_root(path)
+  return resolve_root(path)
+end
+
+---The scan context for `path` — what a provider's `plan()` is handed.
+---@param path string
+---@param opts? { root?: string }
+---@return FiletreeRefCtx
+function M.context(path, opts)
+  return make_ctx(path, opts)
 end
 
 -- ── Scan ──────────────────────────────────────────────────────────────────────

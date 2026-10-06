@@ -266,6 +266,16 @@ and `refs undo`.
 The engine runs in `auto` mode there: the chooser is UI, covered by
 `TESTS/units.lua`; this suite is about what lands on disk.
 
+`refs/usage.lua` is the second, independent script here: it tests the batched
+reference counter (`filetree.refs.usage`) on a scratch project -- once-, twice-
+and never-referenced files, a look-alike name, a URL-encoded space, a file
+linking to itself and a 400-path sweep that takes ripgrep's stdin pattern path --
+with ripgrep and again through the walk fallback.
+
+```
+nvim --clean --headless -u NONE -l TESTS/refs/usage.lua
+```
+
 Currently covers Lua, Python, TS/JS (incl. `.tsx`/dynamic `import()`) and
 Markdown (inline links, HTML `href=`, reference definitions).
 
