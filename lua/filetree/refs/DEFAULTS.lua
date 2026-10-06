@@ -134,6 +134,20 @@ return {
     timeout_ms = 3000,
   },
 
+  -- On-demand reports over the reference engine: `:Filetree references` (who
+  -- points at this file) and `:Filetree refs unused` (which files in a folder
+  -- nobody points at). Read-only counterpart of the rewrite pipeline above,
+  -- so they run whatever `enabled`/`on_*` say.
+  report = {
+    -- How `:Filetree references` shows the list: "popup" (a float, <CR> jumps)
+    -- or "picker" (telescope / fzf-lua / quickfix, per `picker` above).
+    view = "popup",
+    -- `extensions` is left unset on purpose (list-shaped, see the note under
+    -- `outgoing_assets`): `refs unused` then falls back to the asset
+    -- allowlist of `filetree.refs.assets`; `--all` lifts the filter.
+    -- extensions = { "png", "jpg", … }
+  },
+
   -- Keep the previous content of every rewritten line so `:Filetree refs undo`
   -- (and trash's `U`, which reverts the delete's own rewrite) can put it back.
   undo = true,

@@ -156,6 +156,10 @@
 ---@field mode?     "ask"|"auto"|"off" Unset (default) inherits `on_move`/`on_rename` for the op in question — no separate prompt for the common case. Set explicitly to diverge (costs a second confirmation/undo entry when it does).
 ---@field env_vars? string[]           Environment variable names (without the leading `$`) recognized in a `$VAR/...` link target. `$NVIM_CONFIG_DIR` (backed by `vim.fn.stdpath("config")`) is always recognized in addition, with no config needed.
 
+---@class FiletreeRefsReportConfig
+---@field view?       "popup"|"picker"  How `:Filetree references` lists the sites (default "popup").
+---@field extensions? string[]          Extensions `:Filetree refs unused` considers (default: the asset allowlist of `filetree.refs.assets`).
+
 ---@class FiletreeRefsConfig
 ---@field enabled?         boolean
 ---@field providers?       FiletreeRefsProvidersConfig
@@ -168,6 +172,7 @@
 ---@field wiki_links?      boolean   Also rewrite `[[wiki]]`-style markdown links (default false).
 ---@field outgoing_assets? FiletreeRefsOutgoingAssetsConfig  Cascade-delete-assets, opt-in.
 ---@field outgoing_links?  FiletreeRefsOutgoingLinksConfig   Rewrite the moved file's own outgoing links, opt-in.
+---@field report?          FiletreeRefsReportConfig  On-demand reference reports (`:Filetree references`, `refs unused`).
 ---@field experimental?    FiletreeRefsExperimentalConfig  In-development reference features, each opt-in.
 ---@field scan?            FiletreeRefsScanConfig
 ---@field undo?            boolean   Keep an undo token per apply (default true).

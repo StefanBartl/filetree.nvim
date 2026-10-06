@@ -253,4 +253,69 @@ function M.pick(refs, opts, on_confirm, on_cancel)
   via_quickfix(refs, title, on_confirm)
 end
 
+-- ── Browse (jump, no selection) ───────────────────────────────────────────────
+
+---Show `refs` in a picker whose Enter simply jumps to the entry -- the
+---read-only counterpart of `M.pick` (no confirm/cancel flow, no pruning).
+---Telescope and fzf-lua use their own file-jump default; without either the
+---entries land in the quickfix list, where `<CR>` jumps natively.
+---@param refs table[]  {file, line, display}[]
+---@param opts FiletreeRefsPickerOpts|nil
+function M.browse(refs, opts)
+  opts = opts or {}
+  local title = opts.title or "References"
+  local prefer = opts.prefer or "auto"
+
+  if (prefer == "auto" or prefer == "telescope") and pcall(require, "telescope") then
+    local pickers = require("telescope.pickers")
+    local finders = require("telescope.finders")
+    local conf = require("telescope.config").values
+    pickers
+      .new({}, {
+        prompt_title = title,
+        finder = finders.new_table({
+          results = refs,
+          entry_maker = function(r)
+            return {
+              value = r,
+              display = string.format(
+                "%s:%d  %s",
+                path.relative(r.file, vim.fn.getcwd()),
+                r.line,
+                r.display
+              ),
+              ordinal = r.file .. " " .. r.display,
+              filename = r.file,
+              lnum = r.line,
+              col = r.col,
+            }
+          end,
+        }),
+        sorter = conf.generic_sorter({}),
+        previewer = conf.grep_previewer({}),
+      })
+      :find()
+    return
+  end
+
+  if (prefer == "auto" or prefer == "fzf-lua") and pcall(require, "fzf-lua") then
+    local lines = {}
+    for _, r in ipairs(refs) do
+      lines[#lines + 1] = string.format("%s:%d:%d:%s", r.file, r.line, r.col or 1, r.display)
+    end
+    require("fzf-lua").fzf_exec(lines, {
+      prompt = title .. "> ",
+      previewer = "builtin",
+      actions = require("fzf-lua").defaults.actions.files,
+    })
+    return
+  end
+
+  local items = {}
+  for _, r in ipairs(refs) do
+    items[#items + 1] = { filename = r.file, lnum = r.line, col = r.col, text = r.display }
+  end
+  list.qf(items, title, { action = "r" })
+end
+
 return M

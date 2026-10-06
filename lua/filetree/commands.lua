@@ -44,6 +44,26 @@ local function get_adapter()
   return main.adapter()
 end
 
+---@internal
+---Split the arguments of a report command into its optional path and its
+---flags (`--picker` / `--popup`). A path with spaces arrives as several
+---words and is re-joined.
+---@param args string[]
+---@return string? path, { view?: "popup"|"picker" } opts
+local function parse_report_args(args)
+  local words, opts = {}, {}
+  for _, a in ipairs(args) do
+    if a == "--picker" then
+      opts.view = "picker"
+    elseif a == "--popup" then
+      opts.view = "popup"
+    else
+      words[#words + 1] = a
+    end
+  end
+  return #words > 0 and table.concat(words, " ") or nil, opts
+end
+
 -- ── Command tree ──────────────────────────────────────────────────────────────
 -- Leaf values: function(rest_args: string[])
 -- Interior values: table of sub-commands
@@ -531,8 +551,21 @@ local TREE = {
     end,
   },
 
+  -- ── references (who points at this file) ────────────────────────────────────
+  -- :Filetree references [--picker|--popup] [path]
+  --   the sites that reference the file under the cursor (or `path`), in a
+  --   popup or a picker; <CR> jumps. Same as `:Filetree refs list`.
+  references = function(args)
+    local path, opts = parse_report_args(args)
+    require("filetree.refs.report").references(path, opts)
+  end,
+
   -- ── refs (reference engine) ─────────────────────────────────────────────────
   refs = {
+    list = function(args)
+      local path, opts = parse_report_args(args)
+      require("filetree.refs.report").references(path, opts)
+    end,
     undo = function(_)
       require("filetree.refs").undo()
     end,
