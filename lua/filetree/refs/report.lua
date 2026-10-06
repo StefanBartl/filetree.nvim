@@ -13,6 +13,7 @@
 local usage = require("filetree.refs.usage")
 local assets = require("filetree.refs.assets")
 local scan = require("filetree.refs.scan")
+local pathutil = require("filetree.refs.pathutil")
 local ftfs = require("filetree.util.fs")
 local ftpath = require("filetree.util.path")
 local buffer = require("filetree.util.buffer")
@@ -302,12 +303,31 @@ function M.unused(arg, opts)
     )
   end
 
+  -- The search only looks under the root. A folder outside it (no project
+  -- marker, `scan.root = "cwd"`, a tree node elsewhere) would show every file
+  -- as unreferenced -- refuse instead of offering them for deletion.
   local root = refs.resolve_root(dirs[1])
+  for _, dir in ipairs(dirs) do
+    if not pathutil.under(dir, root) then
+      notify.warn(
+        string.format(
+          "%s is outside the search root %s -- references there would be missed; "
+            .. "nothing is offered for deletion (open it from inside the project, or set refs.scan.root)",
+          ftpath.relative(dir),
+          root
+        )
+      )
+      return
+    end
+  end
   usage.count(files, { root = root }, function(by_path, meta)
     -- A partial or blind sweep would call referenced files unused -- never
     -- offer those for deletion.
-    if meta.cancelled then
-      notify.warn("Cancelled -- no result, nothing is offered for deletion")
+    if meta.cancelled or meta.incomplete then
+      notify.warn(
+        meta.cancelled and "Cancelled -- no result, nothing is offered for deletion"
+          or "The search was cut short (too many files or cancelled) -- nothing is offered for deletion"
+      )
       return
     end
     if #meta.providers == 0 then

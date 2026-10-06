@@ -586,6 +586,140 @@ end
 
 run_node_info()
 
+-- ── review fixes: incomplete sweeps, search root, cached root ─────────────────
+local function run_review_fixes()
+  print("\n== review fixes ==")
+  refs.setup({
+    providers = { markdown = true, lua = true, python = false, ts_js = false },
+    picker = "quickfix",
+  })
+  local scan = require("filetree.refs.scan")
+  local report = require("filetree.refs.report")
+  local refs_picker = require("filetree.util.refs_picker")
+
+  -- 1. the walk fallback reports a cut-short search
+  local walk_real_executable = vim.fn.executable
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.fn.executable = function(name)
+    if name == "rg" then return 0 end
+    return walk_real_executable(name)
+  end
+  local got, incomplete, done = nil, nil, false
+  scan.candidates(
+    work,
+    { "twice.png" },
+    { "md" },
+    { scan = { max_files = 1, timeout_ms = 1000 } },
+    function(files, inc)
+      got, incomplete, done = files, inc, true
+    end
+  )
+  vim.wait(5000, function()
+    return done
+  end, 10)
+  check("fix: a walk capped by max_files says it is incomplete", done and incomplete == true)
+  done, incomplete = false, nil
+  scan.candidates(
+    work,
+    { "twice.png" },
+    { "md" },
+    { scan = { max_files = 5000, timeout_ms = 1000 } },
+    function(files, inc)
+      got, incomplete, done = files, inc, true
+    end
+  )
+  vim.wait(5000, function()
+    return done
+  end, 10)
+  check("fix: a complete walk does not", done and not incomplete and #got > 0)
+  vim.fn.executable = walk_real_executable
+
+  -- an incomplete candidate search must stop `refs unused` from offering anything
+  local real_candidates = scan.candidates
+  ---@diagnostic disable-next-line: duplicate-set-field
+  scan.candidates = function(_, _, _, _, cb)
+    cb({}, true)
+  end
+  local notes, picked = {}, nil
+  local real_notify, real_pick = vim.notify, refs_picker.pick
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg)
+    notes[#notes + 1] = tostring(msg)
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  refs_picker.pick = function()
+    picked = true
+  end
+  report.unused(work .. "/assets")
+  vim.wait(5000, function()
+    return #notes > 0
+  end, 10)
+  scan.candidates = real_candidates
+  check(
+    "fix: an incomplete search offers nothing for deletion",
+    picked == nil and notes[#notes] and notes[#notes]:find("cut short", 1, true) ~= nil,
+    notes[#notes]
+  )
+
+  -- 2. a folder outside the search root is refused, not reported as all-unused
+  local outside = scratch_root .. "/outside"
+  vim.fn.mkdir(outside, "p")
+  vim.fn.writefile({ "x" }, outside .. "/lonely.png")
+  local old_cwd = vim.fn.getcwd()
+  vim.fn.chdir(work)
+  refs.setup({
+    providers = { markdown = true, lua = true, python = false, ts_js = false },
+    scan = { root = "cwd" },
+  })
+  notes, picked = {}, nil
+  report.unused(outside)
+  check(
+    "fix: a folder outside the search root is refused",
+    picked == nil and notes[1] and notes[1]:find("outside the search root", 1, true) ~= nil,
+    notes[1]
+  )
+  vim.fn.chdir(old_cwd)
+  refs.setup({ providers = { markdown = true, lua = true, python = false, ts_js = false } })
+  vim.notify, refs_picker.pick = real_notify, real_pick
+
+  -- 3. a cached render spells the rows exactly like the async one
+  local node_info = require("filetree.features.ui.node_info")
+  local current
+  node_info.setup({ keymap = false }, {
+    get_current_node = function()
+      return current
+    end,
+  })
+  local function viewer_text()
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.bo[b].filetype == "filetree_node_info" and vim.api.nvim_buf_is_valid(b) then
+        return table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n")
+      end
+    end
+  end
+  vim.fn.chdir(work .. "/assets")
+  node_info.close()
+  current = { path = p("assets/used.png"), type = "file" }
+  node_info.show_current()
+  vim.wait(20000, function()
+    return (viewer_text() or ""):find("References (1)", 1, true) ~= nil
+  end, 20)
+  local first = viewer_text() or ""
+  node_info.close()
+  node_info.show_current()
+  local second = viewer_text() or ""
+  check(
+    "fix: cached and async renders spell reference paths alike",
+    first:find("References (1)", 1, true) ~= nil
+      and first:match("References %(1%)\n(.-)$") == second:match("References %(1%)\n(.-)$"),
+    first .. " ## " .. second
+  )
+  vim.fn.chdir(old_cwd)
+  node_info.teardown()
+end
+
+run_review_fixes()
+
 print(("\nrefs.usage: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")

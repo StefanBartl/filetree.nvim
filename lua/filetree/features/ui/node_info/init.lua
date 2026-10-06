@@ -304,7 +304,7 @@ end
 local function request_references(path, node_path, base_lines)
   require("filetree.refs.usage").count({ path }, nil, function(by_path, meta)
     local u = by_path[path]
-    if meta.cancelled or not u then return end
+    if meta.cancelled or meta.incomplete or not u then return end
     _refs_cache[path] = { at = (vim.uv or vim.loop).now(), u = u }
 
     if _last_path ~= node_path or not _surf or not _surf:is_valid() then return end
@@ -341,7 +341,10 @@ function M.show_current()
   local want_refs = wants_references(path)
   local cached = want_refs and cache_get(path) or nil
   local base_lines = lines
-  if cached then lines = vim.list_extend(vim.deepcopy(lines), M.references_lines(cached)) end
+  if cached then
+    local root = require("filetree.refs").resolve_root(path)
+    lines = vim.list_extend(vim.deepcopy(lines), M.references_lines(cached, root))
+  end
 
   if not open_viewer(node.path, lines) then return end
 
