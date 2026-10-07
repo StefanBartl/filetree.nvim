@@ -235,6 +235,29 @@ local cft = load_cft(empty_dir)
 local builtins = builtin_names(cft)
 check("fixture: the shipped builtin templates are on the runtimepath", #builtins >= 2)
 
+-- The shipped Lua templates are stored as `<name>.lua.tpl` (not valid Lua, so no tool may take them
+-- for source); the suffix must not leak into the template name, and the content must be readable.
+do
+  local by_name = {}
+  for _, tmpl in ipairs(cft.list()) do
+    by_name[tmpl.name] = tmpl
+    check("builtin names carry no .tpl suffix: " .. tmpl.name, tmpl.name:sub(-4) ~= ".tpl")
+  end
+  for _, lua_tmpl in ipairs({ "lua_class.lua", "lua_module.lua", "lua_spec.lua", "lua_types.lua" }) do
+    local entry = by_name[lua_tmpl]
+    check("builtin Lua template is listed under its .lua name: " .. lua_tmpl, entry ~= nil)
+    if entry then
+      check("... it is a builtin", entry.builtin == true)
+      check("... stored as .lua.tpl", entry.path:sub(-8) == ".lua.tpl")
+      check("... and readable", vim.fn.filereadable(entry.path) == 1)
+    end
+  end
+  check(
+    "no .lua file is shipped as a template",
+    #vim.fn.glob(root .. "/lua/filetree/assets/templates/*.lua", false, true) == 0
+  )
+end
+
 -- ── build_rows: header rows only for mixed sets ────────────────────────────
 
 do

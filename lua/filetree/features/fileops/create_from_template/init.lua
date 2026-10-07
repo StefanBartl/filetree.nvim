@@ -146,9 +146,13 @@ end
 ---(git clone, local dir checkout, symlink, …), same mechanism
 ---ftplugin/syntax/doc rely on. Namespaced under lua/filetree/… (not a generic
 ---top-level "templates/") so an unrelated plugin can never collide with it.
----Living under lua/ does mean lua_ls would parse the .lua templates as source
----and choke on their ${...} placeholders, hence the workspace.ignoreDir entry
----for this directory in .luarc.json. Cached: 'rtp' doesn't change mid-session
+---Living under lua/ does mean lua_ls, luacheck, stylua and the test tooling
+---would take a `.lua` template for source (its ${...} placeholders do not
+---parse, a spec template contains busted calls). So the shipped Lua templates
+---carry a `.tpl` suffix on disk (`lua_class.lua.tpl`); `scan_dir` strips it,
+---so the template is still called `lua_class.lua` and the new file keeps
+---its `.lua` extension. The other tools also skip this directory (.luarc.json
+---workspace.ignoreDir, .luacheckrc, .styluaignore). Cached: 'rtp' doesn't change mid-session
 ---in normal use, and this is the picker's hot path.
 ---@internal
 ---@return string?
@@ -295,6 +299,9 @@ end
 -- ── Template list ─────────────────────────────────────────────────────────────
 
 ---List template files (name + path) directly in `dir`, alphabetical.
+---In the shipped (`builtin`) directory a trailing `.tpl` is not part of the
+---template name: `lua_class.lua.tpl` is the template `lua_class.lua`. The
+---user's own directory is taken literally.
 ---@internal
 ---@param dir string
 ---@param builtin boolean
@@ -307,7 +314,9 @@ local function scan_dir(dir, builtin)
     if not e:match("^%.") then -- skip .order.json and any other dotfile
       local full = dir .. "/" .. e
       if vim.fn.filereadable(full) == 1 then
-        tmpl[#tmpl + 1] = { name = e, path = full, builtin = builtin }
+        local name = e
+        if builtin and #e > 4 and e:sub(-4) == ".tpl" then name = e:sub(1, -5) end
+        tmpl[#tmpl + 1] = { name = name, path = full, builtin = builtin }
       end
     end
   end
