@@ -145,7 +145,7 @@ Press `A`, or run `:Filetree template`. Workflow, in order:
    destination, then the file is created and opened.
 
 **Built-in templates** ship with filetree.nvim itself, several per common
-language: Lua (`lua_module`/`lua_class`/`lua_spec`/`lua_types`),
+language: Lua (`lua_module`/`lua_class`/`lua_spec`/`lua_types`; stored as `*.lua.tpl` on disk so no Lua tool takes them for source, the picker still lists them as `lua_class.lua` etc.),
 TypeScript/TSX/JS, Python, Go, Rust, C#, C/C++, Zig, JSON, Markdown, YAML,
 TOML, shell/PowerShell, HTML/CSS, WAT.
 
