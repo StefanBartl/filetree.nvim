@@ -445,7 +445,14 @@ function M.check()
   -- lib.nvim into a :checkhealth that itself throws, right after this
   -- function already reported that condition gracefully via vim.health.error.
   local ok_composer, composer = pcall(require, "lib.nvim.bindings.usercmd.composer")
-  if ok_composer then composer.checkhealth("Filetree") end
+  if ok_composer then
+    -- The name the command was registered under (`setup({ command = "Foo" })`
+    -- registers no :Filetree at all, and a literal would report it missing).
+    local ok_name, verb = pcall(function()
+      return require("filetree.commands").command_name()
+    end)
+    composer.checkhealth(ok_name and verb or "Filetree")
+  end
 end
 
 return M

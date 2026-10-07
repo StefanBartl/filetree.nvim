@@ -393,6 +393,17 @@ do
     if not route.desc or route.desc == "" then bare[#bare + 1] = table.concat(route.path, " ") end
   end
   check("every :Filetree route has a description", #bare == 0, table.concat(bare, ", "))
+  -- ... and every text in command_descs.lua is read by a route (no dead entries).
+  local paths = {}
+  for _, route in ipairs(handle:spec().routes) do
+    paths[table.concat(route.path, " ")] = true
+  end
+  local dead = {}
+  for key in pairs(require("filetree.command_descs")) do
+    if not paths[key] then dead[#dead + 1] = key end
+  end
+  table.sort(dead)
+  check("command_descs.lua has no entry without a route", #dead == 0, table.concat(dead, ", "))
   commands.teardown()
 end
 
