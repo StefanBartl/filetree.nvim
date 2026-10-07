@@ -826,6 +826,11 @@ local TREE = {
 -- reproduced for free by composer's own walk, not re-implemented here.
 
 ---@internal
+--- One-line texts per sub-command path (see command_descs.lua), for the composer option float and docs.
+---@type table<string, string>
+local descs = require("filetree.command_descs")
+
+---@internal
 ---Recursively walk a TREE-shaped table, appending a composer route per leaf function.
 ---@param node table
 ---@param path string[]
@@ -840,6 +845,7 @@ local function walk_tree(node, path, routes)
     if type(val) == "function" then
       routes[#routes + 1] = {
         path = child_path,
+        desc = descs[table.concat(child_path, " ")],
         run = function(ctx)
           val(ctx.rest)
         end,

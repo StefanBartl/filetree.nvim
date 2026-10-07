@@ -383,6 +383,19 @@ do
   )
 end
 
+-- ── Every :Filetree route carries a description (composer option float, docs) ──
+do
+  local commands = require("filetree.commands")
+  commands.setup("FiletreeSmokeDesc")
+  local handle = require("lib.nvim.bindings.usercmd.composer").registry().FiletreeSmokeDesc
+  local bare = {}
+  for _, route in ipairs(handle:spec().routes) do
+    if not route.desc or route.desc == "" then bare[#bare + 1] = table.concat(route.path, " ") end
+  end
+  check("every :Filetree route has a description", #bare == 0, table.concat(bare, ", "))
+  commands.teardown()
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim smoke: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
