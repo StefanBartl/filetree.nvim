@@ -62,7 +62,9 @@ M.SCHEMA = {
 -- in the same directory shares the same root -- this is deliberately a plain
 -- hash map (O(1) lookup by path), not a ring buffer: a ring buffer bounds an
 -- ordered *history*, but what's needed here is key-based lookup, which a
--- table already gives for free. Capped and cleared in one shot (not a real
+-- table already gives for free. A walk also stops at the first directory that
+-- is already cached and adopts its answer, so it never re-walks a known chain.
+-- Capped and cleared in one shot (not a real
 -- LRU) once it grows past `features.project_root.max_cache_entries`, so a
 -- very long session visiting
 -- many one-off directories can't grow this unboundedly.
@@ -99,6 +101,20 @@ local function find_from(dir)
   local found = nil
 
   while current ~= prev do
+    -- A directory on this walk may already be cached by an earlier walk (a
+    -- sibling's, say). Its answer is exactly what continuing from here would
+    -- produce, so adopt it instead of re-probing every marker on every ancestor
+    -- up to the drive root -- without this, each not-yet-visited sibling in a
+    -- big tree re-walked the whole chain (17 markers plus a *.rockspec glob per
+    -- level, ~25 ms per sibling on a drive with no project root at all).
+    if _cfg.cache ~= false then
+      local cached = _cache[current]
+      if cached ~= nil then
+        found = cached or nil
+        break
+      end
+    end
+
     for _, marker in ipairs(_cfg.markers) do
       -- Support simple glob patterns like "*.rockspec". `current` is a
       -- filesystem path being walked, not a pattern -- only `marker` is
