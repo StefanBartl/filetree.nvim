@@ -1,10 +1,9 @@
 ---@module 'filetree.refs.assets'
---- Classifier for the cascade-delete-assets concept — step 2 of
---- `wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md`: given the outgoing links
---- `filetree.refs.outgoing` found in a file that is about to be deleted,
---- decide which of them are actually safe to offer for deletion.
+--- Classifier for the cascade-delete-assets feature — step 2: given the
+--- outgoing links `filetree.refs.outgoing` found in a file that is about to be
+--- deleted, decide which of them are actually safe to offer for deletion.
 ---
---- "Safe" means all three (see the roadmap note §3):
+--- "Safe" means all three:
 ---   1. the target resolves under a configured assets root;
 ---   2. its extension is on an allowlist (never a denylist — an unknown
 ---      extension must never be offered by accident);
@@ -14,10 +13,10 @@
 ---      `delete_target` filtering, since "is this referenced at all" is a
 ---      broader question than "which refs need a dangling-link marker".
 ---
---- Not wired into the delete dialog yet (step 3) and reads no shared `refs`
---- config yet (step 4) — `roots`/`extensions` are passed in per call, with
---- the same defaults §7 of the roadmap note sketches for the eventual config
---- block, so wiring that block in later is a default swap, not a rewrite.
+--- Reads no shared `refs` config itself — `roots`/`extensions` are passed in
+--- per call (falling back to the built-in defaults below);
+--- `filetree.refs.outgoing_assets` fills them in from the configured
+--- `outgoing_assets` block.
 
 local outgoing = require("filetree.refs.outgoing")
 local pathutil = require("filetree.refs.pathutil")
@@ -25,14 +24,14 @@ local ftpath = require("filetree.util.path")
 
 local M = {}
 
--- `images.nvim`'s `paste.dir` default (see Cascade_Delete_Assets.md §2) —
+-- `images.nvim`'s `paste.dir` default —
 -- matched deliberately rather than inventing a second convention for the
 -- same folder.
 M.DEFAULT_ROOTS = { "assets" }
 
 -- Image/video/binary-attachment shapes only. Deliberately excludes `pdf`
 -- from the default (a linked PDF is often a real document, not a disposable
--- screenshot) — configurable per the roadmap note, not baked in here.
+-- screenshot) — configurable via `opts.extensions`, not baked in here.
 M.DEFAULT_EXTENSIONS = { "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "mp4", "mov" }
 
 -- `FiletreeAssetCandidate` is declared in `@types/refs.lua`, alongside the
@@ -41,7 +40,7 @@ M.DEFAULT_EXTENSIONS = { "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico
 ---@internal
 ---Whether `resolved` lives under one of `roots`, each tried first relative to
 ---`linking_file`'s own directory (the per-doc-folder convention `images.nvim`'s
----`paste.dir` already uses), then relative to the project `root` — see §3.1.
+---`paste.dir` already uses), then relative to the project `root`.
 ---@param resolved string
 ---@param linking_file string
 ---@param root string

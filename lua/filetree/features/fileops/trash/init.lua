@@ -25,8 +25,7 @@
 --- engine: incoming refs (other files pointing at the one being deleted —
 --- offered to mark REF!) and outgoing asset links (files the one being
 --- deleted points at, under a configured assets folder — offered for
---- cascade-deletion when nothing else still references them; see
---- wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md). Neither exists for a
+--- cascade-deletion when nothing else still references them). Neither exists for a
 --- multi-item "delete all at once" batch, same as before this feature.
 ---
 --- That makes a delete two mutations, so `U` undoes two: the incoming-ref
@@ -55,8 +54,7 @@ local ui_confirm = require("filetree.util.confirm")
 local refs_picker = require("filetree.util.refs_picker")
 -- References that would dangle once the file is gone (markdown links only —
 -- see refs.for_delete), AND assets the file itself links out to that would be
--- orphaned by its deletion (refs.outgoing_assets — see
--- wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md). This feature decides what to
+-- orphaned by its deletion (refs.outgoing_assets). This feature decides what to
 -- do with both before the delete happens.
 local refs = require("filetree.refs")
 -- Optional: progress indicator for a multi-item batch (no other feedback
@@ -325,7 +323,7 @@ end
 ---Delete every approved asset through the same trash/undo path as the
 ---primary file (`do_trash`, defined above) — not a plain `fs_unlink` — so
 ---`:Filetree trash undo`/`U` can bring an asset back the same way it brings
----back the file that linked to it (Cascade_Delete_Assets.md §8: each asset
+---back the file that linked to it (each asset
 ---still lands as its OWN undo entry, not grouped with the primary file's —
 ---undoing the whole batch as one unit is a follow-up, not built here).
 ---Sequential like `run_all`, for the same reason: parallel trashing would
@@ -356,7 +354,7 @@ end
 ---agrees) actually trash it and run any approved cleanup. When the file has
 ---incoming references, outgoing links to now-orphaned assets, or both, a
 ---chooser replaces the plain yes/no — one dialog for both directions rather
----than two separate popups (Cascade_Delete_Assets.md §4).
+---than two separate popups.
 ---
 ---Unlike a rename, both scans have to finish *before* the dialog can be
 ---drawn — its text depends on what was found — so this waits for them
@@ -382,7 +380,7 @@ local function confirm_popup(path, cb, require_symlink)
     -- An asset that qualifies (right root, right extension) but is still
     -- linked from some OTHER surviving file is never offered — but the user
     -- should still learn why an apparent orphan wasn't offered, rather than
-    -- silently seeing nothing (§3, point 3).
+    -- silently seeing nothing.
     if #kept_assets > 0 then
       notify.info(
         string.format(

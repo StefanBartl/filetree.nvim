@@ -727,8 +727,7 @@ local function run_plaintext_comment_check()
 end
 
 -- ── refs.outgoing(): what a file links out to (not what links to it) ────────
--- Step 1 of the cascade-delete-assets concept
--- (wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md) — no classifier yet, so this
+-- Step 1 of the cascade-delete-assets feature — no classifier involved, so this
 -- only checks that every path-like link is found and resolved, external
 -- links and pure anchors are not, and a file with nothing to link out to
 -- comes back empty.
@@ -834,8 +833,7 @@ local function run_outgoing_scan_check()
 end
 
 -- ── refs.outgoing_assets(): the cascade-delete-assets classifier ────────────
--- Step 2 of the cascade-delete-assets concept
--- (wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md) — a small, purpose-built tree
+-- Step 2 of the cascade-delete-assets feature — a small, purpose-built tree
 -- (not the shared markdown fixture) isolates the three criteria: under a
 -- configured root, an allowed extension, and not still referenced by some
 -- OTHER surviving file. Each case changes exactly one criterion so a

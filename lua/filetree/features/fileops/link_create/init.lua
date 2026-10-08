@@ -235,7 +235,7 @@ local function do_create(target, link_path, kind, is_dir)
 
   -- A relative target is resolved by the OS against the link's PHYSICAL
   -- directory, but `symlink_text` worked it out from the path as written: when
-  -- some ancestor of the link is itself a symlink (`WKDBooks/x -> elsewhere`)
+  -- some ancestor of the link is itself a symlink (`notes/x -> elsewhere`)
   -- the two differ and the link would dangle. Check it really lands on the
   -- target, and store the absolute path instead when it does not.
   if kind == "Symlink" and is_relative and not resolves_to(link_path, target) then
