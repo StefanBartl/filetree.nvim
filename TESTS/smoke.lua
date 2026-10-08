@@ -404,6 +404,52 @@ do
   end
   table.sort(dead)
   check("command_descs.lua has no entry without a route", #dead == 0, table.concat(dead, ", "))
+
+  -- ... and every positional argument says what it is for (`cwd mode <name>`, `cwd scope <name>`;
+  -- DIR / PATH arguments explain themselves). A lib.nvim older than `help.undocumented` cannot
+  -- answer: that is a missing feature of the dependency, not a defect here.
+  local composer = require("lib.nvim.bindings.usercmd.composer")
+  if type(composer.help.undocumented) == "function" then
+    local missing = {}
+    for _, m in ipairs(composer.help.undocumented("FiletreeSmokeDesc", { args = true })) do
+      missing[#missing + 1] = ("%s %s %s"):format(m.kind, m.route, m.name)
+    end
+    check(
+      "every :Filetree flag and argument has a text",
+      #missing == 0,
+      table.concat(missing, ", ")
+    )
+
+    -- House style of the argument texts: one line, no trailing period, at most 80 characters, and
+    -- every `enum_desc` key is a value the argument offers.
+    local texts, malformed, stray = 0, {}, {}
+    for _, route in ipairs(handle:spec().routes) do
+      for _, arg in ipairs(route.args or {}) do
+        local offered = {}
+        for _, value in ipairs(arg.enum or arg.values or {}) do
+          offered[value] = true
+        end
+        local all = { arg.desc }
+        for value, text in pairs(arg.enum_desc or {}) do
+          all[#all + 1] = text
+          if not offered[value] then stray[#stray + 1] = arg.name .. "=" .. value end
+        end
+        for _, text in ipairs(all) do
+          texts = texts + 1
+          if text:find("\n", 1, true) or text:sub(-1) == "." or #text > 80 then
+            malformed[#malformed + 1] = text
+          end
+        end
+      end
+    end
+    check("argument texts were found (cwd mode, cwd scope)", texts >= 11)
+    check(
+      "argument texts are one line, no trailing period, <= 80 chars",
+      #malformed == 0,
+      table.concat(malformed, " | ")
+    )
+    check("argument enum_desc keys are real values", #stray == 0, table.concat(stray, ", "))
+  end
   commands.teardown()
 end
 

@@ -916,6 +916,15 @@ local function build_routes()
         name = "name",
         type = "STRING",
         enum = { "follow", "project", "nearest", "lock", "manual", "tree_leads" },
+        desc = "Root policy that decides where the cwd and the tree root sit",
+        enum_desc = {
+          follow = "No policy: the usual per-buffer root resolution",
+          project = "Hold the project root until a file outside it opens",
+          nearest = "Like project, but the nearest package boundary",
+          lock = "Pin the cwd to one directory; buffer switches never move it",
+          manual = "Nothing automatic; only explicit actions change it",
+          tree_leads = "The tree root leads and the cwd follows it",
+        },
       },
     },
     desc = "Set the cwd/root policy (follow | project | nearest | lock | manual | tree_leads)",
@@ -926,7 +935,19 @@ local function build_routes()
 
   routes[#routes + 1] = {
     path = { "cwd", "scope" },
-    args = { { name = "name", type = "STRING", enum = { "global", "tab", "win" } } },
+    args = {
+      {
+        name = "name",
+        type = "STRING",
+        enum = { "global", "tab", "win" },
+        desc = "Which directory the cwd policy changes",
+        enum_desc = {
+          global = "The global directory (:cd)",
+          tab = "The tab-local directory (:tcd)",
+          win = "The window-local directory (:lcd)",
+        },
+      },
+    },
     desc = "Set the directory scope of the cwd policy (:cd | :tcd | :lcd)",
     run = function(ctx)
       TREE.cwd.scope({ ctx.args.name })
