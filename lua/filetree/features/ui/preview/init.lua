@@ -27,6 +27,8 @@ local lib_debounce = require("lib.nvim.debounce")
 local bind = require("filetree.util.bind")
 local M = {}
 
+local uv = vim.uv or vim.loop
+
 ---@type FiletreePreviewConfig
 local _cfg = {
   enabled = false,
@@ -36,6 +38,7 @@ local _cfg = {
   keymap = "<Tab>",
   keymap_open = "<CR>",
   max_lines = 40,
+  max_bytes = 1024 * 1024, -- buffer mode: larger files are not loaded (0 = no limit)
   max_width = 80,
   max_height = 25,
   wrap = false,
@@ -62,6 +65,7 @@ M.SCHEMA = {
   keymap = "keymap",
   keymap_open = "keymap",
   max_lines = { "number", min = 1 },
+  max_bytes = { "number", min = 0 },
   max_width = { "number", min = 1 },
   max_height = { "number", min = 1 },
   wrap = "boolean",
@@ -160,7 +164,10 @@ local function system_open(path)
     -- with no cmd.exe re-tokenizing in between; `cmd /c start` silently
     -- truncates a path containing an unescaped `&` (cmd.exe treats a bare
     -- `&` outside quotes as a command separator).
-    args = { "explorer.exe", path:gsub("/", "\\") }
+    -- The parentheses matter: gsub() returns the replacement count as a second
+    -- value, and the last expression of a table constructor keeps all of its
+    -- values, so without them explorer.exe is handed the count as an argument.
+    args = { "explorer.exe", (path:gsub("/", "\\")) }
   elseif platform.is_mac() then
     args = { "open", path }
   elseif platform.is_wsl() or platform.has_executable("wslview") then
@@ -258,17 +265,22 @@ end
 
 -- ── Text preview helpers ──────────────────────────────────────────────────────
 
+---Bytes read from the start of a file of unknown type to look for a NUL.
+local PROBE_BYTES = 512
+
 local function is_binary(path)
   local e = ext(path)
   if line_count.is_binary_ext(e) then return true end
-  -- Unknown extension: probe for null bytes
-  local ok, data = pcall(vim.fn.readfile, path, "b", 1)
-  if not ok or not data or #data == 0 then return false end
-  local line = data[1]
-  for i = 1, math.min(#line, 512) do
-    if line:byte(i) == 0 then return true end
-  end
-  return false
+  -- Unknown extension: probe the first bytes for a NUL. Not through readfile():
+  -- it hands a NUL back as "\n", so no test for a zero byte on its result can
+  -- ever fire, and it reads a whole first line, which in a file without
+  -- newlines is the whole file. (uv, not io.open: libuv takes a UTF-8 path on
+  -- Windows, the C runtime's fopen does not.)
+  local fd = uv.fs_open(path, "r", 438)
+  if not fd then return false end
+  local head = uv.fs_read(fd, PROBE_BYTES, 0)
+  uv.fs_close(fd)
+  return type(head) == "string" and head:find("\0", 1, true) ~= nil
 end
 
 local function hex_dump(path)
@@ -452,12 +464,47 @@ local function without_nav_events(fn)
   if not ok then error(err) end
 end
 
+---Why `path` must not be loaded into a buffer for the preview, or nil when it
+---may. Decided before any bufadd/bufload, cheapest probe first: one stat for the
+---size, then the extension / NUL probe the float mode already uses to choose
+---its hex dump.
+---@param path string
+---@return string? reason  Completes "<name> is ...".
+local function buf_refusal(path)
+  local limit = _cfg.max_bytes
+  if type(limit) == "number" and limit > 0 then
+    local stat = uv.fs_stat(path)
+    if stat and stat.size > limit then
+      return ("larger than %d bytes (features.preview.max_bytes)"):format(limit)
+    end
+  end
+  if is_binary(path) then return "a binary file" end
+  return nil
+end
+
+---The file the last "preview skipped" notice was for. The cursor-follow calls
+---buf_show() again on every CursorMoved over the same node (a column move
+---included), which must not repeat the notice.
+---@type string?
+local _refused = nil
+
 ---Display `path` in the buffer-mode editor window without stealing focus.
+---A file the preview must not load (see `buf_refusal`) leaves the window as it
+---is and says so once; `<Tab>`/`<CR>` still hand images and PDFs to their viewer.
 ---@param path string
 local function buf_show(path)
   local win = _editor_win
   if not (win and vim.api.nvim_win_is_valid(win)) then return end
   if vim.fn.filereadable(path) ~= 1 then return end
+  local refusal = buf_refusal(path)
+  if refusal then
+    if _refused ~= path then
+      _refused = path
+      notify.info(("preview skipped: %s is %s"):format(vim.fn.fnamemodify(path, ":t"), refusal))
+    end
+    return
+  end
+  _refused = nil
   local b = vim.fn.bufadd(path)
   without_nav_events(function()
     vim.fn.bufload(b) -- triggers filetype/syntax
@@ -486,6 +533,7 @@ local function buf_stop(restore)
   _buf_active = false
   _editor_win = nil
   _saved_buf = nil
+  _refused = nil
 end
 
 ---Start buffer-mode preview for `node`, remembering the editor window's buffer.

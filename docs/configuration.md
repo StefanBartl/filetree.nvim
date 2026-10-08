@@ -136,6 +136,8 @@ require("filetree").setup({
       keymap      = "<Tab>",   -- text/dir: toggle preview; image/PDF: dispatch
       keymap_open = "<CR>",    -- image/PDF: dispatch; other: adapter default
       max_lines   = 40,        -- float mode: lines to read
+      max_bytes   = 1048576,   -- buffer mode: larger files are not loaded (0 = no limit);
+                               -- binary files are never loaded, a notice says why
       max_width   = 80,        -- float mode
       max_height  = 25,        -- float mode
       wrap        = false,     -- float mode: line wrapping

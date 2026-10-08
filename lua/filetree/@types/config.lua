@@ -629,6 +629,7 @@
 ---@field keymap               string?                  Normal-mode key: toggle text preview; dispatch image/PDF (default "<Tab>").
 ---@field keymap_open          string?                  Normal-mode key: dispatch image/PDF; adapter default for other nodes (default "<CR>").
 ---@field max_lines?           integer                  Max lines to read for text preview (default 40).
+---@field max_bytes?           integer                  Buffer mode: a file larger than this many bytes is not loaded for the preview (a notice says so); binary files are never loaded. 0 = no size limit (default 1048576, 1 MiB).
 ---@field max_width?           integer                  Max floating window width in columns (default 80).
 ---@field max_height?          integer                  Max floating window height in lines (default 25).
 ---@field wrap?                boolean                  Enable line wrapping in the preview window (default false).

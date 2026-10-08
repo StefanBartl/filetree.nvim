@@ -201,8 +201,10 @@ Covers, with real assertions, in risk order:
   POSIX/Windows command branch and its output parsing — the same seam this
   campaign already uses for `git_status.lua`), `ui/preview.lua` (float-mode
   text/hex/directory rendering in a real floating window, buffer-mode
-  showing/restoring the adjacent editor window's buffer, and the image/pdf
-  dispatch guard with `backend = false`).
+  showing/restoring the adjacent editor window's buffer, the image/pdf
+  dispatch guard with `backend = false`, buffer mode never loading a binary
+  or over-`max_bytes` file (also while the cursor follows), the NUL probe for
+  files of unknown type, and the exact argv of the Windows system-open).
 - **libuv, for real, no stub**: `infra/file_watcher.lua` — a real
   `vim.uv.new_fs_event()` watching a real temp directory, a real file written
   into it, the debounced `adapter.refresh()` actually firing, and re-`setup()`
