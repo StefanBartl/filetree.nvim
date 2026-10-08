@@ -152,8 +152,10 @@ end
 ---carry a `.tpl` suffix on disk (`lua_class.lua.tpl`); `scan_dir` strips it,
 ---so the template is still called `lua_class.lua` and the new file keeps
 ---its `.lua` extension. The other tools also skip this directory (.luarc.json
----workspace.ignoreDir, .luacheckrc, .styluaignore). Cached: 'rtp' doesn't change mid-session
----in normal use, and this is the picker's hot path.
+---workspace.ignoreDir, .luacheckrc, .styluaignore). A picker preview derives
+---its syntax from the file NAME, and `*.tpl` alone means smarty, so
+---`register_tpl_filetype` (below) tells Neovim these four are Lua. Cached:
+---'rtp' doesn't change mid-session in normal use, and this is the picker's hot path.
 ---@internal
 ---@return string?
 local _builtin_dir
@@ -734,6 +736,27 @@ local function pick_template_reorderable(templates, on_select)
   end, mo, "Filetree: move template up")
 end
 
+---Make `vim.filetype.match` call the shipped `*.lua.tpl` templates Lua. The
+---previewers behind pickers.nvim (snacks, telescope) take the preview's syntax
+---from the file NAME, and Neovim reads a bare `*.tpl` as smarty, so without
+---this the four Lua templates would be previewed with smarty highlighting.
+---Scoped to this plugin's own `assets/templates/` directory: any other `.tpl`
+---file, and a user's own template, keeps whatever filetype it had. Idempotent
+---(registered once per session) and global by nature of `vim.filetype.add`,
+---which also gives the shipped templates Lua highlighting when opened for editing.
+---`vim.filetype.add` anchors a pattern itself (`^...$`), so none is written
+---here; `/+` because the template path is `<dir>` .. "/" .. `<name>` and `<dir>`
+---may already end in a separator (`templates//lua_class.lua.tpl`).
+---@internal
+local _tpl_filetype_registered = false
+local function register_tpl_filetype()
+  if _tpl_filetype_registered then return end
+  _tpl_filetype_registered = true
+  pcall(vim.filetype.add, {
+    pattern = { [".*/filetree/assets/templates/+[^/]+%.lua%.tpl"] = "lua" },
+  })
+end
+
 ---Delegate to pickers.nvim for real fuzzy search + a native content preview
 ---of the highlighted template. Loses the <M-j>/<M-k> reorder keymaps that
 ---`pick_template_reorderable` has — pickers.nvim's `pick_item()` has no
@@ -757,6 +780,7 @@ local function pick_template_via_pickers(templates, on_select)
   local engine_mod = pickers_engines.load(prefer)
   if not engine_mod then return false end
 
+  register_tpl_filetype()
   local items = {}
   for i, t in ipairs(templates) do
     items[i] = { text = display_name(t), file = t.path, tmpl = t }

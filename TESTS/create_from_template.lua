@@ -183,7 +183,8 @@ local stub = setmetatable({
 })
 
 ---Fresh module instance bound to `tdir`, against the currently installed kit.
-local function load_cft(tdir)
+---`prefer` defaults to "builtin": never dispatch to pickers.nvim.
+local function load_cft(tdir, prefer)
   package.loaded["pickers.engines"] = nil
   package.loaded["filetree.util.select"] = nil
   package.loaded["filetree.features.fileops.create_from_template"] = nil
@@ -192,7 +193,7 @@ local function load_cft(tdir)
     enabled = true,
     template_dir = tdir,
     open_after = false,
-    prefer = "builtin", -- never dispatch to pickers.nvim
+    prefer = prefer or "builtin",
     keymap = false,
   }, stub)
   return cft
@@ -584,6 +585,76 @@ do
   eq("plain: then the filename prompt appears for the real pick", #state.inputs, 1)
   picked = state.inputs[1]
   eq("plain: pre-filled with the template's name", picked.default, "one.lua")
+end
+
+-- ── pickers.nvim path: the preview keeps the Lua syntax of `*.lua.tpl` ─────
+-- The previewers behind pickers.nvim (snacks, telescope) take the syntax of the preview from the
+-- file NAME, and Neovim reads a bare `*.tpl` as smarty. The four shipped Lua templates are stored
+-- as `*.lua.tpl`, so without the rule the picker registers they would be previewed as smarty.
+
+do
+  install_kit("select") -- never reached: the pickers.nvim stand-in takes the pick
+  local shown
+  package.preload["pickers.engines"] = function()
+    return {
+      load = function()
+        return {
+          pick_item = function(o)
+            shown = o.items
+          end,
+        }
+      end,
+    }
+  end
+
+  local own = fresh_dir(tmp .. "/t-pickers", { ["own.lua.tpl"] = "x" })
+  local cft3 = load_cft(own, "auto")
+  local paths = {}
+  for _, t in ipairs(cft3.list()) do
+    paths[t.name] = t.path
+  end
+  local function ft(path)
+    return vim.filetype.match({ filename = path })
+  end
+  local lua_names = { "lua_class.lua", "lua_module.lua", "lua_spec.lua", "lua_types.lua" }
+
+  check(
+    "pickers: premise - a bare .lua.tpl is not Lua before the picker has opened",
+    ft(paths["lua_class.lua"]) ~= "lua",
+    tostring(ft(paths["lua_class.lua"]))
+  )
+
+  cft3.open(tmp)
+  check("pickers: the template list went to pickers.nvim", shown ~= nil)
+  local by_name = {}
+  for _, item in ipairs(shown or {}) do
+    by_name[item.tmpl.name] = item
+  end
+  for _, name in ipairs(lua_names) do
+    local item = by_name[name]
+    check(
+      "pickers: " .. name .. " is offered with its file to preview",
+      item ~= nil and item.file == paths[name]
+    )
+    if item then
+      eq("pickers: ... and previewed as lua", ft(item.file), "lua")
+      eq("pickers: ... also given a Windows-style path", ft((item.file:gsub("/", "\\"))), "lua")
+    end
+  end
+  eq(
+    "pickers: a non-Lua builtin keeps its own filetype",
+    ft(by_name["python_class.py"].file),
+    "python"
+  )
+  check(
+    "pickers: a .lua.tpl outside the shipped directory is left alone",
+    ft(tmp .. "/elsewhere/lua_class.lua.tpl") ~= "lua"
+  )
+  check("pickers: ... and so is a user template of that name", ft(own .. "/own.lua.tpl") ~= "lua")
+  check("pickers: opening the picker again is fine", pcall(cft3.open, tmp))
+
+  package.preload["pickers.engines"] = nil
+  package.loaded["pickers.engines"] = nil
 end
 
 package.loaded["ui.kit"] = nil
