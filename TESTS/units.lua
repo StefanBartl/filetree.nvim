@@ -7158,6 +7158,22 @@ do
     root5:gsub("\\", "/"),
     rock_dir
   )
+
+  -- A sibling directory's walk stops at an already cached ancestor instead of
+  -- re-walking the chain: with the marker gone from disk, only the cache still
+  -- knows the root.
+  local sib = tmp .. "/sibproj"
+  vim.fn.mkdir(sib .. "/.git", "p")
+  vim.fn.mkdir(sib .. "/a/x", "p")
+  vim.fn.mkdir(sib .. "/b/y", "p")
+  proot.clear_cache()
+  proot.find(sib .. "/a/x")
+  vim.fn.delete(sib .. "/.git", "d")
+  eq(
+    "project_root: a sibling walk stops at a cached ancestor instead of re-walking",
+    proot.find(sib .. "/b/y"):gsub("\\", "/"),
+    sib
+  )
 end
 
 -- ── cheatsheet: `?` opens a float listing active tree-scoped keymaps ────────
