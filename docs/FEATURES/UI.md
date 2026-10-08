@@ -14,6 +14,11 @@ open action needed. `<Tab>`/`<CR>` dispatch images/PDFs to their own
 viewer instead of rendering raw bytes as text; `<PageUp>`/`<PageDown>` page
 a long preview without leaving the tree.
 
+In the editor-window mode a binary file, or a file larger than
+`features.preview.max_bytes` (default 1 MiB, `0` = no limit), is not loaded:
+the window stays as it was and a one-line notice says why. The floating mode
+hex-dumps binaries and reads only the first `max_lines` lines.
+
 - **Module:** `lua/filetree/features/ui/preview/`
 - **Keymaps:** `<Tab>`/`<CR>` (open/dispatch), `<PageUp>`/`<PageDown>`
   (scroll) — see [BINDINGS/KEYMAPS.md](../BINDINGS/KEYMAPS.md)

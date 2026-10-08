@@ -3251,6 +3251,13 @@ do
   vim.fn.writefile({ "fake-png-bytes" }, image_file)
   local binary_file = tmp .. "/blob.bin"
   vim.fn.writefile({ "fake-binary-bytes" }, binary_file)
+  -- Unknown extension, so only the NUL probe can tell it is binary.
+  local nul_file = tmp .. "/data.xyz"
+  do
+    local f = assert(io.open(nul_file, "wb"))
+    f:write("xyz\0\1\2")
+    f:close()
+  end
 
   local cur_node
   local stub = setmetatable({
@@ -3331,6 +3338,24 @@ do
   )
   preview.close()
 
+  -- Regression: the NUL probe for a file of unknown type read its bytes through
+  -- readfile(), which hands a NUL back as "\n" -- so a test for a zero byte on
+  -- the result could never fire, and such a file was previewed as text (and
+  -- the "\n" in the line made the float's set_lines throw). The probe now reads
+  -- the raw start of the file.
+  cur_node = { path = nul_file, type = "file" }
+  local nul_ok = pcall(preview.toggle)
+  float_win = open_float_win()
+  first_line = float_win
+      and vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(float_win), 0, 1, false)[1]
+    or ""
+  check(
+    "preview.toggle() [float]: a NUL byte in a file of unknown type makes it a hex dump",
+    nul_ok and first_line:match("^%x%x") ~= nil,
+    ("ok=%s first line=%q"):format(tostring(nul_ok), first_line)
+  )
+  preview.close()
+
   -- Directory listing.
   cur_node = { path = tmp, type = "directory" }
   preview.toggle()
@@ -3402,6 +3427,185 @@ do
     vim.fn.fnamemodify(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(editor_win)), ":t"),
     "original.txt"
   )
+
+  -- ── buffer mode: files the preview must not load ─────────────────────────
+  -- Regression: buf_show() ran bufadd + bufload on whatever was under the
+  -- cursor, so every <Tab> or cursor stop over an image, an archive or a huge
+  -- file loaded it whole into a Neovim buffer. The size limit and the binary
+  -- check now come first, and nothing is loaded.
+  do
+    local LIMIT = 64
+    local function write_sized(path, size)
+      local f = assert(io.open(path, "wb"))
+      f:write(string.rep("x", size - 1), "\n")
+      f:close()
+    end
+    local at_limit = tmp .. "/at_limit.txt"
+    local over_limit = tmp .. "/over_limit.txt"
+    write_sized(at_limit, LIMIT)
+    write_sized(over_limit, LIMIT + 1)
+
+    local function editor_shows()
+      return vim.fn.fnamemodify(
+        vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(editor_win)),
+        ":t"
+      )
+    end
+    local notices = {}
+    local function notices_for(name)
+      local n = 0
+      for _, m in ipairs(notices) do
+        if m:find(name, 1, true) then n = n + 1 end
+      end
+      return n
+    end
+    local orig_notify = vim.notify
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.notify = function(msg)
+      notices[#notices + 1] = tostring(msg)
+    end
+
+    -- The shipped default limit, on a module copy that never saw a setup().
+    do
+      local name = "filetree.features.ui.preview"
+      local used = package.loaded[name]
+      package.loaded[name] = nil
+      local fresh = require(name)
+      package.loaded[name] = used
+      local big = tmp .. "/over_default.txt"
+      write_sized(big, 1024 * 1024 + 1)
+      fresh.setup({ enabled = true, mode = "buffer" }, stub)
+      cur_node = { path = big, type = "file" }
+      fresh.toggle()
+      check(
+        "preview.toggle() [buffer]: the default max_bytes (1 MiB) refuses a bigger text file",
+        vim.fn.bufloaded(big) == 0 and editor_shows() == "original.txt",
+        ("loaded=%d shows=%s"):format(vim.fn.bufloaded(big), editor_shows())
+      )
+      fresh.teardown()
+    end
+
+    preview.setup({
+      enabled = true,
+      mode = "buffer",
+      max_bytes = LIMIT,
+      cursor_debounce_ms = 10,
+      image = { backend = false },
+    }, stub)
+
+    for _, case in ipairs({
+      { over_limit, "a text file over max_bytes" },
+      { binary_file, "a file with a binary extension" },
+      { nul_file, "a NUL byte in a file of unknown type" },
+      { image_file, "an image (image.backend = false)" },
+    }) do
+      local path, what = case[1], case[2]
+      local base = vim.fn.fnamemodify(path, ":t")
+      cur_node = { path = path, type = "file" }
+      preview.toggle()
+      check(
+        "preview.toggle() [buffer]: " .. what .. " is not loaded",
+        vim.fn.bufloaded(path) == 0,
+        base .. " was loaded"
+      )
+      eq(
+        "preview.toggle() [buffer]: " .. what .. " leaves the editor window as it was",
+        editor_shows(),
+        "original.txt"
+      )
+      check(
+        "preview.toggle() [buffer]: " .. what .. " is explained by one notice",
+        notices_for(base) == 1,
+        ("%d notice(s) for %s"):format(notices_for(base), base)
+      )
+      preview.toggle()
+    end
+
+    cur_node = { path = at_limit, type = "file" }
+    preview.toggle()
+    eq(
+      "preview.toggle() [buffer]: a file of exactly max_bytes is still shown",
+      editor_shows(),
+      "at_limit.txt"
+    )
+    preview.toggle()
+
+    -- Live follow: the cursor comes to rest on a file the preview must not
+    -- load while a preview is showing another one.
+    vim.bo[tree_buf].filetype = "neo-tree"
+    cur_node = { path = text_file, type = "file" }
+    preview.toggle()
+    eq("live follow: starts on the text file", editor_shows(), "note.lua")
+    local before = notices_for("blob.bin")
+    cur_node = { path = binary_file, type = "file" }
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = tree_buf })
+    vim.wait(2000, function()
+      return notices_for("blob.bin") > before
+    end, 10)
+    check("live follow: a binary file is not loaded", vim.fn.bufloaded(binary_file) == 0)
+    eq("live follow: the window keeps the last file shown", editor_shows(), "note.lua")
+    eq("live follow: the refusal is announced", notices_for("blob.bin"), before + 1)
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = tree_buf })
+    vim.wait(100)
+    eq("live follow: the same node does not repeat the notice", notices_for("blob.bin"), before + 1)
+    cur_node = { path = at_limit, type = "file" }
+    vim.api.nvim_exec_autocmds("CursorMoved", { buffer = tree_buf })
+    vim.wait(2000, function()
+      return editor_shows() == "at_limit.txt"
+    end, 10)
+    eq("live follow: moving on to a text file shows it again", editor_shows(), "at_limit.txt")
+    preview.toggle()
+    vim.bo[tree_buf].filetype = ""
+
+    vim.notify = orig_notify
+  end
+
+  -- ── system-open: the argv explorer.exe is started with ───────────────────
+  -- Regression: `{ "explorer.exe", path:gsub("/", "\\") }` -- gsub returns the
+  -- replacement count as a second value and the last expression of a table
+  -- constructor keeps all of them, so explorer.exe got the count ("2") as an
+  -- extra argument.
+  do
+    local platform = require("filetree.util.platform")
+    local orig_is_windows = platform.is_windows
+    local orig_jobstart = vim.fn.jobstart
+    local jobs = {}
+    platform.is_windows = function()
+      return true
+    end
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.jobstart = function(args)
+      jobs[#jobs + 1] = args
+      return 1
+    end
+    preview.setup({
+      enabled = true,
+      mode = "buffer",
+      image = { backend = "system" },
+    }, stub)
+    cur_node = { path = image_file, type = "file" }
+    preview.toggle_or_open()
+    platform.is_windows = orig_is_windows
+    vim.fn.jobstart = orig_jobstart
+
+    local argv = jobs[1] or {}
+    eq("preview system-open [windows]: one process is started", #jobs, 1)
+    check(
+      "preview system-open [windows]: the argv is exactly { explorer.exe, path }",
+      #argv == 2,
+      vim.inspect(argv)
+    )
+    eq("preview system-open [windows]: the program is explorer.exe", argv[1], "explorer.exe")
+    eq(
+      "preview system-open [windows]: the path has backslashes and nothing else follows",
+      argv[2],
+      (image_file:gsub("/", "\\"))
+    )
+    check(
+      "preview.toggle_or_open(): an image handed to a viewer is not loaded as a buffer",
+      vim.fn.bufloaded(image_file) == 0
+    )
+  end
 
   preview.teardown()
   vim.cmd("silent! only")
