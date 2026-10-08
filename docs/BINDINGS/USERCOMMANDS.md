@@ -75,7 +75,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | Command | Action |
 |---------|--------|
 | `:Filetree find [dir]` | Find files (telescope/fzf-lua/builtin) |
-| `:Filetree grep [pattern]` | Live grep (telescope/fzf-lua/builtin) |
+| `:Filetree grep [pattern]` | Grep in the directory of the node under the cursor (else the project root): pickers.nvim, telescope or fzf-lua when installed (live), else ripgrep/grep into the quickfix list |
 
 ### Filter
 | Command | Action |
@@ -216,7 +216,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 ### Markdown links
 | Command | Action |
 |---------|--------|
-| `:Filetree mdlink` | Markdown link for current node |
+| `:Filetree mdlink` | Copy a Markdown link for each marked node, else for the current one |
 | `:Filetree mdlink recursive` | Markdown links for every file under current node |
 | `:Filetree mdlink marked` | Markdown links for all marked nodes |
 | `:Filetree mdlink insert` | Insert markdown link(s) (marked nodes, else current) into the editor window instead of the clipboard |
@@ -230,7 +230,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | `:Filetree open pick` | Open with app picker |
 | `:Filetree open app <name>` | Open with named app |
 | `:Filetree reveal` | Reveal current buffer in tree |
-| `:Filetree reveal pause [ms]` | Pause auto-reveal |
+| `:Filetree reveal pause [ms]` | Pause auto-reveal for `ms` milliseconds (default 2000); `reveal resume` ends it early |
 | `:Filetree reveal resume` | Resume auto-reveal |
 | `:Filetree resize [width]` | Set tree window width |
 | `:Filetree cwd mode <name>` | Set the cwd policy: `follow`, `project`, `nearest`, `lock`, `manual`, `tree_leads` |

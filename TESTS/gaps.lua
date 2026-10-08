@@ -1805,6 +1805,64 @@ do
   package.loaded["filetree.commands"] = nil
 end
 
+-- ── filetree.health ── the composer pre-flight asks about the verb name that ─
+-- was REGISTERED. `setup({ command = "Foo" })` registers no `:Filetree` at all,
+-- so a literal "Filetree" made `:checkhealth filetree` report a verb that was
+-- never meant to exist as missing. The recorder stands in for
+-- `composer.checkhealth`, which only validates the routes of a registered verb.
+do
+  local composer = require("lib.nvim.bindings.usercmd.composer")
+  local commands = require("filetree.commands")
+  require("filetree.config").setup({}) -- health.check() stops early on an empty config
+  package.loaded["filetree.health"] = nil
+  local health = require("filetree.health")
+
+  local real_checkhealth = composer.checkhealth
+  local asked
+  composer.checkhealth = function(name)
+    asked = name
+  end
+
+  ---Run health.check() and return the verb name it asked composer about.
+  ---@return boolean ok, string? name
+  local function run()
+    asked = nil
+    local ok = pcall(health.check)
+    return ok, asked
+  end
+
+  local ok_run, ok_renamed, renamed, ok_default, default, ok_broken, broken
+  ok_run = pcall(function()
+    commands.setup("FooHealth")
+    ok_renamed, renamed = run()
+    commands.teardown()
+    ok_default, default = run()
+
+    -- A command layer that cannot name itself falls back to the default name too.
+    local real_commands = package.loaded["filetree.commands"]
+    package.loaded["filetree.commands"] = {
+      command_name = function()
+        error("simulated: no command name")
+      end,
+    }
+    ok_broken, broken = run()
+    package.loaded["filetree.commands"] = real_commands
+  end)
+
+  composer.checkhealth = real_checkhealth
+  commands.teardown()
+  package.loaded["filetree.commands"] = commands
+
+  check(
+    "health.check(): the pre-flight runs without throwing",
+    ok_run and ok_renamed and ok_default
+  )
+  eq("health.check(): asks composer about the renamed verb, not 'Filetree'", renamed, "FooHealth")
+  eq("health.check(): asks about 'Filetree' when no command is registered", default, "Filetree")
+  check("health.check(): a command layer without a name does not throw", ok_broken == true)
+  eq("health.check(): ... and falls back to 'Filetree'", broken, "Filetree")
+end
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Round 27 (follow-up to round 26's gap pass): the files round 26 explicitly
 -- deferred rather than reached -- see TESTS/README.md's "gaps.lua" section for
