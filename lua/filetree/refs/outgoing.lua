@@ -3,14 +3,12 @@
 --- absolute paths on disk — the mirror of the incoming scan (`refs.for_delete`
 --- asks "who points at this file"; this asks "what does this file point at").
 ---
---- Step 1 of the cascade-delete-assets concept
---- (`wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md`): read the file's own
+--- Step 1 of the cascade-delete-assets feature: read the file's own
 --- content *before* it is deleted — same prefetch-before-mutation discipline
 --- as the rest of the engine, call this the moment the delete is triggered,
 --- while the path still exists — and return every resolved link target,
---- unfiltered. No classifier yet (assets-folder / extension allowlist, the
---- incoming-safety recheck) — those are the next steps in the roadmap note,
---- not this module.
+--- unfiltered. No classifier here (assets-folder / extension allowlist, the
+--- incoming-safety recheck) — that is step 2, see `filetree.refs.assets`.
 
 local scan = require("filetree.refs.scan")
 local pathutil = require("filetree.refs.pathutil")
@@ -90,10 +88,9 @@ end
 ---@internal
 ---Registered, enabled providers that can walk their own outgoing link
 ---targets. Deliberately reads `each_link_target` presence rather than a
----fixed name list: only `markdown` implements it today (see
----`Cascade_Delete_Assets.md` §3 for why a code provider — lua/python/ts_js —
----never will, their outgoing "references" are require()/import statements
----pointing at code, not at binary assets), but a future provider opts in the
+---fixed name list: only `markdown` implements it today (a code
+---provider — lua/python/ts_js — never will: their outgoing "references" are
+---require()/import statements pointing at code, not at binary assets), but a future provider opts in the
 ---same way `plan`/`delete_target` already work.
 ---@param cfg FiletreeRefsConfig
 ---@return FiletreeRefProvider[]

@@ -453,6 +453,44 @@ do
   commands.teardown()
 end
 
+-- ── Repo hygiene: nothing points into the author's private notes vault ───────
+-- This repo is public: a reference to the vault's folder or note names (in code, comments, tests or
+-- docs alike) is a dead path for every reader. The needles are assembled so this file does not
+-- match itself.
+do
+  local needles = { "wkdbook" .. "-myplugins", "Cascade_Delete" .. "_Assets" }
+  -- Not part of the repo: VCS data, checked-out dependencies, parallel git worktrees, and the
+  -- generated (git-ignored) module map under docs/map/.
+  local skip_dirs =
+    { [".git"] = true, [".deps"] = true, [".claude"] = true, ["node_modules"] = true }
+  local text_ext =
+    { lua = true, md = true, txt = true, json = true, yml = true, yaml = true, toml = true }
+  local hits, scanned = {}, 0
+  for rel, kind in
+    vim.fs.dir(root, {
+      depth = 10,
+      skip = function(dir)
+        return not skip_dirs[dir]
+      end,
+    })
+  do
+    local ext = rel:match("%.([%w_]+)$")
+    if kind == "file" and ext and text_ext[ext] and not rel:find("^docs/map/") then
+      local f = io.open(root .. "/" .. rel, "rb")
+      if f then
+        local body = f:read("*a")
+        f:close()
+        scanned = scanned + 1
+        for _, needle in ipairs(needles) do
+          if body:find(needle, 1, true) then hits[#hits + 1] = rel .. " -> " .. needle end
+        end
+      end
+    end
+  end
+  check("hygiene: the text files of the repo were scanned", scanned > 100, "scanned " .. scanned)
+  check("hygiene: no file refers to the private notes vault", #hits == 0, table.concat(hits, " | "))
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim smoke: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then

@@ -4,7 +4,7 @@ Everything CI runs, plus the manual pass it cannot.
 
 | | |
 | --- | --- |
-| [`smoke.lua`](smoke.lua) | integration: every feature module loads, opt-out defaults resolve, registry resolver + binding catalog work, every `:Filetree` route and positional argument has a text for the option float |
+| [`smoke.lua`](smoke.lua) | integration: every feature module loads, opt-out defaults resolve, registry resolver + binding catalog work, every `:Filetree` route and positional argument has a text for the option float; repo hygiene: no code, test or doc file points into the author's private notes vault |
 | [`units.lua`](units.lua) | unit: util layer, neo-tree adapter helpers, the reference engine's apply/undo layer and the chooser, and `context_menu`'s click handling (headless, so CI-gated): only a text row of the tree window opens the menu — not the row right below the last line, far below it, the statusline/separator/winbar (`line == 0`), the tabline (`winid == 0`) or another window; a wrapped last line counts on every one of its rows; a tree scrolled sideways (where `screenpos()` of the last line is off screen) still guards correctly |
 | [`menu.lua`](menu.lua) | unit: `integrations/menu.lua`, against a stubbed `filetree` module |
 | [`cwd_mode.lua`](cwd_mode.lua) | unit: the cwd/root policy feature, against a stub adapter and a temp tree |

@@ -383,8 +383,7 @@ The `I` popup shows the same count for a file: see [Node Info](UI.md#node-info).
 ### Cascade-delete-assets
 
 The opposite direction of the same delete: `refs.outgoing_assets` looks at
-what the file *about to be deleted* itself links out to (via
-`wkdbook-myplugins/filetree.nvim/ROADMAP/IDEAS/Cascade_Delete_Assets.md`) and offers to delete those
+what the file *about to be deleted* itself links out to and offers to delete those
 targets too, once nothing else still references them — a markdown note
 linking to `assets/shot.png` deletes the screenshot along with the note
 instead of leaving it orphaned. Three checks gate every candidate: it must
