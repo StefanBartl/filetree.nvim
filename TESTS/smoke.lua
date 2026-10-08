@@ -393,17 +393,24 @@ do
     if not route.desc or route.desc == "" then bare[#bare + 1] = table.concat(route.path, " ") end
   end
   check("every :Filetree route has a description", #bare == 0, table.concat(bare, ", "))
-  -- ... and every text in command_descs.lua is read by a route (no dead entries).
-  local paths = {}
+  -- ... and every text in command_descs.lua is the one a route carries (no dead entries). Matching
+  -- the path alone is not enough: a hand-built route (`find`, `cwd mode`, ...) has its own `desc`,
+  -- so an entry of the same path would exist but never be read.
+  local by_path = {}
   for _, route in ipairs(handle:spec().routes) do
-    paths[table.concat(route.path, " ")] = true
+    by_path[table.concat(route.path, " ")] = route
   end
   local dead = {}
-  for key in pairs(require("filetree.command_descs")) do
-    if not paths[key] then dead[#dead + 1] = key end
+  for key, text in pairs(require("filetree.command_descs")) do
+    local route = by_path[key]
+    if not route or route.desc ~= text then dead[#dead + 1] = key end
   end
   table.sort(dead)
-  check("command_descs.lua has no entry without a route", #dead == 0, table.concat(dead, ", "))
+  check(
+    "command_descs.lua has no entry a route does not read",
+    #dead == 0,
+    table.concat(dead, ", ")
+  )
 
   -- ... and every positional argument says what it is for (`cwd mode <name>`, `cwd scope <name>`;
   -- DIR / PATH arguments explain themselves). A lib.nvim older than `help.undocumented` cannot
