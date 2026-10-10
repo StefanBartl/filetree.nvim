@@ -131,8 +131,8 @@ local function query_dir_size(path, callback)
       "-NoProfile",
       "-Command",
       string.format(
-        "(Get-ChildItem -Recurse -Force '%s' -ErrorAction SilentlyContinue | Measure-Object -Sum Length).Sum",
-        path:gsub("'", "''")
+        "(Get-ChildItem -Recurse -Force -LiteralPath '%s' -ErrorAction SilentlyContinue | Measure-Object -Sum Length).Sum",
+        require("filetree.util.powershell").escape_single(path)
       ),
     }
   else
@@ -167,6 +167,9 @@ local function query_dir_size(path, callback)
     end)
   )
 end
+
+---@private exposed for TESTS/powershell_quote_spec.lua
+M._query_dir_size = query_dir_size
 
 -- ── File size (sync via uv.fs_stat) ──────────────────────────────────────────
 

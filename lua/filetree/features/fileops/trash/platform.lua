@@ -2,6 +2,7 @@
 ---@brief Platform-specific "send to trash" implementations.
 
 local platform = require("filetree.util.platform")
+local ps_escape = require("filetree.util.powershell").escape_single
 
 local M = {}
 
@@ -61,9 +62,10 @@ end
 local function trash_windows(path, cb, is_dir)
   -- Paths need native backslash separators for the .NET APIs below, and
   -- PowerShell single-quoted strings escape an embedded quote by doubling it
-  -- ('' not \'), so a path containing ' breaks the script otherwise. Both are
-  -- handled the same way in trash/undo.lua's restore_windows.
-  local win_path = path:gsub("/", "\\"):gsub("'", "''")
+  -- ('' not \'), and treat U+2018..U+201B as quotes too, so a path containing
+  -- one breaks (or escapes) the script otherwise; see util/powershell.lua.
+  -- Handled the same way in trash/undo.lua's restore_windows.
+  local win_path = ps_escape((path:gsub("/", "\\")))
   if is_dir == nil then is_dir = vim.fn.isdirectory(path) == 1 end
 
   -- Microsoft.VisualBasic.FileIO.FileSystem, NOT Shell.Application's
@@ -427,7 +429,7 @@ function M.send_batch(paths, cb)
     local targets = {}
     for i, p in ipairs(paths) do
       targets[i] =
-        { win_path = p:gsub("/", "\\"):gsub("'", "''"), is_dir = vim.fn.isdirectory(p) == 1 }
+        { win_path = ps_escape((p:gsub("/", "\\"))), is_dir = vim.fn.isdirectory(p) == 1 }
     end
     return run_windows_batch(targets, cb)
   end
