@@ -41,7 +41,7 @@ local function eq(name, got, want)
   check(name, got == want, ("got %q want %q"):format(tostring(got), tostring(want)))
 end
 
-local escape = require("filetree.util.powershell").escape_single
+local escape = require("lib.nvim.cross.powershell").escape_single
 local QUOTES = { "\226\128\152", "\226\128\153", "\226\128\154", "\226\128\155" } -- U+2018..U+201B
 
 -- ── pure escape ───────────────────────────────────────────────────────────────
