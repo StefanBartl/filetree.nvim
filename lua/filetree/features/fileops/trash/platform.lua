@@ -2,7 +2,7 @@
 ---@brief Platform-specific "send to trash" implementations.
 
 local platform = require("filetree.util.platform")
-local ps_escape = require("filetree.util.powershell").escape_single
+local ps_escape = require("lib.nvim.cross.powershell").escape_single
 
 local M = {}
 
@@ -63,7 +63,7 @@ local function trash_windows(path, cb, is_dir)
   -- Paths need native backslash separators for the .NET APIs below, and
   -- PowerShell single-quoted strings escape an embedded quote by doubling it
   -- ('' not \'), and treat U+2018..U+201B as quotes too, so a path containing
-  -- one breaks (or escapes) the script otherwise; see util/powershell.lua.
+  -- one breaks (or escapes) the script otherwise; see lib.nvim.cross.powershell.
   -- Handled the same way in trash/undo.lua's restore_windows.
   local win_path = ps_escape((path:gsub("/", "\\")))
   if is_dir == nil then is_dir = vim.fn.isdirectory(path) == 1 end

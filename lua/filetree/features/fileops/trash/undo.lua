@@ -176,8 +176,8 @@ local RESTORE_VERB_PATTERN =
 
 local function restore_windows(name, original_path)
   -- PowerShell single-quoted strings escape an embedded quote by doubling it
-  -- ('' not \'), and so are U+2018..U+201B (see util/powershell.lua).
-  local ps_escape = require("filetree.util.powershell").escape_single
+  -- ('' not \'), and so are U+2018..U+201B (see lib.nvim.cross.powershell).
+  local ps_escape = require("lib.nvim.cross.powershell").escape_single
   local win_path = ps_escape((original_path:gsub("/", "\\")))
   local esc_name = ps_escape(name)
 

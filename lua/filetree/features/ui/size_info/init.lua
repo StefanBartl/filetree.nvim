@@ -132,7 +132,7 @@ local function query_dir_size(path, callback)
       "-Command",
       string.format(
         "(Get-ChildItem -Recurse -Force -LiteralPath '%s' -ErrorAction SilentlyContinue | Measure-Object -Sum Length).Sum",
-        require("filetree.util.powershell").escape_single(path)
+        require("lib.nvim.cross.powershell").escape_single(path)
       ),
     }
   else
