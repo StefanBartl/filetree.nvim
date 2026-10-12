@@ -13,25 +13,37 @@
 local bufevents = require("filetree.util.bufevents")
 local au = require("filetree.util.autocmd")
 local lib_debounce = require("lib.nvim.debounce")
+local notify = require("filetree.util.notify").create("[filetree.lsp_diagnostics]")
 local M = {}
 
+---@internal
+---Default badge text, e.g. `E:2 W:1`; nil when there is nothing to show.
+---@param counts { error: integer, warning: integer, hint: integer, info: integer }
+---@return string?
+local function default_format(counts)
+  local parts = {}
+  if counts.error > 0 then parts[#parts + 1] = "E:" .. counts.error end
+  if counts.warning > 0 then parts[#parts + 1] = "W:" .. counts.warning end
+  if counts.hint > 0 then parts[#parts + 1] = "H:" .. counts.hint end
+  if counts.info > 0 then parts[#parts + 1] = "I:" .. counts.info end
+  return #parts > 0 and table.concat(parts, " ") or nil
+end
+
+---Shipped defaults. Never mutated: every `setup()` merges onto a fresh copy, so
+---an option dropped from the user's config falls back instead of lingering.
 ---@type FiletreeLspDiagnosticsConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   show_errors = true,
   show_warnings = true,
   show_hints = false,
   show_info = false,
-  format = function(counts)
-    local parts = {}
-    if counts.error > 0 then parts[#parts + 1] = "E:" .. counts.error end
-    if counts.warning > 0 then parts[#parts + 1] = "W:" .. counts.warning end
-    if counts.hint > 0 then parts[#parts + 1] = "H:" .. counts.hint end
-    if counts.info > 0 then parts[#parts + 1] = "I:" .. counts.info end
-    return #parts > 0 and table.concat(parts, " ") or nil
-  end,
+  format = default_format,
   debounce_ms = 300,
 }
+
+---@type FiletreeLspDiagnosticsConfig
+local _cfg = DEFAULTS
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.lsp_diagnostics` accepts. Keep it in step with the keys this module reads;
@@ -64,8 +76,17 @@ local _unsubscribe_render = nil
 ---@field hint    integer
 ---@field info    integer
 
----@type table<string, DiagCounts>  abs_path → counts
+---@type table<string, DiagCounts>  abs_path ("/"-normalised) → counts
 local _counts = {}
+
+---Directory path ("/"-normalised, no trailing slash) → counts of everything
+---below it. Built once per `recompute()` so a render is O(lines), not
+---O(directory lines × files with diagnostics).
+---@type table<string, DiagCounts>
+local _dir_counts = {}
+
+---Whether the user's `format` already failed since `setup()` (warn only once).
+local _format_warned = false
 
 local sev = vim.diagnostic and vim.diagnostic.severity
   or {
@@ -101,6 +122,31 @@ local function recompute()
     end
   end
   _counts = new_counts
+
+  -- Fold every file's counts into each of its ancestor directories.
+  local new_dirs = {}
+  for path, pc in pairs(new_counts) do
+    local dir = path:match("^(.*)/[^/]*$")
+    local last
+    while dir do
+      local key = dir ~= "" and dir or "/"
+      if key ~= last then
+        local agg = new_dirs[key]
+        if not agg then
+          agg = { error = 0, warning = 0, hint = 0, info = 0 }
+          new_dirs[key] = agg
+        end
+        agg.error = agg.error + pc.error
+        agg.warning = agg.warning + pc.warning
+        agg.hint = agg.hint + pc.hint
+        agg.info = agg.info + pc.info
+        last = key
+      end
+      if dir == "" then break end
+      dir = dir:match("^(.*)/[^/]*$")
+    end
+  end
+  _dir_counts = new_dirs
 end
 
 -- ── Rendering ─────────────────────────────────────────────────────────────────
@@ -127,29 +173,21 @@ function M._render(bufnr)
 
   vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)
   if not _adapter.get_node_at_line then return end
+  -- No diagnostics anywhere: nothing to draw, skip the per-line node walk.
+  if next(_counts) == nil then return end
 
+  local format = type(_cfg.format) == "function" and _cfg.format or default_format
   local line_count = vim.api.nvim_buf_line_count(bufnr)
   for linenr = 0, line_count - 1 do
     local node = _adapter.get_node_at_line(bufnr, linenr)
     if node and node.path then
-      -- For directories: aggregate counts from all children
       local c
+      local path = node.path:gsub("\\", "/")
       if node.type == "directory" then
-        local agg = { error = 0, warning = 0, hint = 0, info = 0 }
-        local prefix = node.path:gsub("\\", "/")
-        if prefix:sub(-1) ~= "/" then prefix = prefix .. "/" end
-        for path, pc in pairs(_counts) do
-          local np = path:gsub("\\", "/")
-          if np:sub(1, #prefix) == prefix then
-            agg.error = agg.error + pc.error
-            agg.warning = agg.warning + pc.warning
-            agg.hint = agg.hint + pc.hint
-            agg.info = agg.info + pc.info
-          end
-        end
-        if agg.error + agg.warning + agg.hint + agg.info > 0 then c = agg end
+        path = path:gsub("/+$", "")
+        c = _dir_counts[path ~= "" and path or "/"]
       else
-        c = _counts[node.path:gsub("\\", "/")]
+        c = _counts[path]
       end
 
       if c then
@@ -161,22 +199,18 @@ function M._render(bufnr)
         }
         local total = filtered.error + filtered.warning + filtered.hint + filtered.info
         if total > 0 then
-          local fmt = type(_cfg.format) == "function" and _cfg.format(filtered)
-            or table.concat(
-              (function()
-                local p = {}
-                if filtered.error > 0 then p[#p + 1] = "E:" .. filtered.error end
-                if filtered.warning > 0 then p[#p + 1] = "W:" .. filtered.warning end
-                return p
-              end)(),
-              " "
-            )
-          if fmt then
+          -- A user `format` may throw or return nothing: no badge for that
+          -- node, never an aborted render of the whole tree.
+          local ok, text = pcall(format, filtered)
+          if ok and type(text) == "string" and text ~= "" then
             pcall(vim.api.nvim_buf_set_extmark, bufnr, _ns, linenr, -1, {
-              virt_text = { { " " .. fmt, sev_hl(filtered) } },
+              virt_text = { { " " .. text, sev_hl(filtered) } },
               virt_text_pos = "eol",
               priority = 60,
             })
+          elseif not ok and not _format_warned then
+            _format_warned = true
+            notify.warn("`format` raised an error, badges are not drawn: " .. tostring(text))
           end
         end
       end
@@ -210,8 +244,9 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("keep", config, _cfg)
+  _cfg = vim.tbl_deep_extend("keep", config, DEFAULTS)
   _adapter = adapter
+  _format_warned = false
   _ns = vim.api.nvim_create_namespace("filetree_lsp_diagnostics")
 
   if _debounce then _debounce.cancel() end
@@ -239,6 +274,8 @@ function M.setup(config, adapter)
   -- a full content replace does not carry extmarks over, so without this the
   -- badges appear on focus and are gone after the next redraw. Counts are not
   -- recomputed here -- only the decoration is redrawn.
+  if _unsubscribe_render then pcall(_unsubscribe_render) end
+  _unsubscribe_render = nil
   if type(adapter.on_render) == "function" then
     _unsubscribe_render = adapter.on_render(M._render)
   end
@@ -262,6 +299,7 @@ function M.teardown()
     vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)
   end
   _counts = {}
+  _dir_counts = {}
   _adapter = nil
   if _debounce then
     if _debounce then _debounce.cancel() end
