@@ -52,6 +52,10 @@ local _adapter = nil
 ---@type integer  extmark namespace
 local _ns = -1
 
+---Unsubscribe handle for `_adapter.on_render`, when the adapter supports it.
+---@type fun()|nil
+local _unsubscribe_render = nil
+
 -- ── Count aggregation ─────────────────────────────────────────────────────────
 
 ---@class DiagCounts
@@ -78,8 +82,10 @@ local function recompute()
   for _, d in ipairs(all) do
     local bufnr = d.bufnr
     if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
-      local path = vim.api.nvim_buf_get_name(bufnr)
-      if path and path ~= "" then
+      -- Normalised to "/" so the lookup in M._render (which normalises the node
+      -- path the same way) hits on Windows, where buffer names carry "\\".
+      local path = vim.api.nvim_buf_get_name(bufnr):gsub("\\", "/")
+      if path ~= "" then
         local c = new_counts[path] or { error = 0, warning = 0, hint = 0, info = 0 }
         if d.severity == sev.ERROR then
           c.error = c.error + 1
@@ -109,10 +115,14 @@ local function sev_hl(counts)
   return "DiagnosticInfo"
 end
 
+---`bufnr`, when given, is the tree buffer to redraw -- passed by the adapter's
+---`on_render` bridge with the tree pass that just rendered, so a second tree on
+---another tab is never decorated by mistake. Omitted, the ambient lookup applies.
 ---@internal
-function M._render()
+---@param bufnr? integer
+function M._render(bufnr)
   if not _adapter then return end
-  local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
+  bufnr = bufnr or (_adapter.get_bufnr and _adapter.get_bufnr()) or -1
   if bufnr < 0 or not vim.api.nvim_buf_is_valid(bufnr) then return end
 
   vim.api.nvim_buf_clear_namespace(bufnr, _ns, 0, -1)
@@ -224,6 +234,15 @@ function M.setup(config, adapter)
     end,
   })
 
+  -- ...and whenever the adapter re-renders the tree on ITS OWN schedule (git
+  -- status landing, watcher event, follow_current_file, async scan finishing):
+  -- a full content replace does not carry extmarks over, so without this the
+  -- badges appear on focus and are gone after the next redraw. Counts are not
+  -- recomputed here -- only the decoration is redrawn.
+  if type(adapter.on_render) == "function" then
+    _unsubscribe_render = adapter.on_render(M._render)
+  end
+
   -- Initial render after adapters set up
   vim.defer_fn(function()
     recompute()
@@ -233,6 +252,10 @@ end
 
 function M.teardown()
   bufevents.unregister("lsp_diagnostics")
+  if _unsubscribe_render then
+    pcall(_unsubscribe_render)
+    _unsubscribe_render = nil
+  end
   if not _adapter then return end
   local bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or -1
   if bufnr >= 0 and vim.api.nvim_buf_is_valid(bufnr) then

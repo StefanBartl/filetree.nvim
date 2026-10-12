@@ -1134,6 +1134,7 @@ do
     [1] = { path = file2, type = "file" },
     [2] = { path = tmp .. "/sub", type = "directory" },
   }
+  local render_cb, unsubscribed
   local stub = {
     name = "gaps-lspdiag-stub",
     get_bufnr = function()
@@ -1141,6 +1142,13 @@ do
     end,
     get_node_at_line = function(_, linenr)
       return NODE_AT[linenr]
+    end,
+    on_render = function(cb)
+      render_cb = cb
+      return function()
+        unsubscribed = true
+        render_cb = nil
+      end
     end,
   }
 
@@ -1187,7 +1195,23 @@ do
     )
   end
 
+  -- The adapter redraws the tree on its own: a full content replace wipes the
+  -- extmarks, and the on_render subscription must put the badges back.
+  check("lsp_diagnostics: subscribed to the adapter's on_render", type(render_cb) == "function")
+  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "a.lua", "sub/b.lua", "sub" })
+  check(
+    "lsp_diagnostics: a buffer content replace wipes the badges (premise)",
+    #extmarks_of(0) == 0 and #extmarks_of(1) == 0
+  )
+  if render_cb then render_cb(tree_buf) end
+  local r1, r2 = extmarks_of(0), extmarks_of(1)
+  check(
+    "lsp_diagnostics: on_render restores the badges after an adapter redraw",
+    #r1 > 0 and #r2 > 0 and r1[1][4].virt_text[1][1]:find("E:1", 1, true) ~= nil
+  )
+
   lspdiag.teardown()
+  check("lsp_diagnostics: teardown unsubscribes from on_render", unsubscribed == true)
   vim.diagnostic.reset(diag_ns)
   pcall(vim.api.nvim_buf_delete, buf1, { force = true })
   pcall(vim.api.nvim_buf_delete, buf2, { force = true })
