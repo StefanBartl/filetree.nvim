@@ -1128,11 +1128,13 @@ do
   })
 
   local tree_buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "a.lua", "sub/b.lua", "sub" })
+  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "a.lua", "sub/b.lua", "sub", "root" })
   local NODE_AT = {
     [0] = { path = file1, type = "file" },
     [1] = { path = file2, type = "file" },
     [2] = { path = tmp .. "/sub", type = "directory" },
+    -- a directory node whose path carries a trailing slash, with backslashes
+    [3] = { path = (tmp .. "/"):gsub("/", "\\"), type = "directory" },
   }
   local render_cb, unsubscribed
   local stub = {
@@ -1195,10 +1197,18 @@ do
     )
   end
 
+  local m4 = extmarks_of(3)
+  check(
+    "lsp_diagnostics: a directory node with a trailing slash / backslashes aggregates the whole subtree",
+    #m4 > 0
+      and m4[1][4].virt_text[1][1]:find("E:1", 1, true) ~= nil
+      and m4[1][4].virt_text[1][1]:find("W:2", 1, true) ~= nil
+  )
+
   -- The adapter redraws the tree on its own: a full content replace wipes the
   -- extmarks, and the on_render subscription must put the badges back.
   check("lsp_diagnostics: subscribed to the adapter's on_render", type(render_cb) == "function")
-  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "a.lua", "sub/b.lua", "sub" })
+  vim.api.nvim_buf_set_lines(tree_buf, 0, -1, false, { "a.lua", "sub/b.lua", "sub", "root" })
   check(
     "lsp_diagnostics: a buffer content replace wipes the badges (premise)",
     #extmarks_of(0) == 0 and #extmarks_of(1) == 0
@@ -1212,6 +1222,80 @@ do
 
   lspdiag.teardown()
   check("lsp_diagnostics: teardown unsubscribes from on_render", unsubscribed == true)
+
+  -- A user `format` that returns nothing draws no badge (it must not fall back
+  -- to the default text), and one that throws must not abort the render.
+  -- setup() recomputes the counts in a deferred pass (500 ms); until then the
+  -- cache is empty and a render has nothing to draw. Wait for that pass.
+  local function settle()
+    vim.wait(700, function()
+      return false
+    end, 50)
+  end
+
+  lspdiag.setup({
+    enabled = true,
+    debounce_ms = 10,
+    format = function()
+      return nil
+    end,
+  }, stub)
+  settle()
+  vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+  render_cb(tree_buf)
+  check(
+    "lsp_diagnostics: a format returning nil draws no badge",
+    #extmarks_of(0) == 0 and #extmarks_of(1) == 0 and #extmarks_of(2) == 0
+  )
+  -- Same state, default format back: the very same render now draws -- proves
+  -- the check above ran against a populated cache, not an empty one.
+  lspdiag.teardown()
+  lspdiag.setup({ enabled = true, debounce_ms = 10 }, stub)
+  settle()
+  vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+  render_cb(tree_buf)
+  check(
+    "lsp_diagnostics: a re-setup without `format` falls back to the default (no stale option)",
+    #extmarks_of(0) > 0
+  )
+  lspdiag.teardown()
+
+  lspdiag.setup({
+    enabled = true,
+    debounce_ms = 10,
+    format = function()
+      error("boom")
+    end,
+  }, stub)
+  settle()
+  vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+  local ok_throw = pcall(render_cb, tree_buf)
+  check("lsp_diagnostics: a throwing format does not abort the render", ok_throw)
+  lspdiag.teardown()
+
+  -- A buffer name with backslashes (Windows) must still match the "/"
+  -- normalised node path.
+  if vim.fn.has("win32") == 1 then
+    local file3 = tmp .. "/c.lua"
+    vim.fn.writefile({ "-- c" }, file3)
+    local buf3 = vim.api.nvim_create_buf(true, false)
+    vim.api.nvim_buf_set_name(buf3, (file3:gsub("/", "\\")))
+    vim.diagnostic.set(diag_ns, buf3, {
+      { lnum = 0, col = 0, message = "e", severity = vim.diagnostic.severity.ERROR },
+    })
+    NODE_AT[0] = { path = file3, type = "file" }
+    lspdiag.setup({ enabled = true, debounce_ms = 10 }, stub)
+    settle()
+    vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+    render_cb(tree_buf)
+    local b = extmarks_of(0)
+    check(
+      "lsp_diagnostics: a backslash buffer name matches the '/'-normalised node path",
+      #b > 0 and b[1][4].virt_text[1][1]:find("E:1", 1, true) ~= nil
+    )
+    lspdiag.teardown()
+    pcall(vim.api.nvim_buf_delete, buf3, { force = true })
+  end
   vim.diagnostic.reset(diag_ns)
   pcall(vim.api.nvim_buf_delete, buf1, { force = true })
   pcall(vim.api.nvim_buf_delete, buf2, { force = true })
