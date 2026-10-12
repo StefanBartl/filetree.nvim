@@ -3607,6 +3607,85 @@ do
     )
   end
 
+  -- ── system_exts: a mail file goes to the OS handler, never into a buffer ──
+  do
+    local platform = require("filetree.util.platform")
+    local orig_is_windows = platform.is_windows
+    local orig_jobstart = vim.fn.jobstart
+    local jobs = {}
+    platform.is_windows = function()
+      return true
+    end
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.jobstart = function(args)
+      jobs[#jobs + 1] = args
+      return 1
+    end
+
+    local mail_file = tmp .. "/mail.MSG"
+    vim.fn.writefile({ "x" }, mail_file)
+    local mail_dir = tmp .. "/folder.msg"
+    vim.fn.mkdir(mail_dir, "p")
+    local mail_fallback_called = false
+    local function fallback()
+      mail_fallback_called = true
+    end
+
+    preview.setup({ enabled = true, mode = "buffer" }, stub)
+
+    cur_node = { path = mail_file, type = "file" }
+    preview.toggle_or_open()
+    eq("system_exts <Tab>: a .msg file is handed to the OS, one process", #jobs, 1)
+    eq("system_exts <Tab>: the program is explorer.exe", (jobs[1] or {})[1], "explorer.exe")
+    eq(
+      "system_exts <Tab>: the path has backslashes and nothing else follows",
+      (jobs[1] or {})[2],
+      (mail_file:gsub("/", "\\"))
+    )
+    check("system_exts <Tab>: nothing else follows the path", #(jobs[1] or {}) == 2)
+
+    preview.open_or_fallback(fallback)
+    eq("system_exts <CR>: a .msg file is handed to the OS too", #jobs, 2)
+    check("system_exts <CR>: the tree's own <CR> is not called for it", not mail_fallback_called)
+    check("system_exts: the mail file is not loaded as a buffer", vim.fn.bufloaded(mail_file) == 0)
+
+    -- A folder that happens to be named x.msg is still a folder.
+    cur_node = { path = mail_dir, type = "directory" }
+    preview.open_or_fallback(fallback)
+    check(
+      "system_exts <CR>: a directory named like a mail file falls through to the tree",
+      mail_fallback_called and #jobs == 2
+    )
+
+    -- `{}` switches the dispatch off.
+    preview.setup({ enabled = true, mode = "buffer", system_exts = {} }, stub)
+    mail_fallback_called = false
+    cur_node = { path = mail_file, type = "file" }
+    preview.open_or_fallback(fallback)
+    check(
+      "system_exts = {}: <CR> on a .msg file goes to the tree again",
+      mail_fallback_called and #jobs == 2
+    )
+
+    -- A leading dot and any case are accepted, and the list replaces the default one.
+    preview.setup({ enabled = true, mode = "buffer", system_exts = { ".MSG" } }, stub)
+    mail_fallback_called = false
+    preview.open_or_fallback(fallback)
+    check("system_exts = { '.MSG' }: matches mail.MSG", not mail_fallback_called and #jobs == 3)
+    local eml_file = tmp .. "/mail.eml"
+    vim.fn.writefile({ "x" }, eml_file)
+    cur_node = { path = eml_file, type = "file" }
+    preview.open_or_fallback(fallback)
+    check(
+      "system_exts = { '.MSG' }: .eml is no longer in the list",
+      mail_fallback_called and #jobs == 3
+    )
+
+    platform.is_windows = orig_is_windows
+    vim.fn.jobstart = orig_jobstart
+    preview.setup({ enabled = true, mode = "buffer", system_exts = { "msg", "eml", "oft" } }, stub)
+  end
+
   preview.teardown()
   vim.cmd("silent! only")
 end

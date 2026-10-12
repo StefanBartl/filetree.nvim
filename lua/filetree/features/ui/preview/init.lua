@@ -163,10 +163,14 @@ end
 ---A file (not a folder that happens to be named `x.msg`) whose extension is in
 ---`system_exts`.
 local function is_system_ext(path)
+  local wanted = _cfg.system_exts
   local e = ext(path)
-  if e == "" or vim.fn.isdirectory(path) == 1 then return false end
-  for _, want in ipairs(_cfg.system_exts or {}) do
-    if type(want) == "string" and want:gsub("^%.", ""):lower() == e then return true end
+  if type(wanted) ~= "table" or e == "" then return false end
+  for _, want in ipairs(wanted) do
+    if type(want) == "string" and want:gsub("^%.", ""):lower() == e then
+      -- The filesystem is asked only for a name that matched.
+      return vim.fn.isdirectory(path) ~= 1
+    end
   end
   return false
 end

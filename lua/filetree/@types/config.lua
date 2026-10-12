@@ -636,10 +636,10 @@
 ---@field keymap_scroll_up     string?                  Scroll preview up 1 line (default "<C-b>").
 ---@field keymap_scroll_down   string?                  Scroll preview down 1 line (default "<C-f>").
 ---@field keymap_scroll_up10   string?                  Scroll preview up 10 lines (default "<PageUp>").
----@field system_exts           string[]?                Extensions opened with the OS default app instead of a buffer (default { "msg", "eml", "oft" }).
 ---@field keymap_scroll_down10 string?                  Scroll preview down 10 lines (default "<PageDown>").
 ---@field image                FiletreePreviewImageConfig?  Image-open config.
 ---@field pdf                  FiletreePreviewPdfConfig?    PDF-open config.
+---@field system_exts         string[]?                Extensions (any case, leading dot optional) opened with the OS default app on <CR>/<Tab> instead of as a buffer; {} = off (default { "msg", "eml", "oft" }).
 
 -- ── ignore_list ───────────────────────────────────────────────────────────────
 
