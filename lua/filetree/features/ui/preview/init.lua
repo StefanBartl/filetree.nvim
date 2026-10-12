@@ -14,7 +14,7 @@
 ---
 --- Keymaps (defaults):
 ---   <Tab>  — toggle preview; image/PDF dispatch for those file types.
----   <CR>   — image/PDF dispatch only; other nodes pass through to adapter's <CR>.
+---   <CR>   — image/PDF/system_exts dispatch only; other nodes pass through to adapter's <CR>.
 
 local notify = require("filetree.util.notify").create("[filetree.preview]")
 local platform = require("filetree.util.platform")
@@ -52,6 +52,10 @@ local _cfg = {
   pdf = {
     backend = "pdfport", -- "pdfport" | "system" | false
   },
+  -- Extensions that only make sense in their own application (a mail file is a
+  -- binary container, not text): <CR>/<Tab> hand them to the OS default handler
+  -- instead of loading them into a buffer. `{}` turns it off.
+  system_exts = { "msg", "eml", "oft" },
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -86,6 +90,7 @@ M.SCHEMA = {
     "table",
     fields = { backend = { "string|false", enum = { "pdfport", "system" } } },
   },
+  system_exts = { "table", of = "string" },
 }
 
 ---@type FiletreeAdapter?
@@ -153,6 +158,17 @@ local function apply_highlight(bufnr, ft)
 end
 local function is_pdf(path)
   return _PDF_EXTS[ext(path)] == 1
+end
+
+---A file (not a folder that happens to be named `x.msg`) whose extension is in
+---`system_exts`.
+local function is_system_ext(path)
+  local e = ext(path)
+  if e == "" or vim.fn.isdirectory(path) == 1 then return false end
+  for _, want in ipairs(_cfg.system_exts or {}) do
+    if type(want) == "string" and want:gsub("^%.", ""):lower() == e then return true end
+  end
+  return false
 end
 
 -- ── Cross-platform system-open ────────────────────────────────────────────────
@@ -625,6 +641,12 @@ function M.toggle_or_open()
     return
   end
 
+  if is_system_ext(node.path) then
+    close_preview()
+    system_open(node.path)
+    return
+  end
+
   -- Text / directory preview (toggle)
   M.toggle()
 end
@@ -649,6 +671,11 @@ function M.open_or_fallback(fallback)
 
   if cfg_pdf.backend ~= false and is_pdf(node.path) then
     open_pdf(node.path)
+    return
+  end
+
+  if is_system_ext(node.path) then
+    system_open(node.path)
     return
   end
 

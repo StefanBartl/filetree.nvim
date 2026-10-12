@@ -147,6 +147,9 @@ require("filetree").setup({
       pdf = {
         backend = "pdfport",  -- "pdfport" | "system" | false
       },
+      system_exts = { "msg", "eml", "oft" },
+                              -- opened with the OS default app (Outlook) on
+                              -- <CR>/<Tab> instead of as a binary buffer; {} = off
     },
 
     cursor_hide = {
