@@ -347,6 +347,14 @@ function M.check()
       mod = "menu",
       label = "nvzone/menu (optional renderer for context_menu; ui.kit.menu is used otherwise)",
     },
+    { mod = "images", label = "images.nvim (preview image backend, works on native Windows)" },
+    { mod = "image", label = "image.nvim (preview image backend, Kitty protocol terminals)" },
+    { mod = "gopath", label = "gopath.nvim (link_create repair: broken-link target search)" },
+    { mod = "netman", label = "netman.nvim (remote sources in the source switcher)" },
+    {
+      mod = "markdown_nvim",
+      label = "markdown.nvim (markdown reference updates on rename/move/delete)",
+    },
   }
   for _, o in ipairs(optionals) do
     if pcall(require, o.mod) then

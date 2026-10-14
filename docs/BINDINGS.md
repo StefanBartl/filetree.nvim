@@ -76,6 +76,26 @@ That is read back from `lib.nvim.bindings.autocmd`'s record of what it
 created, not maintained by hand. The hand-written version of this list used
 to claim fourteen entries against forty-six real ones.
 
+The groups, by augroup (the per-feature detail and the switches to turn each
+off are in [`BINDINGS/AUTOCMDS.md`](BINDINGS/AUTOCMDS.md)):
+
+| Group | Events | Purpose |
+| --- | --- | --- |
+| `filetree_bufevents` | BufEnter, BufWipeout, BufWritePost, TextChanged, WinEnter | One shared dispatcher for the buffer-lifecycle events; features register handlers with it instead of owning an autocmd each |
+| `filetree_buffer_cache` | BufDelete | Drop a deleted buffer from the buffer cache |
+| `filetree_breadcrumbs` | CursorMoved | Update the breadcrumb (winbar, float or statusline) for the node under the cursor |
+| `filetree_broken_link_notify` | BufNewFile | Warn when a just-opened buffer is the target of a broken symlink |
+| `filetree_cursor_hide` | BufLeave, WinClosed, WinLeave | Restore the block cursor when leaving the tree window |
+| `filetree_cwd_mode` | BufWinEnter, TabEnter, WinClosed, WinEnter | Move the cwd-mode badge to wherever the tree window now is |
+| `filetree_file_watcher` | DirChanged | Re-watch the new tree root after the cwd changed |
+| `filetree_git_status` | BufWritePost, FocusGained | Refresh git decorations after a write or when focus returns |
+| `filetree_layout_guard` | BufDelete, BufWipeout, WinClosed | Open an empty split when only the tree window remains |
+| `filetree_lsp_diagnostics` | DiagnosticChanged | Refresh the diagnostic decorations in the tree |
+| `filetree_no_name_guard` | BufAdd, BufDelete, BufWinEnter, BufWipeout | Redirect a stray `[No Name]` window or buffer to a real named buffer |
+| `filetree_preview` | BufLeave, CursorMoved, WinLeave | Close the preview float on leave; live-update it on cursor move |
+| `filetree_session` | BufHidden, VimLeavePre | Auto-save the project session when the tree hides or Neovim exits |
+| `filetree_window_style` | BufWinEnter, WinEnter | Apply the tree window style (blank statusline, isolated highlights) |
+
 ## Keymap prefixes at a glance
 
 Enough to predict where a key lives without opening the full table:
