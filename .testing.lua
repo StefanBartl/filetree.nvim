@@ -55,6 +55,9 @@ return {
     "LIB_NVIM_PATH",
     "UI_NVIM_PATH",
   },
+  -- powershell_quote_spec starts many PowerShell processes; a Windows runner needs more than the default 60 s for them
+  -- (about 14 s on a developer machine). Still a guard against a hang, not a performance budget.
+  timeouts = { file_ms = 180000 },
   -- gated: a failed conformance check makes `scripts/test.sh conformance` exit 1 (docs/CONFORMANCE.md of testing.nvim)
   conformance = { gate = true },
 }
