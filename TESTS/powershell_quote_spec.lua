@@ -72,7 +72,7 @@ else
         { "powershell", "-NoProfile", "-NonInteractive", "-Command", UTF8 .. script },
         { text = true }
       )
-      :wait()
+      :wait(30000) -- bounded: a PowerShell that never ends fails the case with its output
   end
 
   local names = {
@@ -99,8 +99,9 @@ else
   local trash = require("filetree.features.fileops.trash.platform")
   local undo = require("filetree.features.fileops.trash.undo")
 
+  -- bounded waits (the Windows runner once hung here for the whole file limit): each step reports whether it finished
   local function wait_for(cond)
-    return vim.wait(60000, cond, 50)
+    return vim.wait(20000, cond, 50)
   end
 
   local files = {}
@@ -124,9 +125,12 @@ else
   require("filetree.features.ui.size_info")._query_dir_size(dir, function(bytes)
     size_done, size_bytes = true, bytes
   end)
-  wait_for(function()
-    return size_done
-  end)
+  check(
+    "folder size answers within 20 s",
+    wait_for(function()
+      return size_done
+    end)
+  )
   eq("folder size of a directory holding such names", size_bytes, #existing)
 
   -- single trash + restore, per name
@@ -135,9 +139,12 @@ else
     trash.send(f, function(r)
       res = r
     end)
-    wait_for(function()
-      return res ~= nil
-    end)
+    check(
+      "trash answers within 20 s: " .. vim.inspect(vim.fn.fnamemodify(f, ":t")),
+      wait_for(function()
+        return res ~= nil
+      end)
+    )
     check("trash " .. vim.inspect(vim.fn.fnamemodify(f, ":t")), res and res.ok, res and res.err)
     check("  the file is gone", vim.fn.filereadable(f) == 0)
     undo.record(f)
@@ -151,9 +158,12 @@ else
   trash.send_batch(existing, function(r)
     results = r
   end)
-  wait_for(function()
-    return results ~= nil
-  end)
+  check(
+    "batch trash answers within 20 s",
+    wait_for(function()
+      return results ~= nil
+    end)
+  )
   local all_ok = results ~= nil
   for _, r in ipairs(results or {}) do
     all_ok = all_ok and r.ok
