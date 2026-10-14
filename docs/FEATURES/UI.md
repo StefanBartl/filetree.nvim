@@ -13,6 +13,9 @@ window, or a floating window — updates as the cursor moves, no separate
 open action needed. `<Tab>`/`<CR>` dispatch images/PDFs to their own
 viewer instead of rendering raw bytes as text; `<PageUp>`/`<PageDown>` page
 a long preview without leaving the tree.
+Files whose extension is in `features.preview.system_exts`
+(default `msg`, `eml`, `oft`, i.e. Outlook mails) go to the OS default app
+instead; `{}` turns that off.
 
 In the editor-window mode a binary file, or a file larger than
 `features.preview.max_bytes` (default 1 MiB, `0` = no limit), is not loaded:
