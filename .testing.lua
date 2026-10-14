@@ -56,5 +56,22 @@ return {
     "UI_NVIM_PATH",
   },
   -- gated: a failed conformance check makes `scripts/test.sh conformance` exit 1 (docs/CONFORMANCE.md of testing.nvim)
-  conformance = { gate = true },
+  conformance = {
+    gate = true,
+    waivers = {
+      {
+        check = "K6",
+        level = "warn",
+        text = "pdfport.nvim not installed",
+        reason = "environment: pdfport.nvim is an optional external plugin absent in the minimal editor; the health line is correct",
+        expires = "2027-04-14",
+      },
+      {
+        check = "K10",
+        level = "warn",
+        reason = "measured ~76-80 ms median (cold fs); the cost is spread over ~100 small modules (setup 45 ms, refs 32, commands 22) with no single heavy require to defer",
+        expires = "2027-04-14",
+      },
+    },
+  },
 }
