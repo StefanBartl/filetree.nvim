@@ -65,9 +65,11 @@ eq(
 if vim.fn.has("win32") ~= 1 or vim.fn.executable("powershell") ~= 1 then
   print("  skip real PowerShell round trips (needs Windows + powershell.exe)")
 else
-  -- The windows-latest runner's inherited PSModulePath makes the first cmdlet (even Get-Date) hang until the process is
-  -- killed, while plain .NET calls run; with the system default the same cmdlets answer in well under a second. The
-  -- quoting under test does not depend on the module path (diagnosed in insights.nvim, TESTS/ps_quote_spec.lua).
+  -- Inside the testing.nvim child editor on windows-latest every Windows PowerShell 5.1 cmdlet (even Get-Date) takes 22
+  -- to 25 s with the inherited PSModulePath, longer than the waits below, while plain .NET calls are fast; with the
+  -- system modules directory the same cmdlets answer in about 0.5 s. The cause is not found yet (testing.nvim task
+  -- powershell-im-testing-kind-auf-windows-latest-jedes-cmdlet-b). The quoting under test does not depend on the
+  -- module path. This script runs as its own process, so the restore at the end only matters for tidiness.
   local saved_module_path = vim.env.PSModulePath
   vim.env.PSModulePath = (vim.env.SystemRoot or "C:/Windows"):gsub("\\", "/")
     .. "/System32/WindowsPowerShell/v1.0/Modules"
