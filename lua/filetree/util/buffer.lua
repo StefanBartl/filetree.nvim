@@ -59,6 +59,26 @@ local _cache = {}
 
 local CACHE_TTL = 1000 -- ms
 
+---@type boolean
+local _hooked = false
+
+---Install the BufDelete autocmd that keeps the cache clean. Lazy (first cache
+---write) so requiring this module has no side effect; nothing can be cached
+---before that, so there is nothing to invalidate earlier.
+local function ensure_hook()
+  if _hooked then return end
+  _hooked = true
+  au.create("BufDelete", function(args)
+    M.invalidate(args.buf)
+  end, {
+    -- Lowercase-prefixed like every other group here: `bindings.autocmds` picks
+    -- this plugin's records out by a `^filetree` match on the group name, and
+    -- `FiletreeBufferCache` fell straight through it.
+    group = au.group("filetree_buffer_cache", true),
+    desc = "[filetree] Drop a deleted buffer from the buffer cache",
+  })
+end
+
 ---Return true when bufnr is a valid, normal, listed file buffer with a readable path.
 ---@param bufnr integer|nil  0 or nil = current buffer.
 ---@return boolean
@@ -87,6 +107,7 @@ function M.is_valid_file_buffer(bufnr)
     end
   end
 
+  ensure_hook()
   _cache[bufnr] = { valid = valid, timestamp = now }
   return valid
 end
@@ -191,17 +212,6 @@ function M.find_editor_win(exclude_win)
   end
   return nil
 end
-
--- Auto-invalidate cache when buffers are deleted
-au.create("BufDelete", function(args)
-  M.invalidate(args.buf)
-end, {
-  -- Lowercase-prefixed like every other group here: `bindings.autocmds` picks
-  -- this plugin's records out by a `^filetree` match on the group name, and
-  -- `FiletreeBufferCache` fell straight through it.
-  group = au.group("filetree_buffer_cache", true),
-  desc = "[filetree] Drop a deleted buffer from the buffer cache",
-})
 
 ---Repoint every open buffer whose name is `old_path` (or nested under it, for
 ---a directory move/rename) to the corresponding path under `new_path`. Used

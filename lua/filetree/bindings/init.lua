@@ -22,13 +22,12 @@ local M = {}
 
 M.keymaps = require("filetree.bindings.keymaps")
 M.autocmds = require("filetree.bindings.autocmds")
+M.usrcmds = require("filetree.bindings.usrcmds")
 
 ---Return every registered `:Filetree` sub-command path (live from the dispatcher).
 ---@return string[]
 function M.usercommands()
-  local ok, commands = pcall(require, "filetree.commands")
-  if not ok or type(commands.command_paths) ~= "function" then return {} end
-  return commands.command_paths()
+  return M.usrcmds.paths()
 end
 
 ---Every keymap actually bound, from lib.nvim's registry.
