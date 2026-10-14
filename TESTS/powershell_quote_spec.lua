@@ -72,7 +72,7 @@ else
         { "powershell", "-NoProfile", "-NonInteractive", "-Command", UTF8 .. script },
         { text = true }
       )
-      :wait(30000) -- bounded: a PowerShell that never ends fails the case with its output
+      :wait(15000) -- bounded: a PowerShell that never ends fails the case with its output
   end
 
   local names = {
@@ -88,6 +88,20 @@ else
   -- the escaped text, inside '...', evaluates to the original string and nothing else
   for _, n in ipairs(names) do
     local res = ps("Write-Output '" .. escape(n) .. "'")
+    if res.code == 124 then
+      -- killed after the bound: stop with what is known (the runner kills the whole file at 60 s)
+      check(
+        "PowerShell answers within 15 s for " .. vim.inspect(n),
+        false,
+        ("code=%s stdout=%s stderr=%s"):format(
+          tostring(res.code),
+          vim.inspect(res.stdout),
+          vim.inspect(res.stderr)
+        )
+      )
+      print(("\nfiletree.nvim powershell_quote_spec: %d passed, %d failed"):format(passed, failed))
+      vim.cmd("cq")
+    end
     local out = (res.stdout or ""):gsub("\r?\n$", "")
     eq("PowerShell reads back " .. vim.inspect(n), out, n)
   end
