@@ -65,8 +65,12 @@ eq(
 if vim.fn.has("win32") ~= 1 or vim.fn.executable("powershell") ~= 1 then
   print("  skip real PowerShell round trips (needs Windows + powershell.exe)")
 else
-  -- Needs testing.nvim with PSModulePath on its child-environment allowlist: without it the first Windows PowerShell
-  -- 5.1 call of the child rebuilds its module cache (20 to 30 s) and a short wait kills it before it is written.
+  -- The windows-latest runner's inherited PSModulePath makes the first cmdlet (even Get-Date) hang until the process is
+  -- killed, while plain .NET calls run; with the system default the same cmdlets answer in well under a second. The
+  -- quoting under test does not depend on the module path (diagnosed in insights.nvim, TESTS/ps_quote_spec.lua).
+  local saved_module_path = vim.env.PSModulePath
+  vim.env.PSModulePath = (vim.env.SystemRoot or "C:/Windows"):gsub("\\", "/")
+    .. "/System32/WindowsPowerShell/v1.0/Modules"
   local UTF8 = "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); "
   local function ps(script)
     return vim
@@ -196,6 +200,7 @@ else
     undo.restore(undo.last())
   end
   vim.fn.delete(dir, "rf")
+  vim.env.PSModulePath = saved_module_path
 end
 
 print(("\nfiletree.nvim powershell_quote_spec: %d passed, %d failed"):format(passed, failed))
