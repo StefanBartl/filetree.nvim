@@ -132,7 +132,10 @@ local function save_store()
     end
   end
   local ok, encoded = pcall(vim.fn.json_encode, _sessions)
-  if ok then pcall(vim.fn.writefile, { encoded }, _store_path) end
+  if not ok then return end
+  -- Temp file and rename (lib.nvim): a crash or a full disk mid-write keeps the previous store
+  -- instead of truncating every project's saved state.
+  pcall(require("lib.nvim.fs.write.atomic"), _store_path, encoded .. "\n")
 end
 
 -- ── Project key ───────────────────────────────────────────────────────────────
