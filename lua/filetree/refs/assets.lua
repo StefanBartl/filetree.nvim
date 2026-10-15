@@ -144,9 +144,15 @@ function M.classify(path, opts, cb)
     local root = opts.root or outgoing.resolve_root(path)
     local candidates = {}
     local asset_candidates = {}
+    -- One candidate per file: `outgoing.scan` returns one entry per link occurrence, and a file
+    -- linked twice would otherwise be offered twice (and trashed twice, the second time with a
+    -- "path does not exist" warning). The first link stays, it is the one shown.
+    local seen = {}
 
     for _, link in ipairs(links) do
-      if link.exists then
+      local key = link.exists and pathutil.key(link.resolved)
+      if key and not seen[key] then
+        seen[key] = true
         local is_asset = under_a_root(link.resolved, path, root, roots)
           and extension_allowed(link.resolved, extensions)
 
