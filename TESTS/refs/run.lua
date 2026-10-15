@@ -858,6 +858,11 @@ local function run_outgoing_assets_check()
     "Code: [code](assets/code.lua)",
     "Top-level image outside assets/: ![top](toplevel.png)",
     "Missing: ![gone](assets/gone.png)",
+    -- The same files linked a second time (one through a different spelling of the path):
+    -- one candidate per file, not one per link.
+    "Shot again: ![shot2](assets/shot.png)",
+    "Shot via ./: ![shot3](./assets/shot.png)",
+    "Shared again: ![shared2](assets/shared.png)",
   }, work .. "/doc.md")
   -- Also links assets/shared.png -- the one asset with a surviving
   -- second referrer once doc.md (the file "being deleted") is excluded.
@@ -885,9 +890,24 @@ local function run_outgoing_assets_check()
 
   check("outgoing_assets: classification returned", done)
   check(
-    "outgoing_assets: exactly 4 candidates (the dangling link is excluded)",
+    "outgoing_assets: exactly 4 candidates (the dangling link is excluded, a file linked twice is one)",
     found and #found == 4
   )
+  do
+    local seen_paths, distinct = {}, true
+    for _, c in ipairs(found or {}) do
+      local k = c.resolved:gsub("\\", "/"):lower()
+      if seen_paths[k] then distinct = false end
+      seen_paths[k] = true
+    end
+    check("outgoing_assets: no file appears twice", distinct)
+    local deletable = refs.assets.split(found or {})
+    check(
+      "outgoing_assets: the deletable list names each file once (shot.png)",
+      #deletable == 1
+        and deletable[1].resolved:gsub("\\", "/"):find("assets/shot.png", 1, true) ~= nil
+    )
+  end
 
   local shot = found and by(found, "assets/shot.png")
   check(
