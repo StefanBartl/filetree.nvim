@@ -28,6 +28,18 @@ return {
       feature = "tree_traverse",
       scope = "tree",
     },
+    {
+      lhs = "]s",
+      desc = "Next sibling (same depth)",
+      feature = "tree_traverse",
+      scope = "tree",
+    },
+    {
+      lhs = "[s",
+      desc = "Previous sibling (same depth)",
+      feature = "tree_traverse",
+      scope = "tree",
+    },
     { lhs = "B", desc = "Reveal alternate buffer (#)", feature = "reveal_alt", scope = "tree" },
     {
       lhs = "L",

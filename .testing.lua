@@ -27,6 +27,7 @@ return {
     "^TESTS/file_clipboard%.lua$",
     "^TESTS/marks_auto_clear%.lua$",
     "^TESTS/marks_order%.lua$",
+    "^TESTS/sibling_nav%.lua$",
     "^TESTS/quickpick%.lua$",
     "^TESTS/refs/run%.lua$",
     "^TESTS/refs/usage%.lua$",

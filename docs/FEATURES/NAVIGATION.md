@@ -14,8 +14,21 @@ here is reported to `cwd_mode.notify_manual_root()` when that feature is
 active, so a `lock`/`project`/`tree_leads` policy moves its pin instead of
 fighting the user's own `+`/`-` press.
 
+`]s` / `[s` jump to the next / previous **sibling**: the next entry at the
+same depth inside the same folder, skipping the children of an expanded
+sibling folder, and never climbing out of the folder the cursor is in. A
+count moves that many siblings. At the folder's last / first child the jump
+stops (default) or, with `sibling_wrap = true`, wraps around. It is built on
+the adapter contract (`get_current_node`, `get_visible_nodes`,
+`scroll_to_line`) and so works the same on all five adapters; the flat
+listings of mini.files, netrw and oil degrade to plain next / previous entry.
+nvim-tree's own `<`/`>` keep working; `]s`/`[s` only shadow the
+snacks.nvim scope motion inside the tree buffer.
+
 - **Module:** [`features/nav/tree_traverse/init.lua`](../../lua/filetree/features/nav/tree_traverse/init.lua)
-- **Keymaps:** `-` up, `+` down (config fields `keymap_up`/`keymap_down`)
+- **Keymaps:** `-` up, `+` down, `]s` next sibling, `[s` previous sibling
+  (config fields `keymap_up`/`keymap_down`/`keymap_next_sibling`/`keymap_prev_sibling`,
+  `false` disables one; `sibling_wrap` boolean, default `false`)
 - **Usercmds:** `:Filetree traverse up`, `:Filetree traverse down`
 
 ## Auto Reveal

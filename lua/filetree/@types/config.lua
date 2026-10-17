@@ -797,6 +797,9 @@
 ---@field enabled?      boolean
 ---@field keymap_up     string?   Navigate to parent directory (default "-").
 ---@field keymap_down   string?   Set current dir as root (default "+").
+---@field keymap_next_sibling string|false?  Jump to the next node at the same depth, skipping the children of expanded folders (default "]s").
+---@field keymap_prev_sibling string|false?  Jump to the previous node at the same depth (default "[s").
+---@field sibling_wrap? boolean   Sibling jumps wrap around inside the parent folder instead of stopping at its first/last child (default false).
 ---@field sync_cwd?     boolean   Also change Vim's cwd (default false).
 
 -- ── lua_require_copy ─────────────────────────────────────────────────────────

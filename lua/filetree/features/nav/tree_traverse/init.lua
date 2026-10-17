@@ -99,12 +99,89 @@ function M.go_to(path)
   go_to(path)
 end
 
+-- ── Sibling jumps ─────────────────────────────────────────────────────────────
+
+---Index of the cursor node in the rendered node list: by line, else by path.
+---@param nodes FiletreeNode[]
+---@param cur FiletreeNode
+---@return integer?
+local function index_of(nodes, cur)
+  for i, n in ipairs(nodes) do
+    if cur.line_number and n.line_number == cur.line_number then return i end
+  end
+  for i, n in ipairs(nodes) do
+    if n.path == cur.path then return i end
+  end
+  return nil
+end
+
+---Target of a sibling jump from the cursor node, without moving anything.
+---
+---Siblings are the rendered nodes at the cursor's depth between the nearest
+---shallower node above it and the nearest shallower node below it, so the
+---children of an expanded sibling are skipped. Flat listings (mini.files,
+---netrw, oil report depth 1 for every entry) degrade to plain next/previous.
+---@param step integer   +1 = next sibling, -1 = previous sibling.
+---@param count? integer Number of siblings to move (default 1).
+---@return FiletreeNode?
+function M.sibling_target(step, count)
+  if not _adapter then return nil end
+  local cur = _adapter.get_current_node()
+  if not cur then return nil end
+  local nodes = vim.deepcopy(_adapter.get_visible_nodes() or {})
+  table.sort(nodes, function(a, b)
+    return (a.line_number or 0) < (b.line_number or 0)
+  end)
+  local idx = index_of(nodes, cur)
+  if not idx then return nil end
+
+  local depth = nodes[idx].depth or 1
+  local first, last = idx, idx
+  while first > 1 and (nodes[first - 1].depth or 1) >= depth do
+    first = first - 1
+  end
+  while last < #nodes and (nodes[last + 1].depth or 1) >= depth do
+    last = last + 1
+  end
+
+  local siblings, pos = {}, nil
+  for i = first, last do
+    if (nodes[i].depth or 1) == depth then
+      siblings[#siblings + 1] = nodes[i]
+      if i == idx then pos = #siblings end
+    end
+  end
+  if not pos or #siblings < 2 then return nil end
+
+  local target = pos + step * (count or 1)
+  if _cfg.sibling_wrap then
+    target = (target - 1) % #siblings + 1
+  else
+    target = math.max(1, math.min(#siblings, target))
+  end
+  if target == pos then return nil end
+  return siblings[target]
+end
+
+---Move the cursor to the next (`step` = 1) or previous (`step` = -1) sibling.
+---@param step integer
+---@param count? integer
+---@return boolean moved
+function M.sibling(step, count)
+  local target = M.sibling_target(step, count)
+  if not _adapter or not target or not target.line_number then return false end
+  return _adapter.scroll_to_line(target.line_number) == true
+end
+
 -- ── Setup ─────────────────────────────────────────────────────────────────────
 
 ---@type FiletreeTreeTraverseConfig
 local DEFAULTS = {
   keymap_up = "-",
   keymap_down = "+",
+  keymap_next_sibling = "]s",
+  keymap_prev_sibling = "[s",
+  sibling_wrap = false,
   sync_cwd = false,
 }
 
@@ -115,6 +192,9 @@ local DEFAULTS = {
 M.SCHEMA = {
   keymap_up = "keymap",
   keymap_down = "keymap",
+  keymap_next_sibling = "keymap",
+  keymap_prev_sibling = "keymap",
+  sibling_wrap = "boolean",
   sync_cwd = "boolean",
 }
 
@@ -146,6 +226,22 @@ function M.setup(cfg, adapter)
         for _ = 1, vim.v.count1 do
           M.down()
         end
+      end,
+    },
+    {
+      name = "next_sibling",
+      field = "keymap_next_sibling",
+      desc = "next sibling (×count)",
+      rhs = function()
+        M.sibling(1, vim.v.count1)
+      end,
+    },
+    {
+      name = "prev_sibling",
+      field = "keymap_prev_sibling",
+      desc = "previous sibling (×count)",
+      rhs = function()
+        M.sibling(-1, vim.v.count1)
       end,
     },
   })
