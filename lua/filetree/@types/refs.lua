@@ -155,7 +155,7 @@
 ---@class FiletreeRefsOutgoingLinksConfig
 ---@field enabled?  boolean            Turn the feature on (default false — opt-in, same posture as `outgoing_assets`/`experimental.plaintext`).
 ---@field mode?     "ask"|"auto"|"off" Unset (default) inherits `on_move`/`on_rename` for the op in question — no separate prompt for the common case. Set explicitly to diverge (costs a second confirmation/undo entry when it does).
----@field env_vars? string[]           Environment variable names (without the leading `$`) recognized in a `$VAR/...` link target. `$NVIM_CONFIG_DIR` (backed by `vim.fn.stdpath("config")`) is always recognized in addition, with no config needed.
+---@field env_vars? string[]           Environment variable names (without the leading `$`) recognized in a `$VAR/...` link target. `$NVIM_CONFIG_DIR` (backed by `vim.fn.stdpath("config")`) and the roots of lib.nvim's named-roots registry (`lib.nvim.fs.roots`, `$REPOS_DIR` by default) are always recognized in addition, with no config needed.
 
 ---@class FiletreeRefsReportConfig
 ---@field view?       "popup"|"picker"  How `:Filetree references` lists the sites (default "popup").

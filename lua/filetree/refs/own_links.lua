@@ -212,7 +212,9 @@ function M.collect(moves, opts, cb)
   ---@type FiletreeRefEnvRoots
   local env = {
     names = ol.env_vars or {},
-    extra = { { name = "NVIM_CONFIG_DIR", root = vim.fn.stdpath("config") } },
+    -- `$NVIM_CONFIG_DIR` (stdpath("config")) is always recognized, whatever
+    -- the registry's own `nvim_config` says.
+    nvim_config = true,
   }
 
   ---@type table<string, FiletreeRefProvider>

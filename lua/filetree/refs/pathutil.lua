@@ -20,6 +20,8 @@ local normkey = require("lib.nvim.fs.normkey")
 local is_subpath = require("lib.nvim.fs.is_subpath")
 local relpath = require("lib.nvim.fs.relpath")
 local expand_path = require("lib.nvim.cross.fs.expand_path")
+local roots = require("lib.nvim.fs.roots")
+local env_roots = require("filetree.util.env_roots")
 
 local M = {}
 
@@ -88,16 +90,29 @@ end
 ---threaded in explicitly by the caller (own_links, wiki-free) rather than
 ---read from `filetree.refs`'s own config here, to avoid a load cycle
 ---(providers require this module; `refs/init.lua` requires the providers).
+---Both fields are per-call options of lib.nvim's named-roots registry
+---(`lib.nvim.fs.roots`): the roots the user configured there, and the ones
+---other plugins registered, count as well.
 ---@class FiletreeRefEnvRoots
----@field names? string[]                        Environment variable names, written without the leading `$`.
----@field extra? { name: string, root: string }[]  Already-resolved roots to try alongside `names` (e.g. `$NVIM_CONFIG_DIR`, backed by `vim.fn.stdpath("config")` rather than an actual env var).
+---@field names? string[]       Environment variable names, written without the leading `$`.
+---@field nvim_config? boolean  Whether `$NVIM_CONFIG_DIR` (`vim.fn.stdpath("config")`, no environment variable needed) counts; nil = the registry's own setting.
+
+---The registry options for `env` (see `FiletreeRefEnvRoots`).
+---@param env FiletreeRefEnvRoots
+---@return Lib.Fs.Roots.FoldOpts
+local function env_opts(env)
+  local o = {} ---@type Lib.Fs.Roots.FoldOpts
+  if type(env.names) == "table" then o.names = env.names end
+  if type(env.nvim_config) == "boolean" then o.nvim_config = env.nvim_config end
+  return o
+end
 
 ---Resolve `target` (as written in `from_file`) into an absolute path.
----Handles `$VAR/x` (only when `env` is given and `VAR` resolves), `./x`,
----`../x`, `x`, `~/x`, `/x` and Windows drive paths. A leading `/` is
----ambiguous in markdown — it can mean "filesystem root" or "project root" —
----so both readings are returned, in that order, and the caller keeps
----whichever one matches.
+---Handles `$VAR/x`, `${VAR}/x` and `%VAR%/x` (only when `env` is given and
+---`VAR` is a root, see `FiletreeRefEnvRoots`), `./x`, `../x`, `x`, `~/x`,
+---`/x` and Windows drive paths. A leading `/` is ambiguous in markdown — it
+---can mean "filesystem root" or "project root" — so both readings are
+---returned, in that order, and the caller keeps whichever one matches.
 ---@param target string
 ---@param from_file string   The file the reference is written in.
 ---@param root string        Project root, for the root-relative reading.
@@ -108,37 +123,17 @@ function M.resolve_candidates(target, from_file, root, env)
   local out, styles = {}, {}
   local t = target:gsub("\\", "/")
 
-  local var = env and t:match("^%$([%w_]+)")
-  if env and var then
-    local resolved_root ---@type string?
-    for _, name in ipairs(env.names or {}) do
-      local v = vim.env[name]
-      if name == var and type(v) == "string" and v ~= "" then
-        resolved_root = v
-        break
-      end
-    end
-    if not resolved_root then
-      for _, e in ipairs(env.extra or {}) do
-        if e.name == var and type(e.root) == "string" and e.root ~= "" then
-          resolved_root = e.root
-          break
-        end
-      end
-    end
-    if resolved_root then
-      -- Past "$NAME", stripping one leading "/" so "$VAR" (bare) and
-      -- "$VAR/rest" join the same way.
-      local rest = t:sub(#var + 2):gsub("^/", "")
-      local joined = rest == "" and resolved_root or (resolved_root:gsub("/+$", "") .. "/" .. rest)
-      out[#out + 1] = M.abs(joined)
+  if env then
+    -- `t` is slashified already, so the rest joins with "/" on every OS.
+    local _, env_root, rest = env_roots.match(t, env_opts(env))
+    if env_root then
+      out[#out + 1] = M.abs(env_root .. (rest or ""))
       styles[#styles + 1] = "env"
       return out, styles
     end
-    -- Named but unresolved (unset env var, no matching `extra` root): fall
-    -- through to the ordinary readings below rather than giving up — an
-    -- unset `$VAR` in a target most likely just fails every reading, same as
-    -- today's behavior before this branch existed.
+    -- Named but unresolved (unset env var, no such root): fall through to
+    -- the ordinary readings below rather than giving up — an unset `$VAR` in
+    -- a target most likely just fails every reading.
   end
 
   if t:sub(1, 1) == "~" or t:match("^%a:/") then
@@ -185,7 +180,7 @@ end
 
 ---Re-express a moved path in the style the original reference used.
 ---
----  * `env`      — `$VAR/rest`, refolded via `util.path.env_rooted` (falls
+---  * `env`      — `$VAR/rest`, refolded by the named-roots registry (falls
 ---                 back to `fs` when `opts.env` is missing or nothing matches
 ---                 anymore — the target's anchor itself moved out from under
 ---                 every configured root)
@@ -199,7 +194,11 @@ function M.retarget(opts)
   local style, new_path = opts.style, opts.new_path
 
   if style == "env" and opts.env then
-    local folded, matched = ftpath.env_rooted(new_path, opts.env.names, opts.env.extra)
+    -- Forced: the reference was written in `$VAR` form, so it keeps that form
+    -- whatever the registry's global `enable` says.
+    local fold_opts = env_opts(opts.env)
+    fold_opts.force = true
+    local folded, matched = roots.fold(new_path, fold_opts)
     if matched then return folded end
     -- Fall through to "fs" below: the moved-to location no longer sits under
     -- any configured env root, so an env-relative spelling cannot be kept.

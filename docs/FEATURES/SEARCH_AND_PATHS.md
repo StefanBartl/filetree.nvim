@@ -118,7 +118,9 @@ variable back into its root: `$REPOS_DIR/filetree.nvim/lua/x.lua` rather
 than `E:/repos/filetree.nvim/lua/x.lua`. Written into a note, that path
 still means the same file on a machine where the checkout lives on
 another drive. The variables to try are `env_roots` (default
-`{ "REPOS_DIR" }`, written without the `$`); the longest match wins, so
+`{ "REPOS_DIR" }`, written without the `$`), on top of the top-level
+[`env_roots`](../configuration.md#env-roots) roots and the shared ones of
+lib.nvim's named-roots registry; the deepest match wins, so
 a `$REPOS_DIR` inside `$HOME` beats `$HOME`.
 
 `nvim_config_root` (default `true`) additionally tries `$NVIM_CONFIG_DIR`,

@@ -165,7 +165,25 @@ do
   ER.setup({ extra = { NOTES = notes } })
 
   eq("expand: $REPOS_DIR/x", ER.expand("$REPOS_DIR/proj/x"), repos .. "/proj/x")
-  eq("expand: ${REPOS_DIR}\\x", ER.expand("${REPOS_DIR}\\proj"), repos .. "\\proj")
+  -- A backslash separates only where it is one: on Windows the rest comes back
+  -- slashified, elsewhere `${REPOS_DIR}\proj` is a file name, no reference.
+  if vim.fn.has("win32") == 1 then
+    eq("expand: ${REPOS_DIR}\\x (Windows)", ER.expand("${REPOS_DIR}\\proj"), repos .. "/proj")
+  else
+    eq("expand: ${REPOS_DIR}\\x (POSIX)", ER.expand("${REPOS_DIR}\\proj"), "${REPOS_DIR}\\proj")
+  end
+  eq("expand: %REPOS_DIR%/x", ER.expand("%REPOS_DIR%/proj"), repos .. "/proj")
+  eq("expand: '$REPOS_DIR.bak' is no reference", ER.expand("$REPOS_DIR.bak/x"), "$REPOS_DIR.bak/x")
+  eq(
+    "expand: filetree's own extra root wins over a same-named variable",
+    (function()
+      ER.setup({ extra = { REPOS_DIR = notes } })
+      local r = ER.expand("$REPOS_DIR/a")
+      ER.setup({ extra = { NOTES = notes } })
+      return r
+    end)(),
+    notes .. "/a"
+  )
   eq("expand: the bare variable", ER.expand("$REPOS_DIR"), repos)
   eq("expand: a user-defined root", ER.expand("$NOTES/a"), notes .. "/a")
   eq(
@@ -608,6 +626,170 @@ do
     )
   end
 
+  vim.fn.delete(tmp, "rf")
+end
+
+-- ── the named-roots registry (lib.nvim.fs.roots) underneath ──────────────────
+-- filetree's `env_roots` is a per-call layer over the registry; these pin what
+-- that changed against the old private implementation.
+do
+  local tmp, repos, notes, outside = scratch("registry")
+  vim.env.REPOS_DIR = repos
+  local lib_roots = require("lib.nvim.fs.roots")
+  lib_roots.setup(nil)
+
+  -- A root another plugin registered is visible, and the deeper one wins.
+  local unregister = lib_roots.register("FT_TEST_SHARED", repos .. "/proj")
+  ER.setup(nil)
+  eq(
+    "registry: a registered root folds, deeper than $REPOS_DIR",
+    (ER.fold(repos .. "/proj/sub/file.md")),
+    "$FT_TEST_SHARED/sub/file.md"
+  )
+  eq("registry: ...and expands", ER.expand("$FT_TEST_SHARED/sub"), repos .. "/proj/sub")
+  unregister()
+  eq(
+    "registry: unregistered again, $REPOS_DIR is back",
+    (ER.fold(repos .. "/proj/sub/file.md")),
+    "$REPOS_DIR/proj/sub/file.md"
+  )
+
+  -- filetree's own switch, not the registry's: off here folds nothing even
+  -- when the registry's `enable` is on, on here folds even when it is off.
+  lib_roots.setup({ enable = false })
+  ER.setup(nil)
+  eq(
+    "registry enable=false, env_roots on: still folds",
+    (ER.fold(repos .. "/proj")),
+    "$REPOS_DIR/proj"
+  )
+  check(
+    "registry enable=false, env_roots on: remap still maps",
+    #ER.remap("/h/repos/proj/sub/file.md") > 0
+  )
+  lib_roots.setup(nil)
+  ER.setup({ enable = false })
+  eq("env_roots off: root_of is nil", ER.root_of(repos .. "/proj"), nil)
+  ER.setup(nil)
+
+  -- A whole drive / the filesystem root is no root: it would fold every path.
+  local fsroot = vim.fn.has("win32") == 1 and outside:sub(1, 3) or "/"
+  ER.setup({ extra = { ALL = fsroot } })
+  eq("registry: a whole-drive root folds nothing", (ER.fold(outside .. "/f")), outside .. "/f")
+
+  -- A value starting with an unset variable is no root (it used to be
+  -- resolved against the cwd).
+  vim.env.FT_TEST_UNSET = nil
+  ER.setup({ extra = { BROKEN = "$FT_TEST_UNSET/x" } })
+  local broken = false
+  for _, r in ipairs(ER.roots()) do
+    if r.name == "BROKEN" then broken = true end
+  end
+  check("registry: `$UNSET/x` is no root", not broken)
+
+  -- `..` is resolved before the comparison: no `$REPOS_DIR/../x` escape.
+  ER.setup(nil)
+  local escaped = repos .. "/../outside/f"
+  check(
+    "registry: a `..` path out of the root is not folded under it",
+    not (ER.fold(escaped)):find("$REPOS_DIR", 1, true),
+    (ER.fold(escaped))
+  )
+
+  -- `NVIM_CONFIG_DIR` in `vars` is `stdpath("config")`, never a stale
+  -- environment value of that name.
+  local saved_cfg = vim.env.NVIM_CONFIG_DIR
+  vim.env.NVIM_CONFIG_DIR = notes
+  ER.setup({ vars = { "NVIM_CONFIG_DIR", "REPOS_DIR" } })
+  eq(
+    "registry: a stale $NVIM_CONFIG_DIR value is no root",
+    (ER.fold(notes .. "/a/n.md")),
+    notes .. "/a/n.md"
+  )
+  vim.env.NVIM_CONFIG_DIR = saved_cfg
+
+  -- A name `expand` could not read back is no root, and health says so.
+  vim.env["FT-TEST-DASH"] = outside
+  ER.setup({ vars = { "FT-TEST-DASH", "REPOS_DIR" }, extra = { ["MY-ROOT"] = notes } })
+  eq("registry: a name with a dash folds nothing", (ER.fold(outside .. "/f")), outside .. "/f")
+  local reported = {}
+  for _, u in ipairs(ER.unresolved()) do
+    reported[u.name] = u.kind
+  end
+  eq("unresolved: the dashed var is reported", reported["FT-TEST-DASH"], "var")
+  eq("unresolved: the dashed extra is reported", reported["MY-ROOT"], "extra")
+  eq("unresolved: a usable root is not", reported.REPOS_DIR, nil)
+  vim.env["FT-TEST-DASH"] = nil
+
+  ER.setup(nil)
+  vim.fn.delete(tmp, "rf")
+end
+
+-- ── refs: `$VAR` link targets through the registry ───────────────────────────
+do
+  local tmp, repos, notes = scratch("refs")
+  vim.env.REPOS_DIR = repos
+  ER.setup(nil)
+  local pu = require("filetree.refs.pathutil")
+  local from = notes .. "/a/n.md"
+
+  -- `${VAR}` and `%VAR%` resolve like `$VAR`.
+  vim.env.FT_TEST_REFS = notes
+  local env = { names = { "FT_TEST_REFS" } }
+  local c1, s1 = pu.resolve_candidates("${FT_TEST_REFS}/a/n.md", from, tmp, env)
+  eq("refs: ${VAR} resolves", c1[1], notes .. "/a/n.md")
+  eq("refs: ...in the env style", s1[1], "env")
+  local c2 = pu.resolve_candidates("%FT_TEST_REFS%/a/n.md", from, tmp, env)
+  eq("refs: %VAR% resolves", c2[1], notes .. "/a/n.md")
+  local c3, s3 = pu.resolve_candidates("$FT_TEST_REFS.bak/x.md", from, tmp, env)
+  eq("refs: $VAR.bak is no reference", s3[1], "relative")
+  check("refs: ...and resolves relative to the file", c3[1]:find("/a/", 1, true) ~= nil, c3[1])
+
+  -- `$NVIM_CONFIG_DIR` comes from stdpath("config").
+  local cfg = vim.fn.stdpath("config"):gsub("\\", "/")
+  local c4 = pu.resolve_candidates("$NVIM_CONFIG_DIR/lua/x.lua", from, tmp, { nvim_config = true })
+  eq("refs: $NVIM_CONFIG_DIR resolves", c4[1], pu.abs(cfg .. "/lua/x.lua"))
+
+  -- retarget keeps the `$VAR` form under the deepest root, and falls back to
+  -- the absolute path outside every root.
+  eq(
+    "refs retarget: env style refolds",
+    pu.retarget({
+      style = "env",
+      target = "$FT_TEST_REFS/a/n.md",
+      from_file = from,
+      root = tmp,
+      new_path = notes .. "/b/n.md",
+      env = env,
+    }),
+    "$FT_TEST_REFS/b/n.md"
+  )
+  eq(
+    "refs retarget: the user's $REPOS_DIR is a root too",
+    pu.retarget({
+      style = "env",
+      target = "$FT_TEST_REFS/a/n.md",
+      from_file = from,
+      root = tmp,
+      new_path = repos .. "/proj/n.md",
+      env = env,
+    }),
+    "$REPOS_DIR/proj/n.md"
+  )
+  local outside_new = tmp .. "/outside/n.md"
+  eq(
+    "refs retarget: outside every root -> absolute",
+    pu.retarget({
+      style = "env",
+      target = "$FT_TEST_REFS/a/n.md",
+      from_file = from,
+      root = tmp,
+      new_path = outside_new,
+      env = env,
+    }),
+    outside_new
+  )
+  vim.env.FT_TEST_REFS = nil
   vim.fn.delete(tmp, "rf")
 end
 

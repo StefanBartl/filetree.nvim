@@ -601,7 +601,7 @@ end
 ---commonly disagrees in case between an env-var-derived path (`stdpath()`)
 ---and one a filesystem walk turns up — a case-sensitive compare would just
 ---never match there and silently let an unsafe path through. Same fold
----`path.env_rooted` already uses for the identical "is path A under root B"
+---`lib.nvim.fs.roots` uses for the identical "is path A under root B"
 ---question. `vim.fn.tolower`, not Lua's `string.lower` — the latter only
 ---folds ASCII (`("BJÖRN"):lower()` == `"bjÖrn"`, the `Ö` untouched), which
 ---would leave exactly this comparison broken again for a non-ASCII profile

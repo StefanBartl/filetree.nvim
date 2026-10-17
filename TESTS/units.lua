@@ -7913,7 +7913,7 @@ do
   end
 end
 
--- ── util.path: dot_relative / env_rooted ─────────────────────────────────────
+-- ── util.path: dot_relative / refs env refold ───────────────────────────────
 -- Both are pure string transforms over absolute paths -- nothing is stat'ed --
 -- so the fixture root only has to be absolute on the running OS, not to exist.
 do
@@ -7945,104 +7945,85 @@ do
     path.dot_relative(R .. "/docs/.hidden.md", R .. "/docs") == "./.hidden.md"
   )
 
+  -- The `$VAR` refold of a moved link target (refs `env` style) goes through
+  -- lib.nvim's named-roots registry; these were `path.env_rooted`'s checks.
+  local pathutil = require("filetree.refs.pathutil")
+  local lib_roots = require("lib.nvim.fs.roots")
+  ---@param new_path string
+  ---@param env FiletreeRefEnvRoots
+  ---@return string
+  local function refold(new_path, env)
+    return pathutil.retarget({
+      style = "env",
+      target = "$X/old.md",
+      from_file = R .. "/from.md",
+      root = R,
+      new_path = new_path,
+      env = env,
+    })
+  end
+  -- Only the roots named here: no `$REPOS_DIR` / `$NVIM_CONFIG_DIR` of the
+  -- machine running the suite.
+  lib_roots.setup({ vars = {}, nvim_config = false })
+
   local saved = vim.env.FILETREE_UNITS_ROOT
   vim.env.FILETREE_UNITS_ROOT = R .. "/repos"
+  local names = { names = { "FILETREE_UNITS_ROOT" } }
   check(
-    "path.env_rooted: a path under the variable is rewritten",
-    path.env_rooted(R .. "/repos/filetree.nvim/lua/x.lua", { "FILETREE_UNITS_ROOT" })
+    "refs env refold: a path under the variable is rewritten",
+    refold(R .. "/repos/filetree.nvim/lua/x.lua", names)
       == "$FILETREE_UNITS_ROOT/filetree.nvim/lua/x.lua"
   )
   check(
-    "path.env_rooted: the root itself needs no trailing slash",
-    path.env_rooted(R .. "/repos", { "FILETREE_UNITS_ROOT" }) == "$FILETREE_UNITS_ROOT"
+    "refs env refold: the root itself needs no trailing slash",
+    refold(R .. "/repos", names) == "$FILETREE_UNITS_ROOT"
   )
   check(
-    "path.env_rooted: a path outside comes back absolute",
-    path.env_rooted(R .. "/elsewhere/x.lua", { "FILETREE_UNITS_ROOT" }) == R .. "/elsewhere/x.lua"
+    "refs env refold: a path outside comes back absolute",
+    refold(R .. "/elsewhere/x.lua", names) == R .. "/elsewhere/x.lua"
   )
   check(
-    "path.env_rooted: an unset variable is skipped",
-    path.env_rooted(R .. "/repos/x.lua", { "FILETREE_UNITS_NOT_SET" }) == R .. "/repos/x.lua"
+    "refs env refold: an unset variable is skipped",
+    refold(R .. "/repos/x.lua", { names = { "FILETREE_UNITS_NOT_SET" } }) == R .. "/repos/x.lua"
   )
-  -- Longest match wins, so a repo dir nested inside a home dir reports the
+  -- Deepest match wins, so a repo dir nested inside a home dir reports the
   -- repo dir -- the more specific of the two -- whatever order they are listed.
   local saved_home = vim.env.FILETREE_UNITS_HOME
   vim.env.FILETREE_UNITS_HOME = R
   check(
-    "path.env_rooted: the longest matching root wins",
-    path.env_rooted(R .. "/repos/x.lua", { "FILETREE_UNITS_HOME", "FILETREE_UNITS_ROOT" })
+    "refs env refold: the deepest matching root wins",
+    refold(R .. "/repos/x.lua", { names = { "FILETREE_UNITS_HOME", "FILETREE_UNITS_ROOT" } })
       == "$FILETREE_UNITS_ROOT/x.lua"
   )
   vim.env.FILETREE_UNITS_HOME = saved_home
   vim.env.FILETREE_UNITS_ROOT = saved
 
-  -- `extra`: already-resolved roots (e.g. vim.fn.stdpath("config")) tried
-  -- alongside the env-var `names`, without needing an actual environment
-  -- variable of that name -- see path_copy's `nvim_config_root`.
+  -- `nvim_config`: `$NVIM_CONFIG_DIR` from stdpath("config"), without an
+  -- environment variable of that name.
+  local cfg_dir = (vim.fn.stdpath("config") --[[@as string]]):gsub("\\", "/")
   check(
-    "path.env_rooted: extra root (no matching env var) is rewritten",
-    path.env_rooted(
-      R .. "/config/lua/x.lua",
-      { "FILETREE_UNITS_NOT_SET" },
-      { { name = "NVIM_CONFIG_DIR", root = R .. "/config" } }
-    ) == "$NVIM_CONFIG_DIR/lua/x.lua"
+    "refs env refold: $NVIM_CONFIG_DIR (no env var) is rewritten",
+    refold(cfg_dir .. "/lua/x.lua", { nvim_config = true }) == "$NVIM_CONFIG_DIR/lua/x.lua"
   )
   check(
-    "path.env_rooted: extra root is skipped when it does not match",
-    path.env_rooted(
-      R .. "/elsewhere/x.lua",
-      {},
-      { { name = "NVIM_CONFIG_DIR", root = R .. "/config" } }
-    ) == R .. "/elsewhere/x.lua"
-  )
-  -- Longest match wins across names AND extra roots together, whichever side
-  -- the more specific one is on.
-  vim.env.FILETREE_UNITS_ROOT = R
-  check(
-    "path.env_rooted: extra root wins over a shorter env-var match",
-    path.env_rooted(
-      R .. "/config/lua/x.lua",
-      { "FILETREE_UNITS_ROOT" },
-      { { name = "NVIM_CONFIG_DIR", root = R .. "/config" } }
-    ) == "$NVIM_CONFIG_DIR/lua/x.lua"
-  )
-  check(
-    "path.env_rooted: env-var name wins over a shorter extra root",
-    path.env_rooted(
-      R .. "/config/lua/x.lua",
-      { "FILETREE_UNITS_ROOT" },
-      { { name = "NVIM_CONFIG_DIR", root = R } }
-    ) == "$FILETREE_UNITS_ROOT/config/lua/x.lua"
-  )
-  vim.env.FILETREE_UNITS_ROOT = saved
-  check(
-    "path.env_rooted: nil extra behaves exactly like the old 2-arg call",
-    path.env_rooted(R .. "/repos/x.lua", { "FILETREE_UNITS_NOT_SET" }) == R .. "/repos/x.lua"
+    "refs env refold: ...not with nvim_config = false",
+    refold(cfg_dir .. "/lua/x.lua", { nvim_config = false }) == cfg_dir .. "/lua/x.lua"
   )
 
-  -- Regression coverage for env_rooted's own `fold()`: it must use
-  -- `vim.fn.tolower`, not Lua's ASCII-only `string.lower` -- the latter
-  -- leaves a non-ASCII letter's case untouched (`("BJÖRN"):lower() ==
-  -- "bjÖrn"`), so a Windows profile path containing one (e.g.
-  -- C:\Users\Björn\...) would silently fail to fold against an env var
-  -- reported with different casing of that letter.
-  do
-    local platform = require("filetree.util.platform")
-    local orig_is_windows = platform.is_windows
-    ---@diagnostic disable-next-line: duplicate-set-field
-    platform.is_windows = function()
-      return true
-    end
-    local saved_unicode = vim.env.FILETREE_UNITS_ROOT
-    vim.env.FILETREE_UNITS_ROOT = "C:/Users/BJÖRN/repos"
-    check(
-      "path.env_rooted: a non-ASCII-cased root still folds (Ö/ö) on Windows",
-      path.env_rooted("C:/Users/björn/repos/filetree.nvim/lua/x.lua", { "FILETREE_UNITS_ROOT" })
-        == "$FILETREE_UNITS_ROOT/filetree.nvim/lua/x.lua"
-    )
-    vim.env.FILETREE_UNITS_ROOT = saved_unicode
-    platform.is_windows = orig_is_windows
-  end
+  -- A non-ASCII Windows profile path compares case-insensitively (the
+  -- registry folds with `vim.fn.tolower`, not the ASCII-only `string.lower`).
+  lib_roots.setup({
+    vars = {},
+    nvim_config = false,
+    windows = true,
+    source = { FILETREE_UNITS_ROOT = "C:/Users/BJÖRN/repos" },
+  })
+  check(
+    "refs env refold: a non-ASCII-cased root still folds (Ö/ö) on Windows",
+    refold("C:/Users/björn/repos/filetree.nvim/lua/x.lua", names)
+      == "$FILETREE_UNITS_ROOT/filetree.nvim/lua/x.lua"
+  )
+  lib_roots.setup(nil)
 end
 
 -- ── path_copy: every format copies in the canonical separator ──────────────
