@@ -44,6 +44,8 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `<leader>:` | quickpick | `keymap_cwd` | **global**, opt-in feature: the same, with the tree rooted at the cwd |
 | `-` | tree_traverse | `keymap_up` | Navigate to parent directory (×count) |
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root (×count) |
+| `]s` | tree_traverse | `keymap_next_sibling` | Next sibling at the same depth, skipping expanded folders' children (×count; stops at the end unless `sibling_wrap`) |
+| `[s` | tree_traverse | `keymap_prev_sibling` | Previous sibling at the same depth (×count; stops at the start unless `sibling_wrap`) |
 | `B` | reveal_alt | `keymap` | Reveal the alternate buffer (`#`) in the tree |
 | `L` | cwd_mode | `keymap_cycle` | Cycle the cwd policy (follow → project → lock) |
 | `gp` | cwd_mode | `keymap_lock_here` | Lock the cwd to the node under the cursor |
