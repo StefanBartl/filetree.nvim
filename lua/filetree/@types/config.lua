@@ -861,7 +861,8 @@
 ---                                elevation needed) and a symlink elsewhere.
 ---@field relative      "auto"|"always"|"never"?  What a created symlink stores as its target (default
 ---                                `"auto"`). `"auto"`: a RELATIVE target when the link and its target
----                                live under the same `env_roots` root (`$REPOS_DIR`, ...) -- the
+---                                live under the same `env_roots` root (`$REPOS_DIR`, ...; filetree's
+---                                own roots only, not ones other plugins registered) -- the
 ---                                link then survives the checkout sitting on another drive or
 ---                                under another home on another machine; an absolute target
 ---                                otherwise (a symlink cannot carry an environment variable).

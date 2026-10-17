@@ -1254,11 +1254,15 @@ in that form. What the link itself stores is decided by
 • `"auto"` (default): when the link and its target live under the same
 root, the target is stored relative (`../../proj/dir_a`). Such a link keeps
 working on another machine where that root is on another drive or under
-another home — an absolute `E:/repos/…` would not. (On Windows the
-relative text is written with backslashes: Windows does not resolve a relative
-symlink target written with `/`.) The created link is checked: a relative
-target is resolved against the link's physical directory, so a link inside a
-symlinked folder would dangle — such a link is stored absolute instead.
+another home — an absolute `E:/repos/…` would not. "The same root" counts
+filetree's own `env_roots` roots only (`vars`, `extra`, `$NVIM_CONFIG_DIR`): a
+folder that another plugin or your registry config registers inside
+`$REPOS_DIR` does not split it, so a link between two `$REPOS_DIR` paths stays
+relative. (On Windows the relative text is written with backslashes: Windows
+does not resolve a relative symlink target written with `/`.) The created link
+is checked: a relative target is resolved against the link's physical
+directory, so a link inside a symlinked folder would dangle — such a link is
+stored absolute instead.
 • Across two roots (link under `$REPOS_DIR`, target under
 `$NVIM_CONFIG_DIR`) there is no portable form: a symlink cannot carry an
 environment variable, and the two roots have no fixed layout between them. The
