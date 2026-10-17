@@ -180,7 +180,8 @@ end
 
 ---Re-express a moved path in the style the original reference used.
 ---
----  * `env`      — `$VAR/rest`, refolded by the named-roots registry (falls
+---  * `env`      — `$VAR/rest` (`${VAR}/rest` / `%VAR%/rest` when the original
+---                 was written so), refolded by the named-roots registry (falls
 ---                 back to `fs` when `opts.env` is missing or nothing matches
 ---                 anymore — the target's anchor itself moved out from under
 ---                 every configured root)
@@ -199,7 +200,10 @@ function M.retarget(opts)
     local fold_opts = env_opts(opts.env)
     fold_opts.force = true
     local folded, matched = roots.fold(new_path, fold_opts)
-    if matched then return folded end
+    -- In the reference's own spelling (`${VAR}` / `%VAR%` stay so): the text
+    -- is the user's and may be read by a shell or another tool.
+    -- Slashified like `resolve_candidates` read it.
+    if matched then return (env_roots.respell(folded, matched, (opts.target:gsub("\\", "/")))) end
     -- Fall through to "fs" below: the moved-to location no longer sits under
     -- any configured env root, so an env-relative spelling cannot be kept.
   end

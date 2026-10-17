@@ -32,9 +32,14 @@
 --- path (`uri`, `open_with`, the OS clipboard, shell commands).
 
 local roots = require("lib.nvim.fs.roots")
+local is_subpath = require("lib.nvim.fs.is_subpath")
 local platform = require("filetree.util.platform")
 
 local M = {}
+
+---filetree's own default `vars` (the registry's default too); see `own_root_of`.
+---@type string[]
+local DEFAULT_VARS = { "REPOS_DIR" }
 
 ---@class FiletreeEnvRootsResolved
 ---@field enable      boolean
@@ -149,24 +154,97 @@ function M.root_of(p, opts)
   return roots.root_of(p, o)
 end
 
+---The deepest of filetree's OWN roots `p` lives under: `env_roots.vars`
+---(`{ "REPOS_DIR" }` when unset), `env_roots.extra` and `$NVIM_CONFIG_DIR`
+---(unless `nvim_config = false`) -- the roots of the user's registry config
+---and the ones other plugins registered do not count here, unlike `root_of`.
+---For a decision that must not depend on what somebody else registered: two
+---paths under one `$REPOS_DIR` stay "under the same root" when another plugin
+---registers a folder inside it. The comparison is lexical (no symlinks
+---resolved), case-insensitive on Windows. nil when `enable = false`.
+---@param p string  Absolute path.
+---@return string|nil
+function M.own_root_of(p)
+  if not _cfg.enable or type(p) ~= "string" or p == "" then return nil end
+  local win = platform.is_windows()
+  ---@param n any
+  ---@return string|nil
+  local function key(n)
+    if type(n) ~= "string" then return nil end
+    return win and n:upper() or n
+  end
+  local own = {} ---@type table<string, boolean>
+  for _, n in ipairs(_cfg.vars or DEFAULT_VARS) do
+    local k = key(n)
+    if k then own[k] = true end
+  end
+  for n in pairs(_cfg.extra) do
+    local k = key(n)
+    if k then own[k] = true end
+  end
+  if _cfg.nvim_config then own.NVIM_CONFIG_DIR = true end
+  local best, best_len = nil, -1
+  for _, r in ipairs(M.roots()) do
+    if
+      own[key(r.name)]
+      and #r.root > best_len
+      and is_subpath(p, r.root, { realpath = false, ignore_case = win })
+    then
+      best, best_len = r.name, #r.root
+    end
+  end
+  return best
+end
+
 ---A leading `$NAME`, `${NAME}` or `%NAME%` reference, split off -- the same
 ---spelling rules as the registry's `expand`: the name must be followed by the
 ---end of the string or a separator (a backslash only on Windows).
 ---@param s string
 ---@return string|nil name
 ---@return string|nil rest
+---@return "$"|"${}"|"%%"|nil form  How the reference was written.
 local function parse_ref(s)
+  local form = "${}"
   local name, rest = s:match("^%$%{([%a_][%w_]*)%}(.*)$")
   if not name then
+    form = "$"
     name, rest = s:match("^%$([%a_][%w_]*)(.*)$")
   end
   if not name then
+    form = "%%"
     name, rest = s:match("^%%([%a_][%w_]*)%%(.*)$")
   end
-  if not name then return nil, nil end
+  if not name then return nil, nil, nil end
   local win = platform.is_windows()
-  if rest ~= "" and not rest:match(win and "^[/\\]" or "^/") then return nil, nil end
-  return name, rest
+  if rest ~= "" and not rest:match(win and "^[/\\]" or "^/") then return nil, nil, nil end
+  return name, rest, form
+end
+
+---`folded` -- a `fold` result `$NAME/rest` whose root is `name` -- written the
+---way the leading reference of `original` was: `${NAME}/rest` or
+---`%NAME%/rest` when `original` used that form, and with the name spelled as
+---in `original` when that names the same root (it may differ in case on
+---Windows). For text that is rewritten in place (a moved link target): the
+---user's spelling may be meant for a shell or another tool and is kept.
+---Anything that does not fit comes back as `folded`.
+---@param folded string
+---@param name string
+---@param original string
+---@return string
+function M.respell(folded, name, original)
+  if type(folded) ~= "string" or type(name) ~= "string" or type(original) ~= "string" then
+    return folded
+  end
+  local head = "$" .. name
+  if folded:sub(1, #head) ~= head then return folded end
+  local rest = folded:sub(#head + 1)
+  local written, _, form = parse_ref(original)
+  if not written then return folded end
+  local win = platform.is_windows()
+  if (win and written:upper() or written) == (win and name:upper() or name) then name = written end
+  if form == "${}" then return "${" .. name .. "}" .. rest end
+  if form == "%%" then return "%" .. name .. "%" .. rest end
+  return "$" .. name .. rest
 end
 
 ---The root a leading `$NAME` / `${NAME}` / `%NAME%` reference of `s` names,

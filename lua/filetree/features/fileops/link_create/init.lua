@@ -22,7 +22,9 @@
 --- Env roots (`filetree.util.env_roots`, the top-level `env_roots` option):
 ---   * a target typed as `$REPOS_DIR/x`, `$NVIM_CONFIG_DIR/x` (no environment
 ---     variable needed for that one) or any user-defined root is expanded;
----   * a symlink whose link and target live under the SAME root is created with
+---   * a symlink whose link and target live under the SAME root (one of
+---     filetree's own `env_roots` roots -- one another plugin registered
+---     inside it does not split it) is created with
 ---     a RELATIVE target (`relative = "auto"`), so it keeps working on another
 ---     machine where that root sits on another drive/home -- an absolute
 ---     `E:/repos/x` would not;
@@ -149,6 +151,10 @@ end
 ---option): relative to the link's directory when `target` and `link_path` sit
 ---under the same env root -- or always, with `relative = "always"` -- else the
 ---absolute path. `nil` second value = a relative form was used.
+---"The same root" counts filetree's own `env_roots` roots only
+---(`own_root_of`): a folder another plugin or the user's registry config
+---registered inside `$REPOS_DIR` does not split it in two, so a link and a
+---target that both sit under `$REPOS_DIR` stay relative.
 ---@param target string    Absolute path the link points to.
 ---@param link_path string Absolute path of the link to create.
 ---@return string text
@@ -157,8 +163,8 @@ local function symlink_text(target, link_path)
   local mode = _cfg.relative or "auto"
   if mode == "never" then return target, false end
   if mode == "auto" then
-    local t_root = env_roots.root_of(target)
-    if not t_root or t_root ~= env_roots.root_of(link_path) then return target, false end
+    local t_root = env_roots.own_root_of(target)
+    if not t_root or t_root ~= env_roots.own_root_of(link_path) then return target, false end
   end
   local rel = path.dot_relative(target, path.parent(link_path))
   -- No relative form exists across drive letters: dot_relative hands the
@@ -260,10 +266,13 @@ local function do_create(target, link_path, kind, is_dir)
   elseif
     kind == "Symlink"
     and (_cfg.relative or "auto") ~= "never"
+    and env_roots.own_root_of(target)
     and env_roots.root_of(target)
   then
     -- Absolute, with the target under a root: the link text itself cannot say
-    -- `$ROOT/...`, so say what can be done about it.
+    -- `$ROOT/...`, so say what can be done about it. Under one of filetree's
+    -- own roots only -- that is what `symlink_text` decided "relative" by; a
+    -- target under a foreign root alone was never offered a relative form.
     msg = msg
       .. " (stored absolute -- a symlink cannot carry $"
       .. env_roots.root_of(target)

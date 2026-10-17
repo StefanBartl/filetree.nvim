@@ -419,8 +419,9 @@ in `outgoing_links.env_vars` or is a root of
 [lib.nvim's named-roots registry](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/fs/roots/README.md)
 (`$REPOS_DIR` by default; `$NVIM_CONFIG_DIR` is always recognized, backed by
 `stdpath("config")`, no config needed). The rewritten link keeps the `$VAR`
-form under the deepest root that contains the new location, and becomes
-absolute when none does. Moving a whole directory covers every file underneath it,
+form under the deepest root that contains the new location, in the spelling
+the link was written in (`${VAR}/…` and `%VAR%/…` stay so, and so does the
+case of the name on Windows), and becomes absolute when none does. Moving a whole directory covers every file underneath it,
 not just the one under the cursor, and a link whose *target* was moved in
 the same batch (a folder containing both a note and the asset it points at)
 is re-anchored to that target's own new location too.
@@ -703,7 +704,11 @@ decided by `features.link_create.relative`:
 - `"auto"` (default): when the link and its target live under the **same**
   root, the target is stored **relative** (`../../proj/dir_a`). Such a link
   keeps working on another machine where that root is on another drive or
-  under another home — an absolute `E:/repos/…` would not. (On Windows the
+  under another home — an absolute `E:/repos/…` would not. "The same root"
+  counts filetree's own `env_roots` roots only (`vars`, `extra`,
+  `$NVIM_CONFIG_DIR`): a folder that another plugin or your registry config
+  registers inside `$REPOS_DIR` does not split it, so a link between two
+  `$REPOS_DIR` paths stays relative. (On Windows the
   relative text is written with backslashes: Windows does not resolve a
   relative symlink target written with `/`.)
   The created link is checked: a relative target is resolved against the

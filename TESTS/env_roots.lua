@@ -792,7 +792,126 @@ do
     }),
     outside_new
   )
+
+  -- retarget keeps the reference's own spelling: `${VAR}` and `%VAR%` may be
+  -- meant for a shell or another tool, and are not rewritten to `$VAR`.
+  ---@param target string
+  ---@param new_path string
+  ---@return string
+  local function moved(target, new_path)
+    return pu.retarget({
+      style = "env",
+      target = target,
+      from_file = from,
+      root = tmp,
+      new_path = new_path,
+      env = env,
+    })
+  end
+  eq(
+    "refs retarget: ${VAR} stays ${VAR}",
+    moved("${FT_TEST_REFS}/a/n.md", notes .. "/b/n.md"),
+    "${FT_TEST_REFS}/b/n.md"
+  )
+  eq(
+    "refs retarget: %VAR% stays %VAR%",
+    moved("%FT_TEST_REFS%/a/n.md", notes .. "/b/n.md"),
+    "%FT_TEST_REFS%/b/n.md"
+  )
+  eq(
+    "refs retarget: the root itself in %VAR% form",
+    moved("%FT_TEST_REFS%/a/n.md", notes),
+    "%FT_TEST_REFS%"
+  )
+  eq(
+    "refs retarget: a backslashed %VAR% reference keeps its form",
+    moved("%FT_TEST_REFS%\\a\\n.md", notes .. "/b/n.md"),
+    "%FT_TEST_REFS%/b/n.md"
+  )
+  eq(
+    "refs retarget: moved under another root, the form is kept with the new name",
+    moved("${FT_TEST_REFS}/a/n.md", repos .. "/proj/n.md"),
+    "${REPOS_DIR}/proj/n.md"
+  )
+  if vim.fn.has("win32") == 1 then
+    eq(
+      "refs retarget: the name keeps its case on Windows",
+      moved("%ft_test_refs%/a/n.md", notes .. "/b/n.md"),
+      "%ft_test_refs%/b/n.md"
+    )
+  end
+  eq(
+    "respell: a folded path of another root is left alone",
+    ER.respell("$A/x", "B", "%B%/y"),
+    "$A/x"
+  )
+  eq(
+    "respell: an original without a reference is left alone",
+    ER.respell("$A/x", "A", "a/y"),
+    "$A/x"
+  )
   vim.env.FT_TEST_REFS = nil
+  vim.fn.delete(tmp, "rf")
+end
+
+-- ── link_create: a root registered inside $REPOS_DIR does not split it ───────
+-- `relative = "auto"` decides by filetree's own roots: a folder another plugin
+-- registered inside `$REPOS_DIR` must not turn a link between two `$REPOS_DIR`
+-- paths absolute (that link would break when the checkout moves).
+do
+  local tmp, repos = scratch("ownroots")
+  vim.env.REPOS_DIR = repos
+  vim.fn.mkdir(repos .. "/proj/notes/a", "p")
+  vim.fn.writefile({ "x" }, repos .. "/proj/notes/a/x.md")
+  vim.fn.mkdir(repos .. "/other/links", "p")
+  local lib_roots = require("lib.nvim.fs.roots")
+  lib_roots.setup(nil)
+  local unregister = lib_roots.register("FT_TEST_NESTED", repos .. "/proj/notes")
+
+  local seen = {}
+  local orig_notify = vim.notify
+  vim.notify = function(m)
+    seen[#seen + 1] = m
+  end
+
+  setup({}, { link_create = { enabled = true, relative = "auto" } })
+  eq(
+    "own_root_of: a root registered elsewhere is not filetree's own",
+    ER.own_root_of(repos .. "/proj/notes/a/x.md"),
+    "REPOS_DIR"
+  )
+  eq(
+    "own_root_of: ...root_of still sees it",
+    ER.root_of(repos .. "/proj/notes/a/x.md"),
+    "FT_TEST_NESTED"
+  )
+  -- A directory: always a symlink (a file would get a hardlink on Windows).
+  local lc = ft.feature("link_create")
+  lc.mark(repos .. "/proj/notes/a")
+  cur_node = { path = repos .. "/other/links", type = "directory" }
+  lc.paste()
+  vim.notify = orig_notify
+  local ok_rl, made = pcall(uv.fs_readlink, repos .. "/other/links/a")
+  made = ok_rl and made or nil
+  if not made then
+    print(
+      "  note link_create: directory symlink not created in this environment (needs elevation on Windows)"
+    )
+  else
+    eq(
+      "link_create: a root registered inside $REPOS_DIR keeps the link relative",
+      made:gsub("\\", "/"),
+      "../../proj/notes/a"
+    )
+    check(
+      "link_create: ...and the message does not claim that no relative form fits",
+      not table.concat(seen, "\n"):find("no relative form fits", 1, true),
+      table.concat(seen, "\n")
+    )
+  end
+
+  unregister()
+  ER.setup(nil)
   vim.fn.delete(tmp, "rf")
 end
 
