@@ -1,6 +1,7 @@
 ---@module 'filetree.util.env_roots'
 --- Named root directories (`$REPOS_DIR`, `$NVIM_CONFIG_DIR`, user-defined
---- ones) and the three things filetree does with them:
+--- ones) as filetree uses them -- a thin layer over lib.nvim's named-roots
+--- registry (`lib.nvim.fs.roots`, see its README), which does the actual work:
 ---
 ---   * `fold(p)`    absolute path -> `$NAME/rest` -- what every action that
 ---                  hands an ABSOLUTE path to the user (clipboard, inserted
@@ -13,47 +14,49 @@
 ---                  (`$NVIM_CONFIG_DIR` is `stdpath("config")`, user-defined
 ---                  `extra` roots are plain config values).
 ---   * `remap(p)`   an absolute path recorded on ANOTHER machine -> where it
----                  would live under this machine's roots (see the function).
+---                  would live under this machine's roots.
 ---
---- Configured by the top-level `env_roots` option (see `FiletreeEnvRoots`);
---- `enable = false` turns every fold off, so an action that used to write an
---- absolute path writes the plain absolute path again. Actions that are
---- explicitly relative (`relative`, `buffer_relative`, `project_relative`,
---- Markdown links relative to the buffer) never come through here, and
---- neither do the ones that need a real path (`uri`, `open_with`, the OS
---- clipboard, shell commands).
+--- What this layer adds is filetree's own `env_roots` option: it is never
+--- handed to the registry's `setup()` (that one belongs to the user's config
+--- and replaces it globally) but goes into every call -- `vars` as `opts.vars`
+--- (replacing the registry's list, as it always replaced filetree's default),
+--- `extra` as `opts.extra`, `nvim_config` as `opts.nvim_config`. The roots of
+--- the user's registry config and of other plugins stay visible: a path under
+--- a deeper root registered elsewhere folds to that one.
+---
+--- `enable` stays filetree's own switch: off, nothing is folded or remapped
+--- (whatever the registry's `enable` says); on, every call passes
+--- `force = true`. Actions that are explicitly relative (`relative`,
+--- `buffer_relative`, `project_relative`, Markdown links relative to the
+--- buffer) never come through here, and neither do the ones that need a real
+--- path (`uri`, `open_with`, the OS clipboard, shell commands).
 
-local path = require("filetree.util.path")
+local roots = require("lib.nvim.fs.roots")
 local platform = require("filetree.util.platform")
-
-local uv = vim.uv or vim.loop
 
 local M = {}
 
----@type string[]
-local DEFAULT_VARS = { "REPOS_DIR" }
-
 ---@class FiletreeEnvRootsResolved
 ---@field enable      boolean
----@field vars        string[]
+---@field vars?       string[]  nil = the registry's own `vars` (default { "REPOS_DIR" })
 ---@field nvim_config boolean
 ---@field extra       table<string, string|(fun(): string)>
 
 ---@type FiletreeEnvRootsResolved
-local _cfg = { enable = true, vars = DEFAULT_VARS, nvim_config = true, extra = {} }
+local _cfg = { enable = true, vars = nil, nvim_config = true, extra = {} }
 
----Apply the `env_roots` config table (already merged over the defaults).
----`vars` is deliberately not given a default list in `config/DEFAULTS.lua`:
----the config merge is index-wise for lists, so a user's `{ "A" }` would
----silently keep a default's second entry.
+---Apply the `env_roots` config table (already merged over the defaults and
+---type-checked by `filetree.config`). `vars` is deliberately not given a
+---default list in `config/DEFAULTS.lua`: the config merge is index-wise for
+---lists, so a user's `{ "A" }` would silently keep a default's second entry.
 ---@param cfg FiletreeEnvRoots|nil
 function M.setup(cfg)
   cfg = type(cfg) == "table" and cfg or {}
   _cfg = {
     enable = cfg.enable ~= false,
-    vars = type(cfg.vars) == "table" and cfg.vars or DEFAULT_VARS,
+    vars = type(cfg.vars) == "table" and vim.deepcopy(cfg.vars) or nil,
     nvim_config = cfg.nvim_config ~= false,
-    extra = type(cfg.extra) == "table" and cfg.extra or {},
+    extra = type(cfg.extra) == "table" and vim.deepcopy(cfg.extra) or {},
   }
 end
 
@@ -63,119 +66,69 @@ function M.enabled()
   return _cfg.enable
 end
 
----@internal
----@param v any  a path, or a function returning one
----@return string|nil
-local function resolve_value(v)
-  if type(v) == "function" then
-    local ok, r = pcall(v)
-    v = ok and r or nil
-  end
-  if type(v) == "string" and v ~= "" then return v end
-  return nil
-end
-
 ---@class FiletreeEnvRootsOpts
 ---@field names?       string[]  Extra environment variable names to try on top of the configured ones.
 ---@field nvim_config? boolean   Override `env_roots.nvim_config` for this call.
 ---@field force?       boolean   Fold even when `env_roots.enable` is false -- for an action the user asked for by name (`:Filetree copy env_rooted`).
 
+---The registry options of one call: filetree's own `env_roots` config plus the
+---caller's `names` / `nvim_config` (never `force`, see `fold_opts`).
+---@param opts? FiletreeEnvRootsOpts
+---@return Lib.Fs.Roots.Opts
+local function roots_opts(opts)
+  opts = type(opts) == "table" and opts or {}
+  local nvim_config = _cfg.nvim_config
+  if type(opts.nvim_config) == "boolean" then nvim_config = opts.nvim_config end
+  return {
+    vars = _cfg.vars,
+    extra = _cfg.extra,
+    names = type(opts.names) == "table" and opts.names or nil,
+    nvim_config = nvim_config,
+  }
+end
+
+---`roots_opts` plus `force = true`, or nil when filetree's own switch is off
+---and the caller did not ask by name.
+---@param opts? FiletreeEnvRootsOpts
+---@return Lib.Fs.Roots.FoldOpts|nil
+local function fold_opts(opts)
+  local forced = type(opts) == "table" and opts.force == true
+  if not (_cfg.enable or forced) then return nil end
+  local o = roots_opts(opts) --[[@as Lib.Fs.Roots.FoldOpts]]
+  o.force = true
+  return o
+end
+
 ---Every root that currently has a value, as `{ name, root }` with `root` an
----absolute, forward-slash path without a trailing slash. Independent of
----`enable`: that switch decides whether callers FOLD, not which roots exist.
----Order: user-defined `extra` roots (sorted by name, so a result never
----depends on table iteration order), then `vars`, then `names`, then
----`$NVIM_CONFIG_DIR`; the first definition of a name wins, so an `extra`
----entry overrides an environment variable of the same name.
+---absolute, forward-slash path without a trailing slash (uppercase drive
+---letter). Independent of `enable`: that switch decides whether callers FOLD,
+---not which roots exist. Order and precedence are the registry's (`roots()`
+---of `lib.nvim.fs.roots`): the user's `extra`, filetree's `extra`, registered
+---roots, `vars`, `names`, `$NVIM_CONFIG_DIR`; the first usable definition of a
+---name wins.
 ---@param opts? FiletreeEnvRootsOpts
 ---@return { name: string, root: string }[]
 function M.roots(opts)
-  opts = type(opts) == "table" and opts or {}
-  local out, seen = {}, {}
-
-  ---@param name any
-  ---@param value any
-  local function add(name, value)
-    if type(name) ~= "string" or name == "" or seen[name] then return end
-    local root = resolve_value(value)
-    -- An absolute value only: a relative one would be resolved against
-    -- whatever the cwd happens to be, and a root that moves with `:cd` is no
-    -- root. (`~` and a leading `$VAR` are expanded by `to_unix` below.)
-    if not root or not (root:match("^%a:[/\\]") or root:match("^[/\\~$]")) then return end
-    local abs = path.to_unix(root):gsub("/+$", "")
-    if abs == "" then return end
-    seen[name] = true
-    out[#out + 1] = { name = name, root = abs }
-  end
-
-  local extra_names = {}
-  for name in pairs(_cfg.extra) do
-    extra_names[#extra_names + 1] = tostring(name)
-  end
-  table.sort(extra_names)
-  for _, name in ipairs(extra_names) do
-    add(name, _cfg.extra[name])
-  end
-  for _, name in ipairs(_cfg.vars) do
-    if type(name) == "string" then add(name, vim.env[name]) end
-  end
-  for _, name in ipairs(opts.names or {}) do
-    if type(name) == "string" then add(name, vim.env[name]) end
-  end
-  local want_nvim = opts.nvim_config
-  if want_nvim == nil then want_nvim = _cfg.nvim_config end
-  if want_nvim then add("NVIM_CONFIG_DIR", vim.fn.stdpath("config")) end
-  return out
+  return roots.roots(roots_opts(opts))
 end
 
 ---A function that folds absolute paths into `$NAME/rest` (see `fold`) with
 ---the roots resolved ONCE -- for a caller folding many paths (a recursive file
----list): `fold` resolves them per call, which is several `fnamemodify` calls a
----path. The paths must be absolute; anything else comes back unchanged.
+---list). Anything that is not absolute comes back unchanged.
 ---@param opts? FiletreeEnvRootsOpts
 ---@return fun(p: string): string, string|nil
 function M.folder(opts)
-  if not (_cfg.enable or (type(opts) == "table" and opts.force)) then
+  local o = fold_opts(opts)
+  if not o then
     return function(p)
       return p, nil
     end
   end
-
-  local win = platform.is_windows()
-  local prepared = {}
-  for _, r in ipairs(M.roots(opts)) do
-    prepared[#prepared + 1] = {
-      name = r.name,
-      root = r.root,
-      key = win and vim.fn.tolower(r.root) or r.root,
-      len = #r.root,
-    }
-  end
-  -- Longest root first, so a nested root beats the one around it.
-  table.sort(prepared, function(a, b)
-    return a.len > b.len
-  end)
-
-  return function(p)
-    if type(p) ~= "string" or p == "" then return p, nil end
-    local abs = p:gsub("\\", "/")
-    if not (abs:match("^%a:/") or abs:sub(1, 1) == "/") then return p, nil end
-    abs = abs:gsub("/+$", "")
-    -- `vim.fn.tolower`, not `string.lower`: the latter only folds ASCII, which
-    -- would leave this broken for a non-ASCII profile path on Windows.
-    local key = win and vim.fn.tolower(abs) or abs
-    for _, r in ipairs(prepared) do
-      if key == r.key then return "$" .. r.name, r.name end
-      if key:sub(1, r.len + 1) == r.key .. "/" then
-        return "$" .. r.name .. "/" .. abs:sub(r.len + 2), r.name
-      end
-    end
-    return p, nil
-  end
+  return roots.folder(o)
 end
 
 ---Absolute `p` as `$NAME/rest` when it lives under one of the roots (the
----longest match wins, so a nested root beats the one around it); `p`
+---deepest match wins, so a nested root beats the one around it); `p`
 ---unchanged otherwise. With `enable = false` (and no `opts.force`) always `p`
 ---unchanged. `p` must be absolute -- a relative path is returned as is.
 ---@param p string
@@ -191,68 +144,120 @@ end
 ---@param opts? FiletreeEnvRootsOpts
 ---@return string|nil
 function M.root_of(p, opts)
-  local _, name = M.fold(p, opts)
-  return name
+  local o = fold_opts(opts)
+  if not o then return nil end
+  return roots.root_of(p, o)
 end
 
----`$NAME/rest` or `${NAME}/rest` -> absolute path, for the roots known here
----(including ones without a real environment variable). Anything else --
----other variables, a path without a leading variable -- comes back untouched,
----for `path.to_absolute` and its generic `$VAR` expansion to deal with.
----Works whatever `enable` says: it only ever acts on text the user wrote.
+---A leading `$NAME`, `${NAME}` or `%NAME%` reference, split off -- the same
+---spelling rules as the registry's `expand`: the name must be followed by the
+---end of the string or a separator (a backslash only on Windows).
+---@param s string
+---@return string|nil name
+---@return string|nil rest
+local function parse_ref(s)
+  local name, rest = s:match("^%$%{([%a_][%w_]*)%}(.*)$")
+  if not name then
+    name, rest = s:match("^%$([%a_][%w_]*)(.*)$")
+  end
+  if not name then
+    name, rest = s:match("^%%([%a_][%w_]*)%%(.*)$")
+  end
+  if not name then return nil, nil end
+  local win = platform.is_windows()
+  if rest ~= "" and not rest:match(win and "^[/\\]" or "^/") then return nil, nil end
+  return name, rest
+end
+
+---The root a leading `$NAME` / `${NAME}` / `%NAME%` reference of `s` names,
+---among the roots of one registry call (the registry's own `match` knows only
+---the globally configured roots, not a plugin's per-call ones). Names compare
+---case-insensitively on Windows, like the variables themselves.
+---@param s string
+---@param opts? Lib.Fs.Roots.Opts  Passed to the registry's `roots()` as is.
+---@return string|nil name  The root's name as configured.
+---@return string|nil root  Its absolute path.
+---@return string|nil rest  The rest of `s` after the reference (`""` or starting with a separator).
+function M.match(s, opts)
+  if type(s) ~= "string" then return nil, nil, nil end
+  local ref, rest = parse_ref(s)
+  if not ref then return nil, nil, nil end
+  local win = platform.is_windows()
+  local want = win and ref:upper() or ref
+  for _, r in ipairs(roots.roots(opts)) do
+    if (win and r.name:upper() or r.name) == want then return r.name, r.root, rest end
+  end
+  return nil, nil, nil
+end
+
+---`$NAME/rest`, `${NAME}/rest` or `%NAME%/rest` -> absolute path, for the
+---roots known here (including ones without a real environment variable, and
+---filetree's own `extra`); `~/rest` too. Anything else -- other variables, a
+---reference in the middle, a name followed by something that is not a
+---separator -- comes back untouched, for `path.to_absolute` to deal with. On
+---Windows the rest's backslashes become slashes. Works whatever `enable` says:
+---it only ever acts on text the user wrote.
 ---@param s string
 ---@return string
 function M.expand(s)
   if type(s) ~= "string" then return s end
-  local name, rest = s:match("^%$%{?([%a_][%w_]*)%}?(.*)$")
-  if not name or not (rest == "" or rest:match("^[/\\]")) then return s end
-  for _, r in ipairs(M.roots()) do
-    if r.name == name then return r.root .. rest end
-  end
-  return s
-end
-
----@internal
----@param s string
----@return string
-local function fold_case(s)
-  return platform.is_windows() and vim.fn.tolower(s) or s
+  local _, root, rest = M.match(s, roots_opts())
+  if not root then return roots.expand(s) end
+  rest = rest or ""
+  if platform.is_windows() then rest = rest:gsub("\\", "/") end
+  return root .. rest
 end
 
 ---Candidates for an absolute path that was recorded on ANOTHER machine,
----re-anchored under this machine's roots. The root's own folder name is the
----anchor: a root `D:/repos` is called `repos` on every machine, so the part of
----`E:/repos/casedesk.nvim/x.md` after `repos` is looked for under `D:/repos`
----(likewise `nvim` for `$NVIM_CONFIG_DIR`, whatever drive or home it sits
----on). Only candidates that exist are returned, nearest anchor first, each
----once. Empty when `enable = false`, `p` is not absolute, or nothing matches.
+---re-anchored under this machine's roots (the registry's `remap`): the root's
+---own folder name is the anchor, so the part of `E:/repos/casedesk.nvim/x.md`
+---after `repos` is looked for under this machine's `$REPOS_DIR`. Only
+---candidates that exist are returned, the outermost anchor first, each once.
+---Empty when `enable = false`, `p` is not absolute, or nothing matches.
 ---@param p string
 ---@return string[]
 function M.remap(p)
-  if not _cfg.enable or type(p) ~= "string" then return {} end
-  local raw = path.slashify(p)
-  if not (raw:match("^%a:/") or raw:sub(1, 1) == "/") then return {} end
+  local o = fold_opts()
+  if not o or type(p) ~= "string" then return {} end
+  return roots.remap(p, o)
+end
 
-  local segs = vim.split(raw, "/", { plain = true, trimempty = true })
-  local folded_raw = fold_case(raw)
-  local hits, seen = {}, {}
+---Each name filetree's own `env_roots` config asks for (`vars`, `extra`) that
+---is no root here, with the likely reason -- for `:checkhealth filetree`.
+---@return { name: string, kind: "var"|"extra", reason: string }[]
+function M.unresolved()
+  local win = platform.is_windows()
+  local have = {}
   for _, r in ipairs(M.roots()) do
-    local leaf = r.root:match("([^/]+)$")
-    if leaf then
-      local folded_leaf = fold_case(leaf)
-      for i = 1, #segs - 1 do
-        if fold_case(segs[i]) == folded_leaf then
-          local cand = r.root .. "/" .. table.concat(segs, "/", i + 1)
-          local key = fold_case(cand)
-          if not seen[key] and key ~= folded_raw and uv.fs_stat(cand) then
-            seen[key] = true
-            hits[#hits + 1] = cand
-          end
-        end
-      end
-    end
+    have[win and r.name:upper() or r.name] = true
   end
-  return hits
+  local out = {}
+  ---@param name any
+  ---@param kind "var"|"extra"
+  local function check(name, kind)
+    if type(name) ~= "string" or have[win and name:upper() or name] then return end
+    local reason
+    if not name:match("^[%a_][%w_]*$") then
+      reason = "not a valid name (letters, digits and underscores only)"
+    elseif kind == "var" and (vim.env[name] or "") == "" then
+      reason = "the environment variable is not set"
+    else
+      reason = "no usable value (relative, a whole drive, or a `$VAR` without a value)"
+    end
+    out[#out + 1] = { name = name, kind = kind, reason = reason }
+  end
+  for _, name in ipairs(_cfg.vars or {}) do
+    check(name, "var")
+  end
+  local extra_names = {}
+  for name in pairs(_cfg.extra) do
+    if type(name) == "string" then extra_names[#extra_names + 1] = name end
+  end
+  table.sort(extra_names)
+  for _, name in ipairs(extra_names) do
+    check(name, "extra")
+  end
+  return out
 end
 
 return M

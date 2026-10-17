@@ -414,9 +414,13 @@ rewrites those, the moment the file's own move lands.
 It handles every style a link can be written in: relative (`../assets/x`,
 re-derived for the new depth, not just kept as-is), absolute (left alone —
 it already doesn't depend on where the file itself lives), and
-`$VAR/…`-rooted, when the variable is listed in `outgoing_links.env_vars`
-(`$NVIM_CONFIG_DIR` is always recognized, backed by `stdpath("config")`, no
-config needed). Moving a whole directory covers every file underneath it,
+`$VAR/…`-rooted (also `${VAR}/…` and `%VAR%/…`), when the variable is listed
+in `outgoing_links.env_vars` or is a root of
+[lib.nvim's named-roots registry](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/fs/roots/README.md)
+(`$REPOS_DIR` by default; `$NVIM_CONFIG_DIR` is always recognized, backed by
+`stdpath("config")`, no config needed). The rewritten link keeps the `$VAR`
+form under the deepest root that contains the new location, and becomes
+absolute when none does. Moving a whole directory covers every file underneath it,
 not just the one under the cursor, and a link whose *target* was moved in
 the same batch (a folder containing both a note and the asset it points at)
 is re-anchored to that target's own new location too.

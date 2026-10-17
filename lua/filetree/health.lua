@@ -84,6 +84,31 @@ function M.check()
       else
         vim.health.ok("env_roots: " .. table.concat(names, "; "))
       end
+      -- Names filetree's own `env_roots` asks for that came to nothing (a
+      -- `vars = { "MY-DIR" }` would otherwise be silently without effect).
+      for _, u in ipairs(env_roots.unresolved()) do
+        vim.health.warn(
+          ("env_roots.%s: $%s is no root -- %s"):format(
+            u.kind == "var" and "vars" or "extra",
+            u.name,
+            u.reason
+          )
+        )
+      end
+      -- The registry's own configuration (the user's `lib.nvim.fs.roots`
+      -- setup, roots other plugins registered) is reported in full by
+      -- `:checkhealth lib`; point there when something in it is unusable.
+      local bad = {}
+      for _, st in ipairs(require("lib.nvim.fs.roots").status()) do
+        if st.problem then bad[#bad + 1] = ("$%s (%s)"):format(st.name, st.problem) end
+      end
+      if #bad > 0 then
+        vim.health.info(
+          "env_roots: shared roots without a usable value: "
+            .. table.concat(bad, ", ")
+            .. " -- see :checkhealth lib"
+        )
+      end
     end
   end
 

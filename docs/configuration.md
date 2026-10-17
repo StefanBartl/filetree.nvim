@@ -360,9 +360,23 @@ machine where that directory sits on another drive or under another home.
 |---|---|
 | `$REPOS_DIR` | the environment variable of that name (`vars`) |
 | `$NVIM_CONFIG_DIR` | `vim.fn.stdpath("config")` — no environment variable needed (`nvim_config = false` drops it) |
-| your own | `extra = { NAME = "/abs/path" }`, a plain path or a function returning one — no environment variable needed; a name here overrides a `vars` entry of the same name |
+| your own | `extra = { NAME = "/abs/path" }`, a plain path or a function returning one (it may start with `~`, `$VAR`, `${VAR}` or `%VAR%`) — no environment variable needed; a name here overrides a `vars` entry of the same name |
+| shared | the roots of [lib.nvim's named-roots registry](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/fs/roots/README.md): your `require("lib.nvim.fs.roots").setup({ extra = … })` and roots other plugins register |
 
-An unset variable is skipped, and when roots nest the **longest** match wins.
+filetree's `env_roots` is a layer over that registry: `vars`, `extra` and
+`nvim_config` apply to filetree's calls only and never change the registry's
+own configuration, while the registry's roots are visible here too. Without
+`vars`, the registry's list is used (default `{ "REPOS_DIR" }`).
+
+An unset variable is skipped, and when roots nest the **deepest** match wins.
+A value is a root only when it is an absolute path that is not a whole drive
+or the filesystem root (`C:/`, `/`), and a name must be letters, digits and
+underscores (`MY-DIR` is ignored); `:checkhealth filetree` warns about an
+`env_roots` entry that is no root. `$NVIM_CONFIG_DIR` is always
+`stdpath("config")`, also when it is listed in `vars`. `.` and `..` in a path
+are resolved before it is folded, so `$REPOS_DIR/../x` is never written. A
+typed path (`:Filetree symlink`) may name a root as `$NAME`, `${NAME}` or
+`%NAME%`.
 
 What goes through it — the actions that hand an *absolute* path to you:
 
