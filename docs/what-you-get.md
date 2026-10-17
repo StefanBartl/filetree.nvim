@@ -7,7 +7,7 @@ as default-off. The ones worth knowing on day one:
 | --- | --- |
 | `?` | The cheatsheet for the buffer you are in: filetree's keys, the adapter's and other plugins' keys, the commands — and any key two actions claim (`:Filetree keys` moves one) |
 | Auto-reveal | The tree follows the buffer you switch to |
-| Marks | `m` marks a node; copy, move, trash, diff and more act on the whole set |
+| Marks | `m` marks a node; copy, move, trash, diff and more act on the whole set — **in the order you marked them** (`features.marks.order = "tree"` for path order) |
 | Preview | The node under the cursor, without opening it |
 | Link marker | A `⇢` sign on a symlinked node, `⇢!` when it dangles |
 | Smart rename | Rename, and rewrite the markdown links, `require()`s and `import`s pointing at it |

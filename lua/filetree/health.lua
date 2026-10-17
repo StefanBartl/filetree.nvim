@@ -167,6 +167,19 @@ function M.check()
     end
   end
 
+  -- marks: which order every consumer gets the marked paths in. Info only --
+  -- both values are valid; an invalid one is already reported (and dropped)
+  -- by the config validation above.
+  if is_enabled("marks") then
+    local order = (feat_cfg.marks or {}).order or "marked"
+    vim.health.info(
+      ("marks: order = %q (%s)"):format(
+        order,
+        order == "tree" and "sorted by full path" or "the order the nodes were marked in"
+      )
+    )
+  end
+
   -- pdf_open: pdfport.nvim is optional; without it PDFs open in the system viewer
   if is_enabled("pdf_open") and not pcall(require, "pdfport") then
     vim.health.info("pdf_open: pdfport.nvim not installed — PDFs open in the system viewer only")

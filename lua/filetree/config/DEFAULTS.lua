@@ -90,6 +90,12 @@ return {
     no_name_guard = {
       enabled = true,
     },
+    -- Marks hand their paths to every consumer (copy path incl. `[e`, file lists,
+    -- fileops, ...) in the order they were marked; "tree" = sorted by full
+    -- path instead. See docs/FEATURES/INTEGRATIONS.md#marks.
+    marks = {
+      order = "marked",
+    },
     -- Warn when a just-opened buffer turns out to be a dangling symlink's
     -- target -- otherwise indistinguishable from any other empty [New]
     -- buffer. See docs/FEATURES/UI.md#broken-link-notify.

@@ -27,6 +27,15 @@
 --- call, marked or not) — hooking those would keep re-arming the timer from
 --- actions that have nothing to do with actually using the marks, defeating
 --- the point of the timeout entirely.
+---
+--- Output order (`order`, default "marked"): every mark carries a sequence
+--- number taken when it was set, and `get_marked()` -- the one accessor every
+--- consumer (path_copy incl. `[e`, copy_file_list, markdown_links,
+--- file_clipboard, link_create, fileops, pdf_create, diff, ...) goes through -- returns the paths in the
+--- order they were marked. Unmarking and re-marking a path moves it to the
+--- end. A bulk mark (mark all visible, Visual selection) numbers the newly
+--- marked nodes in tree order and leaves already-marked ones where they are.
+--- `order = "tree"` restores the old output: sorted by full path.
 
 local notify = require("filetree.util.notify").create("[filetree.marks]")
 
@@ -59,6 +68,9 @@ local _cfg = {
   -- doc comment above); 0 disables the timeout, same "0 = off" convention
   -- as trash's max_history.
   auto_clear_ms = 60000,
+  -- Order in which marked paths are handed to every consumer: "marked" (the
+  -- order they were marked in) or "tree" (sorted by full path).
+  order = "marked",
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -77,6 +89,7 @@ M.SCHEMA = {
   keymap_next = "keymap",
   keymap_prev = "keymap",
   auto_clear_ms = { "number", min = 0 },
+  order = { "string", enum = { "marked", "tree" } },
 }
 
 ---@type FiletreeAdapter?
@@ -86,8 +99,19 @@ local _adapter = nil
 ---@type fun()?
 local _unsubscribe_render = nil
 
----@type table<string, boolean>  absolute path → marked
+---@type table<string, integer>  absolute path → sequence number it was marked with
 local _marks = {}
+
+---Last sequence number handed out; only ever grows until the set is cleared.
+local _seq = 0
+
+---Mark `path` unless it already is (an existing mark keeps its position).
+---@param path string
+local function set_mark(path)
+  if _marks[path] then return end
+  _seq = _seq + 1
+  _marks[path] = _seq
+end
 
 local _ns = nil
 local function ns()
@@ -171,11 +195,11 @@ function M.toggle(path)
   if _marks[path] then
     _marks[path] = nil
   else
-    _marks[path] = true
+    set_mark(path)
   end
   touch()
   redraw()
-  return _marks[path] == true
+  return _marks[path] ~= nil
 end
 
 ---Toggle mark on the node currently under the cursor.
@@ -194,17 +218,25 @@ end
 ---@param path string
 ---@return boolean
 function M.is_marked(path)
-  return _marks[path] == true
+  return _marks[path] ~= nil
 end
 
----Return all currently marked paths.
+---Return all currently marked paths, in the configured `order`: the order
+---they were marked in ("marked", default) or sorted by full path ("tree").
 ---@return string[]
 function M.get_marked()
   local out = {}
   for p in pairs(_marks) do
     out[#out + 1] = p
   end
-  table.sort(out)
+  if _cfg.order == "tree" then
+    table.sort(out)
+  else
+    -- Sequence numbers are unique, so this order is total.
+    table.sort(out, function(a, b)
+      return _marks[a] < _marks[b]
+    end)
+  end
   return out
 end
 
@@ -224,15 +256,17 @@ end
 function M.clear_all()
   if _debounce then _debounce.cancel() end
   _marks = {}
+  _seq = 0
   redraw()
 end
 
----Mark all currently visible nodes.
+---Mark all currently visible nodes. Newly marked nodes are numbered in tree
+---order after the existing marks; already-marked ones keep their position.
 function M.mark_all_visible()
   if not _adapter then return end
   local nodes = _adapter.get_visible_nodes()
   for _, node in ipairs(nodes) do
-    _marks[node.path] = true
+    set_mark(node.path)
   end
   touch()
   redraw()
@@ -251,7 +285,7 @@ end
 
 ---Marked nodes that are actually on screen, in buffer order.
 ---
---- `get_marked()` returns paths sorted alphabetically, which is the right
+--- `get_marked()` returns paths in mark (or path) order, which is the right
 --- answer for "what is marked" and the wrong one for navigation: jumping
 --- between marks has to follow the tree as it is rendered, and a marked node
 --- inside a collapsed directory has no line to jump to at all.
@@ -370,12 +404,15 @@ function M.mark_visual(unmark)
   for _, node in ipairs(_adapter.get_visible_nodes()) do
     local ln = node.line_number
     if ln and ln >= s_line and ln <= e_line then
-      -- Not `unmark and nil or true`: `x and nil or y` is always `y`, which
-      -- made unmarking a selection mark it instead.
-      local now ---@type boolean?
-      if not unmark then now = true end
-      if _marks[node.path] ~= now then
-        _marks[node.path] = now
+      -- Explicit branches, not `unmark and nil or true`: `x and nil or y` is
+      -- always `y`, which once made unmarking a selection mark it instead.
+      if unmark then
+        if _marks[node.path] then
+          _marks[node.path] = nil
+          changed = changed + 1
+        end
+      elseif not _marks[node.path] then
+        set_mark(node.path)
         changed = changed + 1
       end
     end
@@ -571,6 +608,7 @@ function M.teardown()
     _debounce = nil
   end
   _marks = {}
+  _seq = 0
   if _adapter then
     local _, bufnr = _adapter.is_open()
     if bufnr then pcall(vim.api.nvim_buf_clear_namespace, bufnr, ns(), 0, -1) end
