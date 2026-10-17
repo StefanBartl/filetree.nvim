@@ -100,10 +100,13 @@ do
     "$NVIM_CONFIG_DIR/lua/x.lua"
   )
   eq("fold: a path under no root is returned as given", (ER.fold(outside .. "/f")), outside .. "/f")
+  -- A backslash is a separator on Windows only: on POSIX it is part of a file
+  -- name, so the whole-backslash spelling is no absolute path there.
+  local backslashed = (repos .. "/proj/x.lua"):gsub("/", "\\")
   eq(
-    "fold: a backslash path folds too",
-    (ER.fold(((repos .. "/proj/x.lua"):gsub("/", "\\")))),
-    "$REPOS_DIR/proj/x.lua"
+    "fold: a backslash path folds on Windows, is left alone on POSIX",
+    (ER.fold(backslashed)),
+    vim.fn.has("win32") == 1 and "$REPOS_DIR/proj/x.lua" or backslashed
   )
   eq("fold: the sibling 'repos2' is not under 'repos'", (ER.fold(repos .. "2/x")), repos .. "2/x")
   local _, name = ER.fold(repos .. "/proj")
