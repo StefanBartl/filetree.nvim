@@ -5,8 +5,9 @@
 -- Pins:
 --   1. default "marked": three marks set in a scrambled order come back in
 --      exactly that order; unmark + re-mark moves a path to the end;
---   2. bulk marks (mark all visible) number only the NEW nodes, in tree
---      order, behind the existing marks -- folders and files alike;
+--   2. bulk marks (mark all visible, Visual selection) number only the NEW
+--      nodes, in tree order, behind the existing marks -- folders and files
+--      alike;
 --   3. the switch: `order = "tree"` returns the old path-sorted output, and
 --      an invalid value is rejected by the schema;
 --   4. end to end: path_copy (the `[e` / copy-path family) puts the lines on
@@ -164,6 +165,26 @@ do
     M.get_marked(),
     { "/proj/assets", "/proj/eins.md", "/proj/docs" }
   )
+
+  -- Visual selection over lines 1-4: `line("v")`/`line(".")` are stubbed, a
+  -- real Visual mode needs a UI loop the headless run does not have.
+  M.clear_all()
+  M.toggle("/proj/zeins.md")
+  local real_line = vim.fn.line
+  vim.fn.line = function(expr)
+    if expr == "v" then return 4 end
+    if expr == "." then return 1 end
+    return real_line(expr)
+  end
+  local changed = M.mark_visual(false)
+  vim.fn.line = real_line
+  check("Visual mark counts only the newly marked nodes", changed == 3, tostring(changed))
+  same("Visual mark: existing mark first, new ones in tree order", M.get_marked(), {
+    "/proj/zeins.md",
+    "/proj/docs",
+    "/proj/eins.md",
+    "/proj/beins.md",
+  })
   M.teardown()
 end
 
