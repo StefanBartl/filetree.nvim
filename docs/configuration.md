@@ -196,6 +196,13 @@ require("filetree").setup({
       -- reuse_existing = false, -- Windows: navigate an open Explorer window instead
     },
 
+    marks = {
+      enabled = true,            -- default: on
+      order   = "marked",        -- "marked": every consumer (copy path incl. `[e`, gy,
+                                 -- fileops) gets the paths in mark order; "tree": sorted by path
+      auto_clear_ms = 60000,     -- clear all marks after this much idle time; 0 = never
+    },
+
     file_clipboard = {
       enabled       = true,      -- default: on
       keymap        = "gy",      -- copy the FILES (marked, else the cursor node) to the OS clipboard

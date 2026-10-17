@@ -33,6 +33,17 @@ Toggle a mark on the node under the cursor (`m`), batch mark/unmark
 mechanism several fileops features (trash, copy/move, copy_file_list)
 build on for "act on more than one node at once".
 
+**Marks come out in the order you marked them.** Every action that takes
+the marked set — copy path (including `[e`, env-rooted), copy file list,
+Markdown links, files to the OS clipboard, symlinks, copy/move, trash, PDF,
+diff — gets the paths in mark
+order, not tree order: mark `beins.md`, `zeins.md`, `eins.md` and `[e` puts
+exactly those three lines, in that order, on the clipboard. Unmarking and
+re-marking a node moves it to the end; a bulk mark (`]m`, Visual `m`)
+numbers the newly marked nodes in tree order behind the existing ones.
+Opt out with `features.marks.order = "tree"` (sorted by full path, the old
+behavior). Default `"marked"`.
+
 ### Navigating and selecting marks (2026-08-24)
 
 Marks were set one line at a time and, once set, had no way back to them.
@@ -40,7 +51,7 @@ Two additions close the flag/option audit's entries:
 
 **Jumping.** `Ngm` goes to the Nth marked node in render order, `]M`/`[M`
 cycle to the next/previous one, wrapping. Navigation follows the tree *as
-rendered*, not `get_marked()`'s alphabetical order — that is the right answer
+rendered*, not `get_marked()`'s mark order — that is the right answer
 for "what is marked" and the wrong one for moving around, and a marked node
 inside a collapsed directory has no line to jump to at all. An out-of-range
 count clamps to the last mark rather than erroring, the way `G` treats one.
@@ -85,7 +96,7 @@ idle time does. Set to `0` to disable the timeout and go back to the old
   plus `m`/`[m` in Visual mode
 - **Config:** `marks.keymap_goto` (default `gm`), `marks.keymap_next`
   (`]M`), `marks.keymap_prev` (`[M`), `marks.auto_clear_ms` (default `60000`,
-  `0` disables)
+  `0` disables), `marks.order` (`"marked"` default, or `"tree"`)
 
 ## Session
 

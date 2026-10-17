@@ -398,6 +398,9 @@
 ---@field auto_clear_ms     integer? Clear all marks after this many ms without mark activity
 ---                                  (toggle, mark/unmark all, visual mark, goto/next/prev, show);
 ---                                  default 60000 (60s). 0 disables the timeout.
+---@field order             "marked"|"tree"? Order every consumer (copy path incl. `[e`, file lists, ops) gets the
+---                                  marked paths in: "marked" (default) = the order they were marked,
+---                                  re-marking moves a path to the end; "tree" = sorted by full path.
 
 -- ── diff ──────────────────────────────────────────────────────────────────────
 
