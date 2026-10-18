@@ -1926,6 +1926,12 @@ local function run_delete_undo_refs_chunked_race_check()
   run_argv.run_blocking = function()
     return true, nil -- pretend the OS-level restore succeeded; no real file to move
   end
+  -- the rewrite settles after the restore: the person is asked whether the references go back too (No here)
+  local asked_question
+  trash_undo.confirm = function(question, _, cb)
+    asked_question = question
+    cb(false)
+  end
   local restore_ok = trash_undo.restore_last()
   run_argv.run_blocking = orig_run_blocking
 
@@ -1953,15 +1959,12 @@ local function run_delete_undo_refs_chunked_race_check()
   vim.notify = real_notify
 
   check(
-    "chunked race: attach_refs warned that the finished rewrite has nowhere to attach",
-    (function()
-      for _, m in ipairs(said) do
-        if m:find("finished updating after undo", 1, true) then return true end
-      end
-      return false
-    end)(),
-    table.concat(said, " | ")
+    "chunked race: attach_refs asked whether the finished rewrite is reverted too",
+    asked_question ~= nil
+      and asked_question:find("finished updating after the restore", 1, true) ~= nil,
+    tostring(asked_question)
   )
+  trash_undo.confirm = nil
 
   -- The orphaned token is not lost -- still reachable the generic way.
   check(

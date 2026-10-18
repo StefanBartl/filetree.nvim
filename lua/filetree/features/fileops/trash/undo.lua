@@ -121,13 +121,39 @@ function M.attach_refs(original_path, refs_undo_id, refs_count)
   end
 
   if was_pending then
-    notify.warn(
+    -- the rewrite finished after the file was restored: ask whether those references go back too (No first)
+    M.ask(
       string.format(
-        "%d reference(s) for the now-restored delete finished updating after undo -- "
-          .. "run :Filetree refs undo if you want to revert them too",
+        "%d reference(s) for the now-restored delete finished updating after the restore. Revert them too?",
         refs_count or 0
-      )
+      ),
+      "revert them",
+      function(accepted)
+        if accepted then M.revert_refs(refs_undo_id, refs_count) end
+      end
     )
+  end
+end
+
+---Seam for the question (`nil`: `ui.kit.confirm`, `vim.ui.select` as the fallback); specs replace it.
+---@type (fun(question: string, yes_label: string, cb: fun(accepted: boolean)))|nil
+M.confirm = nil
+
+---@param question string
+---@param yes_label string
+---@param cb fun(accepted: boolean)
+function M.ask(question, yes_label, cb)
+  if M.confirm then return M.confirm(question, yes_label, cb) end
+  local shown = pcall(kit.confirm, {
+    question = question,
+    on_answer = function(yes)
+      cb(yes == true)
+    end,
+  })
+  if not shown then
+    vim.ui.select({ "No", "Yes, " .. yes_label }, { prompt = question }, function(_, index)
+      cb(index == 2)
+    end)
   end
 end
 
@@ -306,12 +332,19 @@ local function restore_refs(entry)
     if _pending[entry.original_path] then
       notify.warn(
         "Reference cleanup for this delete is still running -- its links may still "
-          .. "read REF! once it finishes; run :Filetree refs undo if needed"
+          .. "read REF! once it finishes; you will be asked then whether to revert them"
       )
     end
     return
   end
 
+  M.revert_refs(id, entry.refs_count)
+end
+
+---Revert the reference rewrite of a delete (the refs undo token `id`), and say what came of it.
+---@param id integer
+---@param refs_count integer?
+function M.revert_refs(id, refs_count)
   local ok_refs, apply = pcall(require, "filetree.refs.apply")
   if not ok_refs then return end
 
@@ -320,7 +353,7 @@ local function restore_refs(entry)
       string.format(
         "%d reference(s) marked REF! for this delete could not be restored "
           .. "(already reverted, or dropped from the refs undo history)",
-        entry.refs_count or 0
+        refs_count or 0
       )
     )
     return

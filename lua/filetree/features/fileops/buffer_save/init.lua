@@ -35,8 +35,35 @@ M.SCHEMA = {
   keymap_node = "keymap",
 }
 
+---Seam for the name of a buffer that has none (`nil`: `ui.kit.input`, `vim.ui.input` as the fallback); specs replace it.
+---`cb` gets the name, or `nil` when the prompt was dismissed.
+---@type (fun(default: string, cb: fun(name: string|nil)))|nil
+M.ask_name = nil
+
+---@param default string
+---@param cb fun(name: string|nil)
+local function ask_name(default, cb)
+  if M.ask_name then return M.ask_name(default, cb) end
+  local prompt = "Save as: "
+  local ok, kit = pcall(require, "ui.kit")
+  if ok and type(kit) == "table" and type(kit.input) == "function" then
+    local shown = pcall(kit.input, {
+      prompt = prompt,
+      default = default,
+      completion = "file",
+      on_submit = cb,
+      on_cancel = function()
+        cb(nil)
+      end,
+    })
+    if shown then return end
+  end
+  vim.ui.input({ prompt = prompt, default = default, completion = "file" }, cb)
+end
+
 ---@internal
----Save buffer `bufnr`.  Returns true on success.
+---Save buffer `bufnr`.  Returns true on success; a buffer with no name asks for one and returns false (the save follows
+---the answer).
 ---@param bufnr  integer
 ---@param force  boolean  true → write!   false → update
 ---@return boolean
@@ -48,7 +75,23 @@ local function save_buf(bufnr, force)
 
   local name = vim.api.nvim_buf_get_name(bufnr)
   if name == "" then
-    notify.warn("Buffer has no file name — use :w to name it first")
+    -- the name can be asked for right here; the file is written with a plain `:write`, which refuses to replace one
+    ask_name(vim.fn.getcwd() .. "/", function(chosen)
+      chosen = chosen and vim.trim(chosen) or ""
+      if chosen == "" or chosen:sub(-1) == "/" then
+        notify.info("Not saved: no file name given")
+        return
+      end
+      if not vim.api.nvim_buf_is_valid(bufnr) then return end
+      local wrote, werr = pcall(vim.api.nvim_buf_call, bufnr, function()
+        vim.cmd("write " .. vim.fn.fnameescape(chosen))
+      end)
+      if wrote then
+        notify.info("Saved: " .. vim.fn.fnamemodify(chosen, ":~:."))
+      else
+        notify.warn("Save failed: " .. tostring(werr))
+      end
+    end)
     return false
   end
 
