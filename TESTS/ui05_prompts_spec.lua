@@ -159,6 +159,33 @@ do
   end
   undo.confirm = nil
   undo.revert_refs = real_revert
+
+  -- a question from a background callback waits for an open dialog instead of closing it unanswered
+  local kit = require("ui.kit")
+  local kit_confirm = require("ui.kit.confirm")
+  local real_is_open, real_kit_confirm, real_poll = kit_confirm.is_open, kit.confirm, undo.POLL_MS
+  local open, shown_questions, answered = true, {}, nil
+  kit_confirm.is_open = function()
+    return open
+  end
+  kit.confirm = function(o)
+    shown_questions[#shown_questions + 1] = o.question
+    o.on_answer(true)
+  end
+  undo.POLL_MS = 20
+  undo.ask("later?", "do it", function(accepted)
+    answered = accepted
+  end)
+  check(
+    "another dialog is open: the question is not shown over it",
+    #shown_questions == 0 and answered == nil
+  )
+  open = false
+  vim.wait(1000, function()
+    return answered ~= nil
+  end, 10)
+  check("it is shown when the dialog is gone", #shown_questions == 1 and answered == true)
+  kit_confirm.is_open, kit.confirm, undo.POLL_MS = real_is_open, real_kit_confirm, real_poll
 end
 
 print(("\n%d passed, %d failed"):format(passed, failed))

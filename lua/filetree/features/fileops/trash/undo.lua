@@ -139,22 +139,47 @@ end
 ---@type (fun(question: string, yes_label: string, cb: fun(accepted: boolean)))|nil
 M.confirm = nil
 
+---How often a question that waits for an open dialog looks again, and how long it waits at most (then it is declined).
+M.POLL_MS = 300
+M.MAX_WAIT_MS = 10 * 60 * 1000
+
+---Whether another `ui.kit.confirm` dialog is open: that kit's dialog is single-instance, opening a second one closes the
+---first WITHOUT answering it, so a question that comes from a background callback (here: a rewrite that finishes some
+---time after the restore) must not open over one the person is answering.
+---@return boolean
+local function other_dialog_open()
+  local ok, confirm = pcall(require, "ui.kit.confirm")
+  return ok
+    and type(confirm) == "table"
+    and type(confirm.is_open) == "function"
+    and confirm.is_open() == true
+end
+
 ---@param question string
 ---@param yes_label string
 ---@param cb fun(accepted: boolean)
 function M.ask(question, yes_label, cb)
   if M.confirm then return M.confirm(question, yes_label, cb) end
-  local shown = pcall(kit.confirm, {
-    question = question,
-    on_answer = function(yes)
-      cb(yes == true)
-    end,
-  })
-  if not shown then
-    vim.ui.select({ "No", "Yes, " .. yes_label }, { prompt = question }, function(_, index)
-      cb(index == 2)
-    end)
+  local waited = 0
+  local function attempt()
+    if other_dialog_open() then
+      if waited >= M.MAX_WAIT_MS then return cb(false) end
+      waited = waited + M.POLL_MS
+      return vim.defer_fn(attempt, M.POLL_MS)
+    end
+    local shown = pcall(kit.confirm, {
+      question = question,
+      on_answer = function(yes)
+        cb(yes == true)
+      end,
+    })
+    if not shown then
+      vim.ui.select({ "No", "Yes, " .. yes_label }, { prompt = question }, function(_, index)
+        cb(index == 2)
+      end)
+    end
   end
+  attempt()
 end
 
 ---Return the full trash history (newest first).
