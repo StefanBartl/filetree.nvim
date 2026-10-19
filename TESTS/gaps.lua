@@ -3822,6 +3822,13 @@ do
     end)
     check("image.float = false: <CR> keeps the inline view", #zen_calls == 0 and show_calls == 1)
 
+    -- A re-setup without `float` falls back to the default, not to the
+    -- `false` of the setup before (setup merges onto the defaults).
+    run({ backend = "auto" }, function()
+      preview.open_or_fallback(fallback)
+    end)
+    eq("preview re-setup: a dropped image.float falls back to the default float", #zen_calls, 1)
+
     run({ backend = "snacks", float = { width = 0.66, height = 0.66 } }, function()
       preview.open_or_fallback(fallback)
     end)

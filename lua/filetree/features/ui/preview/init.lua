@@ -29,8 +29,10 @@ local M = {}
 
 local uv = vim.uv or vim.loop
 
+---Shipped defaults. Never mutated: every `setup()` merges onto a fresh copy, so
+---an option dropped from the user's config falls back instead of lingering.
 ---@type FiletreePreviewConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   mode = "buffer", -- "buffer" | "float"
   highlight = true, -- syntax/treesitter highlighting in the preview
@@ -60,6 +62,9 @@ local _cfg = {
   -- instead of loading them into a buffer. `{}` turns it off.
   system_exts = { "msg", "eml", "oft" },
 }
+
+---@type FiletreePreviewConfig
+local _cfg = DEFAULTS
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.preview` accepts. Keep it in step with the keys this module reads;
@@ -725,7 +730,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   if _cm_debounce then _cm_debounce.cancel() end
