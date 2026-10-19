@@ -1295,7 +1295,48 @@ do
     )
     lspdiag.teardown()
     pcall(vim.api.nvim_buf_delete, buf3, { force = true })
+    NODE_AT[0] = { path = file1, type = "file" }
   end
+
+  -- The default badge uses the sign texts of vim.diagnostic.config() (keyed by
+  -- severity number or name), and E:/W: for a severity that has none.
+  local orig_signs = vim.diagnostic.config().signs
+  local function badge(line)
+    local m = extmarks_of(line)
+    return #m > 0 and m[1][4].virt_text[1][1] or nil
+  end
+  vim.diagnostic.config({
+    signs = { text = { [vim.diagnostic.severity.ERROR] = "✘ " } },
+  })
+  lspdiag.setup({ enabled = true, debounce_ms = 10 }, stub)
+  settle()
+  vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+  render_cb(tree_buf)
+  check("lsp_diagnostics: a configured error sign replaces E: (trimmed)", badge(0) == " ✘ 1")
+  check("lsp_diagnostics: a severity without a sign text keeps W:", badge(1) == " W:2")
+  check(
+    "lsp_diagnostics: a directory badge mixes sign and fallback",
+    badge(3) == " ✘ 1 W:2"
+  )
+
+  -- A later config change shows up with the next render, keyed by name too.
+  vim.diagnostic.config({ signs = { text = { ERROR = "E", WARN = "▲" } } })
+  vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+  render_cb(tree_buf)
+  check("lsp_diagnostics: sign texts keyed by severity name are used", badge(1) == " ▲ 2")
+
+  -- signs given as a function have no global text: fallback.
+  vim.diagnostic.config({
+    signs = function()
+      return { text = { [vim.diagnostic.severity.ERROR] = "X" } }
+    end,
+  })
+  vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+  render_cb(tree_buf)
+  check("lsp_diagnostics: signs as a function fall back to E:", badge(0) == " E:1")
+  lspdiag.teardown()
+  vim.diagnostic.config({ signs = orig_signs })
+
   vim.diagnostic.reset(diag_ns)
   pcall(vim.api.nvim_buf_delete, buf1, { force = true })
   pcall(vim.api.nvim_buf_delete, buf2, { force = true })

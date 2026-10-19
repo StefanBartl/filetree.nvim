@@ -1711,6 +1711,14 @@ Decorates tree nodes with LSP diagnostic severity (error/warn/…) rolled up
 from the files under them, so a directory with a broken file inside it is
 visible without expanding into it first.
 
+Badge text. By default each non-zero count is prefixed with the sign text set
+in `vim.diagnostic.config({ signs = { text = { ... } } })` (keyed by severity
+number or name, surrounding whitespace trimmed), e.g. `✘ 2 ▲ 1`. A
+severity without a sign text, or a `signs` given as a function, falls back to
+`E:`/`W:`/`H:`/`I:`, e.g. `E:2 W:1`. The texts are read on every redraw. Hints
+and infos are off by default (`show_hints`, `show_info`); `format` replaces
+the default (`fun(counts): string?`, nil hides the badge).
+
 Backend support. Drawn as extmarks on the node's own line, which needs the
 adapter to say which node a given line holds (`get_node_at_line`). The
 neo-tree and nvim-tree adapters implement it; netrw, oil and mini.files do

@@ -119,8 +119,9 @@ Covers, with real (not merely load-time) assertions, in risk order:
   suite in `units.lua`, including the adapter's own documented doubled-slash
   quirk after a Windows drive letter.
 - **no subprocess needed, previously untested**: `features/lsp/lsp_diagnostics.lua`
-  (severity aggregation, incl. a directory node summing its children) against
-  real `vim.diagnostic.set()`; `features/compare/diff.lua` (stage/diff/
+  (severity aggregation, incl. a directory node summing its children, and the
+  default badge's sign texts from `vim.diagnostic.config()` with the `E:`/`W:`
+  fallback) against real `vim.diagnostic.set()`; `features/compare/diff.lua` (stage/diff/
   diff_marked's exactly-2-marks gate); `features/git/git_status.lua`
   (`git status --porcelain` line parsing for every status code, incl. a
   quoted rename, against a **stubbed `vim.system`** — no real git process).

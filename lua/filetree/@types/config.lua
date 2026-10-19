@@ -469,7 +469,7 @@
 ---@field show_warnings  boolean   Show warning count (default true).
 ---@field show_hints     boolean   Show hint count (default false).
 ---@field show_info      boolean   Show info count (default false).
----@field format         fun(counts: table): string?  Custom formatter. Return nil to hide.
+---@field format         fun(counts: table): string?  Custom formatter. Return nil to hide. Default: the `vim.diagnostic.config().signs.text` glyph before each count, `E:`/`W:`/`H:`/`I:` without one.
 ---@field debounce_ms    integer   Delay after DiagnosticChanged (default 300ms).
 
 -- ── size_info ─────────────────────────────────────────────────────────────────
