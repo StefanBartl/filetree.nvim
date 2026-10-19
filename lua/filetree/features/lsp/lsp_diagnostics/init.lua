@@ -23,6 +23,9 @@ local FALLBACK_LABELS = { error = "E:", warning = "W:", hint = "H:", info = "I:"
 ---Count key → severity name, as `vim.diagnostic.severity` spells it.
 local SEVERITY_NAMES = { error = "ERROR", warning = "WARN", hint = "HINT", info = "INFO" }
 
+---Badge order of the count keys.
+local COUNT_KEYS = { "error", "warning", "hint", "info" }
+
 ---@internal
 ---The prefix per severity: the sign text the user configured in
 ---`vim.diagnostic.config({ signs = { text = … } })` followed by a space, else
@@ -31,16 +34,17 @@ local SEVERITY_NAMES = { error = "ERROR", warning = "WARN", hint = "HINT", info 
 ---it falls back as well.
 ---@return table<string, string>
 local function resolve_labels()
-  local labels = vim.deepcopy(FALLBACK_LABELS)
   local ok, dcfg = pcall(vim.diagnostic.config)
   local signs = ok and type(dcfg) == "table" and dcfg.signs
   local text = type(signs) == "table" and signs.text
-  if type(text) ~= "table" then return labels end
+  -- FALLBACK_LABELS is only ever read, so the common no-sign case shares it.
+  if type(text) ~= "table" then return FALLBACK_LABELS end
   local severity = vim.diagnostic.severity
+  local labels = {}
   for key, name in pairs(SEVERITY_NAMES) do
     local t = text[severity[name]] or text[name]
     t = type(t) == "string" and vim.trim(t) or ""
-    if t ~= "" then labels[key] = t .. " " end
+    labels[key] = t ~= "" and t .. " " or FALLBACK_LABELS[key]
   end
   return labels
 end
@@ -57,7 +61,7 @@ local _labels = nil
 local function default_format(counts)
   local labels = _labels or resolve_labels()
   local parts = {}
-  for _, key in ipairs({ "error", "warning", "hint", "info" }) do
+  for _, key in ipairs(COUNT_KEYS) do
     if counts[key] > 0 then parts[#parts + 1] = labels[key] .. counts[key] end
   end
   return #parts > 0 and table.concat(parts, " ") or nil

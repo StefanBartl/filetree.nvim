@@ -1314,10 +1314,7 @@ do
   render_cb(tree_buf)
   check("lsp_diagnostics: a configured error sign replaces E: (trimmed)", badge(0) == " ✘ 1")
   check("lsp_diagnostics: a severity without a sign text keeps W:", badge(1) == " W:2")
-  check(
-    "lsp_diagnostics: a directory badge mixes sign and fallback",
-    badge(3) == " ✘ 1 W:2"
-  )
+  check("lsp_diagnostics: a directory badge mixes sign and fallback", badge(3) == " ✘ 1 W:2")
 
   -- A later config change shows up with the next render, keyed by name too.
   vim.diagnostic.config({ signs = { text = { ERROR = "E", WARN = "▲" } } })
