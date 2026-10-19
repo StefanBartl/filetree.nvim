@@ -176,12 +176,15 @@ Decorates tree nodes with LSP diagnostic severity (error/warn/…) rolled
 up from the files under them, so a directory with a broken file inside
 it is visible without expanding into it first.
 
-**Badge text.** By default each non-zero count is prefixed with the sign
-text set in `vim.diagnostic.config({ signs = { text = { ... } } })` (keyed
-by severity number or name, surrounding whitespace trimmed), e.g.
-`✘ 2 ▲ 1`. A severity without a sign text, or a `signs` given as a
-function, falls back to `E:`/`W:`/`H:`/`I:`, e.g. `E:2 W:1`. The texts are
-read on every redraw. Hints and infos are off by default (`show_hints`,
+**Badge text.** By default each non-zero count is prefixed with, per
+severity, the first non-blank of: the `icons` option
+(`{ error = "…", warning = "…", hint = "…", info = "…" }`), the sign text
+set in `vim.diagnostic.config({ signs = { text = { ... } } })` (keyed by
+severity number or name), `E:`/`W:`/`H:`/`I:`. Surrounding whitespace is
+trimmed, so a sign text of `" "` (signs shown as a number-column highlight
+only) counts as blank, and so does a `signs` given as a function. Examples:
+`✘ 2 ▲ 1`, `E:2 W:1`. `icons` is the way to get glyphs in the tree while the
+sign column shows none. The texts are read on every redraw. Hints and infos are off by default (`show_hints`,
 `show_info`); `format` replaces the default (`fun(counts): string?`, nil
 hides the badge).
 

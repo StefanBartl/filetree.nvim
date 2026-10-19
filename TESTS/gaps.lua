@@ -1332,6 +1332,29 @@ do
   render_cb(tree_buf)
   check("lsp_diagnostics: signs as a function fall back to E:", badge(0) == " E:1")
   lspdiag.teardown()
+
+  -- The `icons` option wins over signs.text; a missing or blank icon falls
+  -- through to the sign text, a blank sign text (signs drawn as numhl only)
+  -- to E:/W:.
+  vim.diagnostic.config({
+    signs = {
+      text = { [vim.diagnostic.severity.ERROR] = "✘", [vim.diagnostic.severity.WARN] = " " },
+    },
+  })
+  lspdiag.setup({ enabled = true, debounce_ms = 10, icons = { warning = "▲ " } }, stub)
+  settle()
+  vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+  render_cb(tree_buf)
+  check("lsp_diagnostics: an icon replaces a blank sign text", badge(1) == " ▲ 2")
+  check("lsp_diagnostics: without an icon the sign text applies", badge(0) == " ✘ 1")
+  lspdiag.teardown()
+  lspdiag.setup({ enabled = true, debounce_ms = 10, icons = { error = "X", warning = "  " } }, stub)
+  settle()
+  vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+  render_cb(tree_buf)
+  check("lsp_diagnostics: an icon wins over the sign text", badge(0) == " X 1")
+  check("lsp_diagnostics: a blank icon and a blank sign text fall back to W:", badge(1) == " W:2")
+  lspdiag.teardown()
   vim.diagnostic.config({ signs = orig_signs })
 
   vim.diagnostic.reset(diag_ns)

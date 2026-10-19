@@ -5,8 +5,8 @@
 --- counts per file using vim.diagnostic.get(). Results are rendered as eol
 --- virtual text on the matching tree node lines.
 ---
---- Default format:  the sign texts of vim.diagnostic.config() before each
---- count, e.g. "✘ 2 ▲ 1"; E:2 W:1 where no sign text is set (configurable)
+--- Default format:  the `icons` option, else the sign texts of vim.diagnostic.config(), before
+--- each count, e.g. "✘ 2 ▲ 1"; E:2 W:1 where neither is set (configurable)
 --- Highlight groups follow the severity (DiagnosticError, DiagnosticWarn).
 ---
 --- Updates on DiagnosticChanged and when the tree buffer is entered.
@@ -27,24 +27,36 @@ local SEVERITY_NAMES = { error = "ERROR", warning = "WARN", hint = "HINT", info 
 local COUNT_KEYS = { "error", "warning", "hint", "info" }
 
 ---@internal
----The prefix per severity: the sign text the user configured in
----`vim.diagnostic.config({ signs = { text = … } })` followed by a space, else
+---`t` trimmed and followed by a space; nil for a non-string or a blank one.
+---@param t any
+---@return string?
+local function as_label(t)
+  if type(t) ~= "string" then return nil end
+  t = vim.trim(t)
+  return t ~= "" and t .. " " or nil
+end
+
+---@internal
+---The prefix per severity, first non-blank of: the `icons` option, the sign
+---text the user configured in `vim.diagnostic.config({ signs = { text = … } })`,
 ---`E:`/`W:`/`H:`/`I:`. `signs.text` may be keyed by severity number or name; a
 ---`signs` given as a function (per namespace/buffer) has no global answer, so
----it falls back as well.
+---it is skipped.
+---@param icons? table<string, string>  the `icons` option
 ---@return table<string, string>
-local function resolve_labels()
+local function resolve_labels(icons)
+  if type(icons) ~= "table" then icons = nil end
   local ok, dcfg = pcall(vim.diagnostic.config)
   local signs = ok and type(dcfg) == "table" and dcfg.signs
-  local text = type(signs) == "table" and signs.text
-  -- FALLBACK_LABELS is only ever read, so the common no-sign case shares it.
-  if type(text) ~= "table" then return FALLBACK_LABELS end
+  local text = type(signs) == "table" and type(signs.text) == "table" and signs.text or nil
+  -- FALLBACK_LABELS is only ever read, so the common case without either shares it.
+  if not icons and not text then return FALLBACK_LABELS end
   local severity = vim.diagnostic.severity
   local labels = {}
   for key, name in pairs(SEVERITY_NAMES) do
-    local t = text[severity[name]] or text[name]
-    t = type(t) == "string" and vim.trim(t) or ""
-    labels[key] = t ~= "" and t .. " " or FALLBACK_LABELS[key]
+    labels[key] = as_label(icons and icons[key])
+      or as_label(text and (text[severity[name]] or text[name]))
+      or FALLBACK_LABELS[key]
   end
   return labels
 end
@@ -54,7 +66,7 @@ end
 local _labels = nil
 
 ---@internal
----Default badge text, e.g. `✘ 2 ▲ 1` with sign texts configured, `E:2 W:1`
+---Default badge text, e.g. `✘ 2 ▲ 1` with icons or sign texts, `E:2 W:1`
 ---without; nil when there is nothing to show.
 ---@param counts { error: integer, warning: integer, hint: integer, info: integer }
 ---@return string?
@@ -93,6 +105,10 @@ M.SCHEMA = {
   show_hints = "boolean",
   show_info = "boolean",
   format = "function",
+  icons = {
+    "table",
+    fields = { error = "string", warning = "string", hint = "string", info = "string" },
+  },
   debounce_ms = { "number", min = 0 },
 }
 
@@ -217,7 +233,7 @@ function M._render(bufnr)
   local format = type(_cfg.format) == "function" and _cfg.format or default_format
   -- Read the sign texts on every render, so a later vim.diagnostic.config()
   -- shows up with the next redraw.
-  _labels = format == default_format and resolve_labels() or nil
+  _labels = format == default_format and resolve_labels(_cfg.icons) or nil
   local line_count = vim.api.nvim_buf_line_count(bufnr)
   for linenr = 0, line_count - 1 do
     local node = _adapter.get_node_at_line(bufnr, linenr)
