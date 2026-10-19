@@ -3783,6 +3783,7 @@ do
     package.loaded["images"] = {
       zen = function(path, opts)
         zen_calls[#zen_calls + 1] = { path = path, opts = opts }
+        if zen_result == "raise" then error("zen broke") end
         return zen_result
       end,
       show = function()
@@ -3838,7 +3839,16 @@ do
     run({ backend = "auto", float = { width = 0.66, height = 0.66 } }, function()
       preview.open_or_fallback(fallback)
     end)
-    check("image.float: a float that could not open falls back to the inline view", show_calls == 1)
+    -- zen returned false: it has reported that itself (or already handed the
+    -- image to images.show on a terminal that cannot draw); a second try
+    -- through the inline view would show / report it twice.
+    check("image.float: a zen that returned false is not retried inline", show_calls == 0)
+
+    zen_result = "raise"
+    run({ backend = "auto", float = { width = 0.66, height = 0.66 } }, function()
+      preview.open_or_fallback(fallback)
+    end)
+    check("image.float: a zen that raised falls back to the inline view", show_calls == 1)
 
     package.loaded["images"] = orig_images
   end

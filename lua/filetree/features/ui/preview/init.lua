@@ -279,10 +279,13 @@ end
 
 ---Open `path` in images.nvim's zen float at `image.float`'s size, for <CR>.
 ---Only when the configured backend may be images.nvim ("auto" or
----"images.nvim"); false when the float is off or images.nvim is missing or
----could not show it, so the caller goes on to `open_image`.
+---"images.nvim"); false when the float is off, images.nvim (or its `zen`) is
+---missing, or `zen` raised, so the caller goes on to `open_image`. A `zen`
+---that returned false has handled the image already: it reports its own
+---failures, and on a terminal that cannot draw it hands the image to
+---`images.show` itself, so going on to `open_image` would show it twice.
 ---@param path string
----@return boolean shown
+---@return boolean handled
 local function open_image_float(path)
   local cfg_img = _cfg.image or {}
   local box = cfg_img.float
@@ -291,8 +294,7 @@ local function open_image_float(path)
   if backend ~= "auto" and backend ~= "images.nvim" then return false end
   local ok, images = pcall(require, "images")
   if not ok or type(images) ~= "table" or type(images.zen) ~= "function" then return false end
-  local call_ok, shown = pcall(images.zen, path, { width = box.width, height = box.height })
-  return call_ok and shown == true
+  return (pcall(images.zen, path, { width = box.width, height = box.height }))
 end
 
 -- ── PDF backend dispatch ──────────────────────────────────────────────────────
