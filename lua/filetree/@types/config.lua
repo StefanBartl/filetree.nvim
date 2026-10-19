@@ -621,6 +621,7 @@
 
 ---@class FiletreePreviewImageConfig
 ---@field backend FiletreeImageBackend  "auto" tries images.nvim → snacks → image.nvim → system (default "auto").
+---@field float?  { width: number, height: number }|false  <CR> opens images.nvim's zen float at this size (fractions of the editor; <S-Up>/<S-Down> in it step the size), with backend "auto"/"images.nvim" only; false = the backend's own view (default { width = 0.66, height = 0.66 }).
 
 ---@class FiletreePreviewPdfConfig
 ---@field backend FiletreePdfBackend  "pdfport" tries pdfport.nvim, falls back to system (default "pdfport").

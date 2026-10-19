@@ -48,6 +48,9 @@ local _cfg = {
   keymap_scroll_down10 = "<PageDown>",
   image = {
     backend = "auto", -- "auto" | "images.nvim" | "snacks" | "image.nvim" | "system" | false
+    -- <CR> on an image: images.nvim's zen float at this size (fractions of the
+    -- editor), <S-Up>/<S-Down> in it step the size. false = the backend's own view.
+    float = { width = 0.66, height = 0.66 },
   },
   pdf = {
     backend = "pdfport", -- "pdfport" | "system" | false
@@ -83,6 +86,10 @@ M.SCHEMA = {
       backend = {
         "string|false",
         enum = { "auto", "images.nvim", "snacks", "image.nvim", "system" },
+      },
+      float = {
+        "table|false",
+        fields = { width = { "number", min = 0 }, height = { "number", min = 0 } },
       },
     },
   },
@@ -263,6 +270,24 @@ local function open_image(path)
   -- "system" or "auto" fallback
   system_open(path)
   return true
+end
+
+---Open `path` in images.nvim's zen float at `image.float`'s size, for <CR>.
+---Only when the configured backend may be images.nvim ("auto" or
+---"images.nvim"); false when the float is off or images.nvim is missing or
+---could not show it, so the caller goes on to `open_image`.
+---@param path string
+---@return boolean shown
+local function open_image_float(path)
+  local cfg_img = _cfg.image or {}
+  local box = cfg_img.float
+  if type(box) ~= "table" then return false end
+  local backend = cfg_img.backend or "auto"
+  if backend ~= "auto" and backend ~= "images.nvim" then return false end
+  local ok, images = pcall(require, "images")
+  if not ok or type(images) ~= "table" or type(images.zen) ~= "function" then return false end
+  local call_ok, shown = pcall(images.zen, path, { width = box.width, height = box.height })
+  return call_ok and shown == true
 end
 
 -- ── PDF backend dispatch ──────────────────────────────────────────────────────
@@ -669,7 +694,7 @@ function M.open_or_fallback(fallback)
   local cfg_pdf = _cfg.pdf or {}
 
   if cfg_img.backend ~= false and is_image(node.path) then
-    open_image(node.path)
+    if not open_image_float(node.path) then open_image(node.path) end
     return
   end
 

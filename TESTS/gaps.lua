@@ -3776,6 +3776,66 @@ do
     )
   end
 
+  -- ── image.float: <CR> opens images.nvim's zen float at the configured size ──
+  do
+    local orig_images = package.loaded["images"]
+    local zen_calls, show_calls, zen_result = {}, 0, true
+    package.loaded["images"] = {
+      zen = function(path, opts)
+        zen_calls[#zen_calls + 1] = { path = path, opts = opts }
+        return zen_result
+      end,
+      show = function()
+        show_calls = show_calls + 1
+        return true
+      end,
+    }
+    local function fallback()
+      error("the adapter fallback must not run for an image")
+    end
+    local function run(image_cfg, fn)
+      zen_calls, show_calls = {}, 0
+      preview.setup({ enabled = true, mode = "buffer", image = image_cfg }, stub)
+      cur_node = { path = image_file, type = "file" }
+      fn()
+      preview.teardown()
+    end
+
+    run({ backend = "auto", float = { width = 0.66, height = 0.66 } }, function()
+      preview.open_or_fallback(fallback)
+    end)
+    eq("image.float: <CR> opens the zen float once", #zen_calls, 1)
+    eq("image.float: ... for the node's image", zen_calls[1] and zen_calls[1].path, image_file)
+    check(
+      "image.float: ... at the configured size",
+      zen_calls[1] and zen_calls[1].opts.width == 0.66 and zen_calls[1].opts.height == 0.66
+    )
+    eq("image.float: ... and not the inline view as well", show_calls, 0)
+
+    run({ backend = "auto", float = { width = 0.66, height = 0.66 } }, function()
+      preview.toggle_or_open()
+    end)
+    check("image.float: <Tab> keeps the inline view", #zen_calls == 0 and show_calls == 1)
+
+    run({ backend = "auto", float = false }, function()
+      preview.open_or_fallback(fallback)
+    end)
+    check("image.float = false: <CR> keeps the inline view", #zen_calls == 0 and show_calls == 1)
+
+    run({ backend = "snacks", float = { width = 0.66, height = 0.66 } }, function()
+      preview.open_or_fallback(fallback)
+    end)
+    eq("image.float: another configured backend is not bypassed", #zen_calls, 0)
+
+    zen_result = false
+    run({ backend = "auto", float = { width = 0.66, height = 0.66 } }, function()
+      preview.open_or_fallback(fallback)
+    end)
+    check("image.float: a float that could not open falls back to the inline view", show_calls == 1)
+
+    package.loaded["images"] = orig_images
+  end
+
   -- ── system_exts: a mail file goes to the OS handler, never into a buffer ──
   do
     local platform = require("filetree.util.platform")

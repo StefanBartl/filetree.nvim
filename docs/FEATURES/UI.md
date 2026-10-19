@@ -13,6 +13,14 @@ window, or a floating window — updates as the cursor moves, no separate
 open action needed. `<Tab>`/`<CR>` dispatch images/PDFs to their own
 viewer instead of rendering raw bytes as text; `<PageUp>`/`<PageDown>` page
 a long preview without leaving the tree.
+With [images.nvim](https://github.com/StefanBartl/images.nvim) installed,
+`<CR>` on an image opens it in a centred float (images.nvim's `:Image zen`
+window) at `features.preview.image.float` (default
+`{ width = 0.66, height = 0.66 }` of the editor); `<S-Up>`/`<S-Down>` in it
+step through images.nvim's `display.zen.sizes` (2/3, 90%, full screen),
+`q` closes it. `<Tab>` keeps the inline view. `image.float = false`, a
+`backend` other than `"auto"`/`"images.nvim"`, or an images.nvim without
+the float gives `<CR>` the same view as `<Tab>`.
 Files whose extension is in `features.preview.system_exts`
 (default `msg`, `eml`, `oft`, i.e. Outlook mails) go to the OS default app
 instead; `{}` turns that off.
