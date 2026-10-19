@@ -175,6 +175,9 @@ function M.create()
 
   require("ui.kit").input({
     title = "Create in " .. display .. "  (append / for a directory): ",
+    -- Pre-filled when a plugin knows what belongs here (filetree.create_names),
+    -- e.g. the next round folder in a casedesk case's assets/.
+    default = require("filetree.create_names").suggest((parent:gsub("/+$", ""))),
     on_submit = function(input)
       if not input or input == "" then return end
 

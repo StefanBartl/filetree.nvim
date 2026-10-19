@@ -62,6 +62,21 @@ full annotated contract and
 [`lua/filetree/refs/providers/`](../lua/filetree/refs/providers/) for the four
 built-in implementations.
 
+## Name suggestions for the create prompt
+
+A plugin can pre-fill the name `smart_create` (`a`) asks for, for the folders it
+knows. The first provider that answers wins; the prompt stays editable.
+
+```lua
+require("filetree.create_names").register("casedesk", function(dir)
+  -- dir: the folder the new entry goes into, `/`-separated, no trailing slash
+  if dir:match("/assets$") then return "03_2026-10-19/" end -- trailing / = a folder
+end)
+```
+
+`unregister(id)` removes a provider, `suggest(dir)` asks them. Registering works
+before or after `filetree.setup()`; a provider that raises is skipped.
+
 ## Custom adapters
 
 ```lua
