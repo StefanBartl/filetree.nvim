@@ -34,10 +34,13 @@ local key_conflicts = require("filetree.util.key_conflicts")
 local M = {}
 
 ---@type FiletreeCheatsheetConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = true,
   keymap = "?",
 }
+
+---@type FiletreeCheatsheetConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.cheatsheet` accepts. Keep it in step with the keys this module reads;
@@ -510,7 +513,7 @@ end
 ---@param _adapter FiletreeAdapter
 function M.setup(config, _adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_extend("force", _cfg, config)
+  _cfg = vim.tbl_extend("force", vim.deepcopy(DEFAULTS), config)
   if not _cfg.keymap then return end
 
   bind.bind("cheatsheet", _cfg, {

@@ -50,7 +50,7 @@ local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeOpenReplaceConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   keymap = "O",
   -- Two keys for one action, because which of them the terminal actually
@@ -64,6 +64,9 @@ local _cfg = {
   swap_close_tree = false,
   keep_position = true,
 }
+
+---@type FiletreeOpenReplaceConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.open_replace` accepts. Keep it in step with the keys this module reads;
@@ -285,7 +288,7 @@ end
 function M.setup(config, adapter)
   if not config.enabled then return end
 
-  _cfg = vim.tbl_deep_extend("force", _cfg, config or {})
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config or {})
   _adapter = adapter
 
   bind.bind("open_replace", _cfg, {

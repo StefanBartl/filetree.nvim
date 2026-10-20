@@ -8,7 +8,7 @@ local window = require("filetree.util.window")
 local M = {}
 
 ---@type FiletreeSmartCreateConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   keymap = "a",
   -- LuaLS scaffolding for new files — all OFF by default (opt in per key):
@@ -18,6 +18,9 @@ local _cfg = {
   ask_clipboard = false, -- if the clipboard is non-empty, offer to paste it into the file
   notify_level = "verbose", -- "verbose" | "short" | "off" — success message verbosity
 }
+
+---@type FiletreeSmartCreateConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.smart_create` accepts. Keep it in step with the keys this module reads;
@@ -252,7 +255,7 @@ end
 ---@param cfg FiletreeSmartCreateConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg = vim.tbl_deep_extend("force", _cfg, cfg or {})
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), cfg or {})
   _adapter = adapter
 
   bind.bind("smart_create", _cfg, {

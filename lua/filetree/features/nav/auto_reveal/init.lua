@@ -59,7 +59,7 @@ local target_dir_util = require("filetree.util.target_dir")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   debounce_ms = 150,
   ignore_ft = {
@@ -82,6 +82,9 @@ local _cfg = {
   sync_on_enter = true,
   follow_root = true,
 }
+
+---@type FiletreeAutoRevealConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.auto_reveal` accepts. Keep it in step with the keys this module reads;
@@ -406,7 +409,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
   -- Built from cwd_sync's OWN configured root_markers/use_project_root
   -- (falling back to target_dir's defaults when cwd_sync's section is absent,

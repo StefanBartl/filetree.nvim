@@ -21,7 +21,7 @@ local ui_statusline = require("lib.nvim.ui.statusline")
 local M = {}
 
 ---@type FiletreeBreadcrumbsConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   mode = "winbar", -- "winbar"|"float"|"statusline"
   separator = "  ",
@@ -31,6 +31,9 @@ local _cfg = {
   hl_sep = "NonText",
   winbar_hl = "WinBar",
 }
+
+---@type FiletreeBreadcrumbsConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.breadcrumbs` accepts. Keep it in step with the keys this module reads;
@@ -232,7 +235,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   if _augroup then au.del_group(_augroup) end

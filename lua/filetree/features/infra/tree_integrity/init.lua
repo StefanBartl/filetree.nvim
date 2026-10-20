@@ -65,10 +65,13 @@ local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeTreeIntegrityConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = true,
   silent = true, -- only notifier.debug(...) output, and only when healing
 }
+
+---@type FiletreeTreeIntegrityConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.tree_integrity` accepts. Keep it in step with the keys this module reads;
@@ -258,7 +261,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
 
   -- nui.nvim is neo-tree's tree implementation; no other adapter has one.
   if not adapter or adapter.name ~= "neotree" then return end

@@ -3128,6 +3128,11 @@ end
 
 -- ── ui.size_info ── file sizes (sync) + directory sizes (stubbed vim.system) ─
 do
+  -- The git_status blocks above leave their debounced refresh behind, and with the feature's own
+  -- default debounce (300 ms, no longer the 10 ms an earlier block leaked into every later
+  -- setup()) it fires inside this block, through the vim.system stub below, and spoils what it
+  -- counts and captures. Stop it first.
+  require("filetree.features.git.git_status").teardown()
   local si = require("filetree.features.ui.size_info")
   local tmp = (TMP_ROOT .. "/gaps27-sizeinfo"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
@@ -3308,6 +3313,11 @@ end
 -- a write whose buffer name is forward-slash-spelled, as
 -- vim.api.nvim_buf_get_name() reports on that same platform) ────────────────
 do
+  -- The git_status blocks above leave their debounced refresh behind, and with the feature's own
+  -- default debounce (300 ms, no longer the 10 ms an earlier block leaked into every later
+  -- setup()) it fires inside this block, through the vim.system stub below, and spoils what it
+  -- counts and captures. Stop it first.
+  require("filetree.features.git.git_status").teardown()
   local si = require("filetree.features.ui.size_info")
   local tmp = (TMP_ROOT .. "/gaps-sizeinfo-bufwrite"):gsub("\\", "/")
   vim.fn.delete(tmp, "rf")
@@ -3341,6 +3351,8 @@ do
   -- fired below runs the actual production handler, not a direct M._render() call.
   local tree_buf = setup_tree_buffer(stub, {
     size_info = { enabled = true, show_files = true, show_dirs = true, dir_async = true },
+    -- its debounced `git status` would go through the vim.system stub and be counted as a size query
+    git_status = { enabled = false },
   })
   stub.get_bufnr = function()
     return tree_buf

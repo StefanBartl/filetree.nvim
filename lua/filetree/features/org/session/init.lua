@@ -27,12 +27,15 @@ local normkey = require("lib.nvim.fs.normkey")
 local M = {}
 
 ---@type FiletreeSessionConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   auto_save = true,
   auto_restore = true,
   max_sessions = 50,
 }
+
+---@type FiletreeSessionConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.session` accepts. Keep it in step with the keys this module reads;
@@ -292,7 +295,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
   _store_path = vim.fn.stdpath("data") .. "/filetree/sessions.json"
 

@@ -27,7 +27,7 @@ local tree_attach = require("filetree.util.tree_attach")
 local M = {}
 
 ---@type FiletreeAutoResizeConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   breakpoints = {
     { cols = 0, width = 25 },
@@ -37,6 +37,9 @@ local _cfg = {
   min_width = 20,
   max_width = 60,
 }
+
+---@type FiletreeAutoResizeConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.auto_resize` accepts. Keep it in step with the keys this module reads;
@@ -115,7 +118,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   -- Sort breakpoints ascending by cols so the last match wins

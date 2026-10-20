@@ -13,7 +13,7 @@ local globbable = require("lib.nvim.fs.globbable")
 local M = {}
 
 ---@type FiletreeProjectRootConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   markers = {
     ".git",
@@ -41,6 +41,9 @@ local _cfg = {
   -- How many directories the cache holds before it is cleared in one shot.
   max_cache_entries = 1000,
 }
+
+---@type FiletreeProjectRootConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.project_root` accepts. Keep it in step with the keys this module reads;
@@ -191,7 +194,7 @@ end
 ---@param _adapter FiletreeAdapter
 function M.setup(config, _adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
 end
 
 function M.teardown()

@@ -26,13 +26,16 @@ local pathutil = require("filetree.util.path")
 local M = {}
 
 ---@type FiletreeSizeInfoConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   show_files = true,
   show_dirs = true,
   hl_group = "Comment",
   dir_async = true, -- use du for dirs (async; may be slow on large trees)
 }
+
+---@type FiletreeSizeInfoConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.size_info` accepts. Keep it in step with the keys this module reads;
@@ -240,7 +243,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_size_info")
 

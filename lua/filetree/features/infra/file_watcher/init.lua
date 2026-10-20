@@ -26,12 +26,15 @@ local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeFileWatcherConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   debounce_ms = 500,
   watch_recursive = true,
   ignore_events = {},
 }
+
+---@type FiletreeFileWatcherConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.file_watcher` accepts. Keep it in step with the keys this module reads;
@@ -159,7 +162,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   if _debounce then _debounce.cancel() end

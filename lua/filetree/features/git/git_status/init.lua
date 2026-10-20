@@ -27,7 +27,7 @@ local lib_git = require("lib.nvim.git")
 local M = {}
 
 ---@type FiletreeGitStatusConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   debounce_ms = 300,
   show_ignored = false,
@@ -41,6 +41,9 @@ local _cfg = {
     conflict = { text = "✗", hl = "DiagnosticError" },
   },
 }
+
+---@type FiletreeGitStatusConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.git_status` accepts. Keep it in step with the keys this module reads;
@@ -212,7 +215,7 @@ local _augroup = nil
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_git_status")
 

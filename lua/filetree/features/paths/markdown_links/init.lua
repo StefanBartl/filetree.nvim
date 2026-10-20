@@ -29,7 +29,7 @@ local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeMarkdownLinksConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   keymap = "ML",
   keymap_recursive = "MR",
@@ -39,6 +39,9 @@ local _cfg = {
   env_roots = { "REPOS_DIR" },
   cursor = {},
 }
+
+---@type FiletreeMarkdownLinksConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.markdown_links` accepts. Keep it in step with the keys this module reads;
@@ -236,7 +239,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   bind.bind("markdown_links", _cfg, {

@@ -40,11 +40,14 @@ local M = {}
 ---@field highlights_isolate? boolean
 
 ---@type FiletreeWindowStyleConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   statusline = true,
   highlights_isolate = false,
 }
+
+---@type FiletreeWindowStyleConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.window_style` accepts. Keep it in step with the keys this module reads;
@@ -109,7 +112,7 @@ end
 ---@param config FiletreeWindowStyleConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
-  _cfg = vim.tbl_deep_extend("force", _cfg, config or {})
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config or {})
   _adapter = adapter
   if not _cfg.enabled then return end
   -- Nothing to do unless at least one effect is opted into.

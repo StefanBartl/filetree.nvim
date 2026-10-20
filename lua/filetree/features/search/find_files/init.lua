@@ -39,7 +39,7 @@ local function new_progress()
 end
 
 ---@type FiletreeFindFilesConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   keymap_tree = "f",
   keymap_pickers = "tf",
@@ -49,6 +49,9 @@ local _cfg = {
   reveal_on_open = true,
   hidden = false,
 }
+
+---@type FiletreeFindFilesConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.find_files` accepts. Keep it in step with the keys this module reads;
@@ -328,7 +331,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   -- Keymap inside tree

@@ -47,7 +47,7 @@ local mutate = require("lib.nvim.cross.fs.mutate")
 local M = {}
 
 ---@type FiletreeLinkCreateConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = true,
   keymap = nil, -- off by default; set e.g. keymap = "gl" to bind one
   keymap_mark = nil,
@@ -69,6 +69,9 @@ local _cfg = {
   -- disables the hint entirely.
   repair_search_slow_hint_ms = 2000,
 }
+
+---@type FiletreeLinkCreateConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.link_create` accepts. Keep it in step with the keys this module reads;
@@ -1021,7 +1024,7 @@ end
 ---@param cfg FiletreeLinkCreateConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg = vim.tbl_deep_extend("force", _cfg, cfg or {})
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), cfg or {})
   _adapter = adapter
 
   bind.bind("link_create", _cfg, {

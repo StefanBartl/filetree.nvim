@@ -50,7 +50,7 @@ local lib_debounce = require("lib.nvim.debounce")
 local M = {}
 
 ---@type FiletreeLinkMarkerConfig
-local _cfg = {
+local DEFAULTS = {
   show_target = false,
   target_hl = "Comment",
   signs = {
@@ -58,6 +58,9 @@ local _cfg = {
     broken = { text = "⇢!", hl = "DiagnosticError" },
   },
 }
+
+---@type FiletreeLinkMarkerConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.link_marker` accepts. Keep it in step with the keys this module reads;
@@ -157,7 +160,7 @@ local _augroup = nil
 ---@param config FiletreeLinkMarkerConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
-  _cfg = vim.tbl_deep_extend("force", _cfg, config or {})
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config or {})
   _adapter = adapter
   _ns = vim.api.nvim_create_namespace("filetree_link_marker")
 

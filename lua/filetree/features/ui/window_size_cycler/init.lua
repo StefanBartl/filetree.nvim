@@ -20,11 +20,14 @@ local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeWindowSizeCyclerConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   keymap = "w",
   sizes = { 30, 50, 15 },
 }
+
+---@type FiletreeWindowSizeCyclerConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.window_size_cycler` accepts. Keep it in step with the keys this module reads;
@@ -102,7 +105,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   -- Start at the preset closest to the current window width

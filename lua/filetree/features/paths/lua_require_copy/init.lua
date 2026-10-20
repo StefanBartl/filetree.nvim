@@ -9,10 +9,13 @@ local M = {}
 local get_lua_module_path = require("lib.nvim.lua_ls.get_module_path")
 
 ---@type FiletreeLuaRequireCopyConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   keymap = "rq",
 }
+
+---@type FiletreeLuaRequireCopyConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.lua_require_copy` accepts. Keep it in step with the keys this module reads;
@@ -155,7 +158,7 @@ end
 ---@param cfg FiletreeLuaRequireCopyConfig
 ---@param adapter FiletreeAdapter
 function M.setup(cfg, adapter)
-  _cfg = vim.tbl_deep_extend("force", _cfg, cfg or {})
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), cfg or {})
   _adapter = adapter
 
   bind.bind("lua_require_copy", _cfg, {

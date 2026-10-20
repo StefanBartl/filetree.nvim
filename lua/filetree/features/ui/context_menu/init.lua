@@ -35,10 +35,13 @@ local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeContextMenuConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = true,
   keymap = "<RightMouse>",
 }
+
+---@type FiletreeContextMenuConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.context_menu` accepts. Keep it in step with the keys this module reads;
@@ -336,7 +339,7 @@ function M.setup(config, adapter)
   -- setup loop only guarantees `enabled` is set on the incoming table — a user
   -- who never configures features.context_menu at all still needs the default
   -- keymap to survive, not get wiped out by `config` not mentioning it.
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   if not _cfg.keymap then return end

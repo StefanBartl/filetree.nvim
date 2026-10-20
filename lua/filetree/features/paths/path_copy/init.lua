@@ -61,7 +61,7 @@ local lib_relpath = require("lib.nvim.fs.relpath")
 local M = {}
 
 ---@type FiletreePathCopyConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   keymap_pick = nil,
   keymap_abs = "[a",
@@ -76,6 +76,9 @@ local _cfg = {
   nvim_config_root = true, -- also fold in $NVIM_CONFIG_DIR (stdpath("config"))
   notify = true,
 }
+
+---@type FiletreePathCopyConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.path_copy` accepts. Keep it in step with the keys this module reads;
@@ -365,7 +368,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   -- Build the cached project-root finder unless disabled (root_markers = false).

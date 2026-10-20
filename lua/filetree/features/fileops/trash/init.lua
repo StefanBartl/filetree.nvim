@@ -69,7 +69,7 @@ local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeTrashConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   -- "permanent" is opt-in: it is a genuine, unrecoverable delete (no OS
   -- trash, no `U`/history entry), so the safer default stays "trash" even
@@ -90,6 +90,9 @@ local _cfg = {
   keymap_undo = "U",
   keymap_history = "<leader>th",
 }
+
+---@type FiletreeTrashConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.trash` accepts. Keep it in step with the keys this module reads;
@@ -906,7 +909,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   if not trash_platform.available() then

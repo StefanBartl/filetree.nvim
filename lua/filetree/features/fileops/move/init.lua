@@ -47,12 +47,15 @@ local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreeMoveConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   keymap = "M",
   use_safety = true,
   dry_run = false,
 }
+
+---@type FiletreeMoveConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.move` accepts. Keep it in step with the keys this module reads;
@@ -350,7 +353,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   bind.bind("move", _cfg, {

@@ -27,7 +27,7 @@ local bind = require("filetree.util.bind")
 local M = {}
 
 ---@type FiletreePdfOpenConfig
-local _cfg = {
+local DEFAULTS = {
   enabled = false,
   default_mode = "buffer", -- mode used by keymap_open
   keymap_open = "go",
@@ -36,6 +36,9 @@ local _cfg = {
   keymap_terminal = false, -- mode "terminal" (pdfport in a terminal)
   keymap_picker = false, -- mode "picker"   (ask; see M.open_picker)
 }
+
+---@type FiletreePdfOpenConfig
+local _cfg = vim.deepcopy(DEFAULTS)
 
 ---Option schema (see `filetree.config.schema`): exactly what
 ---`features.pdf_open` accepts. Keep it in step with the keys this module reads;
@@ -114,7 +117,7 @@ end
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
-  _cfg = vim.tbl_deep_extend("force", _cfg, config)
+  _cfg = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), config)
   _adapter = adapter
 
   bind.bind("pdf_open", _cfg, {
