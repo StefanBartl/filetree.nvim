@@ -11,29 +11,6 @@ local schema = require("filetree.config.schema")
 ---@type FiletreeConfig
 local _defaults = require("filetree.config.DEFAULTS")
 
---- Starts at the defaults rather than an empty table: `get()` is called from
---- feature modules that can run before `setup()` (a test, a lazy-loaded
---- command), and every one of them reads `cfg.features.<name>` as if the
---- plugin's own defaults were in place. `setup()` replaces this wholesale.
----@type FiletreeConfig
-local _active = vim.deepcopy(_defaults)
-
----Deep-merge src into dst (modifies dst in place).
----@internal
----@param dst table
----@param src table
----@return table
-local function deep_merge(dst, src)
-  for k, v in pairs(src) do
-    if type(v) == "table" and type(dst[k]) == "table" then
-      deep_merge(dst[k], v)
-    else
-      dst[k] = v
-    end
-  end
-  return dst
-end
-
 -- ── Validation (ERR-50 / ERR-22) ─────────────────────────────────────────────
 -- Runs BEFORE the merge, not after: a typo'd top-level option or feature name
 -- must be caught and reported here, or it silently vanishes into the default
@@ -62,11 +39,6 @@ local KNOWN_TOP = {
   max_visible_nodes = true,
   env_roots = true,
 }
-
----What the last `M.setup()` call had to drop, for `:checkhealth`. Reset on
----every call so issues from an earlier setup() never linger.
----@type string[]
-local issues = {}
 
 ---Known sub-keys of the top-level `menu` table (see `DEFAULTS.lua`).
 ---@type table<string, boolean>
@@ -512,28 +484,57 @@ local function normalize_values(cfg, out_issues)
   end
 end
 
----Apply user config on top of defaults.
----@param user FiletreeOpts?
-function M.setup(user)
-  local clean, found_issues = sanitize(user or {})
-  issues = found_issues
-
-  -- Deep-copy defaults
-  _active = vim.deepcopy(_defaults)
-  deep_merge(_active, clean)
-  normalize_values(_active, issues)
-  table.sort(issues)
-  apply_keymap_remap(_active)
-  apply_autocmd_overrides(_active)
-  apply_confirmations(_active)
-  apply_ignore_list(_active)
-  apply_legacy_refs(_active, clean.refs)
+--- To the schema that `lib.lua.config` infers from the defaults, every option is open: the checks
+--- are `sanitize` (top-level options, the feature registry, each feature's own SCHEMA) before the
+--- merge and `normalize_values` after it. An unknown top-level key is caught there as well.
+local ANY = "boolean|number|string|table|function"
+---@type table<string, string>
+local SCHEMA = {}
+for key in pairs(KNOWN_TOP) do
+  SCHEMA[key] = ANY
 end
 
----Return the active configuration.
+-- What the user gave for `refs`, cleaned: the deprecated per-feature reference options migrate
+-- into it only where the user did not say otherwise (see `apply_legacy_refs`).
+local user_refs = nil
+
+local cfg = require("lib.lua.config").new(_defaults, {
+  name = "filetree",
+  schema = SCHEMA,
+  normalize = function(opts, found)
+    local clean, found_issues = sanitize(opts)
+    user_refs = clean.refs
+    for key in pairs(opts) do
+      opts[key] = nil
+    end
+    for key, value in pairs(clean) do
+      opts[key] = value
+    end
+    vim.list_extend(found, found_issues)
+  end,
+  resolve = function(current, found)
+    normalize_values(current, found)
+    apply_keymap_remap(current)
+    apply_autocmd_overrides(current)
+    apply_confirmations(current)
+    apply_ignore_list(current)
+    apply_legacy_refs(current, user_refs)
+  end,
+})
+
+---Apply user config on top of defaults. Every call starts from the defaults.
+---@param user FiletreeOpts?
+function M.setup(user)
+  user_refs = nil
+  cfg.setup(type(user) == "table" and user or nil)
+end
+
+---Return the active configuration. Starts at the defaults rather than an empty table: `get()` is
+---called from feature modules that can run before `setup()` (a test, a lazy-loaded command), and
+---every one of them reads `cfg.features.<name>` as if the plugin's own defaults were in place.
 ---@return FiletreeConfig
 function M.get()
-  return _active
+  return cfg.get()
 end
 
 ---What the last `M.setup()` call rejected or degraded (unknown option, wrong
@@ -541,7 +542,9 @@ end
 ---per issue -- empty when everything validated. For `:checkhealth filetree`.
 ---@return string[]
 function M.issues()
-  return vim.deepcopy(issues)
+  local list = cfg.issues()
+  table.sort(list)
+  return list
 end
 
 ---Validate the active config and return error messages. A safety net, not
@@ -553,9 +556,9 @@ end
 ---@return boolean ok
 ---@return string? err
 function M.validate()
-  local cfg = _active
-  if type(cfg.adapter) ~= "string" then return false, "config.adapter must be a string" end
-  if type(cfg.features) ~= "table" then return false, "config.features must be a table" end
+  local active = cfg.get()
+  if type(active.adapter) ~= "string" then return false, "config.adapter must be a string" end
+  if type(active.features) ~= "table" then return false, "config.features must be a table" end
   return true, nil
 end
 
