@@ -16,7 +16,7 @@ a long preview without leaving the tree.
 With [images.nvim](https://github.com/StefanBartl/images.nvim) installed,
 `<CR>` on an image opens it in a centred float (images.nvim's `:Image zen`
 window) at `features.preview.image.float` (default
-`{ width = 0.66, height = 0.66 }` of the editor); `<S-Up>`/`<S-Down>` in it
+`{ width = 0.66, height = 0.66, viewport = true }` of the editor); `<S-Up>`/`<S-Down>` in it
 step through images.nvim's `display.zen.sizes` (2/3, 90%, full screen),
 `q` closes it. In it, images.nvim also zooms (`+`/`-`, Alt+wheel), pans
 (`hjkl`, middle-button drag), opens a dragged part in a float of its own and
