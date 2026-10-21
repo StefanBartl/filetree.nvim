@@ -11,8 +11,8 @@ a trailing `/` creates a directory, anything else a file, with parent
 directories created as needed. A new file is written right away, also when
 it is empty, and opened in an editor window; a name that already exists just
 opens that file and leaves its content alone. Afterwards the tree cursor is
-on what was created; with the cursor on a collapsed folder, that folder is
-opened first.
+on what was created (for `a/b/c/`, on the outermost new folder `a`); with
+the cursor on a collapsed folder, that folder is opened first.
 
 - **Module:** `lua/filetree/features/fileops/smart_create/`
 - **Keymaps:** `a`

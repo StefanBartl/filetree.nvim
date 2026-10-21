@@ -65,6 +65,11 @@ local _tree_tabid = nil
 ---read-only way to answer this without a side effect; on any failure (an older
 ---neo-tree without it, say) this answers `true`, falling back to the old
 ---creating lookup rather than never finding a tree.
+---
+---Only a TAB state counts (`id == tabid`, as neo-tree's `create_state` sets
+---it): a window-only state of a `position = "current"` tree carries the same
+---`tabid` but lives in `state_by_win` under its window id, so
+---`get_state("filesystem", tabid)` would still create a tab placeholder.
 ---@param manager table
 ---@param tabid integer
 ---@return boolean
@@ -72,7 +77,9 @@ local function has_tracked_state(manager, tabid)
   local ok, states = pcall(manager._get_all_states)
   if not ok or type(states) ~= "table" then return true end
   for _, s in ipairs(states) do
-    if s.name == "filesystem" and s.tabid == tabid then return true end
+    if s.name == "filesystem" and s.tabid == tabid and (s.id == nil or s.id == tabid) then
+      return true
+    end
   end
   return false
 end

@@ -18,7 +18,25 @@ M.DELAYS_MS = { 60, 120, 240, 480 }
 
 ---@class FiletreePlaceCursorOpts
 ---@field anchor? integer  Tree cursor line when the operation started. When set, give up as soon as the cursor is somewhere else: either the tree plugin focused the node itself or the user moved on.
+---@field hold? FiletreePlaceCursorHold  Where the tree cursor was when a REFRESH was started (`smart_create`). A refresh puts the cursor back where it was when it renders -- possibly after the cursor was already placed (the path was in the tree before the refresh drew). neo-tree puts it back on the same LINE (it saves `lnum`), other trees on the same NODE. So the cursor is not left after the first hit: through the whole schedule, a cursor found back on that line or that node is placed again; one found anywhere else but the path means the user moved, and that ends it.
 ---@field delays? integer[]  Retry schedule in ms (default `M.DELAYS_MS`).
+---@field key? string  Calls with the same key replace each other: a second create within the schedule ends the first one's retries, which would otherwise pull the cursor back to the first path.
+
+---@class FiletreePlaceCursorHold
+---@field line integer the tree cursor line
+---@field path string|nil the path of the node on it
+
+--- The latest call per `opts.key`.
+---@type table<string, table>
+local latest = {}
+
+---@internal
+---@param winid integer
+---@return integer|nil
+local function cursor_line(winid)
+  local ok, pos = pcall(vim.api.nvim_win_get_cursor, winid)
+  return ok and pos[1] or nil
+end
 
 ---@internal
 ---@param adapter FiletreeAdapter|fun(): FiletreeAdapter?
@@ -26,6 +44,7 @@ M.DELAYS_MS = { 60, 120, 240, 480 }
 ---@param opts FiletreePlaceCursorOpts
 ---@param attempt integer
 local function try(adapter, path, opts, attempt)
+  if opts.key and latest[opts.key] ~= opts then return end
   local a = type(adapter) == "function" and adapter() or adapter
   if
     type(a) ~= "table"
@@ -36,13 +55,17 @@ local function try(adapter, path, opts, attempt)
   end
   local winid = a.get_winid and a.get_winid() or -1
   if not winid or winid <= 0 or not vim.api.nvim_win_is_valid(winid) then return end
-  if opts.anchor then
-    local ok, pos = pcall(vim.api.nvim_win_get_cursor, winid)
-    if not ok or pos[1] ~= opts.anchor then return end
-  end
+  if opts.anchor and cursor_line(winid) ~= opts.anchor then return end
 
   local line = a.get_node_line(path)
-  if line then
+  if opts.hold then
+    local cur = cursor_line(winid)
+    local back_on_node = opts.hold.path and cur == a.get_node_line(opts.hold.path)
+    -- Anywhere but where it started (that line, or that node) or on the path:
+    -- the user moved it.
+    if cur ~= line and cur ~= opts.hold.line and not back_on_node then return end
+    if line and cur ~= line then a.scroll_to_line(line) end
+  elseif line then
     a.scroll_to_line(line)
     return
   end
@@ -60,7 +83,9 @@ end
 ---@param path string
 ---@param opts? FiletreePlaceCursorOpts
 function M.when_rendered(adapter, path, opts)
-  try(adapter, path, opts or {}, 1)
+  opts = vim.tbl_extend("force", {}, opts or {})
+  if opts.key then latest[opts.key] = opts end
+  try(adapter, path, opts, 1)
 end
 
 return M
