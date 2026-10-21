@@ -16,6 +16,7 @@ Optional, each detected at runtime and degrading to nothing when absent:
 | `trash-put` / `gio` | The trash feature; without one, delete is a real delete |
 | `rg` (ripgrep) | Grep-in-dir and the reference scan |
 | [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | `.pdf` nodes rendered into a buffer |
+| [images.nvim](https://github.com/StefanBartl/images.nvim) | The [image viewer](FEATURES/UI.md#image-viewer) on `<CR>`: zoom, pan, cut-out parts, `gs`/`gy`. It in turn wants a terminal that draws OSC 1337 images (WezTerm, iTerm2, Konsole), **ImageMagick** (`magick`) for zoom/cut/save/copy, `'mouse'` for the wheel and drags, and a current lib.nvim for `gy` (image clipboard) |
 | [pickers.nvim](https://github.com/StefanBartl/pickers.nvim) | `f` (find files) and `gr` (grep) on a node run through it — your engine, your `find` flags, and the picked file is revealed in the tree; otherwise telescope, fzf-lua, mini.pick or a built-in fallback. On by default, opt-out on both ends — see [pickers.nvim integration](configuration.md#pickersnvim-integration) |
 | [which-key.nvim](https://github.com/folke/which-key.nvim) | Labels for the keymap set |
 | [nvzone/menu](https://github.com/nvzone/menu) | Renders the context menu if installed; `ui.kit.menu` draws it otherwise, so right-click works either way — see [Integrations](integrations.md) |

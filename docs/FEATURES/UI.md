@@ -14,20 +14,8 @@ open action needed. `<Tab>`/`<CR>` dispatch images/PDFs to their own
 viewer instead of rendering raw bytes as text; `<PageUp>`/`<PageDown>` page
 a long preview without leaving the tree.
 With [images.nvim](https://github.com/StefanBartl/images.nvim) installed,
-`<CR>` on an image opens it in a centred float (images.nvim's `:Image zen`
-window) at `features.preview.image.float` (default
-`{ width = 0.66, height = 0.66, viewport = true }` of the editor); `<S-Up>`/`<S-Down>` in it
-step through images.nvim's `display.zen.sizes` (2/3, 90%, full screen),
-`q` closes it. In it, images.nvim also zooms (`+`/`-`, Alt+wheel), pans
-(`hjkl`, middle-button drag), opens a dragged part in a float of its own and
-saves (`gs`) or copies (`gy`) what is shown; `?` lists its keys — see
-[images.nvim's BINDINGS, "Zen window"](https://github.com/StefanBartl/images.nvim/blob/main/docs/BINDINGS.md#zen-window).
-`image.float.viewport = false` opens it plain, without those.
-`<Tab>` keeps the inline view. `image.float = false`, a
-`backend` other than `"auto"`/`"images.nvim"`, or an images.nvim without
-the float gives `<CR>` the same view as `<Tab>`. On a terminal images.nvim
-does not expect to draw images in, the float hands the image to the
-block-graphics fallback instead.
+`<CR>` on an image opens the image viewer below; `<Tab>` keeps the inline
+view.
 Files whose extension is in `features.preview.system_exts`
 (default `msg`, `eml`, `oft`, i.e. Outlook mails) go to the OS default app
 instead; `{}` turns that off.
@@ -36,6 +24,46 @@ In the editor-window mode a binary file, or a file larger than
 `features.preview.max_bytes` (default 1 MiB, `0` = no limit), is not loaded:
 the window stays as it was and a one-line notice says why. The floating mode
 hex-dumps binaries and reads only the first `max_lines` lines.
+
+### Image viewer
+
+`<CR>` on an image (a screenshot, a photo, a diagram) opens it in a centred
+float — images.nvim's `:Image zen` window — sized at
+`features.preview.image.float` (default
+`{ width = 0.66, height = 0.66, viewport = true }` of the editor). It is made
+for reading screenshots: zoom into the corner that matters, move around, cut
+the part you need into a window of its own, save it or paste it somewhere
+else.
+
+| In the float | Does |
+| --- | --- |
+| `+` / `-`, Alt + mouse wheel | Zoom in / out; the wheel keeps the point under the pointer in place |
+| `h` `j` `k` `l`, arrows / middle button held + drag | Move the visible part; `H` `J` `K` `L` to an edge |
+| `0` | The whole picture again |
+| Left button drag, or `v` + `hjkl` + `<CR>` | Open the marked part in a float of its own, at full resolution — works again inside it; `<BS>` goes back, `q` closes them all |
+| `gs` | Save what is shown as a PNG next to the original (`<name>.crop-<x>-<y>-<w>x<h>.png`, never overwriting) |
+| `gy` | Copy what is shown to the clipboard as an image |
+| `<S-Up>` / `<S-Down>` | Grow / shrink the window (2/3, 90%, full screen) |
+| `?` | Every key bound in the float, as it is configured |
+
+The title shows the zoom factor and how deep you are in cut-out parts
+(`shot.png · 2.3× · 2/2`). All keys are images.nvim's and are set in its
+`display.zen.keys` — see
+[images.nvim's BINDINGS, "Zen window"](https://github.com/StefanBartl/images.nvim/blob/main/docs/BINDINGS.md#zen-window).
+`image.float.viewport = false` opens the float plain: just the picture, its
+size keys, `?` and `q`.
+
+What it needs (all optional; without them `<CR>` falls back to the inline
+view, or the part that needs a tool says so once):
+
+- [images.nvim](https://github.com/StefanBartl/images.nvim) — the float itself, with `backend = "auto"` (default) or `"images.nvim"`.
+- A terminal that draws images through OSC 1337 — WezTerm (the one that works on native Windows), iTerm2, Konsole; elsewhere images.nvim falls back to block graphics.
+- ImageMagick (`magick` on `PATH`) — zooming, cutting a part, `gs` and `gy`, since each view is a crop; without it the float still shows the whole picture.
+- `'mouse'` including normal mode (`set mouse=a`) — the wheel and the drags.
+- An up-to-date [lib.nvim](https://github.com/StefanBartl/lib.nvim) — `gy` uses its `cross.copy_image_to_clipboard` (PowerShell on Windows, `wl-copy`/`xclip` on Linux, `osascript` on macOS).
+
+`image.float = false`, a `backend` other than `"auto"`/`"images.nvim"`, or an
+images.nvim without the float gives `<CR>` the same view as `<Tab>`.
 
 - **Module:** `lua/filetree/features/ui/preview/`
 - **Keymaps:** `<Tab>`/`<CR>` (open/dispatch), `<PageUp>`/`<PageDown>`

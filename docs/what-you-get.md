@@ -9,6 +9,7 @@ as default-off. The ones worth knowing on day one:
 | Auto-reveal | The tree follows the buffer you switch to |
 | Marks | `m` marks a node; copy, move, trash, diff and more act on the whole set — **in the order you marked them** (`features.marks.order = "tree"` for path order) |
 | Preview | The node under the cursor, without opening it |
+| Image viewer | `<CR>` on an image: zoom, pan, cut a part into its own window, save (`gs`) or copy (`gy`) it — with [images.nvim](https://github.com/StefanBartl/images.nvim); see [Image viewer](FEATURES/UI.md#image-viewer) |
 | Link marker | A `⇢` sign on a symlinked node, `⇢!` when it dangles |
 | Smart rename | Rename, and rewrite the markdown links, `require()`s and `import`s pointing at it |
 | Batch rename | The same, over a whole directory, with a preview |
