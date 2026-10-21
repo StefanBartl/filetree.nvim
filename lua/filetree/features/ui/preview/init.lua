@@ -52,7 +52,9 @@ local DEFAULTS = {
     backend = "auto", -- "auto" | "images.nvim" | "snacks" | "image.nvim" | "system" | false
     -- <CR> on an image: images.nvim's zen float at this size (fractions of the
     -- editor), <S-Up>/<S-Down> in it step the size. false = the backend's own view.
-    float = { width = 0.66, height = 0.66 },
+    -- `viewport = false` opens it plain: no zoom, pan, mouse, selection or
+    -- save/copy keys in it (images.nvim's own keys, see its docs/BINDINGS.md).
+    float = { width = 0.66, height = 0.66, viewport = true },
   },
   pdf = {
     backend = "pdfport", -- "pdfport" | "system" | false
@@ -94,7 +96,11 @@ M.SCHEMA = {
       },
       float = {
         "table|false",
-        fields = { width = { "number", min = 0 }, height = { "number", min = 0 } },
+        fields = {
+          width = { "number", min = 0 },
+          height = { "number", min = 0 },
+          viewport = "boolean",
+        },
       },
     },
   },
@@ -294,7 +300,11 @@ local function open_image_float(path)
   if backend ~= "auto" and backend ~= "images.nvim" then return false end
   local ok, images = pcall(require, "images")
   if not ok or type(images) ~= "table" or type(images.zen) ~= "function" then return false end
-  return (pcall(images.zen, path, { width = box.width, height = box.height }))
+  -- `viewport` only when it is off: an images.nvim older than the option
+  -- ignores it either way, and the default needs no word.
+  local zen_opts = { width = box.width, height = box.height }
+  if box.viewport == false then zen_opts.viewport = false end
+  return (pcall(images.zen, path, zen_opts))
 end
 
 -- ── PDF backend dispatch ──────────────────────────────────────────────────────

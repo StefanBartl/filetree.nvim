@@ -18,7 +18,12 @@ With [images.nvim](https://github.com/StefanBartl/images.nvim) installed,
 window) at `features.preview.image.float` (default
 `{ width = 0.66, height = 0.66 }` of the editor); `<S-Up>`/`<S-Down>` in it
 step through images.nvim's `display.zen.sizes` (2/3, 90%, full screen),
-`q` closes it. `<Tab>` keeps the inline view. `image.float = false`, a
+`q` closes it. In it, images.nvim also zooms (`+`/`-`, Alt+wheel), pans
+(`hjkl`, middle-button drag), opens a dragged part in a float of its own and
+saves (`gs`) or copies (`gy`) what is shown; `?` lists its keys — see
+[images.nvim's BINDINGS, "Zen window"](https://github.com/StefanBartl/images.nvim/blob/main/docs/BINDINGS.md#zen-window).
+`image.float.viewport = false` opens it plain, without those.
+`<Tab>` keeps the inline view. `image.float = false`, a
 `backend` other than `"auto"`/`"images.nvim"`, or an images.nvim without
 the float gives `<CR>` the same view as `<Tab>`. On a terminal images.nvim
 does not expect to draw images in, the float hands the image to the

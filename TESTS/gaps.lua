@@ -3824,6 +3824,20 @@ do
       zen_calls[1] and zen_calls[1].opts.width == 0.66 and zen_calls[1].opts.height == 0.66
     )
     eq("image.float: ... and not the inline view as well", show_calls, 0)
+    eq(
+      "image.float: the zen float has its viewport keys by default",
+      zen_calls[1] and zen_calls[1].opts.viewport,
+      nil
+    )
+
+    run({ backend = "auto", float = { width = 0.66, height = 0.66, viewport = false } }, function()
+      preview.open_or_fallback(fallback)
+    end)
+    eq(
+      "image.float.viewport = false: handed to images.zen",
+      zen_calls[1] and zen_calls[1].opts.viewport,
+      false
+    )
 
     run({ backend = "auto", float = { width = 0.66, height = 0.66 } }, function()
       preview.toggle_or_open()
