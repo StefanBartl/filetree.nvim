@@ -210,7 +210,13 @@ eq(
   table.concat(vim.fn.readfile(work .. "/keep.lua"), "\n"),
   "keep me"
 )
-eq("and is the one opened", slash(vim.api.nvim_buf_get_name(0)), work .. "/keep.lua")
+-- Compared resolved: on macOS the temp dir is under /var, a symlink to /private/var,
+-- and the buffer name comes back resolved.
+eq(
+  "and is the one opened",
+  vim.uv.fs_realpath(vim.api.nvim_buf_get_name(0)),
+  vim.uv.fs_realpath(work .. "/keep.lua")
+)
 
 -- ── 2. the neo-tree adapter never creates neo-tree's state ──────────────────
 
