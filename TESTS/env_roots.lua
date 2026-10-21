@@ -319,7 +319,7 @@ local function setup(env_roots, features)
   })
 end
 
--- ── path_copy: absolute formats ──────────────────────────────────────────────
+-- ── path_copy: absolute formats are real, env_rooted folds ──────────────────
 do
   local tmp, repos, notes, outside = scratch("pathcopy")
   vim.env.REPOS_DIR = repos
@@ -333,15 +333,16 @@ do
     return vim.fn.getreg('"')
   end
 
+  -- `[a` asks for the absolute path; the `$NAME/rest` form is `[e`.
   eq(
-    "path_copy absolute: folded under $REPOS_DIR",
+    "path_copy absolute: the real path under $REPOS_DIR",
     copied(pc.copy_absolute, repos .. "/proj/sub/file.md"),
-    "$REPOS_DIR/proj/sub/file.md"
+    repos .. "/proj/sub/file.md"
   )
   eq(
-    "path_copy absolute: folded under a user-defined root",
+    "path_copy absolute: the real path under a user-defined root",
     copied(pc.copy_absolute, notes .. "/a/n.md"),
-    "$NOTES/a/n.md"
+    notes .. "/a/n.md"
   )
   eq(
     "path_copy absolute: untouched under no root",
@@ -349,14 +350,23 @@ do
     outside .. "/f.md"
   )
   eq(
-    "path_copy absolute_raw: never folded",
+    "path_copy absolute_raw: the same",
     copied(pc.copy_absolute_raw, repos .. "/proj/sub/file.md"),
     repos .. "/proj/sub/file.md"
   )
   eq(
-    "path_copy dirname: folded",
+    "path_copy dirname: the real parent",
     copied(pc.copy_dirname, repos .. "/proj/sub/file.md"),
-    "$REPOS_DIR/proj/sub"
+    repos .. "/proj/sub"
+  )
+  check(
+    "path_copy project_root: no $NAME form",
+    not copied(pc.copy_project_root, repos .. "/proj/sub/file.md"):find("$", 1, true)
+  )
+  eq(
+    "path_copy env_rooted: folds under a user-defined root",
+    copied(pc.copy_env_rooted, notes .. "/a/n.md"),
+    "$NOTES/a/n.md"
   )
   check(
     "path_copy uri: still the real path",
@@ -387,7 +397,7 @@ do
   vim.fn.delete(tmp, "rf")
 end
 
--- ── copy_file_list: absolute lists ───────────────────────────────────────────
+-- ── copy_file_list: absolute lists are real ──────────────────────────────────
 do
   local tmp, repos = scratch("filelist")
   vim.env.REPOS_DIR = repos
@@ -397,7 +407,7 @@ do
   cur_node = { path = repos .. "/proj", type = "directory" }
   vim.fn.setreg('"', "")
   cfl.copy_files_abs()
-  eq("copy_file_list files_abs: folded", vim.fn.getreg('"'), "$REPOS_DIR/proj/sub/file.md")
+  eq("copy_file_list files_abs: the real path", vim.fn.getreg('"'), repos .. "/proj/sub/file.md")
 
   vim.fn.setreg('"', "")
   cfl.copy_files_rel()

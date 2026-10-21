@@ -3,11 +3,11 @@
 --- ones) as filetree uses them -- a thin layer over lib.nvim's named-roots
 --- registry (`lib.nvim.fs.roots`, see its README), which does the actual work:
 ---
----   * `fold(p)`    absolute path -> `$NAME/rest` -- what every action that
----                  hands an ABSOLUTE path to the user (clipboard, inserted
----                  links, notifications) writes instead of `E:/repos/x`, so
----                  the text means the same on a machine where the checkout
----                  sits on another drive.
+---   * `fold(p)`    absolute path -> `$NAME/rest` -- what inserted links,
+---                  notifications and the `env_rooted` copy write instead of
+---                  `E:/repos/x`, so the text means the same on a machine
+---                  where the checkout sits on another drive. A path copied
+---                  as absolute (`[a`) is not folded: that is the real one.
 ---   * `expand(s)`  `$NAME/rest` -> absolute path -- what a path typed or
 ---                  configured by the user goes through first, including a
 ---                  root that has no real environment variable

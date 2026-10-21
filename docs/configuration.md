@@ -58,11 +58,11 @@ require("filetree").setup({
   -- "Progress indicators" below.
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
-  -- Named roots that ABSOLUTE paths are written with — see "Env roots" below.
-  -- A copied absolute path, the project root, an absolute file list, an
-  -- inserted Markdown link (insert_path = "absolute") and a created symlink's
-  -- messages come out as `$REPOS_DIR/foo.nvim/x.lua` / `$NVIM_CONFIG_DIR/lua/x.lua`
-  -- instead of `E:/repos/foo.nvim/x.lua`.
+  -- Named roots that portable paths are written with — see "Env roots" below.
+  -- An inserted Markdown link (insert_path = "absolute") and a created
+  -- symlink's messages come out as `$REPOS_DIR/foo.nvim/x.lua` /
+  -- `$NVIM_CONFIG_DIR/lua/x.lua` instead of `E:/repos/foo.nvim/x.lua`; `[e`
+  -- copies a path in that form. `[a` and the other absolute copies stay real.
   env_roots = {
     enable      = true,                 -- false → plain absolute paths everywhere
     -- vars     = { "REPOS_DIR" },      -- environment variables whose value is a root
@@ -351,10 +351,11 @@ require("filetree").setup({
 
 ## Env roots
 
-`env_roots` names the directories that **absolute paths are written with**.
+`env_roots` names the directories that **portable paths are written with**.
 A path under one of them is written `$NAME/rest` instead of `E:/repos/rest`,
-so the text — a copied path, a pasted link, a message — means the same on a
-machine where that directory sits on another drive or under another home.
+so the text — a pasted link, a message, a path copied with `[e` — means the
+same on a machine where that directory sits on another drive or under another
+home.
 
 | Root | Where it comes from |
 |---|---|
@@ -378,25 +379,27 @@ are resolved before it is folded, so `$REPOS_DIR/../x` is never written. A
 typed path (`:Filetree symlink`) may name a root as `$NAME`, `${NAME}` or
 `%NAME%`.
 
-What goes through it — the actions that hand an *absolute* path to you:
+What goes through it:
 
-- `:Filetree copy absolute` / `dirname` / `project_root` (`[a`, `]a`, `[R`)
-- `:Filetree filelist files abs` / `dirs abs`
+- `:Filetree copy env_rooted` (`[e`) — always, also with `enable = false`
 - Markdown links inserted with `insert_path = "absolute"` (and `"env"`)
 - `:Filetree symlink` — the typed target is expanded (`$REPOS_DIR/x`,
   `$NVIM_CONFIG_DIR/x`, `$YOURS/x`), the messages show the env form, and the
   link's own target text is chosen portably — see
   [Link Create](FEATURES/FILEOPS.md#link-create)
 
-What does **not**: everything relative by definition (`relative`,
+What does **not**: a path you copy as absolute — `:Filetree copy absolute` /
+`dirname` / `project_root` (`[a`, `]a`, `[R`) and `:Filetree filelist files
+abs` / `dirs abs` (`[f`, `[F`) write the real path, since asking for the
+absolute path while a `$NAME` form has a key of its own (`[e`) means asking
+for the real one. Neither does everything relative by definition (`relative`,
 `buffer_relative`, `project_relative`, Markdown links relative to the buffer),
-and everything that needs the real path (`uri`, open-with, the file manager,
+nor everything that needs the real path (`uri`, open-with, the file manager,
 the OS file clipboard, shell commands).
 
-Switch it off with `env_roots = { enable = false }` — every action above then
-writes the plain absolute path again. `:Filetree copy absolute_raw` is the
-plain path on demand while it is on, and `:Filetree copy env_rooted` folds on
-demand while it is off.
+Switch it off with `env_roots = { enable = false }` — the links and messages
+above then show the plain absolute path again; `[e` still folds, it is asked
+for by name.
 
 ```lua
 require("filetree").setup({
