@@ -8,7 +8,8 @@ read-only movement around it.
 
 `a` creates a file or directory under the cursor, template-aware — typing
 a trailing `/` creates a directory, anything else a file, with parent
-directories created as needed.
+directories created as needed. Afterwards the tree cursor is on what was
+created; with the cursor on a collapsed folder, that folder is opened first.
 
 - **Module:** `lua/filetree/features/fileops/smart_create/`
 - **Keymaps:** `a`

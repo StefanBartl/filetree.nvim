@@ -5,6 +5,7 @@ local confirm_choice = require("filetree.util.confirm_choice")
 local path = require("filetree.util.path")
 local bufutil = require("filetree.util.buffer")
 local window = require("filetree.util.window")
+local place_cursor = require("filetree.util.place_cursor")
 local M = {}
 
 ---@type FiletreeSmartCreateConfig
@@ -153,18 +154,45 @@ end
 
 ---@internal
 ---Get the directory to create in (current node's dir or cwd).
----@return string
+---@return string dir
+---@return FiletreeNode? dir_node  The node under the cursor when it is that directory.
 local function resolve_parent_dir()
   if not _adapter then return path.slashify(vim.fn.getcwd()) end
   local node = _adapter.get_current_node()
   if not node then return path.slashify(vim.fn.getcwd()) end
-  if node.type == "directory" then return path.slashify(node.path) end
+  if node.type == "directory" then return path.slashify(node.path), node end
   return path.parent(node.path)
+end
+
+---How long to keep looking for the created node after the refresh, in ms
+---(see `util.place_cursor`). A little longer than a reveal's: the refresh
+---rescans the whole tree, not one branch.
+---@type integer[]
+local CURSOR_RETRY_MS = { 50, 100, 200, 400, 800 }
+
+---Refresh the tree and put its cursor on what was just created.
+---
+---A bare refresh leaves the cursor on the node it was on -- with folders
+---sorted first, a new folder lands lines above a file the cursor was on, so the
+---cursor ended up "5-6 lines below" it. A folder created inside a collapsed one
+---would not be rendered at all, so that one is opened first.
+---@internal
+---@param target string  Absolute path of what was created.
+---@param dir_node FiletreeNode?  The directory node it was created in, when the cursor was on it.
+local function refresh_onto(target, dir_node)
+  if not _adapter then return end
+  if dir_node and dir_node.is_expanded == false and _adapter.expand_node then
+    pcall(_adapter.expand_node, dir_node)
+  end
+  if _adapter.refresh then pcall(_adapter.refresh) end
+  place_cursor.when_rendered(function()
+    return _adapter
+  end, target, { delays = CURSOR_RETRY_MS })
 end
 
 ---Create a file or directory interactively.
 function M.create()
-  local parent = resolve_parent_dir()
+  local parent, dir_node = resolve_parent_dir()
 
   -- Show the parent directory in the prompt (relative to cwd) rather than
   -- pre-filling the absolute path — the user only types the new name. Always
@@ -233,7 +261,7 @@ function M.create()
                 local lines = build_template(target, paste)
                 create_with_content(target, lines)
                 notify_created("file", target)
-                if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+                refresh_onto(target, dir_node)
               end
             )
             return
@@ -245,7 +273,7 @@ function M.create()
         notify_created("file", target)
       end
 
-      if _adapter and _adapter.refresh then pcall(_adapter.refresh) end
+      refresh_onto(target, dir_node)
     end,
   })
 end

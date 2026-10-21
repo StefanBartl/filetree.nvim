@@ -56,6 +56,7 @@ local bufevents = require("filetree.util.bufevents")
 local lib_debounce = require("lib.nvim.debounce")
 local lib_is_subpath = require("lib.nvim.fs.is_subpath")
 local target_dir_util = require("filetree.util.target_dir")
+local place_cursor = require("filetree.util.place_cursor")
 local M = {}
 
 ---@type FiletreeAutoRevealConfig
@@ -200,44 +201,6 @@ end
 
 -- ── Reveal logic ──────────────────────────────────────────────────────────────
 
----How long to keep looking for a node that `open_reveal` is still scanning in,
----as successive delays in ms. Bounded on purpose: about a second in total, then
----it gives up rather than fighting whatever else is moving the cursor.
----@type integer[]
-local REVEAL_RETRY_MS = { 60, 120, 240, 480 }
-
----`open_reveal` only guarantees the node becomes *rendered*. Neo-tree reveals
----through a debounced, asynchronous rescan, and when that is driven from inside
----the tree window it leaves the cursor where it was instead of jumping to the
----revealed node -- so the tree expands correctly and the cursor sits on the root
----line. Once the node turns up in the line map, put the cursor there.
----
----Aborts as soon as the tree cursor moves from where this left it: that is
----either the tree plugin having focused the node itself (nothing to do) or the
----user having moved on (nothing to interrupt).
----@internal
----@param path string
----@param anchor integer  Tree cursor line as it was when the reveal was issued.
----@param attempt integer
-local function place_cursor_when_rendered(path, anchor, attempt)
-  if not _adapter or type(_adapter.get_node_line) ~= "function" then return end
-  local winid = _adapter.get_winid and _adapter.get_winid() or -1
-  if winid <= 0 or not vim.api.nvim_win_is_valid(winid) then return end
-  local ok, pos = pcall(vim.api.nvim_win_get_cursor, winid)
-  if not ok or pos[1] ~= anchor then return end
-
-  local line = _adapter.get_node_line(path)
-  if line then
-    _adapter.scroll_to_line(line)
-    return
-  end
-  local delay = REVEAL_RETRY_MS[attempt]
-  if not delay then return end
-  vim.defer_fn(function()
-    place_cursor_when_rendered(path, anchor, attempt + 1)
-  end, delay)
-end
-
 ---Ask the cwd_mode feature what its active policy wants for this file.
 ---Mirrors cwd_sync's own `policy()` -- returns nil (no opinion, resolve
 ---normally) when the feature is absent, disabled, or in "follow" mode.
@@ -252,9 +215,15 @@ local function policy_decision(path)
   return ok and decision or nil
 end
 
----`_adapter.open_reveal(path, 0, root)`, tracking the tree cursor's current
----line first so `place_cursor_when_rendered` can land on the node once the
----(possibly async) reveal finishes rendering it.
+---`_adapter.open_reveal(path, 0, root)`, then the cursor onto the node.
+---
+---`open_reveal` only guarantees the node becomes *rendered*. Neo-tree reveals
+---through a debounced, asynchronous rescan, and when that is driven from inside
+---the tree window it leaves the cursor where it was instead of jumping to the
+---revealed node -- so the tree expands correctly and the cursor sits on the root
+---line. `util.place_cursor` puts the cursor there once the node turns up, and
+---gives up as soon as the tree cursor leaves the line it was on when the reveal
+---was issued (the tree plugin focused the node itself, or the user moved on).
 ---@internal
 ---@param path string
 ---@param root string
@@ -266,7 +235,11 @@ local function do_open_reveal(path, root)
     if ok then anchor = pos[1] end
   end
   pcall(_adapter.open_reveal, path, 0, root)
-  if anchor then place_cursor_when_rendered(path, anchor, 1) end
+  if anchor then
+    place_cursor.when_rendered(function()
+      return _adapter
+    end, path, { anchor = anchor })
+  end
 end
 
 ---Move the tree cursor onto `path`, expanding parents if it takes that. No

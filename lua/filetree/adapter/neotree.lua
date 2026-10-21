@@ -58,12 +58,56 @@ end
 local _tree_tabid = nil
 
 ---@internal
+---Whether neo-tree already tracks a "filesystem" state for `tabid`, WITHOUT
+---creating one -- unlike `manager.get_state`, which lazily creates and
+---PERMANENTLY registers an empty placeholder state (firing `STATE_CREATED`)
+---for any tabid that never had one. `manager._get_all_states()` is the one
+---read-only way to answer this without a side effect; on any failure (an older
+---neo-tree without it, say) this answers `true`, falling back to the old
+---creating lookup rather than never finding a tree.
+---@param manager table
+---@param tabid integer
+---@return boolean
+local function has_tracked_state(manager, tabid)
+  local ok, states = pcall(manager._get_all_states)
+  if not ok or type(states) ~= "table" then return true end
+  for _, s in ipairs(states) do
+    if s.name == "filesystem" and s.tabid == tabid then return true end
+  end
+  return false
+end
+
+---The "filesystem" state neo-tree tracks for `tabid`, or nil -- never created
+---here. A placeholder created by filetree is not harmless:
+---
+--- - Created before neo-tree merged the user's config (filetree's own setup asks
+---   for the tree window before the tree was ever opened), it is replaced in
+---   `state_by_tab` by a fresh table at the next config merge while the old one
+---   stays in `all_states`. `manager.refresh` and neo-tree's own event handlers
+---   walk `all_states` only, so from then on they no longer reach the visible
+---   tree: a refresh after creating a folder rendered nothing, and the cursor
+---   stayed on the node it was on.
+--- - Nothing ever disposes it, and a stray state in `all_states` can make
+---   neo-tree's `opened_buffers_changed` handler pcall-abort its whole iteration
+---   early (see `TESTS/adapter_lines.lua`'s
+---   `run_neotree_opened_buffers_redraw_check`).
+---@internal
+---@param manager table
+---@param tabid integer
+---@return table? state
+local function tracked_state(manager, tabid)
+  if not has_tracked_state(manager, tabid) then return nil end
+  local ok, state = pcall(manager.get_state, "filesystem", tabid)
+  return ok and state or nil
+end
+
+---@internal
 ---@param manager table
 ---@param tabid integer
 ---@return table? state  Only when its window is a live, real window.
 local function state_with_live_window(manager, tabid)
-  local ok, state = pcall(manager.get_state, "filesystem", tabid)
-  if ok and state and state.winid and vim.api.nvim_win_is_valid(state.winid) then return state end
+  local state = tracked_state(manager, tabid)
+  if state and state.winid and vim.api.nvim_win_is_valid(state.winid) then return state end
   return nil
 end
 
@@ -141,31 +185,6 @@ end
 ---has focus -- so simply preferring the current tab already resolves those
 ---correctly, including with a second, unrelated tree live on some other tab.
 ---@return table? state
----@internal
----Whether neo-tree already tracks a "filesystem" state for `tabid`, WITHOUT
----creating one -- unlike `manager.get_state`, which lazily creates and
----PERMANENTLY registers an empty placeholder state (firing `STATE_CREATED`)
----for any tabid that never had one. Used by `get_state()`'s last-resort probe
----below to tell "this tab never had a tree" (a placeholder our own probe is
----about to create) apart from "this tab has a real, if not currently live,
----tracked state" (something that existed before we got here and is not ours
----to dispose) -- see that probe's own comment for why the distinction matters.
----`manager._get_all_states()` is the one read-only way to answer this without
----a side effect; on any failure (an older neo-tree without it, say) this
----answers `true` so the probe below never disposes something it isn't sure it
----created.
----@param manager table
----@param tabid integer
----@return boolean
-local function has_tracked_state(manager, tabid)
-  local ok, states = pcall(manager._get_all_states)
-  if not ok or type(states) ~= "table" then return true end
-  for _, s in ipairs(states) do
-    if s.name == "filesystem" and s.tabid == tabid then return true end
-  end
-  return false
-end
-
 local function get_state()
   local manager = get_manager()
   if not manager then return nil end
@@ -197,41 +216,25 @@ local function get_state()
   -- Last resort: the tree may live on some other, background tab that was
   -- never cached (or whose cache went stale). Only worth trying with more
   -- than one tab open -- with a single tab, the current-tab call above
-  -- already covered the only tab there is. `manager.get_state` lazily
-  -- creates a harmless-looking empty placeholder for a tabid that never had
-  -- one -- "harmless" only in that it doesn't error, NOT in that it's free:
-  -- nothing ever disposes it, and a stray leftover state in neo-tree's own
-  -- `all_states` list can later make its `opened_buffers_changed` handler
-  -- pcall-abort its whole iteration early, silently breaking the narrow-
-  -- redraw resync other, real trees depend on (see
-  -- `TESTS/adapter_lines.lua`'s `run_neotree_opened_buffers_redraw_check`).
-  -- So: probe via `has_tracked_state` first (a read-only check, creates
-  -- nothing) to tell a genuinely pre-existing state apart from one this
-  -- probe itself is about to lazily create, and dispose only the latter,
-  -- right after checking it -- never a state that was already there before
-  -- this call, which may be legitimately non-live right now (its window
-  -- closed) but still hold config/expand-state worth keeping for later.
+  -- already covered the only tab there is. Creates nothing (see
+  -- `tracked_state`).
   local tabpages = vim.api.nvim_list_tabpages()
   if #tabpages > 1 then
     for _, tabid in ipairs(tabpages) do
       if tabid ~= _tree_tabid then
-        local pre_existing = has_tracked_state(manager, tabid)
         local state = state_with_live_window(manager, tabid)
         if state then
           _tree_tabid = tabid
           return state
-        elseif not pre_existing then
-          pcall(manager.dispose, "filesystem", tabid)
         end
       end
     end
   end
 
-  -- Nothing live anywhere -- same fallback this function always had, e.g.
-  -- get_current_position()'s "no prior state yet" default before the tree
-  -- has ever been shown.
-  local ok, ambient = pcall(manager.get_state, "filesystem", current_tab)
-  return ok and ambient or nil
+  -- Nothing live anywhere: the current tab's tracked state, window closed (it
+  -- still knows e.g. the position the tree was last shown at), or nil before
+  -- the tree has ever been shown.
+  return tracked_state(manager, current_tab)
 end
 
 ---@internal
