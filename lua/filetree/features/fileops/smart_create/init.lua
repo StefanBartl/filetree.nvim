@@ -107,16 +107,34 @@ local function open_editor_window()
 end
 
 ---@internal
----Write initial content to a new buffer and save.
+---Open `filepath` in an editor window and, when it does not exist yet, write
+---it with `lines` -- also when `lines` is empty: only a file on disk shows up
+---in the tree (and gets the tree cursor), and the success message says it was
+---created. Opened through `:edit` so `BufNewFile` handlers still run, and
+---whatever they put in is what gets written. An existing file is only opened,
+---never overwritten with a template.
 ---@param filepath string
 ---@param lines string[]
+---@return boolean created  false when the file was already there.
 local function create_with_content(filepath, lines)
+  local existed = vim.uv.fs_stat(filepath) ~= nil
   open_editor_window()
   vim.cmd("edit " .. vim.fn.fnameescape(filepath))
-  if #lines > 0 then
-    local buf = vim.api.nvim_get_current_buf()
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-    vim.cmd("write")
+  if existed then return false end
+  if #lines > 0 then vim.api.nvim_buf_set_lines(0, 0, -1, false, lines) end
+  vim.cmd("write")
+  return true
+end
+
+---@internal
+---`create_with_content` plus the message for it.
+---@param filepath string
+---@param lines string[]
+local function create_file(filepath, lines)
+  if create_with_content(filepath, lines) then
+    notify_created("file", filepath)
+  elseif _cfg.notify_level ~= "off" then
+    notify.info("Already exists, opened: " .. path.relative(filepath))
   end
 end
 
@@ -240,8 +258,7 @@ function M.create()
         -- Auto init.lua
         if _cfg.auto_init_lua then
           local init_path = target .. "/init.lua"
-          local lines = build_template(init_path, false)
-          create_with_content(init_path, lines)
+          create_with_content(init_path, build_template(init_path, false))
         end
       else
         -- Create file — ensure parent directory exists
@@ -258,9 +275,7 @@ function M.create()
               function(choice)
                 if not choice then return end
                 paste = choice == "Paste clipboard"
-                local lines = build_template(target, paste)
-                create_with_content(target, lines)
-                notify_created("file", target)
+                create_file(target, build_template(target, paste))
                 refresh_onto(target, dir_node)
               end
             )
@@ -268,9 +283,7 @@ function M.create()
           end
         end
 
-        local lines = build_template(target, false)
-        create_with_content(target, lines)
-        notify_created("file", target)
+        create_file(target, build_template(target, false))
       end
 
       refresh_onto(target, dir_node)

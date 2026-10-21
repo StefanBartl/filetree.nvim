@@ -181,6 +181,37 @@ vim.wait(1500, function()
 end, 10)
 eq("an already open folder is not toggled", #expanded, 0)
 
+-- An empty new file is written at once: only a file on disk is in the tree.
+vim.api.nvim_win_set_cursor(tree_win, { 1, 0 })
+current = { id = work .. "/f.txt", name = "f.txt", path = work .. "/f.txt", type = "file" }
+answer = "new.txt"
+smart_create.create()
+eq("the empty file is on disk right away", vim.fn.getfsize(work .. "/new.txt"), 0)
+vim.wait(1500, function()
+  return line_name() == "new.txt"
+end, 10)
+eq("cursor on the new file", line_name(), "new.txt")
+check(
+  "the file is open in an editor window, not the tree",
+  vim.api.nvim_get_current_win() ~= tree_win
+)
+
+-- A name that already exists opens that file and leaves it alone, also with a
+-- template that would otherwise be written into a new one.
+vim.fn.writefile({ "keep me" }, work .. "/keep.lua")
+smart_create.setup(
+  { enabled = true, keymap = false, notify_level = "off", auto_module_annot = true },
+  adapter
+)
+answer = "keep.lua"
+smart_create.create()
+eq(
+  "an existing file keeps its content",
+  table.concat(vim.fn.readfile(work .. "/keep.lua"), "\n"),
+  "keep me"
+)
+eq("and is the one opened", slash(vim.api.nvim_buf_get_name(0)), work .. "/keep.lua")
+
 -- ── 2. the neo-tree adapter never creates neo-tree's state ──────────────────
 
 -- A fake `neo-tree.sources.manager` with neo-tree's own semantics: get_state
