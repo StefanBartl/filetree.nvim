@@ -188,5 +188,5 @@ link — in its empty title, or in the path when the title is filled — in inse
 mode (`cursor = { enable, startinsert, path_cursor }`, see
 `lib.nvim.markdown.link_cursor`). The path is spelled by `insert_path`:
 `"buffer"` (default; relative to the *target* buffer, `./x` / `../x`), `"cwd"`,
-`"absolute"`, or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`, else `"buffer"`;
+`"absolute"` (the real path), or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`, else `"buffer"`;
 `env_roots` adds variables).

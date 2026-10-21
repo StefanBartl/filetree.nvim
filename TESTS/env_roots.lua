@@ -429,7 +429,7 @@ do
   vim.fn.delete(tmp, "rf")
 end
 
--- ── markdown_links: insert_path = "absolute" ─────────────────────────────────
+-- ── markdown_links: insert_path = "absolute" is real, "env" folds ───────────
 do
   local tmp, repos = scratch("mdlinks")
   vim.env.REPOS_DIR = repos
@@ -439,18 +439,14 @@ do
 
   local links = ml.build_insert_links({ repos .. "/proj/sub/file.md" }, buf)
   eq(
-    "markdown_links insert_path=absolute: folded",
-    links[1],
-    "[file.md]($REPOS_DIR/proj/sub/file.md)"
-  )
-
-  setup({ enable = false })
-  links = ft.feature("markdown_links").build_insert_links({ repos .. "/proj/sub/file.md" }, buf)
-  eq(
-    "markdown_links insert_path=absolute, env_roots off: plain",
+    "markdown_links insert_path=absolute: the real path",
     links[1],
     "[file.md](" .. repos .. "/proj/sub/file.md)"
   )
+
+  setup({}, { markdown_links = { enabled = true, insert_path = "env" } })
+  links = ft.feature("markdown_links").build_insert_links({ repos .. "/proj/sub/file.md" }, buf)
+  eq("markdown_links insert_path=env: folded", links[1], "[file.md]($REPOS_DIR/proj/sub/file.md)")
 
   vim.fn.delete(tmp, "rf")
 end

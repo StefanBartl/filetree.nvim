@@ -16,7 +16,7 @@
 ---
 --- The link path of `MI` is spelled by `insert_path`: `"buffer"` (default,
 --- relative to the TARGET buffer's directory, `./x` / `../x`), `"cwd"`,
---- `"absolute"`, or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`, falling back
+--- `"absolute"` (the real path), or `"env"` (`$REPOS_DIR/…`, `$NVIM_CONFIG_DIR/…`, falling back
 --- to `"buffer"` for a file under no known root).
 
 local notify = require("filetree.util.notify").create("[filetree.markdown_links]")
@@ -145,9 +145,9 @@ end
 ---@return string
 local function insert_target(path, buf)
   local mode = _cfg.insert_path
-  -- Absolute, so folded per the top-level `env_roots` option (a no-op when it
-  -- is off); "env" asks for it by name and folds even then.
-  if mode == "absolute" then return path_util.slashify((env_roots.fold(path))) end
+  -- The real absolute path, like path_copy's `[a`: the `$NAME/rest` form is
+  -- "env", asked for by name (it folds even with `env_roots.enable = false`).
+  if mode == "absolute" then return path_util.slashify(path) end
 
   if mode == "env" then
     local rooted, name =

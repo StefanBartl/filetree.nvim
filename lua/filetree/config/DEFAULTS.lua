@@ -31,16 +31,16 @@ return {
   -- entries; the walk is already bounded by what is expanded.
   max_visible_nodes = 5000,
 
-  -- Named root directories that portable paths are written with: an inserted
-  -- Markdown link (insert_path = "absolute"), a symlink's target and its
-  -- messages, and a path copied with `[e` come out as
+  -- Named root directories that portable paths are written with: a symlink's
+  -- target and its messages, a path copied with `[e` and a Markdown link
+  -- inserted with insert_path = "env" come out as
   -- `$REPOS_DIR/foo.nvim/x.lua` / `$NVIM_CONFIG_DIR/lua/x.lua` instead of
   -- `E:/repos/foo.nvim/x.lua`, so the text (and the link) means the same on a
   -- machine where the checkout sits on another drive. Explicitly relative
   -- actions (`relative`, `buffer_relative`, Markdown links relative to the
   -- buffer), ones that need a real path (`uri`, open-with, the OS
-  -- clipboard) and the absolute copies (`[a`, `]a`, `[R`, `[f`, `[F`) are not
-  -- affected. See docs/configuration.md.
+  -- clipboard) and the absolute copies (`[a`, `]a`, `[R`, `[f`, `[F`,
+  -- insert_path = "absolute") are not affected. See docs/configuration.md.
   env_roots = {
     enable = true, -- false: never fold, write plain absolute paths
     -- vars = { "REPOS_DIR" },  -- environment variables whose value is a root

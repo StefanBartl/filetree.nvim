@@ -59,10 +59,10 @@ require("filetree").setup({
   progress_style = "auto",  -- "auto" | "notify" | "statusline" | "fidget" | "float" | "kit"
 
   -- Named roots that portable paths are written with — see "Env roots" below.
-  -- An inserted Markdown link (insert_path = "absolute") and a created
-  -- symlink's messages come out as `$REPOS_DIR/foo.nvim/x.lua` /
-  -- `$NVIM_CONFIG_DIR/lua/x.lua` instead of `E:/repos/foo.nvim/x.lua`; `[e`
-  -- copies a path in that form. `[a` and the other absolute copies stay real.
+  -- A created symlink's messages come out as `$REPOS_DIR/foo.nvim/x.lua` /
+  -- `$NVIM_CONFIG_DIR/lua/x.lua` instead of `E:/repos/foo.nvim/x.lua`; `[e` and
+  -- Markdown links with insert_path = "env" use that form. `[a`, the other
+  -- absolute copies and insert_path = "absolute" stay real.
   env_roots = {
     enable      = true,                 -- false → plain absolute paths everywhere
     -- vars     = { "REPOS_DIR" },      -- environment variables whose value is a root
@@ -382,7 +382,7 @@ typed path (`:Filetree symlink`) may name a root as `$NAME`, `${NAME}` or
 What goes through it:
 
 - `:Filetree copy env_rooted` (`[e`) — always, also with `enable = false`
-- Markdown links inserted with `insert_path = "absolute"` (and `"env"`)
+- Markdown links inserted with `insert_path = "env"` — always, like `[e`
 - `:Filetree symlink` — the typed target is expanded (`$REPOS_DIR/x`,
   `$NVIM_CONFIG_DIR/x`, `$YOURS/x`), the messages show the env form, and the
   link's own target text is chosen portably — see
@@ -394,6 +394,7 @@ abs` / `dirs abs` (`[f`, `[F`) write the real path, since asking for the
 absolute path while a `$NAME` form has a key of its own (`[e`) means asking
 for the real one. Neither does everything relative by definition (`relative`,
 `buffer_relative`, `project_relative`, Markdown links relative to the buffer),
+nor a Markdown link inserted with `insert_path = "absolute"` (the real path),
 nor everything that needs the real path (`uri`, open-with, the file manager,
 the OS file clipboard, shell commands).
 
