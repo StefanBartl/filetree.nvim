@@ -101,7 +101,9 @@ do
   notes = {}
   save.save_adjacent()
   check("a dismissed prompt asks once", asked ~= nil)
-  check("and writes nothing", #vim.fn.glob(dir .. "/*", false, true) == 1)
+  -- readdir, not glob: a Windows temp path in its 8.3 form (`STEFAN~1`) makes
+  -- glob match nothing at all, and the count reads 0 instead of 1.
+  check("and writes nothing", #vim.fn.readdir(dir) == 1, vim.inspect(vim.fn.readdir(dir)))
   check("and says so", told("Not saved"))
 
   -- an existing file is never replaced
