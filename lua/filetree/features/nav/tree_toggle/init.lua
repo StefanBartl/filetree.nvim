@@ -98,15 +98,29 @@ end
 ---the way in catches every one of them; the reveal that follows re-opens
 ---nothing but the current file's chain. A toggle that closes the tree leaves
 ---its state alone. Without `collapse_all` (netrw, oil, mini.files) a no-op.
+---
+---A buffer counts as a file when it is a normal buffer (`buftype` empty) whose
+---folder exists -- also a new file not written yet (`:e src/new.lua`), whose
+---chain is as real as a saved one's. A scratch, help, terminal or plugin
+---buffer keeps nothing.
 ---@param adapter FiletreeAdapter
 ---@param file string  The current buffer's name ("" for none).
+---@param buftype? string  The current buffer's 'buftype' (default: read from it).
 ---@return boolean collapsed
-function M.collapse_for_open(adapter, file)
+function M.collapse_for_open(adapter, file, buftype)
   if type(adapter.collapse_all) ~= "function" then return false end
   local open = type(adapter.is_open) == "function" and adapter.is_open() == true
   if open then return false end
+  if buftype == nil then buftype = vim.bo.buftype end
   local keep = nil
-  if file ~= "" and vim.fn.filereadable(file) == 1 then keep = file end
+  if
+    file ~= ""
+    and buftype == ""
+    and vim.fn.isdirectory(vim.fn.fnamemodify(file, ":h")) == 1
+    and vim.fn.isdirectory(file) == 0
+  then
+    keep = file
+  end
   local ok = adapter.collapse_all(keep)
   return ok == true
 end

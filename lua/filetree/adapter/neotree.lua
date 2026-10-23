@@ -828,13 +828,44 @@ end
 ---@internal
 ---Comparable form of a tree path: neo-tree's ids are native-separator paths,
 ---a buffer name may differ in separators and drive-letter case. Lower-cased on
----Windows, whose paths are case-insensitive.
+---Windows, whose paths are case-insensitive. A pure string operation -- no
+---symlink is resolved, so the chain THROUGH a linked folder stays intact (the
+---folder above a link keeps its own path, the file below it too), and no
+---filesystem call is made per node. `real` resolves instead (`uv.fs_realpath`):
+---only used when the plain form of the kept path does not even lie under the
+---root's plain form, i.e. when the two are spelled differently (an 8.3 short
+---name such as `STEFAN~1` against the long one).
 ---@param p string
+---@param real? boolean
 ---@return string
-local function chain_key(p)
-  local k = normkey(p)
+local function chain_key(p, real)
+  local k = normkey(p, { realpath = real == true })
   if vim.fn.has("win32") == 1 then k = k:lower() end
   return (k:gsub("/+$", ""))
+end
+
+---@internal
+---Whether `key` is `dir_key` or lies below it (both from `chain_key`).
+---@param key string
+---@param dir_key string
+---@return boolean
+local function key_under(key, dir_key)
+  return key == dir_key or key:sub(1, #dir_key + 1) == dir_key .. "/"
+end
+
+---@internal
+---The tab's own "filesystem" state: its live tree, else the one it tracks
+---with the window closed. Deliberately NOT `get_state()`, whose fallbacks hand
+---out another tab's live tree when this tab has none open -- right for a
+---decoration that wants "the" tree, wrong for an action on this tab's tree
+---(`collapse_on_toggle` would collapse the tree on the other tab, then open
+---this tab's untouched).
+---@return table? state
+local function current_tab_state()
+  local manager = get_manager()
+  if not manager then return nil end
+  local tab = vim.api.nvim_get_current_tabpage()
+  return state_with_live_window(manager, tab) or tracked_state(manager, tab)
 end
 
 ---@internal
@@ -864,19 +895,24 @@ end
 ---way from the root to that path stay open (the current file's chain, for
 ---`tree_toggle.collapse_on_toggle`). A path outside the root keeps nothing.
 ---
----Works on the tree's state also while its window is closed (the state
----survives a close; the next show renders what is left open), and then skips
----the redraw. With a live window and no `keep_path`, the cursor lands on the
----top-level entry it was under (or the root).
+---Acts on THIS tab's tree (`current_tab_state`), also while its window is
+---closed (the state survives a close; the next show renders what is left
+---open), and then skips the redraw. With a live window and no `keep_path`,
+---the cursor lands on the top-level entry it was under (or the root).
 ---
 ---Folders opened through neo-tree's `follow_current_file` are remembered in
 ---`state.explicitly_opened_nodes` and re-opened on the next reveal; that set is
 ---reset to the kept chain, exactly as `close_all_nodes` empties it.
+---
+---A collapsed `group_empty_dirs` line ("personal/All/Finish", see
+---`is_group_empty_dirs_merge`) would keep showing the merged chain after a
+---plain `collapse()`; as in `collapse_node`, a live tree is then refreshed,
+---which rebuilds the top level unmerged.
 ---@param keep_path? string  Absolute path whose ancestor folders stay open.
 ---@return boolean ok
 ---@return string? reason
 function M.collapse_all(keep_path)
-  local state = get_state()
+  local state = current_tab_state()
   if not state or not state.tree then return false, "the tree has not been shown yet" end
   local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
   if not ok_r or type(renderer.get_expanded_nodes) ~= "function" then
@@ -898,27 +934,41 @@ function M.collapse_all(keep_path)
     end
   end
 
-  local keep = (type(keep_path) == "string" and keep_path ~= "") and chain_key(keep_path) or nil
+  local keep, real = nil, false
+  if type(keep_path) == "string" and keep_path ~= "" then
+    keep = chain_key(keep_path)
+    if root_id and not key_under(keep, chain_key(root_id)) then
+      real = true
+      keep = chain_key(keep_path, true)
+    end
+  end
   local ok_ids, expanded = pcall(renderer.get_expanded_nodes, state.tree)
   if not ok_ids or type(expanded) ~= "table" then return false, "no expanded nodes to read" end
 
-  local opened = {}
+  local opened, merged = {}, false
   for _, id in ipairs(expanded) do
     if id ~= root_id then
-      local k = chain_key(id)
-      local on_chain = keep ~= nil and (keep == k or keep:sub(1, #k + 1) == k .. "/")
-      if on_chain then
+      if keep ~= nil and key_under(keep, chain_key(id, real)) then
         opened[id] = true
       else
         local node = state.tree:get_node(id)
-        if node and node.collapse then pcall(node.collapse, node) end
+        if node and node.collapse then
+          pcall(node.collapse, node)
+          merged = merged or is_group_empty_dirs_merge(node)
+        end
       end
     end
   end
   state.explicitly_opened_nodes = opened
 
   if live then
-    do_narrow_redraw(state)
+    if merged then
+      -- As in collapse_node: straight to the rescan, no redraw of the
+      -- still-merged state in between.
+      M.refresh()
+    else
+      do_narrow_redraw(state)
+    end
     if focus_id and type(renderer.focus_node) == "function" then
       pcall(renderer.focus_node, state, focus_id)
     end

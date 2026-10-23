@@ -162,6 +162,39 @@ check(
   "clashes on: " .. table.concat(names, ", ")
 )
 
+-- collapse_all's `W` on a tree buffer that already maps `W` itself (a neo-tree
+-- `window.mappings` entry, set before filetree attaches): left alone, said once.
+do
+  check(
+    "collapse_all binds W on a plain tree buffer",
+    (live_desc(tree, "W") or ""):find("^filetree") ~= nil,
+    live_desc(tree, "W")
+  )
+
+  local saved_notify, told = vim.notify, {}
+  vim.notify = function(msg)
+    told[#told + 1] = tostring(msg)
+  end
+  local own = vim.api.nvim_create_buf(false, true)
+  vim.keymap.set("n", "W", function() end, { buffer = own, desc = "open_with_window_picker" })
+  vim.api.nvim_set_current_buf(own)
+  vim.bo[own].filetype = "neo-tree"
+  vim.wait(300, function()
+    return false
+  end)
+  vim.notify = saved_notify
+  check(
+    "a W the tree buffer already maps stays the user's",
+    live_desc(own, "W") == "open_with_window_picker",
+    live_desc(own, "W")
+  )
+  check(
+    "...and collapse_all says why it is not on W",
+    table.concat(told, "\n"):find("W is already mapped in the tree", 1, true) ~= nil,
+    table.concat(told, " | ")
+  )
+end
+
 -- Every action reads its key from a config field the schema declares, or a
 -- moved key could not be told to the user as a `setup()` fragment.
 do

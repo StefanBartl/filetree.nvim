@@ -15,6 +15,7 @@
 
 local notify = require("filetree.util.notify").create("[filetree.collapse_all]")
 local bind = require("filetree.util.bind")
+local tree_attach = require("filetree.util.tree_attach")
 
 local M = {}
 
@@ -57,20 +58,78 @@ end
 
 M.run = run
 
+---@internal
+---The keys `config.keymap` asks for: the default `W` when unset, none for `false`.
+---@param config FiletreeCollapseAllConfig
+---@return string[]
+local function wanted_keys(config)
+  local v = config.keymap
+  if v == nil then return { "W" } end
+  if v == false then return {} end
+  if type(v) == "string" then return { v } end
+  if type(v) == "table" then return vim.deepcopy(v) end
+  return {}
+end
+
+---@internal
+---Whether `buf` already has a buffer-local normal-mode map on `lhs` that
+---filetree did not set: the tree plugin's or the user's own (a neo-tree
+---`window.mappings` entry is exactly that).
+---@param buf integer
+---@param lhs string
+---@return string|nil desc  What the foreign map does, nil when the key is free.
+function M.foreign_map(buf, lhs)
+  local m = vim.api.nvim_buf_call(buf, function()
+    return vim.fn.maparg(lhs, "n", false, true)
+  end)
+  if type(m) ~= "table" or m.buffer ~= 1 then return nil end
+  local desc = m.desc or ""
+  if desc:find("^filetree") then return nil end
+  return desc ~= "" and desc or (type(m.rhs) == "string" and m.rhs or "a mapping")
+end
+
+---@type table<string, true>  keys already reported as taken, once per session
+local _reported = {}
+
 ---@param config FiletreeCollapseAllConfig
 ---@param adapter FiletreeAdapter
 function M.setup(config, adapter)
   if not config.enabled then return end
   _adapter = adapter
-  bind.bind("collapse_all", config, {
-    {
-      name = "collapse",
-      field = "keymap",
-      default = "W",
-      rhs = run,
-      desc = "collapse all folders",
-    },
-  })
+  local wanted = wanted_keys(config)
+  -- Bound per tree buffer, and only on keys that are still free there: the
+  -- default `W` is free in neo-tree and nvim-tree's own `W` is this very
+  -- action, but a config that put something of its own on `W` (a window
+  -- picker, say) must not lose it silently to a plugin update.
+  tree_attach.on_attach(function(buf)
+    local free = {}
+    for _, lhs in ipairs(wanted) do
+      local taken = M.foreign_map(buf, lhs)
+      if taken then
+        -- nvim-tree's own `W` IS collapse-all: nothing lost, nothing to say.
+        local same_action = taken:lower():find("collapse all", 1, true) ~= nil
+        if not same_action and not _reported[lhs] then
+          _reported[lhs] = true
+          notify.info(
+            ("%s is already mapped in the tree (%s); collapse_all leaves it alone -- "):format(
+              lhs,
+              taken
+            ) .. "set features.collapse_all.keymap, or use :Filetree collapse"
+          )
+        end
+      else
+        free[#free + 1] = lhs
+      end
+    end
+    bind.bind_buffer("collapse_all", { keymap = #free > 0 and free or false }, {
+      {
+        name = "collapse",
+        field = "keymap",
+        rhs = run,
+        desc = "collapse all folders",
+      },
+    }, buf)
+  end, "collapse_all")
 end
 
 function M.teardown()

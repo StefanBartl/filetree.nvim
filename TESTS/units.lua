@@ -8205,6 +8205,188 @@ do
   end
 end
 
+-- ── neo-tree collapse_all: which tree, which chain, merged lines ─────────────
+-- Against a shaped stand-in of neo-tree's state/tree/renderer, so the chain
+-- logic is gated in CI (TESTS/collapse_all_backends.lua runs the real tree,
+-- but only where neo-tree is installed). The paths are real directories, one
+-- folder is a junction/symlink: the chain must run THROUGH it.
+do
+  local uv = vim.uv or vim.loop
+  local short_dir = vim.fn.tempname()
+  vim.fn.mkdir(short_dir .. "/r/a", "p")
+  vim.fn.mkdir(short_dir .. "/r/x", "p")
+  vim.fn.mkdir(short_dir .. "/target", "p")
+  local base = (uv.fs_realpath(short_dir) or short_dir):gsub("\\", "/")
+  local tree_root = base .. "/r"
+  local linked = uv.fs_symlink(base .. "/target", tree_root .. "/a/link", { junction = true })
+
+  ---A tree of `ids` (all expanded), root first; `names` overrides a display name.
+  local function fake_tree(ids, names)
+    local nodes = {}
+    local tree = { cursor = nil }
+    for i, id in ipairs(ids) do
+      local parent = i > 1 and (id:match("^(.*)/[^/]+$")) or nil
+      nodes[id] = {
+        id = id,
+        name = (names or {})[id] or id:match("[^/]+$"),
+        type = "directory",
+        expanded = true,
+        get_id = function(self)
+          return self.id
+        end,
+        get_parent_id = function()
+          return parent
+        end,
+        is_expanded = function(self)
+          return self.expanded
+        end,
+        has_children = function()
+          return true
+        end,
+        collapse = function(self)
+          self.expanded = false
+          return true
+        end,
+      }
+    end
+    function tree:get_nodes()
+      return { nodes[ids[1]] }
+    end
+    function tree:get_node(id)
+      if id == nil then return self.cursor and nodes[self.cursor] or nil end
+      return nodes[id]
+    end
+    tree.nodes, tree.ids = nodes, ids
+    return tree
+  end
+
+  ---@param tree table
+  ---@return string  the expanded ids below the root, relative to it, sorted
+  local function open_rel(tree)
+    local out = {}
+    for _, id in ipairs(tree.ids) do
+      if id ~= tree.ids[1] and tree.nodes[id].expanded then
+        out[#out + 1] = id:sub(#tree_root + 2)
+      end
+    end
+    table.sort(out)
+    return table.concat(out, ",")
+  end
+
+  local calls = { redraw = 0, refresh = 0, focus = {} }
+  local states = {}
+  package.loaded["neo-tree.sources.manager"] = {
+    _get_all_states = function()
+      local list = {}
+      for _, s in pairs(states) do
+        list[#list + 1] = s
+      end
+      return list
+    end,
+    get_state = function(_, tabid)
+      return states[tabid]
+    end,
+    refresh = function()
+      calls.refresh = calls.refresh + 1
+    end,
+  }
+  package.loaded["neo-tree.ui.renderer"] = {
+    get_expanded_nodes = function(tree)
+      local out = {}
+      for _, id in ipairs(tree.ids) do
+        if tree.nodes[id].expanded then out[#out + 1] = id end
+      end
+      return out
+    end,
+    redraw = function()
+      calls.redraw = calls.redraw + 1
+    end,
+    focus_node = function(_, id)
+      calls.focus[#calls.focus + 1] = id
+    end,
+  }
+  package.loaded["filetree.adapter.neotree"] = nil
+  local nt = require("filetree.adapter.neotree")
+
+  local tab1 = vim.api.nvim_get_current_tabpage()
+  local function state_for(tab, tree, winid)
+    return { name = "filesystem", tabid = tab, id = tab, tree = tree, winid = winid }
+  end
+
+  -- 1. The chain through a linked folder stays open, everything else closes.
+  if linked then
+    local tree =
+      fake_tree({ tree_root, tree_root .. "/a", tree_root .. "/a/link", tree_root .. "/x" })
+    states = { [tab1] = state_for(tab1, tree, nil) }
+    local ok = nt.collapse_all(tree_root .. "/a/link/f.lua")
+    check(
+      "collapse_all(keep): the chain through a linked folder stays open, x closes",
+      ok and open_rel(tree) == "a,a/link",
+      open_rel(tree)
+    )
+    local remembered = vim.tbl_keys(states[tab1].explicitly_opened_nodes or {})
+    eq("...neo-tree remembers just that chain as opened", #remembered, 2)
+    eq("...a closed tree is not redrawn", calls.redraw, 0)
+  else
+    print("  note no symlink/junction could be created -- skipping the linked-folder case")
+  end
+
+  -- 2. The kept path in another spelling of the same folder (8.3 short form on
+  --    Windows; identical elsewhere) still keeps its chain.
+  do
+    local tree = fake_tree({ tree_root, tree_root .. "/a", tree_root .. "/x" })
+    states = { [tab1] = state_for(tab1, tree, nil) }
+    nt.collapse_all(short_dir:gsub("\\", "/") .. "/r/x/f.lua")
+    eq(
+      "collapse_all(keep) in another spelling of the tree_root keeps x's chain",
+      open_rel(tree),
+      "x"
+    )
+  end
+
+  -- 3. With this tab's tree closed and another tab's tree live, THIS tab's
+  --    tree is the one collapsed.
+  do
+    local here = fake_tree({ tree_root, tree_root .. "/a", tree_root .. "/x" })
+    local there = fake_tree({ tree_root, tree_root .. "/a", tree_root .. "/x" })
+    vim.cmd("tabnew")
+    local tab2 = vim.api.nvim_get_current_tabpage()
+    local win2 = vim.api.nvim_get_current_win()
+    vim.cmd("tabprevious")
+    states = { [tab1] = state_for(tab1, here, nil), [tab2] = state_for(tab2, there, win2) }
+    nt.collapse_all(nil)
+    eq("collapse_all on a tab without an open tree collapses THIS tab's tree", open_rel(here), "")
+    eq("...and leaves the live tree on the other tab alone", open_rel(there), "a,x")
+    vim.cmd("tabclose " .. vim.api.nvim_tabpage_get_number(tab2))
+  end
+
+  -- 4. A collapsed group_empty_dirs line on a live tree: refreshed, as
+  --    collapse_node does, so it does not stay merged.
+  do
+    local merged_id = tree_root .. "/x"
+    local tree = fake_tree({ tree_root, tree_root .. "/a", merged_id }, { [merged_id] = "x/y/z" })
+    tree.cursor = tree_root .. "/a"
+    states = { [tab1] = state_for(tab1, tree, vim.api.nvim_get_current_win()) }
+    calls.redraw, calls.refresh, calls.focus = 0, 0, {}
+    nt.collapse_all(nil)
+    eq("a collapsed merged line: one refresh (rescan rebuilds it unmerged)", calls.refresh, 1)
+    eq("...instead of a redraw of the still-merged state", calls.redraw, 0)
+    eq("...the cursor goes to the top-level entry it was under", calls.focus[1], tree_root .. "/a")
+
+    tree = fake_tree({ tree_root, tree_root .. "/a" })
+    states = { [tab1] = state_for(tab1, tree, vim.api.nvim_get_current_win()) }
+    calls.redraw, calls.refresh = 0, 0
+    nt.collapse_all(nil)
+    eq("no merged line: no refresh", calls.refresh, 0)
+    eq("...one redraw of the live tree", calls.redraw, 1)
+  end
+
+  package.loaded["neo-tree.sources.manager"] = nil
+  package.loaded["neo-tree.ui.renderer"] = nil
+  package.loaded["filetree.adapter.neotree"] = nil
+  vim.fn.delete(short_dir, "rf")
+end
+
 -- ── Report ────────────────────────────────────────────────────────────────────
 print(("\nfiletree.nvim units: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then

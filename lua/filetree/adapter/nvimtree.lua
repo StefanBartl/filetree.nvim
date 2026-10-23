@@ -410,7 +410,13 @@ end
 ---Collapse every folder (nvim-tree's `api.tree.collapse_all`, its own `W`).
 ---With `keep_path` and a visible tree, that file is revealed again afterwards,
 ---which re-opens exactly its folder chain; a closed tree is revealed by the
----next open (tree_toggle's reveal) instead.
+---next open (tree_toggle's reveal) instead. Without `keep_path`, nvim-tree
+---itself puts the cursor on the top-level entry it was under
+---(`TESTS/collapse_all_backends.lua` checks it against the real tree).
+---
+---`false` is passed on purpose, not `{ keep_buffers = false }`: nvim-tree
+---reads a boolean as the legacy form of `keep_buffers`, while an older
+---boolean-only `collapse_all(keep_buffers)` would take any table as true.
 ---@param keep_path? string
 ---@return boolean ok
 ---@return string? reason

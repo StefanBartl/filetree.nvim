@@ -562,9 +562,19 @@ do
   eq("...keeping nothing", collapses[2].keep, false)
 
   vim.cmd("enew")
-  vim.api.nvim_buf_set_name(0, vim.fn.tempname() .. "-scratch-not-on-disk")
+  vim.bo.buftype = "nofile"
+  vim.api.nvim_buf_set_name(0, vim.fn.tempname() .. "-scratch")
   tt.toggle("right")
-  eq("a named buffer with no file on disk: keeps nothing", collapses[3].keep, false)
+  eq("a scratch buffer (buftype=nofile) keeps nothing", collapses[3].keep, false)
+
+  -- A new file not written yet: its folder exists, so its chain is kept.
+  local new_dir = vim.fn.tempname()
+  vim.fn.mkdir(new_dir .. "/src", "p")
+  vim.cmd("edit " .. vim.fn.fnameescape(new_dir .. "/src/new.lua"))
+  local new_name = vim.api.nvim_buf_get_name(0)
+  tt.toggle("left")
+  eq("a new, unsaved file keeps its chain", collapses[4].keep, new_name)
+  vim.fn.delete(new_dir, "rf")
 
   local flat = {
     name = "netrw",

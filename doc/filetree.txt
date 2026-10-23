@@ -1774,8 +1774,21 @@ optional adapter method `collapse_all(keep_path?)`: neo-tree's
 `close_all_nodes` (its own `z`, which also forgets the folders neo-tree
 remembers as opened by hand) and nvim-tree's `api.tree.collapse_all` (its own
 `W`). `keep_path` keeps the folders on the way to that path open, which is
-what `tree_toggle.collapse_on_toggle` passes. The flat backends (netrw, oil,
-mini.files) show one folder at a time and report "not applicable".
+what `tree_toggle.collapse_on_toggle` passes. A new file not written yet keeps
+its chain too (its folder exists); a scratch, help or terminal buffer keeps
+nothing. The flat backends (netrw, oil, mini.files) show one folder at a time
+and report "not applicable".
+
+On neo-tree it acts on the tree of the current tab (also while that tree is
+closed), never on a tree open on another tab. The chain is compared as plain
+strings, so it runs through a linked folder (symlink or junction) without
+resolving it. A `group_empty_dirs` line ("a/b/c") is refreshed after the
+collapse, so it reads "a" again instead of staying merged.
+
+`W` is bound only on tree buffers where it is still free: a `W` the tree
+plugin or the user mapped there (a neo-tree `window.mappings` entry, say)
+stays as it is, and one message says why `collapse_all` is not on it (silently
+on nvim-tree, whose own `W` is collapse-all already).
 
 Keymaps: W
 

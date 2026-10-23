@@ -87,7 +87,7 @@ local function key(p)
   return k
 end
 
----root/top.lua, root/a/b/c/deep.lua, root/x/y/z.lua
+---root/top.lua, root/a/b/c/deep.lua, root/x/y/z.lua, root/g/h/i/leaf.lua
 ---@return string work
 local function make_project()
   local work = vim.fs.normalize((vim.env.TEMP or "/tmp") .. "/filetree-collapse-all")
@@ -97,6 +97,9 @@ local function make_project()
   vim.fn.writefile({ "-- top" }, work .. "/top.lua")
   vim.fn.writefile({ "-- deep" }, work .. "/a/b/c/deep.lua")
   vim.fn.writefile({ "-- z" }, work .. "/x/y/z.lua")
+  -- g holds only h, h only i: one merged line under group_empty_dirs.
+  vim.fn.mkdir(work .. "/g/h/i", "p")
+  vim.fn.writefile({ "-- leaf" }, work .. "/g/h/i/leaf.lua")
   return work
 end
 
@@ -129,10 +132,27 @@ local function run_neotree()
   local renderer = require("neo-tree.ui.renderer")
   local manager = require("neo-tree.sources.manager")
 
+  ---This tab's real "filesystem" state, read like the adapter reads it: from
+  ---`all_states`, the one with a live window first. `manager.get_state` can
+  ---hand out a placeholder that is not the tree on screen (see the adapter's
+  ---`tracked_state`), which made this suite flaky.
+  ---@return table
+  local function fs_state()
+    local tab = vim.api.nvim_get_current_tabpage()
+    local fallback
+    for _, st in ipairs(manager._get_all_states()) do
+      if st.name == "filesystem" and st.tabid == tab then
+        if st.winid and vim.api.nvim_win_is_valid(st.winid) then return st end
+        fallback = fallback or st
+      end
+    end
+    return fallback or manager.get_state("filesystem")
+  end
+
   ---The folders below the root the real tree has open, as `a/b`-style names.
   ---@return table<string, true>
   local function open_dirs()
-    local state = manager.get_state("filesystem")
+    local state = fs_state()
     local out = {}
     if not state or not state.tree then return out end
     local base = key(work)
@@ -169,7 +189,7 @@ local function run_neotree()
   ---ones opened by hand are the ones that pile up.
   ---@param rel string
   local function user_open(rel)
-    local state = manager.get_state("filesystem")
+    local state = fs_state()
     local want = key(work .. "/" .. rel)
     local node
     for _, id in ipairs({ work .. "/" .. rel, ((work .. "/" .. rel):gsub("/", "\\")) }) do
@@ -254,7 +274,7 @@ local function run_neotree()
     names(open_dirs())
   )
   local remembered = {}
-  for id, on in pairs(manager.get_state("filesystem").explicitly_opened_nodes or {}) do
+  for id, on in pairs(fs_state().explicitly_opened_nodes or {}) do
     if on then remembered[#remembered + 1] = key(id):sub(#key(work) + 2) end
   end
   table.sort(remembered)
@@ -309,13 +329,49 @@ local function run_neotree()
     got
   )
   pcall(adapter.close)
+  settle(200)
+
+  -- group_empty_dirs: g holds only h, h only i -> one merged line "g/h/i".
+  -- Collapsed, it must not stay merged on that line.
+  -- On the live state, not through a second `neo-tree.setup()`: that replaces
+  -- the tab's state while the old one stays in `all_states` (see the adapter's
+  -- `tracked_state`), and the test would then exercise a ghost.
+  for _, st in ipairs(manager._get_all_states()) do
+    if st.name == "filesystem" then st.group_empty_dirs = true end
+  end
+  open_on("g/h/i/leaf.lua")
+  local function tree_text()
+    local b = adapter.get_bufnr()
+    return b and table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), "\n") or ""
+  end
+  -- The merged name is joined with the native separator ("g\h\i" on Windows).
+  local merged_pat = "g[/\\]h"
+  check(
+    "group_empty_dirs setup: the merged line is shown",
+    tree_text():find(merged_pat) ~= nil,
+    tree_text()
+  )
+  vim.api.nvim_set_current_win(adapter.get_winid())
+  adapter.collapse_all(nil)
+  vim.wait(3000, function()
+    return not tree_text():find(merged_pat)
+  end, 50)
+  settle()
+  check(
+    "collapse_all(): a merged group_empty_dirs line is back to its first folder",
+    not tree_text():find(merged_pat) and not tree_text():find("leaf.lua", 1, true),
+    tree_text()
+  )
+  vim.cmd("wincmd p")
+  pcall(adapter.close)
 end
 
 -- ── nvim-tree ────────────────────────────────────────────────────────────────
 
 local function run_nvimtree()
   print("\n== nvimtree ==")
-  local work = make_project()
+  -- nvim-tree keeps resolved (long) paths; $TEMP may be the 8.3 short form.
+  local work = ((vim.uv or vim.loop).fs_realpath(make_project()):gsub("\\", "/"))
   vim.cmd("cd " .. vim.fn.fnameescape(work))
   require("nvim-tree").setup({ hijack_netrw = false, update_focused_file = { enable = false } })
   require("filetree").setup({
@@ -333,11 +389,28 @@ local function run_nvimtree()
   local ok = adapter.collapse_all(work .. "/a/b/c/deep.lua")
   settle()
   check("collapse_all(keep) runs", ok)
+  local _, nbuf = adapter.is_open()
   check(
     "...z.lua is hidden again, deep.lua still shown",
     adapter.get_node_line(work .. "/x/y/z.lua") == nil
-      and adapter.get_node_line(work .. "/a/b/c/deep.lua") ~= nil
+      and adapter.get_node_line(work .. "/a/b/c/deep.lua") ~= nil,
+    nbuf and table.concat(vim.api.nvim_buf_get_lines(nbuf, 0, -1, false), " | ") or "no tree buffer"
   )
+
+  -- Without keep_path, from inside the tree: the cursor lands on the
+  -- top-level entry it was under (a), not on whatever now fills its old line.
+  vim.api.nvim_set_current_win(adapter.get_winid())
+  local deep_line = adapter.get_node_line(work .. "/a/b/c/deep.lua")
+  if deep_line then vim.api.nvim_win_set_cursor(0, { deep_line, 0 }) end
+  local ok_all = adapter.collapse_all(nil)
+  settle()
+  local node = adapter.get_current_node()
+  check(
+    "collapse_all(): the cursor on the top-level entry it was under",
+    ok_all and node ~= nil and key(node.path) == key(work .. "/a"),
+    node and node.path or "nil"
+  )
+  vim.cmd("wincmd p")
   pcall(api.tree.close)
 end
 
