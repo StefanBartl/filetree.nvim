@@ -120,10 +120,39 @@ retries once, which is what pressing the key again used to do by hand.
 Off by default: four global Alt keys are a claim on the keyboard the user
 makes, not the plugin.
 
+**`collapse_on_toggle`** (default **false**, on trial): every time one of these
+keys (or `:Filetree toggle`) opens the tree, it first collapses every folder
+except the chain from the root to the current buffer's file, so folders
+opened by hand no longer pile up over a session. A buffer without a file
+(scratch, help, terminal) or a file outside the root keeps nothing open. It
+runs on the way **in**, not on close: the tree can also be closed by `:q` in
+its window, a layout change or another plugin, none of which pass the key,
+and the state that close leaves behind survives until the next show. The
+reveal that follows re-opens exactly the current file's chain, in the same
+redraw. A toggle that closes the tree leaves its state alone. Uses the
+adapter's `collapse_all` (see [Collapse All](#collapse-all)); on netrw, oil
+and mini.files there is nothing to collapse and the toggle runs as before.
+
 - **Module:** [`features/nav/tree_toggle/init.lua`](../../lua/filetree/features/nav/tree_toggle/init.lua)
 - **Keymaps:** `<M-c>`, `<M-f>`, `<M-l>`, `<M-r>` (global; config fields `keymap_current`, `keymap_float`, `keymap_left`, `keymap_right`)
 - **Usercmds:** `:Filetree toggle [left|right|float|current]`
-- **Config:** `opts.features.tree_toggle.enabled` (default **false**), `reveal` (true), `reveal_force_cwd` (true)
+- **Config:** `opts.features.tree_toggle.enabled` (default **false**), `reveal` (true), `reveal_force_cwd` (true), `collapse_on_toggle` (false)
+
+## Collapse All
+
+`W` in the tree folds every open folder back to the root in one redraw;
+the cursor lands on the top-level entry it was under. A thin front for the
+optional adapter method `collapse_all(keep_path?)`: neo-tree's
+`close_all_nodes` (its own `z`, which also forgets the folders neo-tree
+remembers as opened by hand) and nvim-tree's `api.tree.collapse_all` (its
+own `W`). `keep_path` keeps the folders on the way to that path open, which
+is what `tree_toggle.collapse_on_toggle` passes. The flat backends (netrw,
+oil, mini.files) show one folder at a time and report "not applicable".
+
+- **Module:** [`features/nav/collapse_all/init.lua`](../../lua/filetree/features/nav/collapse_all/init.lua)
+- **Keymaps:** `W` (tree-local; config field `keymap`)
+- **Usercmds:** `:Filetree collapse`
+- **Config:** `opts.features.collapse_all.enabled` (default true)
 
 ## Quickpick (opt-in)
 

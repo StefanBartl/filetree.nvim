@@ -407,6 +407,25 @@ function M.collapse_node(node)
   return M.expand_node(node) -- toggle-style; expand_node opens/closes
 end
 
+---Collapse every folder (nvim-tree's `api.tree.collapse_all`, its own `W`).
+---With `keep_path` and a visible tree, that file is revealed again afterwards,
+---which re-opens exactly its folder chain; a closed tree is revealed by the
+---next open (tree_toggle's reveal) instead.
+---@param keep_path? string
+---@return boolean ok
+---@return string? reason
+function M.collapse_all(keep_path)
+  local a = api()
+  if not a or not a.tree or type(a.tree.collapse_all) ~= "function" then
+    return false, "nvim-tree api unavailable"
+  end
+  if not pcall(a.tree.collapse_all, false) then return false, "collapse failed" end
+  if type(keep_path) == "string" and keep_path ~= "" and M.is_open() then
+    pcall(a.tree.find_file, { buf = keep_path, focus = false })
+  end
+  return true, nil
+end
+
 ---@param path string
 ---@param mode? FiletreeOpenMode
 ---@return boolean

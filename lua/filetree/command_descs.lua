@@ -16,6 +16,7 @@ return {
   ["clipboard paste"] = "Paste staged nodes",
   ["clipboard show"] = "Show copy/cut clipboard",
   ["clipfiles"] = "Copy the marked nodes (else the current one) to the OS clipboard as files",
+  ["collapse"] = "Collapse every folder back to the root",
   ["copy absolute"] = "Copy the real absolute path ($REPOS_DIR/… form: env_rooted)",
   ["copy absolute_raw"] = "Copy the real absolute path (older name of absolute)",
   ["copy buffer_relative"] = "Copy path relative to the buffer open in the editor (./x, ../x)",

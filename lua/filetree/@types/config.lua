@@ -98,6 +98,7 @@
 ---@field reveal_alt          FiletreeRevealAltConfig?
 ---@field source_switcher     FiletreeSourceSwitcherConfig?
 ---@field tree_toggle         FiletreeTreeToggleConfig?
+---@field collapse_all        FiletreeCollapseAllConfig?
 ---@field quickpick           FiletreeQuickpickConfig?
 ---@field buffer_save         FiletreeBufferSaveConfig?
 ---@field window_size_cycler  FiletreeWindowSizeCyclerConfig?
@@ -983,6 +984,13 @@
 ---@field keymap_float?     string|string[]|false  Global key: toggle as a float (default "<M-f>").
 ---@field keymap_left?      string|string[]|false  Global key: toggle on the left (default "<M-l>").
 ---@field keymap_right?     string|string[]|false  Global key: toggle on the right (default "<M-r>").
+---@field collapse_on_toggle? boolean  Opening the tree through these keys or `:Filetree toggle` first collapses every folder except the chain to the current file (default false; needs an adapter with `collapse_all`).
+
+-- ── collapse_all ──────────────────────────────────────────────────────────────
+
+---@class FiletreeCollapseAllConfig
+---@field enabled? boolean
+---@field keymap?  string|string[]|false  Key in the tree buffer (default "W"): collapse every folder back to the root.
 
 -- ── quickpick (opt-in) ────────────────────────────────────────────────────────
 

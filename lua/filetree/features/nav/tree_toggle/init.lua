@@ -19,6 +19,9 @@
 ---   keymap_float      string?   Global key (default "<M-f>").
 ---   keymap_left       string?   Global key (default "<M-l>").
 ---   keymap_right      string?   Global key (default "<M-r>").
+---   collapse_on_toggle boolean  Opening the tree first collapses every folder
+---                               except the chain to the current file
+---                               (default false; see `collapse_for_open`).
 
 local notify = require("filetree.util.notify").create("[filetree.tree_toggle]")
 local bind = require("filetree.util.bind")
@@ -34,6 +37,7 @@ local DEFAULTS = {
   keymap_float = "<M-f>",
   keymap_left = "<M-l>",
   keymap_right = "<M-r>",
+  collapse_on_toggle = false,
 }
 
 ---Option schema (see `filetree.config.schema`): exactly what
@@ -47,6 +51,7 @@ M.SCHEMA = {
   keymap_float = "keymap",
   keymap_left = "keymap",
   keymap_right = "keymap",
+  collapse_on_toggle = "boolean",
 }
 
 ---@type FiletreeTreeToggleConfig
@@ -71,6 +76,7 @@ function M.toggle(position)
     return false, ("the %s adapter cannot place its tree"):format(adapter.name)
   end
   local file = vim.api.nvim_buf_get_name(0)
+  if _cfg.collapse_on_toggle == true then M.collapse_for_open(adapter, file) end
   local reveal = _cfg.reveal == true and file ~= ""
   local ok = adapter.toggle_at(position, {
     reveal = reveal,
@@ -79,6 +85,30 @@ function M.toggle(position)
   })
   if not ok then return false, "toggle failed" end
   return true, nil
+end
+
+---The `collapse_on_toggle` step, run before every toggle: when the toggle is
+---about to OPEN the tree, collapse its remembered state down to the folder
+---chain of `file` (all of it when `file` is not a real file, e.g. a scratch,
+---help or terminal buffer; a file outside the root keeps nothing either).
+---
+---On open, not on close: the tree can also be closed by other means (`:q` in
+---its window, a layout change, another plugin) that never pass this key, and
+---the state a close leaves behind survives until the next show. Collapsing on
+---the way in catches every one of them; the reveal that follows re-opens
+---nothing but the current file's chain. A toggle that closes the tree leaves
+---its state alone. Without `collapse_all` (netrw, oil, mini.files) a no-op.
+---@param adapter FiletreeAdapter
+---@param file string  The current buffer's name ("" for none).
+---@return boolean collapsed
+function M.collapse_for_open(adapter, file)
+  if type(adapter.collapse_all) ~= "function" then return false end
+  local open = type(adapter.is_open) == "function" and adapter.is_open() == true
+  if open then return false end
+  local keep = nil
+  if file ~= "" and vim.fn.filereadable(file) == 1 then keep = file end
+  local ok = adapter.collapse_all(keep)
+  return ok == true
 end
 
 ---@internal

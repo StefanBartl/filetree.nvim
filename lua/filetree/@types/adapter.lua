@@ -63,6 +63,7 @@
 ---@field sign_node? fun(path: string, text: string, hl_group: string): boolean  Place a sign-column marker on a node's line (used by current_hl's icon).
 ---@field unsign_node? fun(path: string): boolean  Remove a previously placed sign marker.
 ---@field get_node_at_line? fun(bufnr: integer, linenr: integer): FiletreeNode?  Node rendered on a 0-based buffer line (nil for a line that renders no node, e.g. a root label or a message). `bufnr` must be the adapter's own tree buffer; a mismatch returns nil. Implemented by the neotree and nvimtree adapters.
+---@field collapse_all? fun(keep_path?: string): boolean, string?  Collapse every expanded folder in one redraw; `keep_path` keeps the folders on the way to that path open. Returns false plus a reason when it does not apply (the flat netrw/oil/mini.files listings: "not applicable: …") or failed. neo-tree and nvim-tree implement it (`features.nav.collapse_all`, `tree_toggle.collapse_on_toggle`).
 ---@field get_expanded_paths? fun(): string[]|nil  Absolute paths of the currently expanded directories. Implemented by no backend yet.
 ---@field expand_paths? fun(paths: string[]): boolean  Re-expand the given directories. Implemented by no backend yet.
 ---@field install_reveal_guard? fun(): nil  Backend-specific guard against a reveal fighting the user's cursor; only the neo-tree adapter has one.

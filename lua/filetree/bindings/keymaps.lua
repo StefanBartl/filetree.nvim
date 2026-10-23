@@ -23,6 +23,12 @@ return {
   nav = {
     { lhs = "-", desc = "Parent directory (up)", feature = "tree_traverse", scope = "tree" },
     {
+      lhs = "W",
+      desc = "Collapse all folders back to the root",
+      feature = "collapse_all",
+      scope = "tree",
+    },
+    {
       lhs = "+",
       desc = "Set dir under cursor as root",
       feature = "tree_traverse",

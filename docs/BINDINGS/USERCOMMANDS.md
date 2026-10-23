@@ -52,6 +52,7 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 | Command | Action |
 |---------|--------|
 | `:Filetree toggle [left\|right\|float\|current]` | Toggle the tree at that position (default `left`), revealing the current file |
+| `:Filetree collapse` | Collapse every folder back to the root (`collapse_all`) |
 
 ### Quickpick (opt-in feature)
 | Command | Action |

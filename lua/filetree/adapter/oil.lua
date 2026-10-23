@@ -214,6 +214,14 @@ function M.collapse_node(_node)
   return false
 end
 
+---A flat listing has no expanded folders: nothing to collapse.
+---@param _keep_path? string
+---@return boolean ok
+---@return string? reason
+function M.collapse_all(_keep_path)
+  return false, "not applicable: oil shows one folder at a time"
+end
+
 ---@param path string
 ---@param mode? FiletreeOpenMode
 ---@return boolean

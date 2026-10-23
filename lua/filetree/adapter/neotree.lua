@@ -8,6 +8,7 @@ local lib_debounce = require("lib.nvim.debounce")
 
 -- Shared neo-tree node helpers live in lib.nvim (a hard dependency).
 local libnode = require("lib.nvim.neotree.node")
+local normkey = require("lib.nvim.fs.normkey")
 
 ---@class FiletreeNeotreeAdapter : FiletreeAdapter
 ---@field _retry { limit: integer, interval_ms: integer }  Background install retries (`on_render`, redraw hook). Private: tests shorten it.
@@ -822,6 +823,107 @@ function M.collapse_node(node)
   end
 
   return false
+end
+
+---@internal
+---Comparable form of a tree path: neo-tree's ids are native-separator paths,
+---a buffer name may differ in separators and drive-letter case. Lower-cased on
+---Windows, whose paths are case-insensitive.
+---@param p string
+---@return string
+local function chain_key(p)
+  local k = normkey(p)
+  if vim.fn.has("win32") == 1 then k = k:lower() end
+  return (k:gsub("/+$", ""))
+end
+
+---@internal
+---The top-level entry (direct child of the root) the node `id` lives under,
+---or nil for the root itself / an unknown id.
+---@param state neotree.State
+---@param id string
+---@param root_id string
+---@return string?
+local function top_level_of(state, id, root_id)
+  local current = id
+  for _ = 1, 256 do
+    local ok, node = pcall(function()
+      return state.tree:get_node(current)
+    end)
+    if not ok or not node then return nil end
+    local parent_id = node.get_parent_id and node:get_parent_id() or nil
+    if not parent_id then return nil end
+    if parent_id == root_id then return current end
+    current = parent_id
+  end
+  return nil
+end
+
+---Collapse every expanded folder of the tree in one pass and one redraw --
+---neo-tree's own `close_all_nodes` (`z`), plus `keep_path`: the folders on the
+---way from the root to that path stay open (the current file's chain, for
+---`tree_toggle.collapse_on_toggle`). A path outside the root keeps nothing.
+---
+---Works on the tree's state also while its window is closed (the state
+---survives a close; the next show renders what is left open), and then skips
+---the redraw. With a live window and no `keep_path`, the cursor lands on the
+---top-level entry it was under (or the root).
+---
+---Folders opened through neo-tree's `follow_current_file` are remembered in
+---`state.explicitly_opened_nodes` and re-opened on the next reveal; that set is
+---reset to the kept chain, exactly as `close_all_nodes` empties it.
+---@param keep_path? string  Absolute path whose ancestor folders stay open.
+---@return boolean ok
+---@return string? reason
+function M.collapse_all(keep_path)
+  local state = get_state()
+  if not state or not state.tree then return false, "the tree has not been shown yet" end
+  local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
+  if not ok_r or type(renderer.get_expanded_nodes) ~= "function" then
+    return false, "neo-tree renderer unavailable"
+  end
+  local ok_root, root = pcall(function()
+    return state.tree:get_nodes()[1]
+  end)
+  local root_id = ok_root and root and root.get_id and root:get_id() or nil
+
+  local live = state.winid ~= nil and vim.api.nvim_win_is_valid(state.winid)
+  local focus_id = nil
+  if live and root_id and not keep_path then
+    local ok_cur, cur = pcall(function()
+      return state.tree:get_node()
+    end)
+    if ok_cur and cur and cur.get_id then
+      focus_id = top_level_of(state, cur:get_id(), root_id) or root_id
+    end
+  end
+
+  local keep = (type(keep_path) == "string" and keep_path ~= "") and chain_key(keep_path) or nil
+  local ok_ids, expanded = pcall(renderer.get_expanded_nodes, state.tree)
+  if not ok_ids or type(expanded) ~= "table" then return false, "no expanded nodes to read" end
+
+  local opened = {}
+  for _, id in ipairs(expanded) do
+    if id ~= root_id then
+      local k = chain_key(id)
+      local on_chain = keep ~= nil and (keep == k or keep:sub(1, #k + 1) == k .. "/")
+      if on_chain then
+        opened[id] = true
+      else
+        local node = state.tree:get_node(id)
+        if node and node.collapse then pcall(node.collapse, node) end
+      end
+    end
+  end
+  state.explicitly_opened_nodes = opened
+
+  if live then
+    do_narrow_redraw(state)
+    if focus_id and type(renderer.focus_node) == "function" then
+      pcall(renderer.focus_node, state, focus_id)
+    end
+  end
+  return true, nil
 end
 
 ---@param path string

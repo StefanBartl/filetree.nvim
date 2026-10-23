@@ -111,6 +111,7 @@ local KEY_FEATURES = {
   "preview",
   "tree_reset",
   "window_size_cycler",
+  "collapse_all",
 }
 
 ---@param overrides? table<string, table>  # Per-feature config on top of "enabled".

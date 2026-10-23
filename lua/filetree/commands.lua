@@ -375,6 +375,17 @@ local TREE = {
     end,
   },
 
+  -- ── collapse_all ────────────────────────────────────────────────────────────
+  -- :Filetree collapse   collapse every folder back to the root
+  collapse = function(_)
+    local f = ft("collapse_all")
+    if not f then
+      notify.warn("collapse_all is off (features.collapse_all.enabled = false)")
+      return
+    end
+    f.run()
+  end,
+
   -- ── tree_toggle (opt-in) ────────────────────────────────────────────────────
   -- :Filetree toggle [left|right|float|current]   (default: left)
   toggle = function(args)

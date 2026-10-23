@@ -40,8 +40,10 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `<M-f>` | tree_toggle | `keymap_float` | **global**, opt-in feature: toggle the tree as a float |
 | `<M-l>` | tree_toggle | `keymap_left` | **global**, opt-in feature: toggle the tree on the left |
 | `<M-r>` | tree_toggle | `keymap_right` | **global**, opt-in feature: toggle the tree on the right |
+| — | tree_toggle | `collapse_on_toggle` | not a key: with `true`, opening the tree through these keys first collapses every folder except the current file's chain |
 | `<leader>;` | quickpick | `keymap` | **global**, opt-in feature: number the tree's visible entries, type a number to open it (`N<leader>;` roots the tree N folders above the file) |
 | `<leader>:` | quickpick | `keymap_cwd` | **global**, opt-in feature: the same, with the tree rooted at the cwd |
+| `W` | collapse_all | `keymap` | Collapse every folder back to the root (cursor on its top-level entry); not applicable on netrw/oil/mini.files |
 | `-` | tree_traverse | `keymap_up` | Navigate to parent directory (×count) |
 | `+` | tree_traverse | `keymap_down` | Set current dir as tree root (×count) |
 | `]s` | tree_traverse | `keymap_next_sibling` | Next sibling at the same depth, skipping expanded folders' children (×count; stops at the end unless `sibling_wrap`) |

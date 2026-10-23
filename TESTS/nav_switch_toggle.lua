@@ -513,6 +513,113 @@ do
   os.remove(file)
 end
 
+-- ── tree_toggle.collapse_on_toggle ────────────────────────────────────────────
+
+do
+  ---@type { keep: string|false }[]
+  local collapses = {}
+  local order = {}
+  local is_open = false
+  local adapter = {
+    name = "neotree",
+    is_open = function()
+      return is_open
+    end,
+    collapse_all = function(keep)
+      collapses[#collapses + 1] = { keep = keep or false }
+      order[#order + 1] = "collapse"
+      return true
+    end,
+    toggle_at = function()
+      order[#order + 1] = "toggle"
+      return true
+    end,
+  }
+  local file = vim.fn.tempname() .. ".lua"
+  vim.fn.writefile({ "x" }, file)
+  vim.cmd("edit " .. vim.fn.fnameescape(file))
+  local current = vim.api.nvim_buf_get_name(0)
+
+  tt.setup({ enabled = true }, adapter)
+  tt.toggle("left")
+  eq("collapse_on_toggle off by default: the state stays as it was", #collapses, 0)
+
+  tt.setup({ enabled = true, collapse_on_toggle = true }, adapter)
+  order = {}
+  tt.toggle("left")
+  eq("on: opening collapses once", #collapses, 1)
+  eq("...keeping the current file's chain", collapses[1].keep, current)
+  eq("...before the toggle reveals it", table.concat(order, ","), "collapse,toggle")
+
+  is_open = true
+  tt.toggle("left")
+  eq("a toggle that closes the tree leaves its state alone", #collapses, 1)
+  is_open = false
+
+  vim.cmd("enew")
+  tt.toggle("left")
+  eq("a buffer without a file: collapsed too", #collapses, 2)
+  eq("...keeping nothing", collapses[2].keep, false)
+
+  vim.cmd("enew")
+  vim.api.nvim_buf_set_name(0, vim.fn.tempname() .. "-scratch-not-on-disk")
+  tt.toggle("right")
+  eq("a named buffer with no file on disk: keeps nothing", collapses[3].keep, false)
+
+  local flat = {
+    name = "netrw",
+    toggle_at = function()
+      return true
+    end,
+  }
+  tt.setup({ enabled = true, collapse_on_toggle = true }, flat)
+  local ok_flat, err_flat = tt.toggle("left")
+  check(
+    "an adapter without collapse_all just toggles (not applicable, no error)",
+    ok_flat,
+    err_flat
+  )
+
+  tt.teardown()
+  os.remove(file)
+end
+
+-- ── collapse_all: key, command, not applicable ───────────────────────────────
+
+do
+  local ca = require("filetree.features.nav.collapse_all")
+  local keeps = {}
+  local adapter = {
+    name = "neotree",
+    collapse_all = function(keep)
+      keeps[#keeps + 1] = keep or false
+      return true
+    end,
+  }
+  ca.setup({ enabled = true }, adapter)
+  local ok = ca.collapse()
+  check("collapse_all collapses everything", ok and keeps[1] == false)
+
+  ca.setup({ enabled = true }, { name = "oil" })
+  local ok_none, why = ca.collapse()
+  check(
+    "an adapter without collapse_all is reported as not applicable",
+    ok_none == false and why:find("^not applicable") ~= nil,
+    why
+  )
+
+  for _, name in ipairs({ "oil", "netrw", "mini_files" }) do
+    local flat_adapter = require("filetree.adapter." .. name)
+    local ok_f, why_f = flat_adapter.collapse_all()
+    check(
+      ("the flat %s adapter says not applicable"):format(name),
+      ok_f == false and type(why_f) == "string" and why_f:find("^not applicable") ~= nil,
+      why_f
+    )
+  end
+  ca.teardown()
+end
+
 -- ── neo-tree adapter: toggle_at and the E95 self-heal ─────────────────────────
 
 do
