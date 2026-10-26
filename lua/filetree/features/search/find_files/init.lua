@@ -2,7 +2,7 @@
 --- Fuzzy-find files within the tree root, then reveal the result.
 ---
 --- Detects available fuzzy finders in order:
----   1. pickers.nvim   (StefanBartl/pickers.nvim; picks its own engine)
+---   1. pickers.nvim   (WKDSteve/pickers.nvim; picks its own engine)
 ---   2. telescope.nvim  (nvim-telescope/telescope.nvim)
 ---   3. fzf-lua         (ibhagwan/fzf-lua)
 ---   4. mini.pick       (echasnovski/mini.pick)

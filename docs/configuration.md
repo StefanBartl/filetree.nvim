@@ -362,7 +362,7 @@ home.
 | `$REPOS_DIR` | the environment variable of that name (`vars`) |
 | `$NVIM_CONFIG_DIR` | `vim.fn.stdpath("config")` — no environment variable needed (`nvim_config = false` drops it) |
 | your own | `extra = { NAME = "/abs/path" }`, a plain path or a function returning one (it may start with `~`, `$VAR`, `${VAR}` or `%VAR%`) — no environment variable needed; a name here overrides a `vars` entry of the same name |
-| shared | the roots of [lib.nvim's named-roots registry](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/fs/roots/README.md): your `require("lib.nvim.fs.roots").setup({ extra = … })` and roots other plugins register |
+| shared | the roots of [lib.nvim's named-roots registry](https://github.com/WKDSteve/lib.nvim/blob/main/lua/lib/nvim/fs/roots/README.md): your `require("lib.nvim.fs.roots").setup({ extra = … })` and roots other plugins register |
 
 filetree's `env_roots` is a layer over that registry: `vars`, `extra` and
 `nvim_config` apply to filetree's calls only and never change the registry's
@@ -413,7 +413,7 @@ require("filetree").setup({
 
 ## pickers.nvim integration
 
-With [pickers.nvim](https://github.com/StefanBartl/pickers.nvim) installed,
+With [pickers.nvim](https://github.com/WKDSteve/pickers.nvim) installed,
 `find_files` (`f`) and `grep_in_dir` (`gr`) hand the node's directory to it
 instead of driving a picker of their own; `tf` / `tg` force it. Engine choice,
 `find.*` flags and entry actions are then the ones the rest of your setup uses.

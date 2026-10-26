@@ -4,7 +4,7 @@ All keymaps are buffer-local (tree window) unless marked **global**.
 A `?` suffix means the field is optional; omit or set to `false` to disable.
 
 Every one of them is declared as a named action through
-[`lib.nvim.bindings.keymap`](https://github.com/StefanBartl/lib.nvim), which is
+[`lib.nvim.bindings.keymap`](https://github.com/WKDSteve/lib.nvim), which is
 what lets a config field also hold a **list** of keys
 (`keymap_abs = { "Y", "gy" }`) and what makes the `?` cheatsheet list the keys
 you actually have rather than the ones this plugin ships with. Read them back
@@ -77,7 +77,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `/` | filter | `keymap` | Enter tree filter mode |
 | `<C-c>` | filter | `keymap_clear` | Clear an applied filter directly |
 | `<Tab>` | preview | `keymap` | Text/dir: toggle floating preview; image: open via backend; PDF: pdfport/system |
-| `<CR>` | preview | `keymap_open` | Image: images.nvim float (`image.float`, `<S-Up>`/`<S-Down>` resize; zoom, pan, select, `gs`/`gy` and `?` in it are images.nvim's [zen window keys](https://github.com/StefanBartl/images.nvim/blob/main/docs/BINDINGS.md#zen-window), off with `image.float.viewport = false`), else the backend; PDF: open via backend; `system_exts` files (`.msg`, `.eml`, `.oft`): OS default app; other nodes: adapter's default `<CR>` |
+| `<CR>` | preview | `keymap_open` | Image: images.nvim float (`image.float`, `<S-Up>`/`<S-Down>` resize; zoom, pan, select, `gs`/`gy` and `?` in it are images.nvim's [zen window keys](https://github.com/WKDSteve/images.nvim/blob/main/docs/BINDINGS.md#zen-window), off with `image.float.viewport = false`), else the backend; PDF: open via backend; `system_exts` files (`.msg`, `.eml`, `.oft`): OS default app; other nodes: adapter's default `<CR>` |
 | `<C-b>` | preview | `keymap_scroll_up` | Scroll float preview up 1 line (×count). Float mode only. |
 | `<C-f>` | preview | `keymap_scroll_down` | Scroll float preview down 1 line (×count). Float mode only. |
 | `<PageUp>` | preview | `keymap_scroll_up10` | Scroll float preview up 10 lines (×count); in buffer-mode preview, pages the previewed file instead via native `<PageUp>` |

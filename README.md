@@ -18,9 +18,9 @@
 [![Neovim](https://img.shields.io/badge/Neovim-0.10%2B-57A143?logo=neovim&logoColor=white)](https://neovim.io)
 [![Lua](https://img.shields.io/badge/Lua-5.1%2FLuaJIT-2C2D72?logo=lua&logoColor=white)](https://www.lua.org)
 ![Status](https://img.shields.io/badge/status-beta-orange)
-[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://stefanbartl.github.io/wkd/p/filetree/)
+[![wkd](https://img.shields.io/badge/wkd-family-c6ff3d)](https://wkdsteve.github.io/wkd/p/filetree/)
 
-> Part of the [wkd](https://stefanbartl.github.io/wkd/) family — see this plugin's [page](https://stefanbartl.github.io/wkd/p/filetree/) on the site.
+> Part of the [wkd](https://wkdsteve.github.io/wkd/) family — see this plugin's [page](https://wkdsteve.github.io/wkd/p/filetree/) on the site.
 
 **Adapter-agnostic filetree features for Neovim.** Works with neo-tree.nvim,
 nvim-tree.lua, netrw, oil.nvim and mini.files through one adapter interface, so
@@ -31,7 +31,7 @@ of it.
 [image viewer](docs/FEATURES/UI.md#image-viewer): zoom into the corner that
 matters (Alt + wheel at the pointer), drag the picture around, cut a part into
 a window of its own at full resolution, and save it (`gs`) or copy it to the
-clipboard (`gy`). Needs [images.nvim](https://github.com/StefanBartl/images.nvim),
+clipboard (`gy`). Needs [images.nvim](https://github.com/WKDSteve/images.nvim),
 an image-capable terminal (WezTerm, iTerm2, Konsole) and ImageMagick — see
 [Requirements](docs/installation.md#requirements).
 
@@ -65,7 +65,7 @@ each page answers.
 - [Workflow](docs/WORKFLOW.md) — how the features combine once several are on at the same time.
 - [Health check](docs/troubleshooting.md) — what `:checkhealth filetree` reports, and what to do about a warning.
 - [Contributing](docs/CONTRIBUTING.md) — ground rules, project layout, and how to add an adapter or a feature.
-- [Feedback](https://github.com/StefanBartl/filetree.nvim/issues) — bugs, features, usage questions; broader discussion fits the [discussions board](https://github.com/StefanBartl/filetree.nvim/discussions).
+- [Feedback](https://github.com/WKDSteve/filetree.nvim/issues) — bugs, features, usage questions; broader discussion fits the [discussions board](https://github.com/WKDSteve/filetree.nvim/discussions).
 
 `:help filetree` is the same reference inside the editor.
 

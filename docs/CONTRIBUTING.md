@@ -1,7 +1,7 @@
 # Contributing to filetree.nvim
 
 Thank you for your interest! Bugs, ideas and questions are welcome in the
-[issue tracker](https://github.com/StefanBartl/filetree.nvim/issues); pull
+[issue tracker](https://github.com/WKDSteve/filetree.nvim/issues); pull
 requests very welcome.
 
 ## Getting the repository into a session
@@ -81,7 +81,7 @@ support, measured rather than assumed.
 
 `TESTS/` holds self-running headless specs that fake the adapters, so no tree
 plugin has to be installed. Run them with `bash scripts/test.sh`
-([testing.nvim](https://github.com/StefanBartl/testing.nvim) is the runner,
+([testing.nvim](https://github.com/WKDSteve/testing.nvim) is the runner,
 see [`TESTS/README.md`](../TESTS/README.md)).
 [GitHub Actions](../.github/workflows/ci.yml) runs them on every push and PR
 to `main`.

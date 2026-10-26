@@ -238,7 +238,7 @@ local function open_image(path)
       if call_ok0 and shown0 then return true end
     end
     if backend == "images.nvim" then
-      notify.warn("images.nvim not available — install StefanBartl/images.nvim")
+      notify.warn("images.nvim not available — install WKDSteve/images.nvim")
       return true
     end
   end

@@ -13,7 +13,7 @@ window, or a floating window — updates as the cursor moves, no separate
 open action needed. `<Tab>`/`<CR>` dispatch images/PDFs to their own
 viewer instead of rendering raw bytes as text; `<PageUp>`/`<PageDown>` page
 a long preview without leaving the tree.
-With [images.nvim](https://github.com/StefanBartl/images.nvim) installed,
+With [images.nvim](https://github.com/WKDSteve/images.nvim) installed,
 `<CR>` on an image opens the image viewer below; `<Tab>` keeps the inline
 view.
 Files whose extension is in `features.preview.system_exts`
@@ -49,18 +49,18 @@ else.
 The title shows the zoom factor and how deep you are in cut-out parts
 (`shot.png · 2.3× · 2/2`). All keys are images.nvim's and are set in its
 `display.zen.keys` — see
-[images.nvim's BINDINGS, "Zen window"](https://github.com/StefanBartl/images.nvim/blob/main/docs/BINDINGS.md#zen-window).
+[images.nvim's BINDINGS, "Zen window"](https://github.com/WKDSteve/images.nvim/blob/main/docs/BINDINGS.md#zen-window).
 `image.float.viewport = false` opens the float plain: just the picture, its
 size keys, `?` and `q`.
 
 What it needs (all optional; without them `<CR>` falls back to the inline
 view, or the part that needs a tool says so once):
 
-- [images.nvim](https://github.com/StefanBartl/images.nvim) — the float itself, with `backend = "auto"` (default) or `"images.nvim"`.
+- [images.nvim](https://github.com/WKDSteve/images.nvim) — the float itself, with `backend = "auto"` (default) or `"images.nvim"`.
 - A terminal that draws images through OSC 1337 — WezTerm (the one that works on native Windows), iTerm2, Konsole; elsewhere images.nvim falls back to block graphics.
 - ImageMagick (`magick` on `PATH`) — zooming, cutting a part, `gs` and `gy`, since each view is a crop; without it the float still shows the whole picture.
 - `'mouse'` including normal mode (`set mouse=a`) — the wheel and the drags.
-- An up-to-date [lib.nvim](https://github.com/StefanBartl/lib.nvim) — `gy` uses its `cross.copy_image_to_clipboard` (PowerShell on Windows, `wl-copy`/`xclip` on Linux, `osascript` on macOS).
+- An up-to-date [lib.nvim](https://github.com/WKDSteve/lib.nvim) — `gy` uses its `cross.copy_image_to_clipboard` (PowerShell on Windows, `wl-copy`/`xclip` on Linux, `osascript` on macOS).
 
 `image.float = false`, a `backend` other than `"auto"`/`"images.nvim"`, or an
 images.nvim without the float gives `<CR>` the same view as `<Tab>`.

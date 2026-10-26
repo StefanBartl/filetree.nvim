@@ -2,7 +2,7 @@
 
 Everything that connects the tree to something outside itself: git,
 external programs, LSP, diffing, marks/session persistence, and the
-PDF bridge to [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim).
+PDF bridge to [pdfport.nvim](https://github.com/WKDSteve/pdfport.nvim).
 
 ## Git Status
 
@@ -17,7 +17,7 @@ not, so this renders nothing there rather than misplacing anything.
 
 **Refreshes on:** `BufEnter` (tree buffer), `BufWritePost` (any buffer),
 `FocusGained`, and — optionally, no dependency either way —
-[gitsuite.nvim](https://github.com/StefanBartl/gitsuite.nvim)'s `User
+[gitsuite.nvim](https://github.com/WKDSteve/gitsuite.nvim)'s `User
 GitsuiteBranchSwitched`/`GitsuiteConflictsResolved` events, so a branch
 switch or clearing the last conflict marker in a buffer updates the
 decorations immediately instead of waiting for the next write or focus
@@ -206,7 +206,7 @@ diffmode under the hood, nothing custom rendered.
 
 ## PDF bridge (pdfport.nvim)
 
-When [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) is
+When [pdfport.nvim](https://github.com/WKDSteve/pdfport.nvim) is
 installed, `.pdf` nodes dispatched through `preview` ([UI.md](UI.md)) or
 opened directly can route through pdfport's own backend fallback chain
 (render into a buffer) instead of always shelling out to the system PDF
@@ -222,7 +222,7 @@ system reader directly, no empty prompt).
 
 - **Module:** `lua/filetree/features/system/pdf_open/` (dispatch site,
   wired into `preview` — [UI.md](UI.md)); see
-  [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) for the
+  [pdfport.nvim](https://github.com/WKDSteve/pdfport.nvim) for the
   render side
 
 ## PDF Create

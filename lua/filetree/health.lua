@@ -26,7 +26,7 @@ function M.check()
   else
     vim.health.error(
       "lib.nvim not found — :Filetree/:Ft will fail to register",
-      { 'Install "StefanBartl/lib.nvim" as a dependency' }
+      { 'Install "WKDSteve/lib.nvim" as a dependency' }
     )
   end
 
@@ -218,7 +218,7 @@ function M.check()
     if not (ok_pp and type(pp.create) == "function") then
       vim.health.warn(
         "pdf_create: pdfport.nvim not installed (or has no create() API) — the gP keymap is a no-op",
-        { 'Install "StefanBartl/pdfport.nvim"' }
+        { 'Install "WKDSteve/pdfport.nvim"' }
       )
     end
   end

@@ -33,7 +33,7 @@ Everything CI runs, plus the manual pass it cannot.
 
 ## Running
 
-The suite is run by [testing.nvim](https://github.com/StefanBartl/testing.nvim),
+The suite is run by [testing.nvim](https://github.com/WKDSteve/testing.nvim),
 configured in [`.testing.lua`](../.testing.lua) (the `spec_pattern` lists the
 files CI gates on: the files here carry no `_spec` suffix, and
 `refs/run.lua` is a spec, not a runner). Every file is a self-running script

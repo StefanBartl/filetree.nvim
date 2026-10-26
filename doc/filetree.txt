@@ -57,7 +57,7 @@ Supported backends: neo-tree.nvim, nvim-tree.lua
 
   • Neovim >= 0.10 — vim.system() and vim.uv are used unguarded, and lib.nvim
     itself requires 0.10.
-  • lib.nvim (StefanBartl/lib.nvim) — shared helpers. REQUIRED for the
+  • lib.nvim (WKDSteve/lib.nvim) — shared helpers. REQUIRED for the
     :Filetree/:Ft command layer (lib.nvim.bindings.usercmd.composer); most other
     integrations still have local fallbacks if it's absent, but the
     commands themselves won't register without it.
@@ -813,7 +813,7 @@ PICKER BACKEND ~
 
   auto (default)  Real fuzzy search + a native content preview of the
                   highlighted template, via pickers.nvim (github.com/
-                  StefanBartl/pickers.nvim) — its own telescope > fzf > snacks
+                  WKDSteve/pickers.nvim) — its own telescope > fzf > snacks
                   priority. Falls back to "builtin" when pickers.nvim isn't
                   installed.
   telescope       Force pickers.nvim's telescope engine.

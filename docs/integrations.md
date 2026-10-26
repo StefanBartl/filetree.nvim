@@ -36,7 +36,7 @@ The full wiring — right-click out of the box, the kit-renderer extras
 ## pickers.nvim
 
 `find_files` (`f`, `tf`) and `grep_in_dir` (`gr`, `tg`) hand the directory of the
-node under the cursor to [pickers.nvim](https://github.com/StefanBartl/pickers.nvim)
+node under the cursor to [pickers.nvim](https://github.com/WKDSteve/pickers.nvim)
 when it is installed, instead of driving a picker of their own. The bridge is
 `filetree.util.pickers`, which calls `pickers.integrations.filetree` over there:
 
@@ -54,4 +54,4 @@ when it is installed, instead of driving a picker of their own. The bridge is
 
 Configuration: [configuration.md](configuration.md#pickersnvim-integration). The
 pickers.nvim side is documented in its own
-[FILETREE feature page](https://github.com/StefanBartl/pickers.nvim/blob/main/docs/FEATURES/FILETREE.md).
+[FILETREE feature page](https://github.com/WKDSteve/pickers.nvim/blob/main/docs/FEATURES/FILETREE.md).

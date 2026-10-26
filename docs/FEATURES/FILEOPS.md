@@ -420,7 +420,7 @@ re-derived for the new depth, not just kept as-is), absolute (left alone —
 it already doesn't depend on where the file itself lives), and
 `$VAR/…`-rooted (also `${VAR}/…` and `%VAR%/…`), when the variable is listed
 in `outgoing_links.env_vars` or is a root of
-[lib.nvim's named-roots registry](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/fs/roots/README.md)
+[lib.nvim's named-roots registry](https://github.com/WKDSteve/lib.nvim/blob/main/lua/lib/nvim/fs/roots/README.md)
 (`$REPOS_DIR` by default; `$NVIM_CONFIG_DIR` is always recognized, backed by
 `stdpath("config")`, no config needed). The rewritten link keeps the `$VAR`
 form under the deepest root that contains the new location, in the spelling
@@ -743,7 +743,7 @@ skipping non-symlinks and summarizing the result.
 
 `:Filetree symlink repair [path]` targets a broken symlink: it reads the
 link's own recorded target and searches the filesystem for a file with a
-matching name via [gopath.nvim](https://github.com/StefanBartl/gopath.nvim)
+matching name via [gopath.nvim](https://github.com/WKDSteve/gopath.nvim)
 — an **optional** soft dependency, same style as PDF Open's pdfport.nvim
 bridge. Found candidates are offered in a picker (plus "delete instead" /
 "keep broken"); with gopath.nvim not installed, or nothing found, it falls
