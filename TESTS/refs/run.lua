@@ -221,7 +221,8 @@ end
 ---@diagnostic disable-next-line: duplicate-set-field
 kit.confirm = function(opts)
   if opts.on_answer then opts.on_answer(next_choice) end
-  return nil
+  -- a surface, not nil: the shared dialog takes nil for "no float opened" and asks again natively
+  return true
 end
 
 -- Auto mode: apply every found reference without asking, so the assertions

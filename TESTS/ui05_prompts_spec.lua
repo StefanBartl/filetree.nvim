@@ -162,32 +162,63 @@ do
   undo.confirm = nil
   undo.revert_refs = real_revert
 
-  -- a question from a background callback waits for an open dialog instead of closing it unanswered
-  local kit = require("ui.kit")
-  local kit_confirm = require("ui.kit.confirm")
-  local real_is_open, real_kit_confirm, real_poll = kit_confirm.is_open, kit.confirm, undo.POLL_MS
-  local open, shown_questions, answered = true, {}, nil
-  kit_confirm.is_open = function()
-    return open
+  -- a question from a background callback goes through dialog.ask, "No" first, and only "Yes, ..." accepts
+  local dialog = require("lib.nvim.ui.dialog")
+  local real_ask = dialog.ask
+  local seen, answered = nil, {}
+  dialog.ask = function(o)
+    seen = o
   end
-  kit.confirm = function(o)
-    shown_questions[#shown_questions + 1] = o.question
-    o.on_answer(true)
-  end
-  undo.POLL_MS = 20
   undo.ask("later?", "do it", function(accepted)
-    answered = accepted
+    answered[#answered + 1] = accepted
   end)
   check(
-    "another dialog is open: the question is not shown over it",
-    #shown_questions == 0 and answered == nil
+    "asked behind an open dialog, harmless default",
+    seen ~= nil
+      and seen.question == "later?"
+      and seen.choices[1] == "No"
+      and seen.default == 1
+      and seen.max_wait_ms == undo.MAX_WAIT_MS
   )
-  open = false
-  vim.wait(1000, function()
-    return answered ~= nil
-  end, 10)
-  check("it is shown when the dialog is gone", #shown_questions == 1 and answered == true)
-  kit_confirm.is_open, kit.confirm, undo.POLL_MS = real_is_open, real_kit_confirm, real_poll
+  seen.on_answer("Yes, do it", 2)
+  check("Yes accepts", answered[1] == true)
+  undo.ask("later?", "do it", function(accepted)
+    answered[#answered + 1] = accepted
+  end)
+  seen.on_answer(nil)
+  check("a dismissed or timed-out question declines", answered[2] == false)
+  dialog.ask = real_ask
+end
+
+-- the two button wrappers ask through the shared dialog and pass the answers on unchanged
+do
+  local dialog = require("lib.nvim.ui.dialog")
+  local real = dialog.confirm
+  local seen
+  dialog.confirm = function(o)
+    seen = o
+  end
+  local got = {}
+  require("filetree.util.confirm")({
+    title = " Trash ",
+    body = { "Path: /x" },
+    question = "Send to trash?",
+    on_choice = function(yes)
+      got[#got + 1] = yes
+    end,
+  })
+  check("confirm: body and question are one text", seen.question == "Path: /x\nSend to trash?")
+  seen.on_answer(true)
+  seen.on_answer(false)
+  check("confirm: yes and no are passed on", got[1] == true and got[2] == false)
+  require("filetree.util.confirm_choice")("Refs?", { "Update", "Leave" }, function(choice)
+    got[#got + 1] = choice == nil and "nil" or choice
+  end)
+  check("confirm_choice: choices are passed on", seen.choices[2] == "Leave")
+  seen.on_answer("Update")
+  seen.on_answer(nil)
+  check("confirm_choice: label and a dismissal", got[3] == "Update" and got[4] == "nil")
+  dialog.confirm = real
 end
 
 print(("\n%d passed, %d failed"):format(passed, failed))

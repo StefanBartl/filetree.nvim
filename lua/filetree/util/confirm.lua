@@ -1,8 +1,8 @@
 ---@module 'filetree.util.confirm'
 ---@brief Small yes/no confirmation dialog with an optional info body.
 ---@description
---- Routes through `ui.kit`'s `kit.confirm` (horizontal Yes/No
---- buttons) instead of hand-rolling a floating window. The optional `body`
+--- Routes through `lib.nvim.ui.dialog` (ui.kit's horizontal Yes/No buttons, `vim.ui.select` when no float can
+--- open) instead of hand-rolling a floating window. The optional `body`
 --- (e.g. file metadata) is folded into the question as leading lines, since
 --- kit.confirm centers and renders multi-line questions above the buttons.
 ---
@@ -16,7 +16,7 @@
 --- Keys inside the dialog: h/l (or arrows/<Tab>) move focus, <CR> confirms
 --- the focused button, <Esc>/q cancels (= No).
 
-local kit = require("ui.kit")
+local dialog = require("lib.nvim.ui.dialog")
 
 ---@class FiletreeConfirmOpts
 ---@field title?     string      Window title.
@@ -37,7 +37,7 @@ return function(opts)
   end
   lines[#lines + 1] = question
 
-  kit.confirm({
+  dialog.confirm({
     title = opts.title,
     question = table.concat(lines, "\n"),
     on_answer = on_choice,

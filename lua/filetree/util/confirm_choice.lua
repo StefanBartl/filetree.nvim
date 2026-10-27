@@ -10,13 +10,13 @@
 ---     function(choice) ... end   -- choice is one of the strings above, or nil
 ---   )                            -- if the dialog was dismissed (Esc/q)
 
-local kit = require("ui.kit")
+local dialog = require("lib.nvim.ui.dialog")
 
 ---@param question string
 ---@param choices string[]
 ---@param on_choice fun(choice: string|nil)
 return function(question, choices, on_choice)
-  kit.confirm({
+  dialog.confirm({
     question = question,
     choices = choices,
     on_answer = on_choice,

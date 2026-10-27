@@ -135,51 +135,30 @@ function M.attach_refs(original_path, refs_undo_id, refs_count)
   end
 end
 
----Seam for the question (`nil`: `ui.kit.confirm`, `vim.ui.select` as the fallback); specs replace it.
+---Seam for the question (`nil`: `lib.nvim.ui.dialog.ask`); specs replace it.
 ---@type (fun(question: string, yes_label: string, cb: fun(accepted: boolean)))|nil
 M.confirm = nil
 
----How often a question that waits for an open dialog looks again, and how long it waits at most (then it is declined).
-M.POLL_MS = 300
+---How long a question that waits for an open dialog waits at most (then it is declined).
 M.MAX_WAIT_MS = 10 * 60 * 1000
 
----Whether another `ui.kit.confirm` dialog is open: that kit's dialog is single-instance, opening a second one closes the
----first WITHOUT answering it, so a question that comes from a background callback (here: a rewrite that finishes some
----time after the restore) must not open over one the person is answering.
----@return boolean
-local function other_dialog_open()
-  local ok, confirm = pcall(require, "ui.kit.confirm")
-  return ok
-    and type(confirm) == "table"
-    and type(confirm.is_open) == "function"
-    and confirm.is_open() == true
-end
-
+---A question from a background callback (here: a rewrite that finishes some time after the restore): it waits
+---behind the dialog the person is answering instead of replacing it. "No" is the first button and the default.
 ---@param question string
 ---@param yes_label string
 ---@param cb fun(accepted: boolean)
 function M.ask(question, yes_label, cb)
   if M.confirm then return M.confirm(question, yes_label, cb) end
-  local waited = 0
-  local function attempt()
-    if other_dialog_open() then
-      if waited >= M.MAX_WAIT_MS then return cb(false) end
-      waited = waited + M.POLL_MS
-      return vim.defer_fn(attempt, M.POLL_MS)
-    end
-    local shown = pcall(kit.confirm, {
-      question = question,
-      on_answer = function(yes)
-        cb(yes == true)
-      end,
-    })
-    if not shown then
-      vim.ui.select({ "No", "Yes, " .. yes_label }, { prompt = question }, function(_, index)
-        cb(index == 2)
-      end)
-    end
-  end
-  attempt()
+  local yes = "Yes, " .. yes_label
+  require("lib.nvim.ui.dialog").ask({
+    question = question,
+    choices = { "No", yes },
+    default = 1,
+    max_wait_ms = M.MAX_WAIT_MS,
+    on_answer = function(choice)
+      cb(choice == yes)
+    end,
+  })
 end
 
 ---Return the full trash history (newest first).
