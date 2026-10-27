@@ -176,7 +176,7 @@ do
     "asked behind an open dialog, harmless default",
     seen ~= nil
       and seen.question == "later?"
-      and seen.choices[1] == "No"
+      and seen.choices == "&No\n&Yes, do it"
       and seen.default == 1
       and seen.max_wait_ms == undo.MAX_WAIT_MS
   )
@@ -187,6 +187,29 @@ do
   end)
   seen.on_answer(nil)
   check("a dismissed or timed-out question declines", answered[2] == false)
+  undo.ask("a & b?", "save & go", function() end)
+  check("an ampersand in the label is escaped", seen.choices == "&No\n&Yes, save && go")
+
+  -- a lib.nvim without ui.dialog: the helper stands in with ui.kit
+  local real_require, kit = require, require("ui.kit")
+  local real_kit_ask, kit_seen = kit.ask, nil
+  kit.ask = function(o)
+    kit_seen = o
+  end
+  package.loaded["lib.nvim.ui.dialog"] = nil
+  _G.require = function(name)
+    if name == "lib.nvim.ui.dialog" then error("module '" .. name .. "' not found") end
+    return real_require(name)
+  end
+  local fallback_ok, fallback_err = pcall(undo.ask, "again?", "do it", function() end)
+  _G.require = real_require
+  package.loaded["lib.nvim.ui.dialog"] = dialog
+  kit.ask = real_kit_ask
+  check(
+    "without ui.dialog the question goes to ui.kit",
+    fallback_ok and kit_seen ~= nil,
+    fallback_err
+  )
   dialog.ask = real_ask
 end
 

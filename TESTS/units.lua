@@ -311,7 +311,7 @@ do
   eq("close_for_path: no new [No Name] buffer was created", noname_count(), before_noname)
 end
 
--- ── util.confirm ── kit.confirm button dialog, replacing native vim.fn.confirm ─
+-- ── util.confirm ── shared button dialog, replacing native vim.fn.confirm ─
 do
   local confirm = require("filetree.util.confirm")
   local function keys(s)

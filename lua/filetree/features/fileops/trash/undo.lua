@@ -149,10 +149,11 @@ M.MAX_WAIT_MS = 10 * 60 * 1000
 ---@param cb fun(accepted: boolean)
 function M.ask(question, yes_label, cb)
   if M.confirm then return M.confirm(question, yes_label, cb) end
+  -- `&` marks the hotkeys (n / y) the plain Yes/No dialog has; `&&` is a literal ampersand in the label
   local yes = "Yes, " .. yes_label
-  require("lib.nvim.ui.dialog").ask({
+  require("filetree.util.dialog").ask({
     question = question,
-    choices = { "No", yes },
+    choices = "&No\n&" .. yes:gsub("&", "&&"),
     default = 1,
     max_wait_ms = M.MAX_WAIT_MS,
     on_answer = function(choice)
