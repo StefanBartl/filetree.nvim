@@ -327,14 +327,14 @@ do
       got = yes
     end,
   })
-  -- The dialog floats and takes focus; default focus is "Yes" (button 1).
+  -- The dialog floats and takes focus; the safe answer, "No" (button 2), is focused.
   local float_open = false
   for _, w in ipairs(vim.api.nvim_list_wins()) do
     if vim.api.nvim_win_get_config(w).relative ~= "" then float_open = true end
   end
   check("confirm: opens a floating window", float_open)
   vim.api.nvim_feedkeys(keys("<CR>"), "x", false)
-  check("confirm: <CR> on the default-focused Yes resolves to true", got == true)
+  check("confirm: <CR> on the default-focused No resolves to false", got == false)
 
   got = nil
   confirm({
@@ -344,8 +344,8 @@ do
       got = yes
     end,
   })
-  vim.api.nvim_feedkeys(keys("l<CR>"), "x", false)
-  check("confirm: l<CR> moves focus to No and resolves to false", got == false)
+  vim.api.nvim_feedkeys(keys("h<CR>"), "x", false)
+  check("confirm: h<CR> moves focus to Yes and resolves to true", got == true)
 end
 
 -- ── opened_sync ── buffer open/close triggers a light adapter redraw ────────
