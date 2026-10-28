@@ -217,7 +217,7 @@ end
 ---@param path string
 ---@return boolean confirmed
 local function confirm(path)
-  local answer = vim.fn.confirm(confirm_question(path), "&Yes\n&No", 2)
+  local answer = vim.fn.confirm(confirm_question(path), "&Yes\n&No", 2) -- native-prompt: M.delete answers synchronously (documented)
   return answer == 1
 end
 

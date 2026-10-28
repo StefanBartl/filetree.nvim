@@ -168,9 +168,13 @@ function M.ask(question, yes_label, cb)
   })
   if shown or answered then return end
   -- the dialog raised: the caller (the end of a delete) must still be told, so ask natively
-  vim.ui.select({ "No", yes }, { prompt = question }, function(choice)
-    answer(choice == yes)
-  end)
+  vim.ui.select(
+    { "No", yes },
+    { prompt = question },
+    function(choice) -- native-prompt: the dialog raised, the delete must still be told
+      answer(choice == yes)
+    end
+  )
 end
 
 ---Return the full trash history (newest first).
