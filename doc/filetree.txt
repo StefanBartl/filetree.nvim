@@ -2041,10 +2041,6 @@ netrw and oil degrade to plain next / previous entry. nvim-tree's own `<`/`>`
 keep working; `]s`/`[s` only shadow the snacks.nvim scope motion inside the
 tree buffer.
 
-(config fields
-`keymap_up`/`keymap_down`/`keymap_next_sibling`/`keymap_prev_sibling`, `false`
-disables one; `sibling_wrap` boolean, default `false`)
-
 Keymaps: - + ]s [s
 
 Usercmds: `:Filetree traverse up`, `:Filetree traverse down`
@@ -2117,13 +2113,11 @@ resets the idle clock nor clears marks by itself, only elapsed idle time does.
 Set to `0` to disable the timeout and go back to the old "forever until
 cleared" behavior.
 
-`goto_adjacent_mark`, `mark_visual`) plus `m`/`[m` in Visual mode (`]M`),
-`marks.keymap_prev` (`[M`), `marks.auto_clear_ms` (default `60000`, `0`
-disables), `marks.order` (`"marked"` default, or `"tree"`)
-
 Keymaps: m ]m [m <leader>mc <leader>ms gm ]M [M
 
-Config: `marks.keymap_goto` (default `gm`), `marks.keymap_next`
+Config: `marks.keymap_goto` (default `gm`), `marks.keymap_next` (`]M`),
+        `marks.keymap_prev` (`[M`), `marks.auto_clear_ms` (default `60000`,
+        `0` disables), `marks.order` (`"marked"` default, or `"tree"`)
 
 Module: lua/filetree/features/org/marks/
 
@@ -2353,14 +2347,13 @@ bsdtar: Windows 10+ ships one as `System32\tar.exe` (Git for Windows' own
 `bsdtar`. `zip` only takes nodes from one folder into one archive; bsdtar
 takes them from anywhere. With neither, `gz` only warns.
 
-`:Filetree compress together` `multiple` (default `"ask"`: `"each"` /
-`"together"` / `"ask"`)
-
 Keymaps: gz
 
-Config: `features.compress.enabled` (default `true`),
+Config: `features.compress.enabled` (default `true`), `multiple` (default
+        `"ask"`: `"each"` / `"together"` / `"ask"`)
 
-Commands: `:Filetree compress`, `:Filetree compress each`,
+Commands: `:Filetree compress`, `:Filetree compress each`, `:Filetree compress
+          together`
 
 Module: lua/filetree/features/system/compress/
 
@@ -2444,11 +2437,10 @@ summary rather than treated as an error.
 Off by default, and pdfport.nvim is a soft dependency: without it the keymap
 warns and does nothing, rather than filetree requiring pdfport just to load.
 
-`on_conflict` (default `"suffix"`), `confirm` (default `true`)
-
 Keymaps: gP
 
-Config: `features.pdf_create.enabled` (default `false`),
+Config: `features.pdf_create.enabled` (default `false`), `on_conflict`
+        (default `"suffix"`), `confirm` (default `true`)
 
 Module: lua/filetree/features/system/pdf_create/
 
@@ -2467,8 +2459,6 @@ instead to get pdfport's own "open PDF as…" chooser — every backend/mode
 pdfport knows about, plus "system application", which is always offered even
 without pdfport.nvim installed (falls back to the system reader directly, no
 empty prompt).
-
-wired into `preview` — UI.md); see pdfport.nvim for the render side
 
 Keymaps: go
 
@@ -2758,8 +2748,6 @@ view, or the part that needs a tool says so once):
 `image.float = false`, a `backend` other than `"auto"`/`"images.nvim"`, or an
 images.nvim without the float gives `<CR>` the same view as `<Tab>`.
 
-(scroll) — see BINDINGS/KEYMAPS.md
-
 Keymaps: <Tab> <CR> <C-b> <C-f> <PageUp> <PageDown>
 
 Module: lua/filetree/features/ui/preview/
@@ -2812,9 +2800,7 @@ A blank statusline for the tree window (adapter-agnostic, on by default) plus
 optional isolated tree highlight groups (opt-in), so the tree reads as a
 distinct UI region rather than another ordinary buffer.
 
-configuration.md
-
-Config: isolated highlights are opt-in — see
+Config: isolated highlights are opt-in — see configuration.md
 
 Module: lua/filetree/features/ui/window_style/
 

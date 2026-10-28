@@ -145,17 +145,26 @@ end
 local function parse_markdown(path)
   local lines = vim.fn.readfile(path)
   local sections, cur = {}, nil
+  -- The meta key an indented continuation line (a `- **Key:** ...` bullet
+  -- hard-wrapped onto its own line) belongs to; cleared at a blank line, a
+  -- new bullet or anything else that is not that continuation.
+  local open_key = nil
   for _, raw in ipairs(lines) do
     local title = raw:match("^##%s+(.+)$")
     if title then
       cur = { title = title, body = {}, meta = {} }
       sections[#sections + 1] = cur
+      open_key = nil
     elseif cur then
       -- The trailing `- **Module:** ...` block is metadata, not prose.
       local key, value = raw:match("^%-%s+%*%*([%w%s]+):%*%*%s*(.*)$")
       if key then
         cur.meta[key] = value
+        open_key = key
+      elseif open_key and raw:match("^%s+%S") then
+        cur.meta[open_key] = cur.meta[open_key] .. " " .. vim.trim(raw)
       else
+        open_key = nil
         cur.body[#cur.body + 1] = raw
       end
     end
