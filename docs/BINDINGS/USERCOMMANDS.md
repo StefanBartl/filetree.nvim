@@ -137,6 +137,13 @@ Default: `Filetree`, with `Ft` registered automatically as an alias.
 |---------|--------|
 | `:Filetree clipfiles` | Copy the marked nodes (else the current one) to the OS clipboard as files, ready for Ctrl+V in another app |
 
+### Compress to .zip
+| Command | Action |
+|---------|--------|
+| `:Filetree compress` | Compress the marked nodes (else the current one) to `.zip`, like `gz` |
+| `:Filetree compress each` | Every marked node to its own `<name>.zip`, without asking |
+| `:Filetree compress together` | All marked nodes into one `.zip` (name asked) |
+
 ### Lua require copy
 | Command | Action |
 |---------|--------|

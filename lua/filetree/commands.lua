@@ -534,6 +534,23 @@ local TREE = {
     if f then f.copy() end
   end,
 
+  -- ── compress ──────────────────────────────────────────────────────────────────
+  -- :Filetree compress [each|together]  → zip the marked nodes (else the current one)
+  compress = {
+    [""] = function(_)
+      local f = ft("compress")
+      if f then f.compress() end
+    end,
+    each = function(_)
+      local f = ft("compress")
+      if f then f.compress("each") end
+    end,
+    together = function(_)
+      local f = ft("compress")
+      if f then f.compress("together") end
+    end,
+  },
+
   -- ── open_variants ─────────────────────────────────────────────────────────────
   openas = {
     vsplit = function(_)

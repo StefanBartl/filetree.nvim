@@ -355,6 +355,12 @@ return {
       feature = "pdf_create",
       scope = "tree",
     },
+    {
+      lhs = "gz",
+      desc = "Compress node/marked nodes to .zip",
+      feature = "compress",
+      scope = "tree",
+    },
   },
   lsp = {},
   compare = {

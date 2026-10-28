@@ -103,6 +103,7 @@ local KEY_FEATURES = {
   "open_with",
   "file_clipboard",
   "pdf_create",
+  "compress",
   "pdf_open",
   "shell_run",
   "cheatsheet",

@@ -252,3 +252,29 @@ just to load.
 - **Keymaps:** `gP`
 - **Config:** `features.pdf_create.enabled` (default `false`),
   `on_conflict` (default `"suffix"`), `confirm` (default `true`)
+
+## Compress
+
+`gz` zips the node under the cursor, or every marked node when any is
+marked (`m`). A folder goes into the zip with its contents. One node
+becomes `<name>.zip` beside it; for several, `multiple` decides: one zip
+per node (`"each"`), one zip for all of them with the name asked
+(`"together"`, default the folder name), or a question offering both
+(`"ask"`, the default). An existing zip is never overwritten, the new one
+becomes `<name>_2.zip`. The sources and the marks are left alone.
+
+Typical use: a log or event dump too large for a commit (a pre-commit size
+check), marked with `m` and zipped with `gz` before staging.
+
+The archive is written by Info-ZIP `zip` when it is on `PATH`, else by a
+bsdtar: Windows 10+ ships one as `System32\tar.exe` (Git for Windows' own
+`tar` is GNU tar and cannot write zip), macOS as `tar`, elsewhere it is
+`bsdtar`. `zip` only takes nodes from one folder into one archive; bsdtar
+takes them from anywhere. With neither, `gz` only warns.
+
+- **Module:** `lua/filetree/features/system/compress/`
+- **Keymaps:** `gz`
+- **Commands:** `:Filetree compress`, `:Filetree compress each`,
+  `:Filetree compress together`
+- **Config:** `features.compress.enabled` (default `true`),
+  `multiple` (default `"ask"`: `"each"` / `"together"` / `"ask"`)

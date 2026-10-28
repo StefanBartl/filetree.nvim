@@ -107,6 +107,7 @@ local MUST_BE_EXERCISED = {
   "auto_reveal",
   "breadcrumbs",
   "cheatsheet",
+  "compress",
   "context_menu",
   "copy_move",
   "create_from_template",

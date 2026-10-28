@@ -114,6 +114,7 @@ at runtime with `:lua vim.print(require("filetree.bindings").live())` —
 | `i` | shell_run | `keymap` | Prompt for a shell command, run in node directory |
 | `go` | pdf_open | `keymap_open` | Open the PDF under the cursor with `default_mode` (pdfport / system reader) |
 | `gP` | pdf_create | `keymap` | Create PDF(s) from the current node/marked nodes/folder via pdfport.nvim (confirms first) |
+| `gz` | compress | `keymap` | Compress the current node / marked nodes to `.zip` (several nodes: one zip each or one for all) |
 
 ### Visual-mode keymaps
 

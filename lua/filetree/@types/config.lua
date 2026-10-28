@@ -145,6 +145,7 @@
 ---@field file_clipboard          FiletreeFileClipboardConfig?
 ---@field pdf_open               FiletreePdfOpenConfig?
 ---@field pdf_create              FiletreePdfCreateConfig?
+---@field compress                FiletreeCompressConfig?
 ---@field move                    FiletreeMoveConfig?
 ---@field smart_rename            FiletreeSmartRenameConfig?
 ---@field path_copy               FiletreePathCopyConfig?
@@ -732,6 +733,13 @@
 ---@field keymap      string?   Create a PDF from the current node/marks/folder (default "gP").
 ---@field on_conflict "overwrite"|"suffix"|"error"?  Passed to pdfport.create() (default "suffix").
 ---@field confirm     boolean?  Ask (shared dialog) before creating (default true).
+
+-- ── compress ──────────────────────────────────────────────────────────────────
+
+---@class FiletreeCompressConfig
+---@field enabled   boolean
+---@field keymap    string|false?  Compress the current node / marked nodes (default "gz").
+---@field multiple  "ask"|"each"|"together"?  Several nodes: one zip each, one for all, or ask (default "ask").
 
 -- ── smart_rename ─────────────────────────────────────────────────────────────
 
