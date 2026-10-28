@@ -124,9 +124,11 @@ end
 ---@return fun(p: string): string, string|nil
 function M.folder(opts)
   local o = fold_opts(opts)
-  if not o then return function(p)
-    return p, nil
-  end end
+  if not o then
+    return function(p)
+      return p, nil
+    end
+  end
   return roots.folder(o)
 end
 
