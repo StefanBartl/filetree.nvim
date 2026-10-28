@@ -10,7 +10,7 @@
 ---     function(choice) ... end   -- choice is one of the strings above, or nil
 ---   )                            -- if the dialog was dismissed (Esc/q)
 
-local dialog = require("filetree.util.dialog")
+local dialog = require("lib.nvim.ui.dialog")
 
 ---@param question string
 ---@param choices string[]

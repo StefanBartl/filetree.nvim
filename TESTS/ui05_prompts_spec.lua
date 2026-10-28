@@ -190,26 +190,6 @@ do
   undo.ask("a & b?", "save & go", function() end)
   check("an ampersand in the label is escaped", seen.choices == "&No\n&Yes, save && go")
 
-  -- a lib.nvim without ui.dialog: the helper stands in with ui.kit
-  local real_require, kit = require, require("ui.kit")
-  local real_kit_ask, kit_seen = kit.ask, nil
-  kit.ask = function(o)
-    kit_seen = o
-  end
-  package.loaded["lib.nvim.ui.dialog"] = nil
-  _G.require = function(name)
-    if name == "lib.nvim.ui.dialog" then error("module '" .. name .. "' not found") end
-    return real_require(name)
-  end
-  local fallback_ok, fallback_err = pcall(undo.ask, "again?", "do it", function() end)
-  _G.require = real_require
-  package.loaded["lib.nvim.ui.dialog"] = dialog
-  kit.ask = real_kit_ask
-  check(
-    "without ui.dialog the question goes to ui.kit",
-    fallback_ok and kit_seen ~= nil,
-    fallback_err
-  )
   dialog.ask = real_ask
 end
 
@@ -231,6 +211,7 @@ do
     end,
   })
   check("confirm: body and question are one text", seen.question == "Path: /x\nSend to trash?")
+  check("confirm: the safe answer is focused", seen.default == 2)
   -- a long body does not push the question out: it is the last line, and the dialog cuts the end
   local long_body = {}
   for i = 1, 40 do

@@ -149,7 +149,6 @@ M.MAX_WAIT_MS = 10 * 60 * 1000
 ---@param cb fun(accepted: boolean)
 function M.ask(question, yes_label, cb)
   if M.confirm then return M.confirm(question, yes_label, cb) end
-  -- `&` marks the hotkeys (n / y) the plain Yes/No dialog has; `&&` is a literal ampersand in the label
   local yes = "Yes, " .. yes_label
   local answered = false
   local function answer(accepted)
@@ -163,15 +162,9 @@ function M.ask(question, yes_label, cb)
     end
     cb(accepted)
   end
-  local shown = pcall(require("filetree.util.dialog").ask, {
-    question = question,
-    choices = "&No\n&" .. yes:gsub("&", "&&"),
-    default = 1,
+  local shown = pcall(require("lib.nvim.ui.dialog").yesno, question, yes_label, answer, {
+    unprompted = true,
     max_wait_ms = M.MAX_WAIT_MS,
-    on_answer = function(choice)
-      -- the label, or `true` from a kit old enough to show its plain Yes/No for a choices string
-      answer(choice == yes or choice == true)
-    end,
   })
   if shown or answered then return end
   -- the dialog raised: the caller (the end of a delete) must still be told, so ask natively

@@ -30,6 +30,16 @@ function M.check()
     )
   end
 
+  -- lib.nvim.ui.dialog: every yes/no and choice dialog asks through it (lib.nvim of 2026-10-28 or newer)
+  local dialog_ok, dialog = pcall(require, "lib.nvim.ui.dialog")
+  if dialog_ok and type(dialog) == "table" and dialog.yesno then
+    vim.health.ok("lib.nvim.ui.dialog (the dialogs of the tree and the trash)")
+  else
+    vim.health.error("this lib.nvim has no ui.dialog.yesno -- the confirmations will fail", {
+      "Update lib.nvim to a version of 2026-10-28 or newer",
+    })
+  end
+
   -- ── Neovim version ────────────────────────────────────────────────────────
   local version = vim.version()
   if version.major == 0 and version.minor < 10 then
