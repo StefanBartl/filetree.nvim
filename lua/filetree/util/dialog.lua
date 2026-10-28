@@ -8,10 +8,27 @@
 
 local M = {}
 
+local reported = false
+
 ---@return table dialog  # has `confirm` and `ask`
 local function resolve()
   local ok, dialog = pcall(require, "lib.nvim.ui.dialog")
   if ok and type(dialog) == "table" and dialog.confirm and dialog.ask then return dialog end
+  -- A module that is there but raises is not a module that is missing: say so once, then stand in.
+  if
+    not ok
+    and not tostring(dialog):find("module 'lib.nvim.ui.dialog' not found", 1, true)
+    and not reported
+  then
+    reported = true
+    vim.schedule(function()
+      vim.notify(
+        "[filetree] lib.nvim.ui.dialog failed to load, dialogs use ui.kit directly: "
+          .. tostring(dialog),
+        vim.log.levels.WARN
+      )
+    end)
+  end
   local kit = require("ui.kit")
   return {
     confirm = function(opts)

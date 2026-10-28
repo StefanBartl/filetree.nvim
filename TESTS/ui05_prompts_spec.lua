@@ -231,6 +231,22 @@ do
     end,
   })
   check("confirm: body and question are one text", seen.question == "Path: /x\nSend to trash?")
+  -- a long body does not push the question out: it is the last line, and the dialog cuts the end
+  local long_body = {}
+  for i = 1, 40 do
+    long_body[i] = "line " .. i
+  end
+  local first = seen
+  require("filetree.util.confirm")({
+    body = long_body,
+    question = "Delete it?",
+    on_choice = function() end,
+  })
+  check(
+    "confirm: a long body is capped and the question stays",
+    #vim.split(seen.question, "\n") <= 8 and seen.question:sub(-10) == "Delete it?"
+  )
+  seen = first
   seen.on_answer(true)
   seen.on_answer(false)
   check("confirm: yes and no are passed on", got[1] == true and got[2] == false)
@@ -242,6 +258,58 @@ do
   seen.on_answer(nil)
   check("confirm_choice: label and a dismissal", got[3] == "Update" and got[4] == "nil")
   dialog.confirm = real
+end
+
+-- the revert question, end to end through the real dialog and kit: the label round trip, the safe default,
+-- a dialog that raises
+do
+  local undo = require("filetree.features.fileops.trash.undo")
+  local kit_confirm = require("ui.kit.confirm")
+  local accepted
+  undo.ask("Revert them too?", "revert them", function(yes)
+    accepted = yes
+  end)
+  vim.wait(500, function()
+    return kit_confirm.is_open()
+  end, 5)
+  check("the revert question is shown by the real kit", kit_confirm.is_open())
+  check("and No is focused", kit_confirm.current_focus() == 1)
+  kit_confirm.pick(2)
+  check("picking Yes accepts (the label round trip through the real parser)", accepted == true)
+  accepted = nil
+  undo.ask("Revert them too?", "revert them", function(yes)
+    accepted = yes
+  end)
+  vim.wait(500, function()
+    return kit_confirm.is_open()
+  end, 5)
+  kit_confirm.cancel()
+  vim.wait(500, function()
+    return accepted ~= nil
+  end, 5)
+  check("dismissing it declines", accepted == false)
+
+  local dialog = require("lib.nvim.ui.dialog")
+  local real_ask, real_select, real_notify = dialog.ask, vim.ui.select, vim.notify
+  dialog.ask = function()
+    error("kit broke")
+  end
+  local asked_natively
+  vim.ui.select = function(items, _, on_choice)
+    asked_natively = items
+    on_choice(items[2], 2)
+  end
+  vim.notify = function() end
+  accepted = nil
+  local ran = pcall(undo.ask, "Revert them too?", "revert them", function(yes)
+    accepted = yes
+  end)
+  dialog.ask, vim.ui.select, vim.notify = real_ask, real_select, real_notify
+  check("a dialog that raises does not escape (the end of a delete still runs)", ran)
+  check(
+    "it is asked natively, No first, and answers",
+    asked_natively ~= nil and asked_natively[1] == "No" and accepted == true
+  )
 end
 
 print(("\n%d passed, %d failed"):format(passed, failed))

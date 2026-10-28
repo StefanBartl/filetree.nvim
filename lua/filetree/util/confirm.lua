@@ -18,6 +18,8 @@
 
 local dialog = require("filetree.util.dialog")
 
+local MAX_BODY_LINES = 6
+
 ---@class FiletreeConfirmOpts
 ---@field title?     string      Window title.
 ---@field body?      string[]    Info lines shown above the question.
@@ -31,8 +33,14 @@ return function(opts)
   local body = opts.body or {}
   local question = opts.question or "Confirm?"
 
+  -- The question is the last line and the dialog cuts the end of a text that does not fit: a body of dozens of
+  -- lines (a name with newlines in it, a long listing) must not push it out.
   local lines = {}
-  for _, l in ipairs(body) do
+  for i, l in ipairs(body) do
+    if i > MAX_BODY_LINES then
+      lines[#lines + 1] = "  …"
+      break
+    end
     lines[#lines + 1] = l
   end
   lines[#lines + 1] = question

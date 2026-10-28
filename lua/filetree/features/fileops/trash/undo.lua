@@ -151,15 +151,33 @@ function M.ask(question, yes_label, cb)
   if M.confirm then return M.confirm(question, yes_label, cb) end
   -- `&` marks the hotkeys (n / y) the plain Yes/No dialog has; `&&` is a literal ampersand in the label
   local yes = "Yes, " .. yes_label
-  require("filetree.util.dialog").ask({
+  local answered = false
+  local function answer(accepted)
+    if answered then return end
+    answered = true
+    if not accepted then
+      vim.notify(
+        "[filetree.trash] the references stay marked (:Filetree refs undo reverts them)",
+        vim.log.levels.INFO
+      )
+    end
+    cb(accepted)
+  end
+  local shown = pcall(require("filetree.util.dialog").ask, {
     question = question,
     choices = "&No\n&" .. yes:gsub("&", "&&"),
     default = 1,
     max_wait_ms = M.MAX_WAIT_MS,
     on_answer = function(choice)
-      cb(choice == yes)
+      -- the label, or `true` from a kit old enough to show its plain Yes/No for a choices string
+      answer(choice == yes or choice == true)
     end,
   })
+  if shown or answered then return end
+  -- the dialog raised: the caller (the end of a delete) must still be told, so ask natively
+  vim.ui.select({ "No", yes }, { prompt = question }, function(choice)
+    answer(choice == yes)
+  end)
 end
 
 ---Return the full trash history (newest first).
