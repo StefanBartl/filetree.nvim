@@ -750,6 +750,72 @@ do
   ta.teardown()
 end
 
+-- ── suite hermeticity ── setup() never opens the first-run deps float ──────
+-- Guards the header's `vim.g.lib_nvim_deps_disable_first_run`. On a cache
+-- that has already "seen" filetree the suite passes without it, so only this
+-- forced worst case (no seen store, a declared tool missing) keeps a removed
+-- opt-out from going unnoticed until the next fresh $TEMP -- where the float's
+-- 'winfixbuf' window makes the cwd_sync case below die with E1513 on :edit.
+-- Nothing is written to the real cache (save is stubbed). view.show is only
+-- scheduled, so the stubs stay until the event loop has run that callback.
+do
+  local disk = require("lib.nvim.cache.disk")
+  local dspec = require("lib.nvim.deps.spec")
+  local install = require("lib.nvim.deps.install")
+  local view = require("lib.nvim.deps.view")
+  local orig = {
+    load = disk.load,
+    save = disk.save,
+    find = dspec.find,
+    spec_load = dspec.load,
+    plan = install.plan,
+    show = view.show,
+  }
+  local shown = 0
+  ---@diagnostic disable-next-line: duplicate-set-field
+  disk.load = function()
+    return nil
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  disk.save = function()
+    return true
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  dspec.find = function()
+    return "install.json"
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  dspec.load = function()
+    return { tools = { { name = "units-missing-tool" } } }
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  install.plan = function()
+    return { missing = { { name = "units-missing-tool" } } }
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  view.show = function()
+    shown = shown + 1
+  end
+  local stub = setmetatable({ name = "units-depsfirstrun-stub" }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+  local ft = require("filetree")
+  ft.register_adapter(stub)
+  ft.setup({ adapter = stub.name, features = {} })
+  vim.wait(100, function()
+    return shown > 0
+  end, 10)
+  disk.load, disk.save = orig.load, orig.save
+  dspec.find, dspec.load = orig.find, orig.spec_load
+  install.plan, view.show = orig.plan, orig.show
+  eq("deps first run: setup() schedules no external-tools float in this suite", shown, 0)
+  vim.cmd("silent! only")
+end
+
 -- ── cwd_sync: silently changes cwd + refreshes, never prompts ────────────────
 do
   local tmp = (TMP_ROOT .. "/units-cwdsync"):gsub("\\", "/")

@@ -2083,8 +2083,11 @@ end
 -- The worst case for the header's opt-out, forced regardless of the real
 -- stdpath("cache") state: no "seen" store yet and a declared tool missing.
 -- Without `vim.g.lib_nvim_deps_disable_first_run` this schedules the focused
--- 'winfixbuf' float that broke reveal_alt (gaps) and units.lua:790 under a
--- fresh $TEMP. Nothing is written to the real cache (save is stubbed).
+-- 'winfixbuf' float that broke reveal_alt (gaps) and units.lua's first
+-- cwd_sync case under a fresh $TEMP. Nothing is written to the real cache
+-- (save is stubbed). show_once() only *schedules* view.show, so the stubs stay
+-- in place until the event loop has run that callback (the explicit wait
+-- below) -- restoring them earlier would let the real float open unnoticed.
 do
   local disk = require("lib.nvim.cache.disk")
   local dspec = require("lib.nvim.deps.spec")
@@ -2125,6 +2128,9 @@ do
     end,
   })
   setup_tree_buffer(stub, {})
+  vim.wait(100, function()
+    return shown > 0
+  end, 10)
   disk.load, disk.save = orig.load, orig.save
   dspec.find, dspec.load = orig.find, orig.spec_load
   install.plan, view.show = orig.plan, orig.show
