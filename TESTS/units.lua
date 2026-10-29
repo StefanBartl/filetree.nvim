@@ -75,6 +75,14 @@ for _, candidate in ipairs(ui_candidates) do
   end
 end
 
+-- filetree's setup() calls lib.nvim's deps.show_once(), whose "seen" flag lives
+-- under stdpath("cache") -- on Windows that is $TEMP/nvim even with --clean. A
+-- fresh $TEMP (testing.nvim's child sandbox, a new CI runner) therefore pops a
+-- focused "external tools" float on the first setup(); its window is
+-- 'winfixbuf', so every later :edit/:buffer in the suite dies with E1513.
+-- The documented opt-out keeps the suite independent of the cache state.
+vim.g.lib_nvim_deps_disable_first_run = true
+
 -- Cross-platform scratch-dir root for the many `tmp = TMP_ROOT .. "/units-*"`
 -- fixtures below. $TEMP is Windows-only; POSIX runners (incl. CI) don't set
 -- it, which previously hard-errored ("attempt to concatenate a nil value").

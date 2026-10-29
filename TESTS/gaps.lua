@@ -52,6 +52,12 @@ for _, candidate in ipairs(ui_candidates) do
   end
 end
 
+-- No first-run "external tools" float from setup(): its "seen" flag lives in
+-- stdpath("cache") ($TEMP/nvim on Windows), so a fresh $TEMP would open a
+-- focused 'winfixbuf' window that steals the window reveal_alt and later
+-- cases switch buffers in -- see TESTS/units.lua's header.
+vim.g.lib_nvim_deps_disable_first_run = true
+
 -- Cross-platform scratch-dir root, canonicalized -- see TESTS/units.lua's
 -- header for why (8.3 short-name mismatch on Windows $TEMP).
 local TMP_ROOT = vim.env.TEMP or vim.env.TMPDIR or vim.env.TMP or "/tmp"
@@ -2071,6 +2077,59 @@ local function setup_tree_buffer(stub, features)
     return false
   end)
   return buf, win
+end
+
+-- ── suite hermeticity ── setup() never opens the first-run deps float ──────
+-- The worst case for the header's opt-out, forced regardless of the real
+-- stdpath("cache") state: no "seen" store yet and a declared tool missing.
+-- Without `vim.g.lib_nvim_deps_disable_first_run` this schedules the focused
+-- 'winfixbuf' float that broke reveal_alt (gaps) and units.lua:790 under a
+-- fresh $TEMP. Nothing is written to the real cache (save is stubbed).
+do
+  local disk = require("lib.nvim.cache.disk")
+  local dspec = require("lib.nvim.deps.spec")
+  local install = require("lib.nvim.deps.install")
+  local view = require("lib.nvim.deps.view")
+  local orig = {
+    load = disk.load,
+    save = disk.save,
+    find = dspec.find,
+    spec_load = dspec.load,
+    plan = install.plan,
+    show = view.show,
+  }
+  local shown = 0
+  disk.load = function()
+    return nil
+  end
+  disk.save = function()
+    return true
+  end
+  dspec.find = function()
+    return "install.json"
+  end
+  dspec.load = function()
+    return { tools = { { name = "gaps-missing-tool" } } }
+  end
+  install.plan = function()
+    return { missing = { { name = "gaps-missing-tool" } } }
+  end
+  view.show = function()
+    shown = shown + 1
+  end
+  local stub = setmetatable({ name = "gaps-depsfirstrun-stub" }, {
+    __index = function()
+      return function()
+        return false
+      end
+    end,
+  })
+  setup_tree_buffer(stub, {})
+  disk.load, disk.save = orig.load, orig.save
+  dspec.find, dspec.load = orig.find, orig.spec_load
+  install.plan, view.show = orig.plan, orig.show
+  eq("deps first run: setup() schedules no external-tools float in this suite", shown, 0)
+  vim.cmd("silent! only")
 end
 
 -- ── infra.file_watcher ── libuv fs_event watch + debounced adapter.refresh ──
