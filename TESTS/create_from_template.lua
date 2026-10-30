@@ -544,18 +544,29 @@ end
 
 do
   fresh_dir(tdir, { ["alpha.lua"] = "A", ["beta.lua"] = "B" })
-  -- json.write stages through "<file>.tmp"; a directory squatting on that
-  -- name makes the write fail WITHOUT throwing (it returns false, err).
-  vim.fn.mkdir(tdir .. "/.order.json.tmp", "p")
+  -- json.write reports a failed write WITHOUT throwing (it returns false, err).
+  -- It stages in a temp name unique per call (lib.nvim 39c4251), so no file
+  -- system trick can make it fail deterministically on every platform: stand
+  -- in for exactly that contract instead. The module looks `json.write` up
+  -- at call time, so patching the shared module table reaches it.
+  local json = require("lib.nvim.fs.json")
+  local real_write = json.write
+  json.write = function()
+    return false, "EACCES: permission denied (stand-in)"
+  end
   notified = {}
-  eq("move: an unwritable order file is reported as a failed move", cft.move("alpha.lua", 1), false)
+  local moved = cft.move("alpha.lua", 1)
+  local visible = names(cft.list())[1]
+  json.write = real_write
+  eq("move: an unwritable order file is reported as a failed move", moved, false)
   check(
     "move: ... with a warning naming the cause",
-    #notified >= 1 and notified[1]:find("Could not save the template order", 1, true) ~= nil,
+    #notified >= 1
+      and notified[1]:find("Could not save the template order", 1, true) ~= nil
+      and notified[1]:find("EACCES", 1, true) ~= nil,
     vim.inspect(notified)
   )
-  eq("move: ... and the visible order is unchanged", names(cft.list())[1], "alpha.lua")
-  vim.fn.delete(tdir .. "/.order.json.tmp", "rf")
+  eq("move: ... and the visible order is unchanged", visible, "alpha.lua")
   eq("move: it works again once the write can succeed", cft.move("alpha.lua", 1), true)
 end
 
