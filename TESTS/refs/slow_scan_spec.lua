@@ -30,7 +30,13 @@ end
 ---@param env table<string, string>
 ---@return integer code, string out
 local function run(env)
-  env = vim.tbl_extend("force", { FILETREE_REFS_TEST_ONLY = "plaintext" }, env)
+  -- An empty WAIT_MS reads as "unset" (run.lua's default), whatever the caller's
+  -- environment says; a case that wants a limit names it.
+  env = vim.tbl_extend(
+    "force",
+    { FILETREE_REFS_TEST_ONLY = "plaintext", FILETREE_REFS_TEST_WAIT_MS = "" },
+    env
+  )
   local res = vim
     .system({ vim.v.progpath, "--clean", "--headless", "-u", "NONE", "-l", run_lua }, {
       env = env,
@@ -60,6 +66,35 @@ do
     out:find("ok   plaintext: docs/index.md updated", 1, true) ~= nil,
     out
   )
+
+  -- The runner (testing.nvim: scripts/test.sh, CI) kills the whole file after
+  -- `timeouts.file_ms`. A default limit per wait that long would let the kill
+  -- win, and the TIMEOUT line naming the stuck wait would never be printed;
+  -- and a FILETREE_REFS_TEST_* variable the runner does not pass through
+  -- would make "raise FILETREE_REFS_TEST_WAIT_MS" a remedy that does nothing.
+  local cfg = dofile(vim.fn.fnamemodify(this, ":p:h:h:h") .. "/.testing.lua")
+  local file_ms = (cfg.timeouts or {}).file_ms or 60000
+  local limit = tonumber(out:match("refs: waiting up to (%d+) ms per scan"))
+  check(
+    "the default wait leaves the runner's file limit room for a normal run",
+    limit ~= nil and limit * 2 <= file_ms,
+    ("limit %s ms, file_ms %d"):format(tostring(limit), file_ms)
+  )
+  local function allowed(name)
+    for _, pat in ipairs(cfg.env_allow or {}) do
+      if pat == name or (pat:sub(-1) == "*" and name:sub(1, #pat - 1) == pat:sub(1, -2)) then
+        return true
+      end
+    end
+    return false
+  end
+  for _, name in ipairs({
+    "FILETREE_REFS_TEST_WAIT_MS",
+    "FILETREE_REFS_TEST_SCAN_DELAY_MS",
+    "FILETREE_REFS_TEST_ONLY",
+  }) do
+    check(".testing.lua passes " .. name .. " through to the spec", allowed(name))
+  end
 end
 
 print("\n== a wait that really runs out ==")

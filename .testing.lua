@@ -50,6 +50,9 @@ return {
   env_allow = {
     "FILETREE_ADAPTER_LINES",
     "FILETREE_LIB_NVIM",
+    -- TESTS/refs/run.lua: the wait limit and its test hooks (raising the limit on a slow machine
+    -- must work through this runner too).
+    "FILETREE_REFS_TEST_*",
     "FILETREE_TEST_REAL_CLIPBOARD",
     "FILETREE_UI_NVIM",
     "FT_CODE",

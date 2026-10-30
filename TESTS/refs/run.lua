@@ -141,7 +141,7 @@ end
 -- usual, and a fixed few seconds used to end the wait silently, so the content
 -- checks that followed failed while the code under test was fine.
 --
---   FILETREE_REFS_TEST_WAIT_MS        the limit per wait (default 60000)
+--   FILETREE_REFS_TEST_WAIT_MS        the limit per wait (default 30000)
 --   FILETREE_REFS_TEST_SCAN_DELAY_MS  test hook: hold back every scan result
 --                                     this long (proves the waits are not
 --                                     racing the scan; see slow_scan_spec)
@@ -151,9 +151,18 @@ end
 -- the checks after it would only report the half-finished rename as wrong
 -- content, and the scan still running in the background would race the next
 -- block.
-local WAIT_MS = tonumber(vim.env.FILETREE_REFS_TEST_WAIT_MS) or 60000
+--
+-- The default stays well below the 60 s that testing.nvim (scripts/test.sh,
+-- CI) gives this whole file (`timeouts.file_ms`) before it kills it: a limit
+-- per wait as long as the file's own would let the runner's kill win, and
+-- the TIMEOUT line naming the stuck wait would never be printed. The whole
+-- file normally takes about 12 s. `.testing.lua` passes FILETREE_REFS_TEST_*
+-- through to the child, so raising the limit works through the runner too
+-- (together with `--file-timeout`).
+local WAIT_MS = tonumber(vim.env.FILETREE_REFS_TEST_WAIT_MS) or 30000
 local SCAN_DELAY_MS = tonumber(vim.env.FILETREE_REFS_TEST_SCAN_DELAY_MS) or 0
 local ONLY = vim.env.FILETREE_REFS_TEST_ONLY
+print(("refs: waiting up to %d ms per scan"):format(WAIT_MS))
 
 local function finish()
   print(("\nrefs: %d passed, %d failed"):format(passed, failed))
@@ -176,6 +185,7 @@ local function await(what, cond)
     ("TIMEOUT waiting for `%s` (run.lua:%d)"):format(what, line),
     false,
     ("no result after %d ms; raise FILETREE_REFS_TEST_WAIT_MS on a slow machine"):format(WAIT_MS)
+      .. " (under scripts/test.sh also --file-timeout)"
   )
   finish()
 end

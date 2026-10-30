@@ -122,9 +122,14 @@ Headless, no tree plugin needed (stub adapter). Exit 0 = pass, 1 = fail.
   live-buffer patch, `M` move and `refs undo`. Runs on either candidate-search
   path — ripgrep when present, the capped fallback walk when not.
 
-  Each wait for the asynchronous scan allows 60 s (`FILETREE_REFS_TEST_WAIT_MS`
+  Each wait for the asynchronous scan allows 30 s (`FILETREE_REFS_TEST_WAIT_MS`
   changes it); a wait that runs out is reported as `FAIL TIMEOUT …` and ends the
-  run instead of turning into wrong-content failures. The scratch dir is unique
+  run instead of turning into wrong-content failures. The default stays below
+  the 60 s testing.nvim gives the whole file (`timeouts.file_ms`), so the
+  runner's kill does not swallow that line; `.testing.lua` passes the
+  `FILETREE_REFS_TEST_*` variables through, so under `scripts/test.sh` a higher
+  limit works too (add `--file-timeout <ms>` when it exceeds the file's
+  budget). The scratch dir is unique
   per run (`%TEMP%`/`/tmp` + `filetree-refs-test-<pid>-<hrtime>`), removed on a
   green run and kept (path printed) on a red one.
   `FILETREE_REFS_TEST_SCAN_DELAY_MS` holds back every scan result to simulate
