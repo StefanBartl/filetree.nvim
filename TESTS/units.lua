@@ -8201,6 +8201,9 @@ do
         elseif type(got) == "string" and got:find("\\", 1, true) then
           bad[#bad + 1] = fmt .. "=" .. got
         end
+      else
+        -- A format the list names but the module lacks is no pass (NEW-43).
+        broken[#broken + 1] = fmt .. ": copy_" .. fmt .. " is missing"
       end
     end
     check("path_copy: every format runs without erroring", #broken == 0, table.concat(broken, "; "))

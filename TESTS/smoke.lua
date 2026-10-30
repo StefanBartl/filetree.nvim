@@ -414,7 +414,7 @@ do
 
   -- ... and every positional argument says what it is for (`cwd mode <name>`, `cwd scope <name>`;
   -- DIR / PATH arguments explain themselves). A lib.nvim older than `help.undocumented` cannot
-  -- answer: that is a missing feature of the dependency, not a defect here.
+  -- answer: the check fails by name instead of being skipped (NEW-43).
   local composer = require("lib.nvim.bindings.usercmd.composer")
   if type(composer.help.undocumented) == "function" then
     local missing = {}
@@ -456,6 +456,12 @@ do
       table.concat(malformed, " | ")
     )
     check("argument enum_desc keys are real values", #stray == 0, table.concat(stray, ", "))
+  else
+    check(
+      "every :Filetree flag and argument has a text",
+      false,
+      "lib.nvim lacks composer.help.undocumented: update lib.nvim"
+    )
   end
   commands.teardown()
 end
