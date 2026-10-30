@@ -93,6 +93,35 @@ local function slash(p)
   return (tostring(p):gsub("\\", "/"))
 end
 
+---@return integer count  neo-tree windows on the current tab
+local function neotree_windows()
+  local n = 0
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then n = n + 1 end
+  end
+  return n
+end
+
+---Close every neo-tree window on the current tab and keep it closed.
+---A single close right after a `show` is not enough: neo-tree's debounced
+---navigate from that show can still be pending, and when it fires it opens
+---the window again -- and may focus it. The next suite then runs `:edit` from
+---inside the tree window, where neo-tree's buffer-hijack guard moves the file
+---into a NEW split, so "the editor window" that suite captured is not the one
+---that ends up current (the `multitab` flake, roughly one run in five). Close,
+---wait past the debounce, and repeat until no tree window comes back.
+---@return boolean closed
+local function close_neotree_settled()
+  for _ = 1, 10 do
+    pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
+    vim.wait(400, function()
+      return false
+    end, 20)
+    if neotree_windows() == 0 then return true end
+  end
+  return false
+end
+
 ---A real little project, with a real git repo: one committed-then-modified
 ---file and one untracked file, both at the ROOT so no expansion is needed for
 ---git_status to have something to decorate.
@@ -735,10 +764,7 @@ local function run_neotree_filter_race_check()
   -- feature drives another, and the baseline check reads a tree that is not the
   -- one on screen. It only showed up as a coin flip once startup timing shifted.
   pcall(vim.cmd, "tabonly")
-  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
-  vim.wait(300, function()
-    return false
-  end, 20)
+  close_neotree_settled()
 
   require("filetree").setup({
     adapter = "neotree",
@@ -915,10 +941,7 @@ local function run_neotree_filter_other_tab_check()
   vim.cmd("cd " .. vim.fn.fnameescape(work))
 
   pcall(vim.cmd, "tabonly")
-  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
-  vim.wait(300, function()
-    return false
-  end, 20)
+  close_neotree_settled()
 
   require("filetree").setup({
     adapter = "neotree",
@@ -985,10 +1008,7 @@ local function run_neotree_filter_other_tab_check()
 
   filter.teardown()
   pcall(vim.cmd, "tabonly")
-  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
-  vim.wait(300, function()
-    return false
-  end, 20)
+  close_neotree_settled()
 end
 
 -- ── neo-tree only: filtering a closed tree must not open it ────────────────
@@ -1010,10 +1030,7 @@ local function run_neotree_filter_closed_tree_check()
   vim.cmd("cd " .. vim.fn.fnameescape(work))
 
   pcall(vim.cmd, "tabonly")
-  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
-  vim.wait(300, function()
-    return false
-  end, 20)
+  close_neotree_settled()
 
   require("filetree").setup({
     adapter = "neotree",
@@ -1091,10 +1108,7 @@ local function run_neotree_filter_closed_tree_check()
   )
 
   filter.teardown()
-  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
-  vim.wait(300, function()
-    return false
-  end, 20)
+  close_neotree_settled()
 end
 
 -- ── neo-tree only: link_marker must survive neo-tree's own async re-render ──
@@ -1247,10 +1261,7 @@ local function run_neotree_get_visible_nodes_bufnr_check()
   )
 
   pcall(vim.api.nvim_buf_delete, scratch, { force = true })
-  pcall(adapter.close)
-  vim.wait(300, function()
-    return false
-  end, 50)
+  close_neotree_settled()
 end
 
 -- ── neo-tree only: a background-tab redraw must still hit the tree's own,
@@ -1284,6 +1295,17 @@ local function run_neotree_multitab_redraw_check()
   end
 
   vim.cmd("tabonly")
+  -- The checks below need a plain editor window to be current with no tree
+  -- around yet -- an earlier suite's tree that reopened itself after its own
+  -- close would otherwise be where `:edit` runs (see close_neotree_settled).
+  -- Checked before repairing it, so a teardown that leaks its tree is a
+  -- named failure here instead of a flaky one further down.
+  check(
+    "multitab: no tree window is left over from an earlier suite",
+    neotree_windows() == 0,
+    tostring(neotree_windows()) .. " tree window(s)"
+  )
+  close_neotree_settled()
   -- Restored below on every exit path: neo-tree's `bind_to_cwd` (default on)
   -- reacts to `DirChanged` through its own 200ms-debounced event queue (see
   -- `setup/init.lua`) -- a queued reaction can still be sitting there,
