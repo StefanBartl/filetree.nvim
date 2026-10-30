@@ -16,8 +16,8 @@
 ---   <C-c> inside tree buffer  → clear an already-applied filter directly
 ---
 --- User commands:
----   :FiletreeFilter [query]
----   :FiletreeFilterClear
+---   :Filetree filter [query]
+---   :Filetree filter clear
 
 local kit = require("ui.kit")
 local bind = require("filetree.util.bind")
@@ -115,8 +115,19 @@ local function neotree_filter(query)
     local state = neotree_state()
     if not state then return false end
 
+    -- Redraw only a tree whose window is actually shown, which is the guard
+    -- `manager.refresh` applies per state (it marks the others dirty). A closed
+    -- tree is still resolved (the current tab's tracked state), and navigating
+    -- it -- directly, or through `reset_search(state, true)` -- makes neo-tree
+    -- open a new tree window on the current tab: `:Filetree filter foo`, the
+    -- clear in `tree_reset` or the teardown of a re-`setup()` popped the tree
+    -- open. A closed tree keeps the pattern and is redrawn when it next opens.
+    local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
+    local shown = not (ok_r and renderer.window_exists) or renderer.window_exists(state)
+
     if not query or query == "" then
-      fs.reset_search(state, true)
+      fs.reset_search(state, shown)
+      if not shown then state.dirty = true end
       -- Release the snapshot only once we're sure this clear stuck -- if
       -- another query lands before neo-tree's debounced re-render fires,
       -- search_pattern will be set again and the release is skipped, so the
@@ -131,7 +142,6 @@ local function neotree_filter(query)
     end
 
     if not _pre_search_folders then
-      local ok_r, renderer = pcall(require, "neo-tree.ui.renderer")
       if ok_r and state.tree and renderer.get_expanded_nodes then
         _pre_search_folders = renderer.get_expanded_nodes(state.tree)
       end
@@ -141,7 +151,11 @@ local function neotree_filter(query)
     -- This state's own navigate, which is what `manager.refresh` runs per
     -- state -- but refresh only reaches states on the CURRENT tab (others
     -- are merely marked dirty), so a tree live on another tab never redrew.
-    mgr.navigate(state, state.path)
+    if shown then
+      mgr.navigate(state, state.path)
+    else
+      state.dirty = true
+    end
     return true
   end)
   return ok and done == true

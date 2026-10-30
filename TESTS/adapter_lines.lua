@@ -900,7 +900,7 @@ end
 -- `mgr.get_state("filesystem")`, i.e. the CURRENT tab's state, while every
 -- other part of the feature (the dim fallback, the input's position) and the
 -- adapter itself resolve the tree that is actually live. With the tree on one
--- tab and `:FiletreeFilter` run from another, treeless one, the filter then
+-- tab and `:Filetree filter` run from another, treeless one, the filter then
 -- created an empty placeholder state for the current tab (which nothing ever
 -- disposes), set the pattern on that, reported success -- and the visible tree
 -- was never filtered, with no dim fallback either.
@@ -985,6 +985,112 @@ local function run_neotree_filter_other_tab_check()
 
   filter.teardown()
   pcall(vim.cmd, "tabonly")
+  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
+  vim.wait(300, function()
+    return false
+  end, 20)
+end
+
+-- ── neo-tree only: filtering a closed tree must not open it ────────────────
+-- With the tree closed, the adapter still resolves the current tab's tracked
+-- state, and neo-tree opens a new tree window for any navigate on a state
+-- whose window is gone. `neotree_filter` navigated it unconditionally (the
+-- apply's own `manager.navigate`, the clear's `reset_search(state, true)`), so
+-- `:Filetree filter foo`, `:Filetree filter clear`, `tree_reset` and the
+-- teardown of a re-`setup()` popped the tree open on the current tab.
+-- `manager.refresh`, which the apply used before, only marks such a state dirty.
+local function run_neotree_filter_closed_tree_check()
+  print("\n== neo-tree: filtering a closed tree does not open it ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-filter-closed")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "a" }, work .. "/alpha.lua")
+  vim.fn.writefile({ "b" }, work .. "/bravo.lua")
+  vim.cmd("cd " .. vim.fn.fnameescape(work))
+
+  pcall(vim.cmd, "tabonly")
+  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
+  vim.wait(300, function()
+    return false
+  end, 20)
+
+  require("filetree").setup({
+    adapter = "neotree",
+    -- auto_reveal disabled -- see `run_neotree_multitab_redraw_check`'s
+    -- setup() call for why every neo-tree suite in this file does this.
+    features = { filter = { enabled = true }, auto_reveal = { enabled = false } },
+  })
+
+  local mgr = require("neo-tree.sources.manager")
+  local filter = require("filetree.features.search.filter")
+  local tab = vim.api.nvim_get_current_tabpage()
+
+  ---@return integer count  neo-tree windows on the current tab
+  local function tree_windows()
+    local n = 0
+    for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+      if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then n = n + 1 end
+    end
+    return n
+  end
+
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  vim.wait(4000, function()
+    local state = mgr.get_state("filesystem", tab)
+    local win = state and state.winid
+    if not (win and vim.api.nvim_win_is_valid(win)) then return false end
+    local text =
+      table.concat(vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false), "\n")
+    return text:find("bravo.lua", 1, true) ~= nil
+  end, 50)
+  -- Let neo-tree's debounced navigate settle, or the close below races it and
+  -- the pending render reopens the window by itself.
+  vim.wait(1000, function()
+    return false
+  end, 50)
+  require("filetree.adapter.neotree").close()
+  vim.wait(1000, function()
+    return tree_windows() == 0
+  end, 50)
+  check(
+    "filter-closed: the tree is closed before filtering",
+    tree_windows() == 0,
+    tostring(tree_windows())
+  )
+
+  filter.apply("alpha")
+  vim.wait(1000, function()
+    return tree_windows() > 0
+  end, 50)
+  local state = mgr.get_state("filesystem", tab)
+  check(
+    "filter-closed: applying a query leaves the closed tree closed",
+    tree_windows() == 0,
+    tostring(tree_windows())
+  )
+  check(
+    "filter-closed: the closed tree keeps the pattern for its next open",
+    state.search_pattern == "alpha",
+    tostring(state.search_pattern)
+  )
+
+  filter.clear()
+  vim.wait(1000, function()
+    return tree_windows() > 0
+  end, 50)
+  check(
+    "filter-closed: clearing leaves the closed tree closed",
+    tree_windows() == 0,
+    tostring(tree_windows())
+  )
+  check(
+    "filter-closed: the clear still drops the pattern",
+    state.search_pattern == nil,
+    tostring(state.search_pattern)
+  )
+
+  filter.teardown()
   pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
   vim.wait(300, function()
     return false
@@ -2277,6 +2383,7 @@ if has_neotree and has_nui and want("neotree") then
   })
   run_neotree_filter_race_check()
   run_neotree_filter_other_tab_check()
+  run_neotree_filter_closed_tree_check()
   run_neotree_link_marker_check()
   run_neotree_get_visible_nodes_bufnr_check()
   run_neotree_multitab_redraw_check()
