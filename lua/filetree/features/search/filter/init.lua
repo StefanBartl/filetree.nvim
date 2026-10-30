@@ -75,6 +75,31 @@ local _query = ""
 local _pre_search_folders = nil
 
 ---@internal
+---Tree buffer the open filter input belongs to: captured by `M.enter` while the
+---tree has focus, released when the input closes. Nil outside the input.
+---@type integer?
+local _target_bufnr = nil
+
+---@internal
+---The neo-tree state the filter drives -- resolved through the adapter, not
+---neo-tree's ambient `manager.get_state("filesystem")`. That one is the CURRENT
+---tab's state, and creates an empty placeholder for a treeless tab: with the
+---tree live on another tab, the filter used to set its pattern on that
+---placeholder, report success, and leave the visible tree unfiltered. The
+---adapter resolves the tree that is actually live (the input's own tree while
+---it is open, else the ambient tree) and never creates a state.
+---@return table? state
+local function neotree_state()
+  if not (_adapter and _adapter.get_state) then return nil end
+  local bufnr = _target_bufnr
+  if not (bufnr and vim.api.nvim_buf_is_valid(bufnr)) then
+    bufnr = _adapter.get_bufnr and _adapter.get_bufnr() or nil
+  end
+  local state = bufnr and _adapter.get_state(bufnr) or nil
+  return state or _adapter.get_state()
+end
+
+---@internal
 ---Drive neo-tree's own filter: it is `state.search_pattern` plus a refresh,
 ---which is exactly what its filter prompt does on submit. The pre-search
 ---expansion is recorded first so `reset_search` can put the tree back the way
@@ -87,7 +112,7 @@ local function neotree_filter(query)
   if not ok_mgr or not ok_fs then return false end
 
   local ok, done = pcall(function()
-    local state = mgr.get_state("filesystem")
+    local state = neotree_state()
     if not state then return false end
 
     if not query or query == "" then
@@ -96,10 +121,11 @@ local function neotree_filter(query)
       -- another query lands before neo-tree's debounced re-render fires,
       -- search_pattern will be set again and the release is skipped, so the
       -- original snapshot survives for that next apply/clear round instead
-      -- of being re-derived from a not-yet-settled tree.
+      -- of being re-derived from a not-yet-settled tree. Checked on the very
+      -- state just cleared, not looked up again: by then another tab (with
+      -- its own tree and pattern) may be current.
       vim.defer_fn(function()
-        local ok_st, st = pcall(mgr.get_state, "filesystem")
-        if ok_st and st and not st.search_pattern then _pre_search_folders = nil end
+        if not state.search_pattern then _pre_search_folders = nil end
       end, 150)
       return true
     end
@@ -112,7 +138,10 @@ local function neotree_filter(query)
     end
     state.open_folders_before_search = _pre_search_folders
     state.search_pattern = query
-    mgr.refresh("filesystem")
+    -- This state's own navigate, which is what `manager.refresh` runs per
+    -- state -- but refresh only reaches states on the CURRENT tab (others
+    -- are merely marked dirty), so a tree live on another tab never redrew.
+    mgr.navigate(state, state.path)
     return true
   end)
   return ok and done == true
@@ -220,6 +249,10 @@ function M.enter()
 
   -- Position at bottom of the tree window
   local tree_win = _adapter and _adapter.get_winid and _adapter.get_winid() or -1
+  _target_bufnr = tree_win > 0
+      and vim.api.nvim_win_is_valid(tree_win)
+      and vim.api.nvim_win_get_buf(tree_win)
+    or nil
   local row, col, width
   if tree_win > 0 and vim.api.nvim_win_is_valid(tree_win) then
     local pos = vim.api.nvim_win_get_position(tree_win)
@@ -254,9 +287,14 @@ function M.enter()
       return_to_tree()
     end,
   })
-  if _surf then _surf:on_close(function()
-    _surf = nil
-  end) end
+  if _surf then
+    _surf:on_close(function()
+      _surf = nil
+      _target_bufnr = nil
+    end)
+  else
+    _target_bufnr = nil
+  end
 end
 
 ---Clear the current filter.
@@ -293,6 +331,7 @@ function M.teardown()
   if _surf then _surf:close() end
   _adapter = nil
   _pre_search_folders = nil
+  _target_bufnr = nil
 end
 
 return M

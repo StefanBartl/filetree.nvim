@@ -895,6 +895,102 @@ local function run_neotree_filter_race_check()
   end, 50)
 end
 
+-- ── neo-tree only: the filter drives the tree the adapter resolves ─────────
+-- `neotree_filter` used to look its state up through the ambient
+-- `mgr.get_state("filesystem")`, i.e. the CURRENT tab's state, while every
+-- other part of the feature (the dim fallback, the input's position) and the
+-- adapter itself resolve the tree that is actually live. With the tree on one
+-- tab and `:FiletreeFilter` run from another, treeless one, the filter then
+-- created an empty placeholder state for the current tab (which nothing ever
+-- disposes), set the pattern on that, reported success -- and the visible tree
+-- was never filtered, with no dim fallback either.
+local function run_neotree_filter_other_tab_check()
+  print("\n== neo-tree: the filter drives the live tree, not the current tab's state ==")
+
+  local work = slash((vim.env.TEMP or "/tmp") .. "/filetree-neotree-filter-tab")
+  vim.fn.delete(work, "rf")
+  vim.fn.mkdir(work, "p")
+  vim.fn.writefile({ "a" }, work .. "/alpha.lua")
+  vim.fn.writefile({ "b" }, work .. "/bravo.lua")
+  vim.cmd("cd " .. vim.fn.fnameescape(work))
+
+  pcall(vim.cmd, "tabonly")
+  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
+  vim.wait(300, function()
+    return false
+  end, 20)
+
+  require("filetree").setup({
+    adapter = "neotree",
+    -- auto_reveal disabled -- see `run_neotree_multitab_redraw_check`'s
+    -- setup() call for why every neo-tree suite in this file does this.
+    features = { filter = { enabled = true }, auto_reveal = { enabled = false } },
+  })
+
+  local mgr = require("neo-tree.sources.manager")
+  local filter = require("filetree.features.search.filter")
+
+  local tab_a = vim.api.nvim_get_current_tabpage()
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = work })
+  ---@return string
+  local function tree_text()
+    local state = mgr.get_state("filesystem", tab_a)
+    local win = state and state.winid
+    if not (win and vim.api.nvim_win_is_valid(win)) then return "" end
+    return table.concat(
+      vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false),
+      "\n"
+    )
+  end
+  vim.wait(4000, function()
+    local text = tree_text()
+    return text:find("alpha.lua", 1, true) ~= nil and text:find("bravo.lua", 1, true) ~= nil
+  end, 50)
+  check("filter-tab: tab A's tree shows both files", tree_text():find("bravo.lua", 1, true) ~= nil)
+
+  -- A second tab without a tree is current; the filter is applied from there.
+  vim.cmd("tabnew")
+  local tab_b = vim.api.nvim_get_current_tabpage()
+  filter.apply("alpha")
+  vim.wait(3000, function()
+    return tree_text():find("bravo.lua", 1, true) == nil
+  end, 50)
+
+  local state_a = mgr.get_state("filesystem", tab_a)
+  check(
+    "filter-tab: the pattern landed on tab A's live tree",
+    state_a.search_pattern == "alpha",
+    tostring(state_a.search_pattern)
+  )
+  check(
+    "filter-tab: tab A's tree really narrowed (bravo.lua is gone)",
+    tree_text():find("bravo.lua", 1, true) == nil and tree_text():find("alpha.lua", 1, true) ~= nil,
+    tree_text()
+  )
+  local placeholder = false
+  for _, s in ipairs(mgr._get_all_states()) do
+    if s.name == "filesystem" and s.tabid == tab_b then placeholder = true end
+  end
+  check("filter-tab: no placeholder state was created for the treeless tab", not placeholder)
+
+  filter.clear()
+  vim.wait(3000, function()
+    return tree_text():find("bravo.lua", 1, true) ~= nil
+  end, 50)
+  check(
+    "filter-tab: clearing from the treeless tab restores tab A's listing",
+    state_a.search_pattern == nil and tree_text():find("bravo.lua", 1, true) ~= nil,
+    tostring(state_a.search_pattern)
+  )
+
+  filter.teardown()
+  pcall(vim.cmd, "tabonly")
+  pcall(require("neo-tree.command").execute, { action = "close", source = "filesystem" })
+  vim.wait(300, function()
+    return false
+  end, 20)
+end
+
 -- ── neo-tree only: link_marker must survive neo-tree's own async re-render ──
 -- A symlink's sign, drawn as an extmark on the very first `BufEnter`-driven
 -- render, used to be silently wiped moments later: neo-tree's filesystem
@@ -2180,6 +2276,7 @@ if has_neotree and has_nui and want("neotree") then
     end,
   })
   run_neotree_filter_race_check()
+  run_neotree_filter_other_tab_check()
   run_neotree_link_marker_check()
   run_neotree_get_visible_nodes_bufnr_check()
   run_neotree_multitab_redraw_check()

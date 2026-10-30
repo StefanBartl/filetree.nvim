@@ -30,6 +30,14 @@ never reached — `/` silently did nothing on the two backends that had a filter
 `try_native_filter` now reports failure honestly, so a native path that breaks
 again degrades to dimming instead of to nothing.
 
+On neo-tree the filter drives the tree the adapter resolves (`adapter.get_state`:
+the tree `/` was pressed in, else the live tree on the current tab, else one live
+on a background tab), not neo-tree's ambient `manager.get_state("filesystem")`.
+That one is always the current tab's state and creates an empty placeholder for
+a treeless tab, so `:FiletreeFilter` run from a tab without a tree used to filter
+that placeholder and leave the visible tree untouched (`TESTS/adapter_lines.lua`,
+"the filter drives the live tree").
+
 - **Module:** `lua/filetree/features/search/filter/`
 - **Keymaps:** `/`
 

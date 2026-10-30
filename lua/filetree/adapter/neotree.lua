@@ -420,6 +420,20 @@ function M.get_bufnr()
   return bufnr
 end
 
+---The neo-tree "filesystem" state of one tree, for a feature that has to drive
+---neo-tree's own API on it (the filter sets `search_pattern` on it). With
+---`bufnr`, the state whose window shows that buffer (nil when none does);
+---without, the same ambient resolution every other adapter function uses: the
+---live tree on the current tab, else one live on a background tab, else the
+---current tab's tracked state. Never creates a state -- unlike neo-tree's own
+---`manager.get_state`, which registers an empty placeholder for a treeless tab.
+---@param bufnr integer?
+---@return table? state
+function M.get_state(bufnr)
+  if bufnr then return state_for_bufnr(bufnr) end
+  return get_state()
+end
+
 ---@return integer? winid
 function M.get_winid()
   local state = get_state()
