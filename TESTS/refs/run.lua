@@ -108,9 +108,16 @@ local fixtures_root = vim.fn.fnamemodify(this, ":p:h") .. "/fixtures"
 --- directory. Checks that compare a fixture path against one the editor
 --- produced then fail while the code under test is correct. Resolving once,
 --- here, keeps every path in this suite in the same spelling.
-local scratch_root = (vim.fn.has("win32") == 1 and vim.env.TEMP or "/tmp") .. "/filetree-refs-test"
+---
+--- One directory per run (pid + hrtime): a run that `scripts/test.sh` gave up
+--- on but that is still alive must not rewrite the fixtures of the next run.
+local uv = vim.uv or vim.loop
+local scratch_root = ("%s/filetree-refs-test-%d-%d"):format(
+  vim.fn.has("win32") == 1 and vim.env.TEMP or "/tmp",
+  vim.fn.getpid(),
+  uv.hrtime()
+)
 do
-  local uv = vim.uv or vim.loop
   vim.fn.mkdir(scratch_root, "p")
   local real = uv.fs_realpath(scratch_root)
   if real then scratch_root = (real:gsub("\\", "/")) end
@@ -125,6 +132,52 @@ local function check(name, ok, detail)
     failed = failed + 1
     print("  FAIL " .. name .. (detail and ("  — " .. detail) or ""))
   end
+end
+
+-- ── Waiting for the asynchronous scan ────────────────────────────────────────
+-- Every block below starts an asynchronous reference scan and waits for its
+-- "done" signal. The limit is deliberately generous: on a loaded machine the
+-- scan (plaintext is the heaviest provider) can take several times as long as
+-- usual, and a fixed few seconds used to end the wait silently, so the content
+-- checks that followed failed while the code under test was fine.
+--
+--   FILETREE_REFS_TEST_WAIT_MS        the limit per wait (default 60000)
+--   FILETREE_REFS_TEST_SCAN_DELAY_MS  test hook: hold back every scan result
+--                                     this long (proves the waits are not
+--                                     racing the scan; see slow_scan_spec)
+--   FILETREE_REFS_TEST_ONLY           run only the LANGS entry of this name
+--
+-- A wait that runs out is a FAIL of its own, named TIMEOUT, and ends the run:
+-- the checks after it would only report the half-finished rename as wrong
+-- content, and the scan still running in the background would race the next
+-- block.
+local WAIT_MS = tonumber(vim.env.FILETREE_REFS_TEST_WAIT_MS) or 60000
+local SCAN_DELAY_MS = tonumber(vim.env.FILETREE_REFS_TEST_SCAN_DELAY_MS) or 0
+local ONLY = vim.env.FILETREE_REFS_TEST_ONLY
+
+local function finish()
+  print(("\nrefs: %d passed, %d failed"):format(passed, failed))
+  if failed > 0 then
+    print("  scratch dir kept for inspection: " .. scratch_root)
+    vim.cmd("cq")
+  else
+    vim.fn.delete(scratch_root, "rf")
+    vim.cmd("qa!")
+  end
+end
+
+---Wait until `cond()` holds; a timeout is reported as TIMEOUT and ends the run.
+---@param what string  the condition, as written (names the wait in the report)
+---@param cond fun(): boolean
+local function await(what, cond)
+  if vim.wait(WAIT_MS, cond, 10) then return end
+  local line = debug.getinfo(2, "l").currentline
+  check(
+    ("TIMEOUT waiting for `%s` (run.lua:%d)"):format(what, line),
+    false,
+    ("no result after %d ms; raise FILETREE_REFS_TEST_WAIT_MS on a slow machine"):format(WAIT_MS)
+  )
+  finish()
 end
 
 -- ── Portable recursive directory copy (binary-safe, no shell dependency) ─────
@@ -228,6 +281,21 @@ end
 -- Auto mode: apply every found reference without asking, so the assertions
 -- below are about what the providers found, not about the chooser.
 local refs = require("filetree.refs")
+-- Test hook (FILETREE_REFS_TEST_SCAN_DELAY_MS, see `await` above): every
+-- candidate search answers that much later, as on a heavily loaded machine.
+if SCAN_DELAY_MS > 0 then
+  local scan = require("filetree.refs.scan")
+  local real_candidates = scan.candidates
+  ---@diagnostic disable-next-line: duplicate-set-field
+  scan.candidates = function(root_dir, needles, exts, cfg, cb)
+    return real_candidates(root_dir, needles, exts, cfg, function(...)
+      local args = { n = select("#", ...), ... }
+      vim.defer_fn(function()
+        cb(unpack(args, 1, args.n))
+      end, SCAN_DELAY_MS)
+    end)
+  end
+end
 -- The undo stack itself: several blocks below assert on tokens directly.
 local apply = require("filetree.refs.apply")
 
@@ -242,6 +310,10 @@ local BASE_REFS_CFG = {
   -- The experimental plaintext provider is off by default; the "plaintext"
   -- LANGS entry and the comment-toggle check below need it on.
   experimental = { plaintext = { enabled = true, comments = true } },
+  -- ripgrep's own kill timer (default 3 s) is the second fixed clock a loaded
+  -- machine can outrun: a killed search reads as "no references" and the
+  -- rename lands without its rewrites. Give it the same generous limit.
+  scan = { timeout_ms = WAIT_MS },
 }
 refs.setup(vim.deepcopy(BASE_REFS_CFG))
 
@@ -452,9 +524,9 @@ local function run_lang(lang)
 
   next_input = lang.new_name
   smart_rename.rename_current()
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   check(lang.name .. ": hub file renamed on disk", vim.fn.filereadable(hub_new) == 1)
   check(lang.name .. ": old hub path gone", vim.fn.filereadable(hub_old) == 0)
@@ -511,9 +583,9 @@ local function run_lua_buffer_check()
 
   next_input = "shared_utils.lua"
   smart_rename.rename_current()
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   local buf_content = table.concat(vim.api.nvim_buf_get_lines(bufnr, 0, -1, false), "\n")
   check(
@@ -582,9 +654,9 @@ local function run_lua_directory_cascade_check()
 
   next_input = "utilities"
   smart_rename.rename_current()
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   check("lua dir cascade: directory renamed on disk", vim.fn.isdirectory(new_dir) == 1)
   check("lua dir cascade: old directory gone", vim.fn.isdirectory(old_dir) == 0)
@@ -632,9 +704,9 @@ local function run_move_feature_check()
 
   -- ":Filetree move <dest>" path — no prompt involved, so nothing to stub.
   move.move(work)
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   check("move: file moved into the destination directory", vim.fn.filereadable(dst) == 1)
   check("move: source is gone", vim.fn.filereadable(src) == 0)
@@ -681,9 +753,9 @@ local function run_plaintext_comment_check()
     })
     next_input = "Renamed.md"
     smart_rename.rename_current()
-    vim.wait(5000, function()
+    await("done", function()
       return done
-    end, 20)
+    end)
   end
 
   print("\n== plaintext (comments = true) ==")
@@ -745,9 +817,9 @@ local function run_outgoing_scan_check()
     found = links
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
 
   ---One link matching both `target` (as written) and `kind` — several of
   ---README.md's links share a target string ("./docs/guide.md" appears as an
@@ -810,9 +882,9 @@ local function run_outgoing_scan_check()
     guide_links = links
     guide_done = true
   end)
-  vim.wait(2000, function()
+  await("guide_done", function()
     return guide_done
-  end, 10)
+  end)
   check(
     "outgoing: a file with no links out returns an empty list",
     guide_done and #guide_links == 0
@@ -824,9 +896,9 @@ local function run_outgoing_scan_check()
     nonexistent_ext_links = links
     nonexistent_ext_done = true
   end)
-  vim.wait(2000, function()
+  await("nonexistent_ext_done", function()
     return nonexistent_ext_done
-  end, 10)
+  end)
   check(
     "outgoing: a non-markdown file is skipped by the extension gate",
     nonexistent_ext_done and #nonexistent_ext_links == 0
@@ -878,9 +950,9 @@ local function run_outgoing_assets_check()
     found = candidates
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
 
   local function by(candidates, target)
     for _, c in ipairs(candidates) do
@@ -988,9 +1060,9 @@ local function run_outgoing_assets_gate_check()
     on_result = candidates
     on_done = true
   end)
-  vim.wait(2000, function()
+  await("on_done", function()
     return on_done
-  end, 10)
+  end)
   check(
     "outgoing_assets gate: enabled via config, no per-call override needed",
     on_done and on_result and #on_result == 1 and on_result[1].is_asset == true,
@@ -1067,9 +1139,9 @@ local function run_outgoing_assets_independent_switch_check()
     found = candidates
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
 
   local shared = found
   for _, c in ipairs(found or {}) do
@@ -1135,9 +1207,9 @@ local function run_own_links_move_check()
     end,
   })
   move.move(work)
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   check("own_links move: the file moved up one level", vim.fn.filereadable(dst) == 1)
   check("own_links move: the old path is gone", vim.fn.filereadable(src) == 0)
@@ -1224,9 +1296,9 @@ local function run_own_links_dir_move_check()
     end,
   })
   move.move(work)
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   check("own_links dir move: the directory relocated", vim.fn.isdirectory(new_dir) == 1)
   check("own_links dir move: the old directory is gone", vim.fn.isdirectory(old_dir) == 0)
@@ -1280,9 +1352,9 @@ local function run_own_links_env_var_check()
     found = links
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
 
   local function normalized(p)
     return (p or ""):gsub("\\", "/")
@@ -1320,9 +1392,9 @@ local function run_own_links_env_var_check()
   })
   next_input = "Renamed"
   smart_rename.rename_current()
-  vim.wait(5000, function()
+  await("rn_done", function()
     return rn_done
-  end, 20)
+  end)
 
   check("own_links env var: the directory was renamed on disk", vim.fn.isdirectory(new_dir) == 1)
 
@@ -1381,9 +1453,9 @@ local function run_own_links_copy_check()
   copy_move.stage_copy()
   current = work .. "/Copies/Sub"
   copy_move.paste()
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   local pasted = work .. "/Copies/Sub/Research.md"
   check("own_links copy: the copy landed at the destination", vim.fn.filereadable(pasted) == 1)
@@ -1425,7 +1497,6 @@ end
 local function run_own_links_symlink_safety_check()
   print("\n== own_links: a symlink is never scanned or rewritten through (security) ==")
 
-  local uv = vim.uv or vim.loop
   local work = scratch_root .. "/own_links_symlink"
   vim.fn.delete(work, "rf")
   vim.fn.mkdir(work .. "/outside", "p")
@@ -1460,9 +1531,9 @@ local function run_own_links_symlink_safety_check()
     edits = e
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
   check("own_links symlink: collect finished", done)
   check(
     "own_links symlink: no edit was produced for the symlinked entry",
@@ -1488,9 +1559,9 @@ local function run_own_links_symlink_safety_check()
         done2 = true
       end
     )
-    vim.wait(2000, function()
+    await("done2", function()
       return done2
-    end, 10)
+    end)
     check(
       "own_links symlink: a single moved symlink (no directory) is skipped too",
       done2 and #(edits2 or {}) == 0,
@@ -1550,9 +1621,9 @@ local function run_own_links_multi_root_check()
     edits = e
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
   check("own_links multi-root: collect finished", done)
 
   local b_edit = nil
@@ -1610,9 +1681,9 @@ local function run_own_links_prune_dirs_check()
     edits = e
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
   check("own_links prune: collect finished", done)
 
   local touched_node_modules = false
@@ -1687,9 +1758,9 @@ local function run_own_links_empty_retargetable_async_check()
     done == false
   )
 
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
   check("own_links empty-retargetable: cb() did eventually run", done)
   check(
     "own_links empty-retargetable: no edits (no enabled provider can retarget)",
@@ -1729,9 +1800,9 @@ local function run_delete_undo_refs_check()
     found = r
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
   check("delete undo: incoming refs found", found ~= nil and #found > 0)
 
   local applied, _, undo_id = apply.run(found or {}, { label = "delete: notes.md" })
@@ -1768,9 +1839,9 @@ local function run_delete_undo_refs_check()
     other_found = r
     other_done = true
   end)
-  vim.wait(2000, function()
+  await("other_done", function()
     return other_done
-  end, 10)
+  end)
   local other_applied = apply.run(other_found or {}, { label = "delete: guide.md" })
   check("delete undo: a newer, unrelated rewrite was applied", other_applied > 0)
 
@@ -1878,9 +1949,9 @@ local function run_delete_undo_refs_chunked_race_check()
     found = r
     scanned = true
   end)
-  vim.wait(2000, function()
+  await("scanned", function()
     return scanned
-  end, 10)
+  end)
   check(
     "chunked race: found refs in all " .. N .. " referencing files",
     found ~= nil and #found == N,
@@ -1953,9 +2024,9 @@ local function run_delete_undo_refs_chunked_race_check()
   )
 
   -- Let the rest of the chunked rewrite actually finish.
-  vim.wait(2000, function()
+  await("finished_undo_id ~= nil", function()
     return finished_undo_id ~= nil
-  end, 10)
+  end)
   check("chunked race: the rewrite did eventually finish", finished_applied == N)
   vim.notify = real_notify
 
@@ -2027,9 +2098,9 @@ local function mark_unrelated_delete(work, label)
     found = r
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
   local _, _, id = apply.run(found or {}, { label = "delete: decoy.md" })
   check(
     label .. ": the newer, unrelated rewrite landed",
@@ -2067,9 +2138,9 @@ local function run_cut_paste_undo_check()
   copy_move.stage_cut()
   current = work
   copy_move.paste()
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   check(
     "cut/paste: the file moved",
@@ -2131,9 +2202,9 @@ local function run_move_undo_check()
     end,
   })
   move.move(work)
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   check("move: the file moved", vim.fn.filereadable(dst) == 1 and vim.fn.filereadable(src) == 0)
   local moved = read(work .. "/index.md")
@@ -2194,9 +2265,9 @@ local function run_undo_content_verification_check()
     found = r
     done = true
   end)
-  vim.wait(2000, function()
+  await("done", function()
     return done
-  end, 10)
+  end)
   local applied, _, id = apply.run(found or {}, { label = "delete: notes.md" })
   check("undo verify: both references were marked", applied == 2, "applied=" .. applied)
 
@@ -2252,9 +2323,9 @@ local function run_trash_dry_run_check()
     found = r
     scanned = true
   end)
-  vim.wait(2000, function()
+  await("scanned", function()
     return scanned
-  end, 10)
+  end)
   check(
     "trash dry-run: the delete really does have a reference to rewrite",
     found ~= nil and #found == 1,
@@ -2292,9 +2363,9 @@ local function run_trash_dry_run_check()
 
   next_choice = true -- "yes" to the trash confirmation
   trash.delete_current()
-  vim.wait(5000, function()
+  await("refreshed", function()
     return refreshed
-  end, 20)
+  end)
   vim.notify = real_notify
 
   ---@param needle string
@@ -2387,9 +2458,9 @@ local function run_scan_path_canonical_check()
       result = r
       done = true
     end)
-    vim.wait(5000, function()
+    await("done", function()
       return done
-    end, 20)
+    end)
     local seen, out = {}, {}
     for _, ref in ipairs((result or {}).refs or {}) do
       if not seen[ref.file] then
@@ -2447,9 +2518,9 @@ local function run_scan_path_canonical_check()
     result = r
     done = true
   end)
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
   local shown = require("filetree.refs.ui").unique_files((result or {}).refs or {})
   local shown_bad = {}
   for _, f in ipairs(shown) do
@@ -2495,9 +2566,9 @@ local function run_display_path_check()
     result = r
     done = true
   end)
-  vim.wait(5000, function()
+  await("done", function()
     return done
-  end, 20)
+  end)
 
   local found = (result or {}).refs or {}
   check("display paths: the scan found refs to inspect", #found > 0, tostring(#found))
@@ -2559,8 +2630,9 @@ end
 
 -- ── Run ───────────────────────────────────────────────────────────────────────
 for _, lang in ipairs(LANGS) do
-  run_lang(lang)
+  if not ONLY or lang.name == ONLY then run_lang(lang) end
 end
+if ONLY then finish() end
 run_lua_buffer_check()
 run_lua_directory_cascade_check()
 run_move_feature_check()
@@ -2587,9 +2659,4 @@ run_scan_path_canonical_check()
 run_display_path_check()
 
 -- ── Report ────────────────────────────────────────────────────────────────────
-print(("\nrefs: %d passed, %d failed"):format(passed, failed))
-if failed > 0 then
-  vim.cmd("cq")
-else
-  vim.cmd("qa!")
-end
+finish()
