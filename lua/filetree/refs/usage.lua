@@ -177,9 +177,9 @@ function M.count(paths, opts, cb)
   local scan_cfg = vim.tbl_deep_extend("force", cfg, {
     scan = {
       timeout_ms = math.max((cfg.scan and cfg.scan.timeout_ms) or 0, MIN_TIMEOUT_MS),
-      -- A count must not read a dead ripgrep as "no references", nor stop at
-      -- the rename-sized walk cap: both would report referenced files as unused.
-      strict = true,
+      -- A count must not stop at the rename-sized walk cap: that would report
+      -- referenced files as unused. (A dead ripgrep falls back to the walk
+      -- for every caller, see `filetree.refs.scan`.)
       max_files = math.max((cfg.scan and cfg.scan.max_files) or 0, MIN_WALK_FILES),
     },
   })

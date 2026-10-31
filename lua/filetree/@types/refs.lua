@@ -103,13 +103,13 @@
 ---@class FiletreeRefScanResult
 ---@field refs  FiletreeRef[]
 ---@field plans table<string, table<string, FiletreeRefPlan>>  source path → provider → plan
+---@field incomplete? boolean  The candidate search was cut short (fallback walk capped or cancelled, already warned about); refs may be missing.
 
 ---@class FiletreeRefsScanConfig
 ---@field root              "project"|"cwd"  Search root (default "project").
 ---@field respect_gitignore boolean          Pass ripgrep's ignore rules (default true).
 ---@field max_files         integer          Cap for the no-ripgrep fallback walk (default 5000).
 ---@field timeout_ms        integer          Per-scan timeout (default 3000).
----@field strict?           boolean          Internal: a failed ripgrep run falls back to the walk instead of reporting no matches (set by `filetree.refs.usage`).
 
 ---@class FiletreeRefsProvidersConfig
 ---@field markdown? boolean

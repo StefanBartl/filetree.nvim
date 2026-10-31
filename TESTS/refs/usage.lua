@@ -660,6 +660,73 @@ local function run_review_fixes()
   end, 10)
   progress.create = real_create
   check("fix: a cancelled walk says it is incomplete", done and incomplete == true)
+
+  -- a ripgrep run killed by `scan.timeout_ms` (vim.system reports 124) is not
+  -- "no references" for an ordinary rename scan: the walk takes over, and a
+  -- capped walk warns and flags the result incomplete
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.fn.executable = function(name)
+    if name == "rg" then return 1 end
+    return walk_real_executable(name)
+  end
+  local timeout_real_system = vim.system
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function(cmd, o, on_exit)
+    if cmd[1] == "rg" and on_exit then
+      on_exit({ code = 124, signal = 15, stdout = "", stderr = "" })
+      return {}
+    end
+    return timeout_real_system(cmd, o, on_exit)
+  end
+  local timeout_warns = {}
+  local timeout_real_notify = vim.notify
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg, level)
+    if level == vim.log.levels.WARN then timeout_warns[#timeout_warns + 1] = tostring(msg) end
+  end
+  done, incomplete, got = false, nil, nil
+  scan.candidates(
+    work,
+    { "twice.png" },
+    { "md" },
+    { scan = { max_files = 5000, timeout_ms = 1 } },
+    function(files, inc)
+      got, incomplete, done = files, inc, true
+    end
+  )
+  vim.wait(5000, function()
+    return done
+  end, 10)
+  check(
+    "fix: a timed-out ripgrep falls back to the walk instead of finding nothing",
+    done and not incomplete and got and #got > 0 and #timeout_warns == 0,
+    vim.inspect({ got = got, incomplete = incomplete, warns = timeout_warns })
+  )
+  local plan_refs, plan_incomplete
+  done = false
+  scan.run_plan({
+    needles = { "twice.png" },
+    extensions = { "md" },
+    extract = function(file, line, text)
+      if text:find("twice.png", 1, true) then return { { file = file, line = line } } end
+    end,
+  }, { root = work, cfg = { scan = { max_files = 1, timeout_ms = 1 } } }, function(r, inc)
+    plan_refs, plan_incomplete, done = r, inc, true
+  end)
+  vim.wait(5000, function()
+    return done
+  end, 10)
+  vim.system = timeout_real_system
+  vim.notify = timeout_real_notify
+  check(
+    "fix: a timed-out ripgrep with a capped walk is flagged incomplete and warned about",
+    done
+      and plan_incomplete == true
+      and plan_refs ~= nil
+      and timeout_warns[1] ~= nil
+      and timeout_warns[1]:find("timed out", 1, true) ~= nil,
+    vim.inspect({ incomplete = plan_incomplete, warns = timeout_warns })
+  )
   vim.fn.executable = walk_real_executable
 
   -- an incomplete candidate search must stop `refs unused` from offering anything

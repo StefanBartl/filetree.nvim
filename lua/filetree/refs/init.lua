@@ -265,7 +265,8 @@ function M.prefetch(paths, opts)
   else
     local pending = #jobs
     for _, job in ipairs(jobs) do
-      scan.run_plan(job.plan, job.ctx, function(refs)
+      scan.run_plan(job.plan, job.ctx, function(refs, incomplete)
+        if incomplete then result.incomplete = true end
         for _, r in ipairs(refs) do
           result.refs[#result.refs + 1] = r
         end

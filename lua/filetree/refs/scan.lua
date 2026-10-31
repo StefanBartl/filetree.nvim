@@ -148,12 +148,15 @@ local function candidates_rg(root, needles, exts, cfg, cb)
     function(result)
       vim.schedule(function()
         -- rg: 0 = matches, 1 = no matches, >1 = error (including a timeout kill)
+        -- A dead search (timeout kill on a loaded machine, a crash) is never
+        -- "nothing matches": a rename would then land without its reference
+        -- rewrites and nobody would notice. The walk takes over instead; when
+        -- its cap cuts it short, it warns and the result is flagged incomplete.
         if result.code > 1 then
-          notify.debug("ripgrep scan failed (code " .. tostring(result.code) .. ")")
-          -- A caller that must not mistake "the search died" for "nothing
-          -- matches" (the unused-files report) asks for the walk instead.
-          if cfg.scan and cfg.scan.strict then return cb(nil) end
-          return cb({})
+          notify.debug(
+            "ripgrep scan failed (code " .. tostring(result.code) .. "), falling back to the walk"
+          )
+          return cb(nil)
         end
         local files = {}
         for line in (result.stdout or ""):gmatch("[^\r\n]+") do
@@ -202,7 +205,8 @@ end
 ---@param exts string[]
 ---@param cfg FiletreeRefsConfig
 ---@param cb fun(files: string[], incomplete?: boolean)  `incomplete`: the cap cut the walk short or it was cancelled
-local function candidates_walk(root, needles, exts, cfg, cb)
+---@param rg_failed? boolean  ripgrep exists but its run died (timeout, crash); only changes the cap warning
+local function candidates_walk(root, needles, exts, cfg, cb, rg_failed)
   local max_files = (cfg.scan and cfg.scan.max_files) or 5000
   local wanted = ext_set(exts)
 
@@ -221,10 +225,15 @@ local function candidates_walk(root, needles, exts, cfg, cb)
   local total = capped and max_files or #candidates
   if capped then
     notify.warn(
-      string.format(
-        "reference scan stopped at %d files (install ripgrep for the fast path)",
-        max_files
-      )
+      rg_failed
+          and string.format(
+            "ripgrep reference scan failed or timed out; the fallback walk stopped at %d files, references may be missing (raise refs.scan.timeout_ms)",
+            max_files
+          )
+        or string.format(
+          "reference scan stopped at %d files (install ripgrep for the fast path)",
+          max_files
+        )
     )
   end
 
@@ -275,7 +284,7 @@ end
 ---@param needles string[]
 ---@param exts string[]
 ---@param cfg FiletreeRefsConfig
----@param cb fun(files: string[], incomplete?: boolean)  `incomplete` only ever comes from the walk fallback (capped or cancelled)
+---@param cb fun(files: string[], incomplete?: boolean)  `incomplete` only ever comes from the walk fallback (capped or cancelled), which also takes over when ripgrep is missing or its run died
 function M.candidates(root, needles, exts, cfg, cb)
   if #needles == 0 or #exts == 0 then return cb({}) end
 
@@ -304,7 +313,7 @@ function M.candidates(root, needles, exts, cfg, cb)
     if files then return normalized(files, cb) end
     candidates_walk(root, needles, exts, cfg, function(walked, incomplete)
       return normalized(walked, cb, incomplete)
-    end)
+    end, vim.fn.executable("rg") == 1)
   end)
 end
 
@@ -313,9 +322,9 @@ end
 ---Run one provider plan for one moved path and deliver the refs it found.
 ---@param plan FiletreeRefPlan
 ---@param ctx FiletreeRefCtx
----@param cb fun(refs: FiletreeRef[])
+---@param cb fun(refs: FiletreeRef[], incomplete?: boolean)  `incomplete`: the candidate search was cut short, refs may be missing
 function M.run_plan(plan, ctx, cb)
-  M.candidates(ctx.root, plan.needles, plan.extensions, ctx.cfg, function(files)
+  M.candidates(ctx.root, plan.needles, plan.extensions, ctx.cfg, function(files, incomplete)
     local refs = {}
     for _, file in ipairs(files) do
       local lines = M.lines_of(file)
@@ -328,7 +337,7 @@ function M.run_plan(plan, ctx, cb)
         end
       end
     end
-    cb(refs)
+    cb(refs, incomplete)
   end)
 end
 

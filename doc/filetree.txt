@@ -1009,7 +1009,9 @@ automatically, with a one-time notice.
 Without ripgrep, the fallback walk reads extension-matching files in chunks
 across event-loop ticks once the candidate set passes ~20 files, with a
 `[filetree.refs]` progress indicator rather than freezing the editor for the
-whole scan.
+whole scan. The same walk takes over when a ripgrep run fails or is killed by
+`scan.timeout_ms`, so a slow search never reads as "no references"; a walk cut
+short by `scan.max_files` warns that references may be missing.
 
 Commands:
   :Filetree refs undo      Revert the last reference rewrite
