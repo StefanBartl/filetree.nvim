@@ -41,6 +41,38 @@ eq("dotfile", stem_end(".gitignore"), nil)
 eq("trailing dot", stem_end("name."), nil)
 eq("directory", stem_end("v1.2", true), nil)
 
+-- ── the prompt itself: stubbed adapter, real kit.input window ──────────────────
+local sr = require("filetree.features.fileops.smart_rename")
+local current
+sr.setup({ enabled = true }, {
+  get_current_node = function()
+    return current
+  end,
+  refresh = function()
+    return true
+  end,
+})
+local function prompt_cursor_col(name, node_type)
+  current = { name = name, path = root .. "/" .. name, type = node_type }
+  sr.rename_current()
+  vim.wait(200, function()
+    return false
+  end)
+  local win = vim.api.nvim_get_current_win()
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.api.nvim_win_get_cursor(win)[2]
+  vim.cmd("stopinsert")
+  pcall(vim.api.nvim_win_close, win, true)
+  return col, line
+end
+local col, line = prompt_cursor_col("init.lua", "file")
+eq("prompt holds the old name", line, "init.lua")
+eq("file: cursor before the extension", col, 4)
+eq("multi-dot file: cursor before the last extension", (prompt_cursor_col("a.test.lua", "file")), 6)
+eq("no extension: cursor at the end", (prompt_cursor_col("Makefile", "file")), 8)
+eq("directory with a dot: cursor at the end", (prompt_cursor_col("v1.2", "directory")), 4)
+sr.teardown()
+
 print(("\nfiletree.nvim rename_stem_spec: %d passed, %d failed"):format(passed, failed))
 if failed > 0 then
   vim.cmd("cq")
