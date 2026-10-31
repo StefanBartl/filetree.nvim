@@ -23,6 +23,9 @@ return {
     {
       lua = [[local work = vim.fs.normalize(vim.fn.tempname()) .. "/proj"
       vim.fn.mkdir(work .. "/src", "p")
+      -- the real path: on macOS the temp dir is /var/..., a link to /private/var/..., and the
+      -- buffer names must spell the files the way neo-tree resolves the tree
+      work = vim.fs.normalize(vim.uv.fs_realpath(work))
       vim.fn.writefile({ "return 1" }, work .. "/src/a.lua")
       vim.fn.writefile({ "return 2" }, work .. "/src/b.lua")
       vim.fn.writefile({ "return 3" }, work .. "/src/clean.lua")
