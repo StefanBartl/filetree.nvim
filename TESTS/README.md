@@ -29,6 +29,7 @@ Everything CI runs, plus the manual pass it cannot.
 | [`neotree_redraw_hook.lua`](neotree_redraw_hook.lua) | integration: the `renderer.redraw` monkeypatch (`adapter/neotree.lua`'s `install_redraw_hook`/`hoist_redraw_hook`) against a **real neo-tree**, run in its own process — real `copy_to_clipboard`/`cut_to_clipboard` (`y`/`x`) in the exact load order a lazily-loaded neo-tree.nvim gives, and the last-resort tab probe's ghost-state cleanup |
 | [`neotree_collapse_redraw_coalesce.lua`](neotree_collapse_redraw_coalesce.lua) | integration: `adapter/neotree.lua`'s `M.redraw_soon()` coalescing helper against a **real neo-tree** — a burst of `redraw_soon()` calls settles into exactly one real `renderer.redraw`, `M.redraw()`/`collapse_node` stay synchronous and immediate. Investigated as part of the "modified" icon blinking on folder collapse; `opened_sync` (the original motivating caller) turned out not to need it and now calls `redraw()` directly, so no production call site uses `redraw_soon` today |
 | [`collapse_all_backends.lua`](collapse_all_backends.lua) | integration: `adapter.collapse_all` and `tree_toggle.collapse_on_toggle` against a **real neo-tree** (and nvim-tree when installed) — folders opened by hand (neo-tree's own `toggle_directory`) close on the next open, only the current file's chain stays; also after a close by `nvim_win_close`; a file outside the root keeps nothing; `collapse_all()` lands on the top-level entry; with the option off the folders stay open as before; a `group_empty_dirs` line is back to its first folder; on nvim-tree the kept chain and the cursor on the top-level entry. Read back through neo-tree's own `renderer.get_expanded_nodes`. Not part of CI; the gated counterpart (which tab, a chain through a junction, another spelling of the root, the merged-line refresh) is in `units.lua` |
+| [`sheets_spec.lua`](sheets_spec.lua) + [`sheets/`](sheets/) | test sheets (testing.nvim `testing.sheet`): the automated half of a live check, each sheet one case `sheet:<id>`, run by the RPC klicker in a child editor and compared with screen snapshots under `__snapshots__/sheets/`. `diag-badges-neotree.sheet.lua` puts a **real neo-tree** (child editor from [`minimal_init_sheet_neotree.lua`](minimal_init_sheet_neotree.lua)) under `lsp_diagnostics`: badges on the file nodes and the folders, still there after neo-tree's own redraw and a focus change, gone with the diagnostics. Gated on CI, which checks out neo-tree, nui and plenary at pinned commits for it — see "Test sheets" below |
 | [`refs/`](refs/) | fixture-based: real on-disk multi-file projects, described below |
 | [`MANUAL.md`](MANUAL.md) | the manual checklist for what a headless run cannot reach — real neo-tree, real floats, real clipboard |
 
@@ -56,8 +57,8 @@ suites below are not part of the gated set and are started that way.
 
 All of them are headless and exit 0 on a pass. `.github/workflows/ci.yml`'s
 `test` job gates on the stub-based suites above `adapter_lines.lua` in
-the table, plus `refs/run.lua`; it does not install neo-tree/nui/devicons, so
-the four real-neo-tree suites (`adapter_lines.lua`, `group_empty_dirs_collapse.lua`,
+the table, plus `refs/run.lua` and the test sheets; it checks out neo-tree/nui/plenary
+(pinned) only for the sheets, so the four real-neo-tree suites (`adapter_lines.lua`, `group_empty_dirs_collapse.lua`,
 `neotree_redraw_hook.lua`, `neotree_collapse_redraw_coalesce.lua`) always
 print a skip there today rather than running for real — a pre-existing CI
 gap, not something this pass closes. `quickpick_neotree.lua` is a fifth of the
@@ -80,6 +81,21 @@ controls their `require()` order, which no other suite in this repo may
 safely do once it shares a process with other neo-tree-backed checks — so it
 runs in its OWN `nvim -l` process rather than being folded into
 `adapter_lines.lua`.
+
+## Test sheets
+
+A test sheet (`sheets/<name>.sheet.lua`, format in testing.nvim's `docs/SHEETS.md`) writes a
+live check down as data: the steps a machine can do run with the suite, `judge` and `manual`
+are what is left for a person. `testing sheets report` lists them (review inbox).
+
+`sheets_spec.lua` is the only busted-dialect spec here (`.testing.lua` `dialect`). The neo-tree
+sheet's child editor finds neo-tree.nvim, nui.nvim and plenary.nvim via `$NEO_TREE_NVIM_DIR` /
+`$NUI_NVIM_DIR` / `$PLENARY_NVIM_DIR`, `.deps/<name>`, a sibling checkout `../<name>` or the
+lazy.nvim directory of the real editor, and fails naming every place when one is missing. The
+snapshots were taken with the commits CI pins in `.github/workflows/ci.yml`: a local neo-tree far
+from those may draw the tree differently (update with `--update-snapshots` only after checking the
+pin). The sheet turns neo-tree's window-size poll (`resize_timer_interval = -1`) and filetree's
+`file_watcher` off: both keep a handle alive for ever and the editor would never settle.
 
 ## gaps.lua
 

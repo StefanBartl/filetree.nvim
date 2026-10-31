@@ -7,7 +7,8 @@ return {
   plugin = "filetree",
   -- How the spec files are run: "auto" = sniffed per file, "h" = on the project's own TESTS/harness.lua,
   -- "script" = a self-running script in its own process.
-  dialect = "script",
+  -- TESTS/sheets_spec.lua is busted style: one case per test sheet (`sheet:<id>`, testing sheets report).
+  dialect = { ["TESTS/sheets_spec.lua"] = "busted", ["*"] = "script" },
   -- Lua patterns a file name must match to be a spec (the old runner started these files by name).
   spec_pattern = {
     "_spec%.lua$",
@@ -35,14 +36,17 @@ return {
   -- Dependencies (directory names) put on the runtimepath: $<NAME>_DIR, .deps/<name>, ../<name>,
   -- stdpath('data')/lazy/<name>.
   deps = { "lib.nvim", "ui.nvim" },
-  -- Guards (fs / state / scheduled_error / prompt / deprecation / process_net) and `guard_allow`
-  -- are intentionally left at their defaults: every spec here runs in the "script" dialect (its own
-  -- `nvim -l` process), where testing.nvim installs NO guard ("guards: not installed in a script
-  -- file"). Nothing is measured, so no guard mode or allowlist entry can be justified yet. Revisit
-  -- this once the specs run in a dialect that supports guards.
+  -- Guards (fs / state / scheduled_error / prompt / deprecation / process_net) are intentionally
+  -- left at their defaults: every spec but TESTS/sheets_spec.lua runs in the "script" dialect (its
+  -- own `nvim -l` process), where testing.nvim installs NO guard ("guards: not installed in a script
+  -- file"). Nothing is measured, so no guard mode can be justified yet. Revisit this once the specs
+  -- run in a dialect that supports guards.
   -- "none" = all specs in one nvim, "file" = one nvim per spec file
   -- (nothing leaks from one file into the next).
   isolated = "none",
+  -- TESTS/sheets_spec.lua (busted dialect, so the default guards apply to it): every test sheet
+  -- runs in a child editor.
+  guard_allow = { spawn = { "nvim" } },
   -- "c" = child started from a -c command (v:vim_did_enter is 0, <cword> works),
   -- "l" = `nvim -l`.
   host = "l",
@@ -55,6 +59,11 @@ return {
     "FILETREE_REFS_TEST_*",
     "FILETREE_TEST_REAL_CLIPBOARD",
     "FILETREE_UI_NVIM",
+    -- TESTS/minimal_init_sheet_neotree.lua: where the child editor of a neo-tree test sheet finds
+    -- neo-tree and what it needs (else .deps/, ../, the real editor's lazy.nvim directory).
+    "NEO_TREE_NVIM_DIR",
+    "NUI_NVIM_DIR",
+    "PLENARY_NVIM_DIR",
     "FT_CODE",
     "FT_X",
     "LIB_NVIM_PATH",

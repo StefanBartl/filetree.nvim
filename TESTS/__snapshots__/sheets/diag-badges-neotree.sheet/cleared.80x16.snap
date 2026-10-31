@@ -1,0 +1,38 @@
+testing.nvim screen v1
+size: 80x16
+cursor: 4,1
+mode: n
+--- text
+01|################################################################################
+02|    src                                │
+03|   │ * a.lua                            │~
+04|   │ * b.lua                            │~
+05|   └ * clean.lua                        │~
+06|   * README.md                          │~
+07|~                                       │~
+08|~                                       │~
+09|~                                       │~
+10|~                                       │~
+11|~                                       │~
+12|~                                       │~
+13|~                                       │~
+14|~                                       │~
+15|~                                       │~
+16|
+--- attrs
+01|################################################################################
+02|aaabbbbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+03|aaaccbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaddddddddddddddddddddddddddddddddddddddd
+04|eeeffggeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeaddddddddddddddddddddddddddddddddddddddd
+05|aaaccbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaddddddddddddddddddddddddddddddddddddddd
+06|aaabbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaddddddddddddddddddddddddddddddddddddddd
+07|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+08|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+09|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+10|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+11|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+12|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+13|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+14|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+15|hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhaddddddddddddddddddddddddddddddddddddddd
+16|iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii

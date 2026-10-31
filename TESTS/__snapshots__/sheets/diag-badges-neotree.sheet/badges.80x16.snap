@@ -1,0 +1,38 @@
+testing.nvim screen v1
+size: 80x16
+cursor: 2,42
+mode: n
+--- text
+01|################################################################################
+02|    src  E:2 W:2                       │
+03|   │ * a.lua  W:1                       │~
+04|   │ * b.lua  E:2 W:1                   │~
+05|   └ * clean.lua                        │~
+06|   * README.md                          │~
+07|~                                       │~
+08|~                                       │~
+09|~                                       │~
+10|~                                       │~
+11|~                                       │~
+12|~                                       │~
+13|~                                       │~
+14|~                                       │~
+15|~                                       │~
+16|
+--- attrs
+01|################################################################################
+02|aaabbbbbaccccccccaaaaaaaaaaaaaaaaaaaaaaad
+03|aaaeebbaaaaaaffffaaaaaaaaaaaaaaaaaaaaaaadggggggggggggggggggggggggggggggggggggggg
+04|hhhiijjhhhhhhcccccccchhhhhhhhhhhhhhhhhhhdggggggggggggggggggggggggggggggggggggggg
+05|aaaeebbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaadggggggggggggggggggggggggggggggggggggggg
+06|aaabbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaadggggggggggggggggggggggggggggggggggggggg
+07|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+08|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+09|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+10|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+11|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+12|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+13|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+14|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+15|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
+16|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

@@ -1,0 +1,38 @@
+testing.nvim screen v1
+size: 80x16
+cursor: 4,1
+mode: n
+--- text
+01|################################################################################
+02|    src  E:2 W:2                       │
+03|   │ * a.lua  W:1                       │~
+04|   │ * b.lua  E:2 W:1                   │~
+05|   └ * clean.lua                        │~
+06|   * README.md                          │~
+07|~                                       │~
+08|~                                       │~
+09|~                                       │~
+10|~                                       │~
+11|~                                       │~
+12|~                                       │~
+13|~                                       │~
+14|~                                       │~
+15|~                                       │~
+16|
+--- attrs
+01|################################################################################
+02|aaabbbbbaccccccccaaaaaaaaaaaaaaaaaaaaaaaa
+03|aaaddbbaaaaaaeeeeaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffffffff
+04|ggghhiiggggggccccccccgggggggggggggggggggafffffffffffffffffffffffffffffffffffffff
+05|aaaddbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffffffff
+06|aaabbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffffffff
+07|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+08|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+09|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+10|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+11|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+12|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+13|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+14|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+15|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+16|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk

@@ -88,6 +88,28 @@ jobs:
           path: ui.nvim
           ref: ci-verified
 
+      # The test sheet TESTS/sheets/diag-badges-neotree.sheet.lua runs a real neo-tree in its child
+      # editor (TESTS/minimal_init_sheet_neotree.lua finds these as siblings). Pinned: the sheet's
+      # screen snapshots were taken with exactly these commits.
+      - name: Checkout neo-tree.nvim (pinned)
+        uses: actions/checkout@v5
+        with:
+          repository: nvim-neo-tree/neo-tree.nvim
+          path: neo-tree.nvim
+          ref: 1a14083046d96e88e361d1da00761c40d45012f3
+      - name: Checkout nui.nvim (pinned)
+        uses: actions/checkout@v5
+        with:
+          repository: MunifTanjim/nui.nvim
+          path: nui.nvim
+          ref: 10fc361835c856ba4233ef5ea135b919bf3dce97
+      - name: Checkout plenary.nvim (pinned)
+        uses: actions/checkout@v5
+        with:
+          repository: nvim-lua/plenary.nvim
+          path: plenary.nvim
+          ref: 74b06c6c75e4eeb3108ec01852001636d85a932b
+
       - name: Install Neovim (stable)
         uses: rhysd/action-setup-vim@v1
         with:
