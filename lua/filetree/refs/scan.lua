@@ -150,7 +150,11 @@ local function candidates_rg(root, needles, exts, cfg, cb)
   local ok_spawn = pcall(
     vim.system,
     cmd,
-    { text = true, timeout = timeout, stdin = stdin },
+    -- `cwd = root`: rg matches `-g` globs against the path relative to its
+    -- process cwd, not to the search root. From any other cwd the unanchored
+    -- `!**/build/**` also matched a pruned name in an *ancestor* of the root
+    -- (a project under `.../build/proj`) and dropped every file.
+    { text = true, timeout = timeout, stdin = stdin, cwd = root },
     function(result)
       vim.schedule(function()
         -- rg: 0 = matches, 1 = no matches, >1 = error (including a timeout kill)

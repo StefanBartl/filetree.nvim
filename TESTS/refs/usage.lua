@@ -934,22 +934,31 @@ local function run_review_fixes()
     -- at the root and nested: the walk's git listing prunes them at any
     -- depth, and ripgrep's globs must prune the same folders, or the two
     -- candidate searches disagree
+    -- The second project lives below an ancestor named `build/`: pruning
+    -- applies inside the scan root only, never to the root's own path, while
+    -- the suite's cwd is not the root.
+    local function prune_fixture(pruneproj)
+      vim.fn.delete(pruneproj, "rf")
+      for _, d in ipairs({ "vendor", "pkg/vendor/deep", "pkg/build" }) do
+        vim.fn.mkdir(pruneproj .. "/" .. d, "p")
+      end
+      for _, f in ipairs({ "top.md", "vendor.md", "vendor/root-vendor.md", "pkg/ok.md" }) do
+        vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/" .. f)
+      end
+      vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/pkg/vendor/deep/nested-vendor.md")
+      vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/pkg/build/nested-build.md")
+      fixture_ok, fixture_err = true, nil
+      fixture_git({ "init", "-q", pruneproj })
+      fixture_git({ "-C", pruneproj, "add", "." })
+      return fixture_ok, fixture_err
+    end
     local pruneproj = scratch_root .. "/pruneproj"
-    vim.fn.delete(pruneproj, "rf")
-    for _, d in ipairs({ "vendor", "pkg/vendor/deep", "pkg/build" }) do
-      vim.fn.mkdir(pruneproj .. "/" .. d, "p")
-    end
-    for _, f in ipairs({ "top.md", "vendor.md", "vendor/root-vendor.md", "pkg/ok.md" }) do
-      vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/" .. f)
-    end
-    vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/pkg/vendor/deep/nested-vendor.md")
-    vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/pkg/build/nested-build.md")
-    local prune_ok, prune_err = fixture_ok, fixture_err
-    fixture_ok = true
-    fixture_git({ "init", "-q", pruneproj })
-    fixture_git({ "-C", pruneproj, "add", "." })
-    prune_ok, prune_err = prune_ok and fixture_ok, prune_err or fixture_err
-    local function search(rg)
+    local prune_ok, prune_err = prune_fixture(pruneproj)
+    vim.fn.delete(scratch_root .. "/build", "rf")
+    local nestedproj = scratch_root .. "/build/proj"
+    local nested_ok, nested_err = prune_fixture(nestedproj)
+    local function search(rg, search_root)
+      search_root = search_root or pruneproj
       ---@diagnostic disable-next-line: duplicate-set-field
       vim.fn.executable = function(name)
         if name == "rg" and not rg then return 0 end
@@ -957,7 +966,7 @@ local function run_review_fixes()
       end
       local out, fin = nil, false
       scan.candidates(
-        pruneproj,
+        search_root,
         { "twice.png" },
         { "md" },
         { scan = { max_files = 5000, timeout_ms = 5000 } },
@@ -985,6 +994,28 @@ local function run_review_fixes()
         "fix: ripgrep prunes the same tracked folders as the walk",
         vim.deep_equal(grepped, walked),
         vim.inspect({ rg = grepped, walk = walked })
+      )
+    else
+      print("  skip the ripgrep pruned-folder check (rg not found)")
+    end
+    check("fix: the project below a build/ ancestor is set up", nested_ok, nested_err)
+    check(
+      "fix: the suite's cwd is not the project below a build/ ancestor",
+      not vim.startswith(vim.fn.getcwd():gsub("\\", "/"):lower(), nestedproj:lower()),
+      vim.fn.getcwd()
+    )
+    local walked_nested = search(false, nestedproj)
+    check(
+      "fix: the walk keeps a project whose ancestor is named build/",
+      vim.deep_equal(walked_nested, expected),
+      vim.inspect(walked_nested)
+    )
+    if walk_real_executable("rg") == 1 then
+      local grepped_nested = search(true, nestedproj)
+      check(
+        "fix: ripgrep keeps a project whose ancestor is named build/",
+        vim.deep_equal(grepped_nested, expected),
+        vim.inspect(grepped_nested)
       )
     else
       print("  skip the ripgrep pruned-folder check (rg not found)")
