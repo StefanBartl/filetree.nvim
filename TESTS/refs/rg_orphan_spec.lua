@@ -234,6 +234,13 @@ do
   grep.setup({ enabled = true, prefer = "builtin", keymap = false, keymap_pickers = false })
   local grep_argv
   local real_system = vim.system
+  -- CI may have no ripgrep; grep_in_dir would take its grep branch then.
+  local real_exec = vim.fn.executable
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.fn.executable = function(name)
+    if name == "rg" then return 1 end
+    return real_exec(name)
+  end
   ---@diagnostic disable-next-line: duplicate-set-field
   vim.system = function(cmd)
     grep_argv = cmd
@@ -241,6 +248,7 @@ do
   end
   local ok_grep, grep_err = pcall(grep.grep, scratch, "needle")
   vim.system = real_system
+  vim.fn.executable = real_exec
   vim.fn.delete(shims .. "/rg.shim")
   local no_shim = scan.rg_binary()
   vim.fn.exepath = real_exepath
