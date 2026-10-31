@@ -53,6 +53,36 @@ function M.has_executable(name)
   return vim.fn.executable(name) == 1
 end
 
+---The ripgrep binary to start. A Scoop shim (`...\shims\rg.exe` next to an
+---`rg.shim` naming the real binary) is resolved to the binary it points at.
+---
+---The shim is a process of its own between the editor and ripgrep. libuv puts
+---the processes it starts into a kill-on-close job object, but children of
+---those processes may break away from it, and a shim killed (scan timeout,
+---editor exit) right after it created ripgrep left ripgrep behind: a search
+---from a refs spec was found still alive hours after its editor exited,
+---holding the editor's inherited stdout, so `scripts/test.sh | tail` never
+---saw EOF. Started directly, ripgrep is the job member and dies with it.
+---
+---Limits: only Scoop shims are resolved. A Chocolatey (shimgen) shim has no
+---side file naming its target and is started by name, with the same risk. A
+---Scoop shim that also adds arguments (an `args = ...` line) is started by
+---name too, so those arguments are never dropped.
+---@return string
+function M.rg_binary()
+  local exe = vim.fn.exepath("rg")
+  if exe == "" then return "rg" end
+  local shim = exe:gsub("%.[eE][xX][eE]$", "") .. ".shim"
+  if vim.fn.filereadable(shim) == 0 then return "rg" end
+  local target
+  for _, line in ipairs(vim.fn.readfile(shim)) do
+    if line:match("^%s*args%s*=") then return "rg" end
+    target = target or line:match('^%s*path%s*=%s*"([^"]+)"') or line:match("^%s*path%s*=%s*(%S+)")
+  end
+  if target and vim.fn.executable(target) == 1 then return target end
+  return "rg"
+end
+
 ---Return the current working directory (never nil).
 ---@return string
 function M.get_cwd()

@@ -200,7 +200,9 @@ local function run_builtin_search(dir, pattern)
   -- build exactly such a string; it is an argv list now too.
   local args
   if has_rg then
-    args = { "rg", "--vimgrep", "--color=never" }
+    -- The real binary, not a Scoop shim: a shim between the editor and rg
+    -- lets rg outlive the editor (see `filetree.util.platform.rg_binary`).
+    args = { require("filetree.util.platform").rg_binary(), "--vimgrep", "--color=never" }
     if _cfg.hidden then args[#args + 1] = "--hidden" end
     for _, a in ipairs(_cfg.extra_args) do
       args[#args + 1] = a

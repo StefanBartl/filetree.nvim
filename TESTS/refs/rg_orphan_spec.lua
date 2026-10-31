@@ -66,6 +66,11 @@ end
 local scratch = vim.fn.tempname()
 vim.fn.mkdir(scratch, "p")
 local pidfile = (scratch .. "/sleeper.pid"):gsub("\\", "/")
+-- Written by the timeout child before it quits: whether the scan delivered its
+-- result, and whether the sleeper was still alive at that point. Exiting kills
+-- the sleeper anyway (VimLeavePre, the job object), so only this tells a
+-- working timeout from one that never fired.
+local resultfile = (scratch .. "/result.txt"):gsub("\\", "/")
 
 -- What the child editor runs: it puts the repo on rtp, replaces rg with a
 -- sleeper, starts one candidate search with a long timeout and quits while the
@@ -75,6 +80,8 @@ vim.fn.writefile({
   rtp_lines[1],
   rtp_lines[2] or "",
   ("local pidfile = %q"):format(pidfile),
+  ("local resultfile = %q"):format(resultfile),
+  "local sleeper",
   "local mode = vim.env.FILETREE_RG_ORPHAN_MODE",
   "local real_system = vim.system",
   "local real_exec = vim.fn.executable",
@@ -84,6 +91,7 @@ vim.fn.writefile({
   "    cmd = { vim.v.progpath, '--clean', '--headless', '-u', 'NONE', '-c', 'sleep 30', '-c', 'qa!' }",
   "    opts = vim.tbl_extend('force', opts or {}, { cwd = vim.fn.getcwd() })",
   "    local obj = real_system(cmd, opts, on_exit)",
+  "    sleeper = obj.pid",
   "    vim.fn.writefile({ tostring(obj.pid) }, pidfile)",
   "    return obj",
   "  end",
@@ -91,10 +99,16 @@ vim.fn.writefile({
   "end",
   "local scan = require('filetree.refs.scan')",
   "scan.rg_binary = function() return 'rg' end",
+  -- The exit kill must not stand in for a missing timeout kill.
+  "if mode == 'timeout' then scan.kill_live = function() return 0 end end",
   "local timeout = mode == 'timeout' and 500 or 60000",
   "local got",
   "scan.candidates(vim.fn.getcwd(), { 'x' }, { 'md' }, { scan = { timeout_ms = timeout } }, function(f) got = f end)",
-  "if mode == 'timeout' then vim.wait(20000, function() return got ~= nil end, 20) end",
+  "if mode == 'timeout' then",
+  "  vim.wait(20000, function() return got ~= nil end, 20)",
+  "  local alive = sleeper ~= nil and vim.uv.kill(sleeper, 0) == 0",
+  "  vim.fn.writefile({ got and 'delivered' or 'pending', tostring(alive) }, resultfile)",
+  "end",
   "vim.cmd('qa!')",
 }, child)
 
@@ -102,6 +116,7 @@ vim.fn.writefile({
 ---@return integer|nil pid
 local function run_child(mode)
   vim.fn.delete(pidfile)
+  vim.fn.delete(resultfile)
   -- No stdout/stderr pipes: a leaked sleeper holding them would make this wait
   -- hang instead of failing.
   vim
@@ -133,6 +148,17 @@ print("\n== the scan's timeout kills a hung ripgrep ==")
 do
   local pid = run_child("timeout")
   check("the double started a sleeper in place of rg", pid ~= nil)
+  local result = vim.fn.filereadable(resultfile) == 1 and vim.fn.readfile(resultfile) or {}
+  check(
+    "the scan delivered its result before the editor quit",
+    result[1] == "delivered",
+    vim.inspect(result)
+  )
+  check(
+    "the sleeper was already dead when the result arrived",
+    result[2] == "false",
+    vim.inspect(result)
+  )
   local dead = pid ~= nil and wait_dead(pid, 5000)
   check("the sleeper was killed by the timeout", dead, "pid " .. tostring(pid) .. " still alive")
   if pid and not dead then pcall(uv.kill, pid, "sigkill") end
@@ -196,10 +222,35 @@ do
   local with_shim = scan.rg_binary()
   vim.fn.writefile({ ('path = "%s"'):format(scratch .. "/no-such-rg.exe") }, shims .. "/rg.shim")
   local dangling = scan.rg_binary()
+  -- A shim that adds arguments: resolving it would drop them.
+  vim.fn.writefile(
+    { ('path = "%s"'):format(vim.v.progpath), 'args = "--no-config"' },
+    shims .. "/rg.shim"
+  )
+  local with_args = scan.rg_binary()
+  -- grep_in_dir's builtin backend starts the same resolved binary.
+  vim.fn.writefile({ ('path = "%s"'):format(vim.v.progpath) }, shims .. "/rg.shim")
+  local grep = require("filetree.features.search.grep_in_dir")
+  grep.setup({ enabled = true, prefer = "builtin", keymap = false, keymap_pickers = false })
+  local grep_argv
+  local real_system = vim.system
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.system = function(cmd)
+    grep_argv = cmd
+    return { pid = 0 }
+  end
+  local ok_grep, grep_err = pcall(grep.grep, scratch, "needle")
+  vim.system = real_system
   vim.fn.delete(shims .. "/rg.shim")
   local no_shim = scan.rg_binary()
   vim.fn.exepath = real_exepath
   check("the shim's target is started directly", with_shim == vim.v.progpath, with_shim)
+  check("a shim adding arguments is started by name", with_args == "rg", with_args)
+  check(
+    "grep_in_dir starts the shim's target directly",
+    ok_grep and grep_argv ~= nil and grep_argv[1] == vim.v.progpath,
+    ok_grep and vim.inspect(grep_argv and grep_argv[1]) or tostring(grep_err)
+  )
   check("a shim naming a missing binary falls back to rg", dangling == "rg", dangling)
   check("without a shim file rg is started by name", no_shim == "rg", no_shim)
 end
