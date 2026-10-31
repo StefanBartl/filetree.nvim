@@ -57,11 +57,12 @@ suites below are not part of the gated set and are started that way.
 
 All of them are headless and exit 0 on a pass. `.github/workflows/ci.yml`'s
 `test` job gates on the stub-based suites above `adapter_lines.lua` in
-the table, plus `refs/run.lua` and the test sheets; it checks out neo-tree/nui/plenary
-(pinned) only for the sheets, so the four real-neo-tree suites (`adapter_lines.lua`, `group_empty_dirs_collapse.lua`,
-`neotree_redraw_hook.lua`, `neotree_collapse_redraw_coalesce.lua`) always
-print a skip there today rather than running for real — a pre-existing CI
-gap, not something this pass closes. `quickpick_neotree.lua` is a fifth of the
+the table, plus `refs/run.lua` and the test sheets. It checks out neo-tree/nui/plenary
+(pinned) as siblings for the sheets; the four real-neo-tree suites (`adapter_lines.lua`,
+`group_empty_dirs_collapse.lua`, `neotree_redraw_hook.lua`,
+`neotree_collapse_redraw_coalesce.lua`) would find them there, but they are not in the
+`spec_pattern` of `.testing.lua`, so CI does not run them. Adding them is a step of its own.
+`quickpick_neotree.lua` is a fifth of the
 same kind (it sits beside `quickpick.lua` in the table but CI does not run it).
 All but those run against a
 stub adapter and need no tree plugin; those four need neo-tree (plus

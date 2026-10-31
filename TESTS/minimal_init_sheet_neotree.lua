@@ -10,6 +10,9 @@
 --   3. <repo>/../<name>                    (what CI checks out, at a pinned commit)
 --   4. the lazy.nvim directory of the real editor ($LOCALAPPDATA/nvim-data/lazy on Windows,
 --      ~/.local/share/nvim/lazy elsewhere): the child's own stdpath('data') is a sandbox.
+--      $XDG_DATA_HOME and $NVIM_APPNAME cannot be honoured here: testing.nvim points the child's
+--      XDG_* into its sandbox and does not pass NVIM_APPNAME on. A developer with either set uses
+--      step 1 ($NEO_TREE_NVIM_DIR etc.); the error below says so.
 -- A missing one is FATAL (exit 1, naming every place searched): a sheet that silently ran without
 -- neo-tree would prove nothing. The snapshots were taken with the commits CI pins
 -- (.github/workflows/ci.yml): a much newer or older local neo-tree may draw the tree differently.
@@ -73,6 +76,10 @@ for _, dep in ipairs(DEPS) do
     for i, p in ipairs(places) do
       lines[#lines + 1] = ("  %d. %s (%s)"):format(i, p[1], p[2] or "unset")
     end
+    lines[#lines + 1] = (
+      "  (with $XDG_DATA_HOME or $NVIM_APPNAME set, step 4 cannot see your editor's"
+      .. " plugins: set $%s)"
+    ):format(env_name(dep.name))
     failures[#failures + 1] = table.concat(lines, "\n")
   end
 end

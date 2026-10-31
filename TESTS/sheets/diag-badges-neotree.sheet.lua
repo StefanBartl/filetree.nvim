@@ -5,9 +5,11 @@
 -- language server needed: the feature reads vim.diagnostic.get); the file nodes get their own
 -- counts and the folder the sum. Then the two ways the badges used to vanish: neo-tree redraws the
 -- tree on its own (refresh, as a git status, a watcher event or an async scan does) and the focus
--- leaves the tree and comes back. The badges stay. Finally the diagnostics are cleared and every
--- badge is gone. neo-tree's own diagnostics and git status are off, so every badge on screen is
--- filetree's. Left for a person: a week of normal work with a real language server.
+-- leaves the tree and comes back (every focus change is checked). The badges stay. Finally the
+-- diagnostics are cleared and every badge is gone. neo-tree's own diagnostics and git status are
+-- off, so every badge on screen is filetree's. The screen cursor is not compared: read right after
+-- a redraw it can still show the previous window's position. Left for a person: a week of normal
+-- work with a real language server; flicker on collapse and handle_guard/EPERM are not covered.
 return {
   id = "filetree.diag-badges-neotree",
   title = "filetree.nvim: E:/W: diagnostic badges in neo-tree stay, and go with the diagnostics",
@@ -23,8 +25,9 @@ return {
     {
       lua = [[local work = vim.fs.normalize(vim.fn.tempname()) .. "/proj"
       vim.fn.mkdir(work .. "/src", "p")
-      -- the real path: on macOS the temp dir is /var/..., a link to /private/var/..., and the
-      -- buffer names must spell the files the way neo-tree resolves the tree
+      -- the real path (on macOS the temp dir /var/... links to /private/var/...): the sheet works
+      -- in the directory neo-tree shows; filetree matches a buffer opened through a link as well
+      -- (TESTS/gaps.lua, lsp_diagnostics link case)
       work = vim.fs.normalize(vim.uv.fs_realpath(work))
       vim.fn.writefile({ "return 1" }, work .. "/src/a.lua")
       vim.fn.writefile({ "return 2" }, work .. "/src/b.lua")
@@ -100,6 +103,14 @@ return {
       timeout = 10000,
       note = "the tree lists src/ with its three files and README.md",
     },
+    {
+      lua = "vim.api.nvim_set_current_win(_G.adapter.get_winid())",
+      note = "focus the tree (`show` opens it without focusing it)",
+    },
+    {
+      expect = "vim.api.nvim_get_current_win() == _G.adapter.get_winid()",
+      note = "the tree has the focus",
+    },
     { settle = 500 },
     {
       expect = [[select(2, _G.badges()) == 0]],
@@ -129,7 +140,7 @@ return {
       note = "the file nodes carry their own counts, src/ and the root the sum; clean.lua and README.md none",
     },
     { settle = 300 },
-    { screen = "badges", masks = { { row = 1 } } },
+    { screen = "badges", masks = { { row = 1 } }, cursor = false },
     {
       lua = [[_G.renders = 0
       _G.adapter.on_render(function() _G.renders = _G.renders + 1 end)
@@ -152,17 +163,25 @@ return {
       end]],
       note = "focus leaves the tree",
     },
+    {
+      expect = "vim.api.nvim_get_current_win() ~= _G.adapter.get_winid()",
+      note = "the focus is outside the tree",
+    },
     { settle = 300 },
     {
       lua = "vim.api.nvim_set_current_win(_G.adapter.get_winid())",
       note = "focus back on the tree",
+    },
+    {
+      expect = "vim.api.nvim_get_current_win() == _G.adapter.get_winid()",
+      note = "the tree has the focus again",
     },
     { settle = 500 },
     {
       expect = [[_G.has({ proj = "E:2 W:2", src = "E:2 W:2", ["a.lua"] = "W:1", ["b.lua"] = "E:2 W:1" })]],
       note = "the badges are still there after the focus change",
     },
-    { screen = "badges-after-redraw", masks = { { row = 1 } } },
+    { screen = "badges-after-redraw", masks = { { row = 1 } }, cursor = false },
     { lua = "vim.diagnostic.reset(_G.diag_ns)", note = "clear every diagnostic" },
     {
       wait = [[select(2, _G.badges()) == 0]],
@@ -170,7 +189,7 @@ return {
       note = "every badge is gone with the diagnostics",
     },
     { settle = 300 },
-    { screen = "cleared", masks = { { row = 1 } } },
+    { screen = "cleared", masks = { { row = 1 } }, cursor = false },
   },
   judge = {
     "badges: the counts sit at the end of the src/, a.lua and b.lua rows, readable, in the error / warning colour, nothing else on those rows is shifted",

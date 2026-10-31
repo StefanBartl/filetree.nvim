@@ -1304,6 +1304,52 @@ do
     NODE_AT[0] = { path = file1, type = "file" }
   end
 
+  -- A buffer opened through a link (a junction on Windows, a symlink elsewhere; macOS /var) must
+  -- match the node a backend draws under the resolved path, and a directory both spellings share
+  -- must count the file once.
+  do
+    local uv = vim.uv or vim.loop
+    vim.fn.mkdir(tmp .. "/real", "p")
+    vim.fn.writefile({ "-- d" }, tmp .. "/real/d.lua")
+    if uv.fs_symlink(tmp .. "/real", tmp .. "/link", { junction = true }) then
+      local buf4 = vim.fn.bufadd(tmp .. "/link/d.lua")
+      vim.fn.bufload(buf4)
+      vim.diagnostic.set(diag_ns, buf4, {
+        { lnum = 0, col = 0, message = "e", severity = vim.diagnostic.severity.ERROR },
+      })
+      local real_dir = vim.fs.normalize(uv.fs_realpath(tmp .. "/real"))
+      local saved = { NODE_AT[0], NODE_AT[2] }
+      NODE_AT[0] = { path = real_dir .. "/d.lua", type = "file" }
+      NODE_AT[2] = { path = real_dir, type = "directory" }
+      lspdiag.setup({ enabled = true, debounce_ms = 10 }, stub)
+      settle()
+      vim.api.nvim_buf_clear_namespace(tree_buf, -1, 0, -1)
+      render_cb(tree_buf)
+      local function text(line)
+        local m = extmarks_of(line)
+        return #m > 0 and m[1][4].virt_text[1][1] or nil
+      end
+      eq(
+        "lsp_diagnostics: a buffer opened through a link badges its resolved node",
+        text(0),
+        " E:1"
+      )
+      eq("lsp_diagnostics: the resolved directory sums it", text(2), " E:1")
+      -- the root holds a.lua (E:1), sub/b.lua (W:2) and d.lua once (E:1), not once per spelling
+      eq(
+        "lsp_diagnostics: a directory both spellings share counts the file once",
+        text(3),
+        " E:2 W:2"
+      )
+      lspdiag.teardown()
+      vim.diagnostic.reset(diag_ns, buf4)
+      pcall(vim.api.nvim_buf_delete, buf4, { force = true })
+      NODE_AT[0], NODE_AT[2] = saved[1], saved[2]
+    else
+      print("  note no permission to create a link here — skipping the lsp_diagnostics link case")
+    end
+  end
+
   -- The default badge uses the sign texts of vim.diagnostic.config() (keyed by
   -- severity number or name), and E:/W: for a severity that has none.
   local orig_signs = vim.diagnostic.config().signs

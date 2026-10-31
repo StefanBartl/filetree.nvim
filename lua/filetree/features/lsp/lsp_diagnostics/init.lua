@@ -150,9 +150,35 @@ local sev = vim.diagnostic and vim.diagnostic.severity
     HINT = 4,
   }
 
+---Buffer name ("/"-normalised) → its resolved path ("/"-normalised), or false when it resolves to
+---itself. One fs_realpath per name, not per recompute (a name not on disk is not cached).
+---@type table<string, string|false>
+local _real = {}
+
+---@internal
+---The resolved spelling of `path` when it differs (a path through a symlink or a junction, macOS
+---/var → /private/var), else nil. A backend such as neo-tree draws the tree from the resolved
+---cwd, so a buffer opened through the link would otherwise never match its node.
+---@param path string  "/"-normalised
+---@return string?
+local function resolved(path)
+  local hit = _real[path]
+  if hit == nil then
+    local uv = vim.uv or vim.loop
+    local real = uv.fs_realpath(path)
+    real = real and real:gsub("\\", "/")
+    if not real then return nil end -- not on disk (yet): ask again next time
+    hit = real ~= path and real or false
+    _real[path] = hit
+  end
+  return hit or nil
+end
+
 ---@internal
 local function recompute()
   local new_counts = {}
+  ---File path → every key it is counted under (its buffer name and, if different, the resolved one).
+  local spellings = {}
   local all = vim.diagnostic.get(nil)
   for _, d in ipairs(all) do
     local bufnr = d.bufnr
@@ -161,7 +187,12 @@ local function recompute()
       -- path the same way) hits on Windows, where buffer names carry "\\".
       local path = vim.api.nvim_buf_get_name(bufnr):gsub("\\", "/")
       if path ~= "" then
-        local c = new_counts[path] or { error = 0, warning = 0, hint = 0, info = 0 }
+        local c = new_counts[path]
+        if not c then
+          c = { error = 0, warning = 0, hint = 0, info = 0 }
+          new_counts[path] = c
+          spellings[path] = { path, resolved(path) }
+        end
         if d.severity == sev.ERROR then
           c.error = c.error + 1
         elseif d.severity == sev.WARN then
@@ -171,35 +202,41 @@ local function recompute()
         elseif d.severity == sev.INFO then
           c.info = c.info + 1
         end
-        new_counts[path] = c
       end
     end
   end
-  _counts = new_counts
 
-  -- Fold every file's counts into each of its ancestor directories.
+  -- Fold every file's counts into each of its ancestor directories, under both spellings; a
+  -- directory both spellings share (the link inside the project) gets the file once.
   local new_dirs = {}
   for path, pc in pairs(new_counts) do
-    local dir = path:match("^(.*)/[^/]*$")
-    local last
-    while dir do
-      local key = dir ~= "" and dir or "/"
-      if key ~= last then
-        local agg = new_dirs[key]
-        if not agg then
-          agg = { error = 0, warning = 0, hint = 0, info = 0 }
-          new_dirs[key] = agg
+    local seen = {}
+    for _, spelling in ipairs(spellings[path]) do
+      local dir = spelling:match("^(.*)/[^/]*$")
+      while dir do
+        local key = dir ~= "" and dir or "/"
+        if not seen[key] then
+          seen[key] = true
+          local agg = new_dirs[key]
+          if not agg then
+            agg = { error = 0, warning = 0, hint = 0, info = 0 }
+            new_dirs[key] = agg
+          end
+          agg.error = agg.error + pc.error
+          agg.warning = agg.warning + pc.warning
+          agg.hint = agg.hint + pc.hint
+          agg.info = agg.info + pc.info
         end
-        agg.error = agg.error + pc.error
-        agg.warning = agg.warning + pc.warning
-        agg.hint = agg.hint + pc.hint
-        agg.info = agg.info + pc.info
-        last = key
+        if dir == "" then break end
+        dir = dir:match("^(.*)/[^/]*$")
       end
-      if dir == "" then break end
-      dir = dir:match("^(.*)/[^/]*$")
     end
   end
+  -- The file nodes under the resolved spelling too (after the fold: counted once above).
+  for path, list in pairs(spellings) do
+    if list[2] and not new_counts[list[2]] then new_counts[list[2]] = new_counts[path] end
+  end
+  _counts = new_counts
   _dir_counts = new_dirs
 end
 
@@ -357,6 +394,7 @@ function M.teardown()
   end
   _counts = {}
   _dir_counts = {}
+  _real = {}
   _adapter = nil
   if _debounce then
     if _debounce then _debounce.cancel() end

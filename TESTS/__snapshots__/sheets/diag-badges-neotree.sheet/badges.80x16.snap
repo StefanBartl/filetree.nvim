@@ -1,6 +1,5 @@
 testing.nvim screen v1
 size: 80x16
-cursor: 2,42
 mode: n
 --- text
 01|################################################################################
@@ -21,18 +20,18 @@ mode: n
 16|
 --- attrs
 01|################################################################################
-02|aaabbbbbaccccccccaaaaaaaaaaaaaaaaaaaaaaad
-03|aaaeebbaaaaaaffffaaaaaaaaaaaaaaaaaaaaaaadggggggggggggggggggggggggggggggggggggggg
-04|hhhiijjhhhhhhcccccccchhhhhhhhhhhhhhhhhhhdggggggggggggggggggggggggggggggggggggggg
-05|aaaeebbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaadggggggggggggggggggggggggggggggggggggggg
-06|aaabbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaadggggggggggggggggggggggggggggggggggggggg
-07|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-08|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-09|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-10|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-11|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-12|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-13|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-14|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-15|ggggggggggggggggggggggggggggggggggggggggdggggggggggggggggggggggggggggggggggggggg
-16|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+02|aaabbbbbaccccccccaaaaaaaaaaaaaaaaaaaaaaaa
+03|aaaddbbaaaaaaeeeeaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffffffff
+04|ggghhiiggggggccccccccgggggggggggggggggggafffffffffffffffffffffffffffffffffffffff
+05|aaaddbbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffffffff
+06|aaabbaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaafffffffffffffffffffffffffffffffffffffff
+07|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+08|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+09|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+10|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+11|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+12|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+13|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+14|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+15|jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjafffffffffffffffffffffffffffffffffffffff
+16|kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
