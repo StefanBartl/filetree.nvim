@@ -839,33 +839,61 @@ local function run_review_fixes()
     end
     local honoured, all = walk(true), walk(false)
 
-    -- a submodule: `git ls-files` lists only its gitlink, the walk descends
-    -- into it (tracked and untracked files, with its own ignore rules)
+    -- fixture git calls: a failed step fails here, not as a walk regression
+    local fixture_ok, fixture_err = true, nil
+    local function fixture_git(args)
+      if not fixture_ok then return end
+      local res = vim
+        .system(
+          vim.list_extend({
+            "git",
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "core.hooksPath=" .. scratch_root .. "/no-hooks",
+            "-c",
+            "protocol.file.allow=always",
+          }, args),
+          { text = true }
+        )
+        :wait()
+      if res.code ~= 0 then
+        fixture_ok, fixture_err = false, table.concat(args, " ") .. ": " .. (res.stderr or "")
+      end
+    end
+
+    -- a nested repository: `git ls-files` lists it only as `modules/lib/`
+    -- while untracked (an embedded clone) and only as its gitlink once added
+    -- (a submodule); the walk descends into it either way (tracked and
+    -- untracked files, with its own ignore rules)
     local sub = gitproj .. "/modules/lib"
     vim.fn.mkdir(sub, "p")
     vim.fn.writefile({ "![t](twice.png)" }, sub .. "/in-sub.md")
     vim.fn.writefile({ "skip.md" }, sub .. "/.gitignore")
     vim.fn.writefile({ "![t](twice.png)" }, sub .. "/skip.md")
-    vim.system({ "git", "init", "-q", sub }):wait()
-    vim.system({ "git", "-C", sub, "add", "in-sub.md", ".gitignore" }):wait()
-    vim
-      .system({
-        "git",
-        "-C",
-        sub,
-        "-c",
-        "user.name=t",
-        "-c",
-        "user.email=t@t",
-        "-c",
-        "commit.gpgsign=false",
-        "commit",
-        "-qm",
-        "i",
-      })
-      :wait()
+    fixture_git({ "init", "-q", sub })
+    fixture_git({ "-C", sub, "add", "in-sub.md", ".gitignore" })
+    fixture_git({ "-C", sub, "commit", "-qm", "i" })
     vim.fn.writefile({ "![t](twice.png)" }, sub .. "/untracked-in-sub.md")
-    vim.system({ "git", "-C", gitproj, "add", "modules/lib" }):wait()
+    local embedded = walk(true)
+    fixture_git({ "-C", gitproj, "add", "modules/lib" })
+    -- a second submodule whose repository git cannot open any more: the walk
+    -- falls back to its plain files instead of dropping them
+    local broken = gitproj .. "/modules/broken"
+    vim.fn.mkdir(broken, "p")
+    vim.fn.writefile({ "![t](twice.png)" }, broken .. "/in-broken.md")
+    fixture_git({ "init", "-q", broken })
+    fixture_git({ "-C", broken, "add", "in-broken.md" })
+    fixture_git({ "-C", broken, "commit", "-qm", "i" })
+    fixture_git({ "-C", gitproj, "add", "modules/broken" })
+    if fixture_ok then
+      vim.fn.delete(broken .. "/.git", "rf")
+      vim.fn.writefile({ "gitdir: " .. scratch_root .. "/no-such-gitdir" }, broken .. "/.git")
+    end
     local with_sub = walk(true)
     vim.fn.executable = walk_real_executable
     check(
@@ -877,6 +905,20 @@ local function run_review_fixes()
       "fix: the walk includes them with respect_gitignore = false",
       all["kept.md"] and all["generated.md"],
       vim.inspect(all)
+    )
+    check("fix: the submodule fixture is set up", fixture_ok, fixture_err)
+    check(
+      "fix: the walk finds references in an embedded repository not in the index",
+      embedded["kept.md"]
+        and embedded["in-sub.md"]
+        and embedded["untracked-in-sub.md"]
+        and not embedded["skip.md"],
+      vim.inspect(embedded)
+    )
+    check(
+      "fix: the walk keeps a submodule's files when git cannot list it",
+      with_sub["in-broken.md"],
+      vim.inspect(with_sub)
     )
     check(
       "fix: the walk finds references in submodule files, honouring the submodule's gitignore",

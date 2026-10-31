@@ -242,21 +242,51 @@ end
 local MAX_SUBMODULE_DEPTH = 8
 
 ---@internal
+---Every file under `dir` minus the pruned build and dependency folders: what
+---the walk looks at when git cannot list `dir`.
+---@param dir string
+---@return string[]
+local function plain_listing(dir)
+  return ftfs.collect_recursive(dir, "files", function(name)
+    return PRUNE_DIRS[name] == true
+  end)
+end
+
+local git_listing
+
+---@internal
+---The files of the nested repository at `abs` (a checked-out submodule or an
+---embedded clone), listed by git within what is left of the time budget. When
+---that listing fails or the budget is used up, the plain walk of `abs` stands
+---in, so the repository's files are never silently dropped.
+---@param abs string
+---@param deadline integer  `vim.uv.hrtime()` deadline in nanoseconds
+---@param depth integer  nesting level of the nested repository
+---@return string[]
+local function nested_listing(abs, deadline, depth)
+  local remaining = math.floor((deadline - vim.uv.hrtime()) / 1e6)
+  return (remaining > 0 and git_listing(abs, remaining, depth, deadline)) or plain_listing(abs)
+end
+
+---@internal
 ---The files under `root` that git does not ignore (tracked plus untracked,
 ---minus `.gitignore` / `info/exclude` / the global excludes), so the walk
 ---honours `scan.respect_gitignore` like ripgrep does. nil when git is missing,
 ---`root` is not inside a work tree, or git fails.
 ---
 ---`git ls-files` lists a submodule only as its gitlink (and
----`--recurse-submodules` cannot be combined with `--others`), so every
----checked-out gitlink is listed again from inside the submodule, with that
----submodule's own ignore rules. ripgrep searches submodule files too.
+---`--recurse-submodules` cannot be combined with `--others`), and an
+---untracked embedded repository only as `dir/`, so each checked-out one is
+---listed again from inside, with its own ignore rules. ripgrep searches those
+---files too. All nested listings share the one `timeout` budget.
 ---@param root string
----@param timeout integer
----@param depth? integer  submodule nesting level, 0 for the root
+---@param timeout integer  milliseconds
+---@param depth? integer  nesting level, 0 for the root
+---@param deadline? integer  shared `vim.uv.hrtime()` deadline (nanoseconds)
 ---@return string[]|nil
-local function git_listing(root, timeout, depth)
+function git_listing(root, timeout, depth, deadline)
   depth = depth or 0
+  deadline = deadline or (vim.uv.hrtime() + timeout * 1e6)
   if vim.fn.isdirectory(root) ~= 1 or vim.fn.executable("git") == 0 then return nil end
   local ok, res = pcall(function()
     return vim
@@ -283,12 +313,15 @@ local function git_listing(root, timeout, depth)
     rel = rel or entry
     if not seen[rel] and not pruned(rel) then
       seen[rel] = true
-      local abs = base .. "/" .. rel
-      if mode == "160000" then
-        -- A gitlink. Not checked out (no `.git` inside): nothing to search,
-        -- and `git -C` there would answer for the superproject.
+      local abs = (base .. "/" .. rel):gsub("/+$", "")
+      -- A gitlink, or an untracked directory git lists as `dir/` because it
+      -- holds a repository of its own. Not checked out (no `.git` inside):
+      -- nothing to search, and `git -C` there would answer for the
+      -- superproject.
+      local nested = mode == "160000" or (mode == nil and rel:sub(-1) == "/")
+      if nested then
         if depth < MAX_SUBMODULE_DEPTH and vim.uv.fs_stat(abs .. "/.git") then
-          for _, file in ipairs(git_listing(abs, timeout, depth + 1) or {}) do
+          for _, file in ipairs(nested_listing(abs, deadline, depth + 1)) do
             out[#out + 1] = file
           end
         end
@@ -312,11 +345,7 @@ local function list_files(root, cfg, session)
   local cached = session.listings[key]
   if cached then return cached end
   local all = respect and git_listing(root, (cfg.scan and cfg.scan.timeout_ms) or 3000) or nil
-  if not all then
-    all = ftfs.collect_recursive(root, "files", function(name)
-      return PRUNE_DIRS[name] == true
-    end)
-  end
+  if not all then all = plain_listing(root) end
   session.listings[key] = all
   return all
 end
