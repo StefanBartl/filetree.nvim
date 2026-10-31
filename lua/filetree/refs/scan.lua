@@ -152,14 +152,33 @@ local function candidates_rg(root, needles, exts, cfg, cb)
         -- "nothing matches": a rename would then land without its reference
         -- rewrites and nobody would notice. The walk takes over instead; when
         -- its cap cuts it short, it warns and the result is flagged incomplete.
+        --
+        -- rg also exits 2 when it merely hit an error on the way (one
+        -- unreadable directory, a locked file) and still printed every hit it
+        -- found. Those hits are a usable answer -- the walk could not read
+        -- the unreadable files either -- so only a killed run (timeout: code
+        -- 124 or a signal) or one without any output counts as dead.
+        local stdout = result.stdout or ""
         if result.code > 1 then
+          local killed = result.code == 124 or (result.signal ~= nil and result.signal ~= 0)
+          if killed or not stdout:find("%S") then
+            notify.debug(
+              "ripgrep scan failed (code "
+                .. tostring(result.code)
+                .. "), falling back to the walk: "
+                .. vim.trim(result.stderr or "")
+            )
+            return cb(nil)
+          end
           notify.debug(
-            "ripgrep scan failed (code " .. tostring(result.code) .. "), falling back to the walk"
+            "ripgrep reported errors (code "
+              .. tostring(result.code)
+              .. "), using its hits: "
+              .. vim.trim(result.stderr or "")
           )
-          return cb(nil)
         end
         local files = {}
-        for line in (result.stdout or ""):gmatch("[^\r\n]+") do
+        for line in stdout:gmatch("[^\r\n]+") do
           files[#files + 1] = ftpath.to_absolute(line)
         end
         cb(files)
@@ -193,9 +212,85 @@ local function file_hits(file, needles)
   return false
 end
 
+---State shared by the candidate searches of one scan (one `refs.prefetch`,
+---one `refs unused` sweep). Every (path, provider) job of a rename runs its
+---own ripgrep, and on a loaded machine they tend to time out together: without
+---this, each one would list the whole tree again and warn again.
+---@class FiletreeRefScanSession
+---@field listings table<string, string[]>  listing key → every file under the root
+---@field warned   boolean                   the walk cap warning was shown already
+
+---A fresh scan session, to hand to every `candidates` / `run_plan` call of one scan.
+---@return FiletreeRefScanSession
+function M.new_session()
+  return { listings = {}, warned = false }
+end
+
+---@internal
+---Whether any segment of the slash-separated `rel` is a pruned directory.
+---@param rel string
+---@return boolean
+local function pruned(rel)
+  for seg in rel:gmatch("[^/]+") do
+    if PRUNE_DIRS[seg] then return true end
+  end
+  return false
+end
+
+---@internal
+---The files under `root` that git does not ignore (tracked plus untracked,
+---minus `.gitignore` / `info/exclude` / the global excludes), so the walk
+---honours `scan.respect_gitignore` like ripgrep does. nil when git is missing,
+---`root` is not inside a work tree, or git fails.
+---@param root string
+---@param timeout integer
+---@return string[]|nil
+local function git_listing(root, timeout)
+  if vim.fn.isdirectory(root) ~= 1 or vim.fn.executable("git") == 0 then return nil end
+  local ok, res = pcall(function()
+    return vim
+      .system(
+        { "git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard" },
+        { text = true, timeout = timeout }
+      )
+      :wait()
+  end)
+  if not ok or not res or res.code ~= 0 then return nil end
+  local base = ftpath.slashify(root):gsub("/+$", "")
+  local out = {}
+  for rel in (res.stdout or ""):gmatch("[^%z]+") do
+    if not pruned(rel) then out[#out + 1] = base .. "/" .. rel end
+  end
+  return out
+end
+
+---@internal
+---Every file under `root` the walk may look at, listed once per session.
+---@param root string
+---@param cfg FiletreeRefsConfig
+---@param session FiletreeRefScanSession
+---@return string[]
+local function list_files(root, cfg, session)
+  local respect = not (cfg.scan and cfg.scan.respect_gitignore == false)
+  local key = (respect and "git:" or "all:") .. root
+  local cached = session.listings[key]
+  if cached then return cached end
+  local all = respect and git_listing(root, (cfg.scan and cfg.scan.timeout_ms) or 3000) or nil
+  if not all then
+    all = ftfs.collect_recursive(root, "files", function(name)
+      return PRUNE_DIRS[name] == true
+    end)
+  end
+  session.listings[key] = all
+  return all
+end
+
 ---@internal
 ---ripgrep-free fallback: walk the tree, keep files with a matching extension,
 ---and plain-find the needles in their content. Capped by `scan.max_files`.
+---With `scan.respect_gitignore` (the default) and `root` inside a git work
+---tree, the listing comes from git, so gitignored files stay out exactly as
+---they do for ripgrep.
 ---
 ---Over `WALK_CHUNK_SIZE` candidates the reads are spread `WALK_CHUNK_SIZE` per
 ---event-loop tick with a `[filetree.refs]` progress indicator, mirroring
@@ -205,14 +300,13 @@ end
 ---@param exts string[]
 ---@param cfg FiletreeRefsConfig
 ---@param cb fun(files: string[], incomplete?: boolean)  `incomplete`: the cap cut the walk short or it was cancelled
----@param rg_failed? boolean  ripgrep exists but its run died (timeout, crash); only changes the cap warning
-local function candidates_walk(root, needles, exts, cfg, cb, rg_failed)
+---@param rg_failed boolean  ripgrep exists but its run died (timeout, crash); only changes the cap warning
+---@param session FiletreeRefScanSession
+local function candidates_walk(root, needles, exts, cfg, cb, rg_failed, session)
   local max_files = (cfg.scan and cfg.scan.max_files) or 5000
   local wanted = ext_set(exts)
 
-  local all = ftfs.collect_recursive(root, "files", function(name)
-    return PRUNE_DIRS[name] == true
-  end)
+  local all = list_files(root, cfg, session)
 
   ---@type string[]
   local candidates = {}
@@ -223,15 +317,17 @@ local function candidates_walk(root, needles, exts, cfg, cb, rg_failed)
 
   local capped = #candidates > max_files
   local total = capped and max_files or #candidates
-  if capped then
+  -- One warning per scan, however many of its jobs hit the cap.
+  if capped and not session.warned then
+    session.warned = true
     notify.warn(
       rg_failed
           and string.format(
-            "ripgrep reference scan failed or timed out; the fallback walk stopped at %d files, references may be missing (raise refs.scan.timeout_ms)",
+            "ripgrep reference scan failed or timed out; the fallback walk stopped at %d files, references may be missing (raise refs.scan.timeout_ms or refs.scan.max_files)",
             max_files
           )
         or string.format(
-          "reference scan stopped at %d files (install ripgrep for the fast path)",
+          "reference scan stopped at %d files (install ripgrep for the fast path, or raise refs.scan.max_files)",
           max_files
         )
     )
@@ -285,8 +381,10 @@ end
 ---@param exts string[]
 ---@param cfg FiletreeRefsConfig
 ---@param cb fun(files: string[], incomplete?: boolean)  `incomplete` only ever comes from the walk fallback (capped or cancelled), which also takes over when ripgrep is missing or its run died
-function M.candidates(root, needles, exts, cfg, cb)
+---@param session? FiletreeRefScanSession  shared by the calls of one scan (see `new_session`); a fresh one when omitted
+function M.candidates(root, needles, exts, cfg, cb, session)
   if #needles == 0 or #exts == 0 then return cb({}) end
+  session = session or M.new_session()
 
   -- Both backends funnel through here, and they did NOT agree on how to spell
   -- a path. ripgrep is handed a root with forward slashes and prints its hits
@@ -313,7 +411,7 @@ function M.candidates(root, needles, exts, cfg, cb)
     if files then return normalized(files, cb) end
     candidates_walk(root, needles, exts, cfg, function(walked, incomplete)
       return normalized(walked, cb, incomplete)
-    end, vim.fn.executable("rg") == 1)
+    end, vim.fn.executable("rg") == 1, session)
   end)
 end
 
@@ -323,7 +421,8 @@ end
 ---@param plan FiletreeRefPlan
 ---@param ctx FiletreeRefCtx
 ---@param cb fun(refs: FiletreeRef[], incomplete?: boolean)  `incomplete`: the candidate search was cut short, refs may be missing
-function M.run_plan(plan, ctx, cb)
+---@param session? FiletreeRefScanSession  shared by every job of one scan (see `new_session`)
+function M.run_plan(plan, ctx, cb, session)
   M.candidates(ctx.root, plan.needles, plan.extensions, ctx.cfg, function(files, incomplete)
     local refs = {}
     for _, file in ipairs(files) do
@@ -338,7 +437,7 @@ function M.run_plan(plan, ctx, cb)
       end
     end
     cb(refs, incomplete)
-  end)
+  end, session)
 end
 
 return M

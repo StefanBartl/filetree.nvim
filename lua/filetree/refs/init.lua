@@ -264,6 +264,9 @@ function M.prefetch(paths, opts)
     finish(result) -- no provider had anything to look for
   else
     local pending = #jobs
+    -- One session for all jobs: when their ripgrep runs die together, the
+    -- fallback lists the tree once and warns once, not once per job.
+    local session = scan.new_session()
     for _, job in ipairs(jobs) do
       scan.run_plan(job.plan, job.ctx, function(refs, incomplete)
         if incomplete then result.incomplete = true end
@@ -272,7 +275,7 @@ function M.prefetch(paths, opts)
         end
         pending = pending - 1
         if pending == 0 then finish(result) end
-      end)
+      end, session)
     end
   end
 

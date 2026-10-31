@@ -130,7 +130,7 @@ return {
   scan = {
     root = "project", -- "project" (nearest root) | "cwd"
     respect_gitignore = true,
-    max_files = 5000, -- cap for the ripgrep-free fallback walk
+    max_files = 5000, -- cap for the fallback walk (no ripgrep, or a failed/timed-out run)
     timeout_ms = 3000,
   },
 

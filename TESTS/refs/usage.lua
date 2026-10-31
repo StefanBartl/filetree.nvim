@@ -724,10 +724,134 @@ local function run_review_fixes()
       and plan_incomplete == true
       and plan_refs ~= nil
       and timeout_warns[1] ~= nil
-      and timeout_warns[1]:find("timed out", 1, true) ~= nil,
+      and timeout_warns[1]:find("timed out", 1, true) ~= nil
+      and timeout_warns[1]:find("refs.scan.max_files", 1, true) ~= nil,
     vim.inspect({ incomplete = plan_incomplete, warns = timeout_warns })
   )
+
+  -- every job of one prefetch shares a scan session: when all their ripgrep
+  -- runs time out, the fallback lists the tree once and warns once
+  local ftfs = require("filetree.util.fs")
+  local real_collect = ftfs.collect_recursive
+  local listings = 0
+  ---@diagnostic disable-next-line: duplicate-set-field
+  ftfs.collect_recursive = function(...)
+    listings = listings + 1
+    return real_collect(...)
+  end
+  vim.system = function(cmd, o, on_exit)
+    if cmd[1] == "rg" and on_exit then
+      on_exit({ code = 124, signal = 15, stdout = "", stderr = "" })
+      return {}
+    end
+    return timeout_real_system(cmd, o, on_exit)
+  end
+  ---@diagnostic disable-next-line: duplicate-set-field
+  vim.notify = function(msg, level)
+    if level == vim.log.levels.WARN then timeout_warns[#timeout_warns + 1] = tostring(msg) end
+  end
+  refs.setup({
+    providers = { markdown = true, lua = true, python = false, ts_js = false },
+    scan = { max_files = 1, timeout_ms = 1, respect_gitignore = false },
+  })
+  timeout_warns = {}
+  local prefetched
+  refs
+    .prefetch(
+      { p("assets/twice.png"), p("assets/used.png"), p("assets/shot.png") },
+      { op = "move", mode = "ask", root = work }
+    )
+    .await(function(res)
+      prefetched = res
+    end)
+  vim.wait(5000, function()
+    return prefetched ~= nil
+  end, 10)
+  ftfs.collect_recursive = real_collect
+  refs.setup({ providers = { markdown = true, lua = true, python = false, ts_js = false } })
+  check(
+    "fix: a prefetch whose ripgrep runs all time out lists the tree once and warns once",
+    prefetched ~= nil and prefetched.incomplete == true and listings == 1 and #timeout_warns == 1,
+    vim.inspect({ listings = listings, warns = timeout_warns })
+  )
+
+  -- rg exits 2 when it hit an error on the way (an unreadable file) but
+  -- still printed its hits: those are kept, not thrown away for the walk
+  local rg_hit = work .. "/only-rg-knows.md"
+  vim.system = function(cmd, o, on_exit)
+    if cmd[1] == "rg" and on_exit then
+      on_exit({ code = 2, signal = 0, stdout = rg_hit .. "\n", stderr = "rg: locked.md: denied" })
+      return {}
+    end
+    return timeout_real_system(cmd, o, on_exit)
+  end
+  done, got = false, nil
+  scan.candidates(
+    work,
+    { "twice.png" },
+    { "md" },
+    { scan = { max_files = 5000, timeout_ms = 1000 } },
+    function(files)
+      got, done = files, true
+    end
+  )
+  vim.wait(5000, function()
+    return done
+  end, 10)
+  vim.system = timeout_real_system
+  vim.notify = timeout_real_notify
+  check(
+    "fix: a ripgrep run with errors but hits keeps its hits",
+    done and got and #got == 1 and got[1] == rg_hit,
+    vim.inspect(got)
+  )
   vim.fn.executable = walk_real_executable
+
+  -- the walk honours scan.respect_gitignore inside a git work tree
+  if walk_real_executable("git") == 1 then
+    local gitproj = scratch_root .. "/gitproj"
+    vim.fn.delete(gitproj, "rf")
+    vim.fn.mkdir(gitproj .. "/out", "p")
+    vim.fn.writefile({ "out/" }, gitproj .. "/.gitignore")
+    vim.fn.writefile({ "![t](twice.png)" }, gitproj .. "/kept.md")
+    vim.fn.writefile({ "![t](twice.png)" }, gitproj .. "/out/generated.md")
+    vim.system({ "git", "init", "-q", gitproj }):wait()
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.executable = function(name)
+      if name == "rg" then return 0 end
+      return walk_real_executable(name)
+    end
+    local function walk(respect)
+      local out, fin = nil, false
+      scan.candidates(
+        gitproj,
+        { "twice.png" },
+        { "md" },
+        { scan = { max_files = 5000, timeout_ms = 5000, respect_gitignore = respect } },
+        function(files)
+          out, fin = files, true
+        end
+      )
+      vim.wait(5000, function()
+        return fin
+      end, 10)
+      return basename_set(out or {})
+    end
+    local honoured, all = walk(true), walk(false)
+    vim.fn.executable = walk_real_executable
+    check(
+      "fix: the walk leaves gitignored files out with respect_gitignore",
+      honoured["kept.md"] and not honoured["generated.md"],
+      vim.inspect(honoured)
+    )
+    check(
+      "fix: the walk includes them with respect_gitignore = false",
+      all["kept.md"] and all["generated.md"],
+      vim.inspect(all)
+    )
+  else
+    print("  skip the walk gitignore checks (git not found)")
+  end
 
   -- an incomplete candidate search must stop `refs unused` from offering anything
   local real_candidates = scan.candidates

@@ -103,12 +103,12 @@
 ---@class FiletreeRefScanResult
 ---@field refs  FiletreeRef[]
 ---@field plans table<string, table<string, FiletreeRefPlan>>  source path → provider → plan
----@field incomplete? boolean  The candidate search was cut short (fallback walk capped or cancelled, already warned about); refs may be missing.
+---@field incomplete? boolean  The candidate search was cut short (fallback walk capped or cancelled, already warned about); refs may be missing. Informational for now: no flow reads it, the warning is the user-visible signal.
 
 ---@class FiletreeRefsScanConfig
 ---@field root              "project"|"cwd"  Search root (default "project").
----@field respect_gitignore boolean          Pass ripgrep's ignore rules (default true).
----@field max_files         integer          Cap for the no-ripgrep fallback walk (default 5000).
+---@field respect_gitignore boolean          Honour gitignore: ripgrep's ignore rules, and `git ls-files` for the fallback walk inside a git work tree (default true).
+---@field max_files         integer          Cap for the fallback walk: no ripgrep, or a failed/timed-out run (default 5000).
 ---@field timeout_ms        integer          Per-scan timeout (default 3000).
 
 ---@class FiletreeRefsProvidersConfig

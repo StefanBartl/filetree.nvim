@@ -206,6 +206,7 @@ function M.count(paths, opts, cb)
     cb(out, meta)
   end
 
+  local session = scan.new_session()
   local gi = 0
   local function next_group()
     gi = gi + 1
@@ -239,7 +240,7 @@ function M.count(paths, opts, cb)
       end
 
       step()
-    end)
+    end, session)
   end
 
   next_group()
