@@ -36,17 +36,24 @@ return {
   -- Dependencies (directory names) put on the runtimepath: $<NAME>_DIR, .deps/<name>, ../<name>,
   -- stdpath('data')/lazy/<name>.
   deps = { "lib.nvim", "ui.nvim" },
-  -- Guards (fs / state / scheduled_error / prompt / deprecation / process_net) are intentionally
-  -- left at their defaults: every spec but TESTS/sheets_spec.lua runs in the "script" dialect (its
-  -- own `nvim -l` process), where testing.nvim installs NO guard ("guards: not installed in a script
-  -- file"). Nothing is measured, so no guard mode can be justified yet. Revisit this once the specs
-  -- run in a dialect that supports guards.
+  -- Guards (fs / state / scheduled_error / prompt / deprecation / process_net) are left at their
+  -- defaults. They DO apply to the "script" dialect: testing.nvim's child boot opens ONE guard
+  -- window around the whole script file (child/boot.lua, `script_guards` record), so a script spec's
+  -- spawns are judged against `guard_allow.spawn` below like any other spec's; there are just no
+  -- per-case tags (`@spawn`) in a script, only the config list.
   -- "none" = all specs in one nvim, "file" = one nvim per spec file
   -- (nothing leaks from one file into the next).
   isolated = "none",
-  -- TESTS/sheets_spec.lua (busted dialect, so the default guards apply to it): every test sheet
-  -- runs in a child editor.
-  guard_allow = { spawn = { "nvim" } },
+  -- Executables the specs start on purpose (matched by basename, `.exe` ignored):
+  --   nvim       TESTS/sheets_spec.lua runs every test sheet in a child editor; file_clipboard.lua
+  --              uses this very nvim as a harmless stand-in tool.
+  --   tar, unzip TESTS/compress_spec.lua creates real archives (`tar -a`) and lists them (`unzip -Z1`).
+  --   powershell TESTS/file_clipboard.lua runs the built Windows clipboard command for real.
+  --   ft-definitely-missing-tool-xyz  TESTS/file_clipboard.lua checks the "tool not found" path
+  --              (the spawn fails by design; nothing is started).
+  guard_allow = {
+    spawn = { "nvim", "tar", "unzip", "powershell", "ft-definitely-missing-tool-xyz" },
+  },
   -- "c" = child started from a -c command (v:vim_did_enter is 0, <cword> works),
   -- "l" = `nvim -l`.
   host = "l",
