@@ -47,6 +47,14 @@ do
   if real then scratch_root = (real:gsub("\\", "/")) end
 end
 
+---Whether a `vim.system` argv starts ripgrep: the scan may start it by its
+---resolved path (a Scoop shim resolves to the real binary), not as "rg".
+---@param cmd string[]
+---@return boolean
+local function is_rg(cmd)
+  return (vim.fs.basename(cmd[1]):lower():gsub("%.exe$", "")) == "rg"
+end
+
 local passed, failed = 0, 0
 local function check(name, ok, detail)
   if ok then
@@ -423,7 +431,7 @@ local function run_report()
   local real_system = vim.system
   ---@diagnostic disable-next-line: duplicate-set-field
   vim.system = function(cmd, o, on_exit)
-    if cmd[1] == "rg" and on_exit then
+    if is_rg(cmd) and on_exit then
       on_exit({ code = 2, stdout = "", stderr = "boom" })
       return {}
     end
@@ -672,7 +680,7 @@ local function run_review_fixes()
   local timeout_real_system = vim.system
   ---@diagnostic disable-next-line: duplicate-set-field
   vim.system = function(cmd, o, on_exit)
-    if cmd[1] == "rg" and on_exit then
+    if is_rg(cmd) and on_exit then
       on_exit({ code = 124, signal = 15, stdout = "", stderr = "" })
       return {}
     end
@@ -740,7 +748,7 @@ local function run_review_fixes()
     return real_collect(...)
   end
   vim.system = function(cmd, o, on_exit)
-    if cmd[1] == "rg" and on_exit then
+    if is_rg(cmd) and on_exit then
       on_exit({ code = 124, signal = 15, stdout = "", stderr = "" })
       return {}
     end
@@ -779,7 +787,7 @@ local function run_review_fixes()
   -- still printed its hits: those are kept, not thrown away for the walk
   local rg_hit = work .. "/only-rg-knows.md"
   vim.system = function(cmd, o, on_exit)
-    if cmd[1] == "rg" and on_exit then
+    if is_rg(cmd) and on_exit then
       on_exit({ code = 2, signal = 0, stdout = rg_hit .. "\n", stderr = "rg: locked.md: denied" })
       return {}
     end

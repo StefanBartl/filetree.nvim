@@ -99,6 +99,76 @@ end
 local STDIN_PATTERN_BYTES = 6000
 
 ---@internal
+---The ripgrep binary to start. A Scoop shim (`...\shims\rg.exe` next to an
+---`rg.shim` naming the real binary) is resolved to the binary it points at.
+---
+---The shim is a process of its own between the editor and ripgrep. libuv puts
+---the processes it starts into a kill-on-close job object, but children of
+---those processes may break away from it, and a shim killed (scan timeout,
+---editor exit) right after it created ripgrep left ripgrep behind: a search
+---from a refs spec was found still alive hours after its editor exited,
+---holding the editor's inherited stdout, so `scripts/test.sh | tail` never
+---saw EOF. Started directly, ripgrep is the job member and dies with it.
+---@return string
+function M.rg_binary()
+  local exe = vim.fn.exepath("rg")
+  if exe == "" then return "rg" end
+  local shim = exe:gsub("%.[eE][xX][eE]$", "") .. ".shim"
+  if vim.fn.filereadable(shim) == 0 then return "rg" end
+  for _, line in ipairs(vim.fn.readfile(shim)) do
+    local path = line:match('^%s*path%s*=%s*"([^"]+)"') or line:match("^%s*path%s*=%s*(%S+)")
+    if path and vim.fn.executable(path) == 1 then return path end
+  end
+  return "rg"
+end
+
+-- ripgrep processes still running, keyed by their `vim.SystemObj`.
+--
+-- Neovim does not stop a `vim.system` child when it exits (on POSIX; on
+-- Windows libuv's job object does, but only for its direct children, see
+-- `rg_binary`). A search still running at `:qa` (a test that ends while a
+-- second plan of the same rename is in flight, an editor closed mid-scan)
+-- would outlive the editor. VimLeavePre kills them all.
+---@type table<vim.SystemObj, true>
+local live_rg = {}
+local leave_hook = false
+
+---@internal
+---Kill every ripgrep this module started that has not exited yet.
+---@return integer killed  how many were still running
+function M.kill_live()
+  local n = 0
+  for obj in pairs(live_rg) do
+    live_rg[obj] = nil
+    if pcall(obj.kill, obj, "sigkill") then n = n + 1 end
+  end
+  return n
+end
+
+---@internal
+---How many ripgrep searches are running right now (for the specs).
+---@return integer
+function M.live_count()
+  local n = 0
+  for _ in pairs(live_rg) do
+    n = n + 1
+  end
+  return n
+end
+
+local function ensure_leave_hook()
+  if leave_hook then return end
+  leave_hook = true
+  vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = vim.api.nvim_create_augroup("filetree.refs.scan.rg", { clear = true }),
+    desc = "filetree.refs: stop ripgrep searches still running",
+    callback = function()
+      M.kill_live()
+    end,
+  })
+end
+
+---@internal
 ---ripgrep-based candidate search.
 ---@param root string
 ---@param needles string[]
@@ -111,7 +181,8 @@ local function candidates_rg(root, needles, exts, cfg, cb)
   -- argv form (not a shell string) on purpose: rg is exec'd directly, so
   -- there is nothing to quote and no dependency on &shell — the same
   -- reasoning as the scan this replaces in smart_rename.
-  local cmd = { "rg", "--files-with-matches", "--fixed-strings", "--color=never", "--ignore-case" }
+  local cmd =
+    { M.rg_binary(), "--files-with-matches", "--fixed-strings", "--color=never", "--ignore-case" }
   if cfg.scan and cfg.scan.respect_gitignore == false then cmd[#cmd + 1] = "--no-ignore" end
   for _, e in ipairs(exts) do
     cmd[#cmd + 1] = "-g"
@@ -147,7 +218,11 @@ local function candidates_rg(root, needles, exts, cfg, cb)
   cmd[#cmd + 1] = root
 
   local timeout = (cfg.scan and cfg.scan.timeout_ms) or 3000
-  local ok_spawn = pcall(
+  ensure_leave_hook()
+  -- Set before the spawn: `on_exit` may run before `vim.system` returns.
+  local obj
+  local exited = false
+  local ok_spawn, spawned = pcall(
     vim.system,
     cmd,
     -- `cwd = root`: rg matches `-g` globs against the path relative to its
@@ -156,6 +231,10 @@ local function candidates_rg(root, needles, exts, cfg, cb)
     -- (a project under `.../build/proj`) and dropped every file.
     { text = true, timeout = timeout, stdin = stdin, cwd = root },
     function(result)
+      -- `on_exit` runs in a fast event; table writes are allowed there. The
+      -- `timeout` above makes vim.system kill a hung search itself.
+      exited = true
+      if obj then live_rg[obj] = nil end
       vim.schedule(function()
         -- rg: 0 = matches, 1 = no matches, >1 = error (including a timeout kill)
         -- A dead search (timeout kill on a loaded machine, a crash) is never
@@ -195,7 +274,9 @@ local function candidates_rg(root, needles, exts, cfg, cb)
       end)
     end
   )
-  if not ok_spawn then cb(nil) end
+  if not ok_spawn then return cb(nil) end
+  obj = spawned
+  if not exited then live_rg[obj] = true end
 end
 
 -- Candidates read per event-loop tick during the ripgrep-free walk. Each cycle
