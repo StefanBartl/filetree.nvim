@@ -34,6 +34,9 @@ local M = {}
 -- Exported (not `@internal`) so `filetree.refs.own_links`'s directory-move
 -- walk -- the same "walk a tree for reference-bearing files" concern, just
 -- the outgoing direction -- prunes the identical set instead of drifting.
+-- Pruned at any depth and on every scan path alike: ripgrep, the walk's git
+-- listing (even for a tracked folder of that name) and the plain walk, so
+-- the two candidate searches never disagree about such a folder.
 ---@type table<string, boolean>
 M.PRUNE_DIRS = {
   [".git"] = true,
@@ -114,9 +117,12 @@ local function candidates_rg(root, needles, exts, cfg, cb)
     cmd[#cmd + 1] = "-g"
     cmd[#cmd + 1] = "*." .. e
   end
+  -- `**/dir/**`, not `dir/*`: a glob with a slash is anchored at the search
+  -- root, so `dir/*` left a nested `pkg/vendor/` searched while the walk
+  -- prunes that folder at any depth.
   for dir in pairs(PRUNE_DIRS) do
     cmd[#cmd + 1] = "-g"
-    cmd[#cmd + 1] = "!" .. dir .. "/*"
+    cmd[#cmd + 1] = "!**/" .. dir .. "/**"
   end
   -- A sweep over a whole folder (`filetree.refs.usage`) hands over one needle
   -- per file; hundreds of `-e` arguments would blow Windows' command-line

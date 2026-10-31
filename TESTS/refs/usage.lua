@@ -929,6 +929,66 @@ local function run_review_fixes()
         and not with_sub["generated.md"],
       vim.inspect(with_sub)
     )
+
+    -- tracked folders named like a PRUNE_DIRS entry (`vendor/`, `build/`),
+    -- at the root and nested: the walk's git listing prunes them at any
+    -- depth, and ripgrep's globs must prune the same folders, or the two
+    -- candidate searches disagree
+    local pruneproj = scratch_root .. "/pruneproj"
+    vim.fn.delete(pruneproj, "rf")
+    for _, d in ipairs({ "vendor", "pkg/vendor/deep", "pkg/build" }) do
+      vim.fn.mkdir(pruneproj .. "/" .. d, "p")
+    end
+    for _, f in ipairs({ "top.md", "vendor.md", "vendor/root-vendor.md", "pkg/ok.md" }) do
+      vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/" .. f)
+    end
+    vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/pkg/vendor/deep/nested-vendor.md")
+    vim.fn.writefile({ "![t](twice.png)" }, pruneproj .. "/pkg/build/nested-build.md")
+    local prune_ok, prune_err = fixture_ok, fixture_err
+    fixture_ok = true
+    fixture_git({ "init", "-q", pruneproj })
+    fixture_git({ "-C", pruneproj, "add", "." })
+    prune_ok, prune_err = prune_ok and fixture_ok, prune_err or fixture_err
+    local function search(rg)
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.fn.executable = function(name)
+        if name == "rg" and not rg then return 0 end
+        return walk_real_executable(name)
+      end
+      local out, fin = nil, false
+      scan.candidates(
+        pruneproj,
+        { "twice.png" },
+        { "md" },
+        { scan = { max_files = 5000, timeout_ms = 5000 } },
+        function(files)
+          out, fin = files, true
+        end
+      )
+      vim.wait(5000, function()
+        return fin
+      end, 10)
+      vim.fn.executable = walk_real_executable
+      return basename_set(out or {})
+    end
+    local expected = { ["top.md"] = true, ["vendor.md"] = true, ["ok.md"] = true }
+    check("fix: the pruned-folder fixture is set up", prune_ok, prune_err)
+    local walked = search(false)
+    check(
+      "fix: the walk prunes tracked vendor/ and build/ folders at any depth",
+      vim.deep_equal(walked, expected),
+      vim.inspect(walked)
+    )
+    if walk_real_executable("rg") == 1 then
+      local grepped = search(true)
+      check(
+        "fix: ripgrep prunes the same tracked folders as the walk",
+        vim.deep_equal(grepped, walked),
+        vim.inspect({ rg = grepped, walk = walked })
+      )
+    else
+      print("  skip the ripgrep pruned-folder check (rg not found)")
+    end
   else
     print("  skip the walk gitignore checks (git not found)")
   end

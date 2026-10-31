@@ -1017,7 +1017,9 @@ keeps its hits. With `scan.respect_gitignore` the walk lists files through
 `git ls-files` inside a git work tree, so gitignored files stay out as they do
 for ripgrep, and descends into checked-out submodules and embedded
 repositories as ripgrep does; outside a work tree (or without git) it walks
-everything but the usual build and dependency folders.
+everything. Both searches skip the usual build and dependency folders
+(`node_modules`, `vendor`, `build`, `dist`, `target`, ...) at any depth, even
+when git tracks them.
 
 Commands:
   :Filetree refs undo      Revert the last reference rewrite
