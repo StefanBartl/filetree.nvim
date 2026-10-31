@@ -48,11 +48,23 @@ return {
   --   nvim       TESTS/sheets_spec.lua runs every test sheet in a child editor; file_clipboard.lua
   --              uses this very nvim as a harmless stand-in tool.
   --   tar, unzip TESTS/compress_spec.lua creates real archives (`tar -a`) and lists them (`unzip -Z1`).
+  --   zip, bsdtar TESTS/compress_spec.lua's real round trip uses whatever archiver.detect() picks:
+  --              Info-ZIP `zip` when on PATH (ubuntu/macos runners), else `bsdtar` or `tar`.
+  --   sh         TESTS/file_clipboard.lua's non-Windows signal case (`sh -c "kill -9 $$"`).
   --   powershell TESTS/file_clipboard.lua runs the built Windows clipboard command for real.
   --   ft-definitely-missing-tool-xyz  TESTS/file_clipboard.lua checks the "tool not found" path
   --              (the spawn fails by design; nothing is started).
   guard_allow = {
-    spawn = { "nvim", "tar", "unzip", "powershell", "ft-definitely-missing-tool-xyz" },
+    spawn = {
+      "nvim",
+      "tar",
+      "unzip",
+      "zip",
+      "bsdtar",
+      "sh",
+      "powershell",
+      "ft-definitely-missing-tool-xyz",
+    },
   },
   -- "c" = child started from a -c command (v:vim_did_enter is 0, <cword> works),
   -- "l" = `nvim -l`.
