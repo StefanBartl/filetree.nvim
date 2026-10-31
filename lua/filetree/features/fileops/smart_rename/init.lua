@@ -210,6 +210,18 @@ end
 
 -- ── Public API ────────────────────────────────────────────────────────────────
 
+---Byte column (0-based) just before the extension of `name`, or nil when the
+---cursor should stay at the end (directory, no extension, dotfile like ".gitignore").
+---@param name string
+---@param is_dir boolean?
+---@return integer?
+function M.stem_end(name, is_dir)
+  if is_dir then return nil end
+  local dot = name:match("^.*()%.")
+  if not dot or dot == 1 or dot == #name then return nil end
+  return dot - 1
+end
+
 function M.rename_current()
   if not _adapter then return end
   local node = _adapter.get_current_node()
@@ -230,7 +242,7 @@ function M.rename_current()
   -- are switched off, so the flow below stays the same either way.)
   local refs_handle = refs.prefetch({ old_path }, { op = "rename" })
 
-  require("ui.kit").input({
+  local surf = require("ui.kit").input({
     title = "Rename to: ",
     default = old_name,
     on_submit = function(new_name)
@@ -259,6 +271,15 @@ function M.rename_current()
       end
     end,
   })
+
+  -- kit.input parks the cursor at the end of the line; for a file put it right
+  -- before the extension so typing replaces just the stem.
+  local stem_end = M.stem_end(old_name, node.type == "directory")
+  if surf and stem_end then
+    vim.schedule(function()
+      if surf:is_valid() then pcall(vim.api.nvim_win_set_cursor, surf.winid, { 1, stem_end }) end
+    end)
+  end
 end
 
 -- ── Setup ─────────────────────────────────────────────────────────────────────
