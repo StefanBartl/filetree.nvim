@@ -838,6 +838,35 @@ local function run_review_fixes()
       return basename_set(out or {})
     end
     local honoured, all = walk(true), walk(false)
+
+    -- a submodule: `git ls-files` lists only its gitlink, the walk descends
+    -- into it (tracked and untracked files, with its own ignore rules)
+    local sub = gitproj .. "/modules/lib"
+    vim.fn.mkdir(sub, "p")
+    vim.fn.writefile({ "![t](twice.png)" }, sub .. "/in-sub.md")
+    vim.fn.writefile({ "skip.md" }, sub .. "/.gitignore")
+    vim.fn.writefile({ "![t](twice.png)" }, sub .. "/skip.md")
+    vim.system({ "git", "init", "-q", sub }):wait()
+    vim.system({ "git", "-C", sub, "add", "in-sub.md", ".gitignore" }):wait()
+    vim
+      .system({
+        "git",
+        "-C",
+        sub,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-qm",
+        "i",
+      })
+      :wait()
+    vim.fn.writefile({ "![t](twice.png)" }, sub .. "/untracked-in-sub.md")
+    vim.system({ "git", "-C", gitproj, "add", "modules/lib" }):wait()
+    local with_sub = walk(true)
     vim.fn.executable = walk_real_executable
     check(
       "fix: the walk leaves gitignored files out with respect_gitignore",
@@ -848,6 +877,15 @@ local function run_review_fixes()
       "fix: the walk includes them with respect_gitignore = false",
       all["kept.md"] and all["generated.md"],
       vim.inspect(all)
+    )
+    check(
+      "fix: the walk finds references in submodule files, honouring the submodule's gitignore",
+      with_sub["kept.md"]
+        and with_sub["in-sub.md"]
+        and with_sub["untracked-in-sub.md"]
+        and not with_sub["skip.md"]
+        and not with_sub["generated.md"],
+      vim.inspect(with_sub)
     )
   else
     print("  skip the walk gitignore checks (git not found)")

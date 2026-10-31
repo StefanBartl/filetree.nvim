@@ -238,28 +238,64 @@ local function pruned(rel)
 end
 
 ---@internal
+---Nesting limit for submodules inside submodules, against a gitlink loop.
+local MAX_SUBMODULE_DEPTH = 8
+
+---@internal
 ---The files under `root` that git does not ignore (tracked plus untracked,
 ---minus `.gitignore` / `info/exclude` / the global excludes), so the walk
 ---honours `scan.respect_gitignore` like ripgrep does. nil when git is missing,
 ---`root` is not inside a work tree, or git fails.
+---
+---`git ls-files` lists a submodule only as its gitlink (and
+---`--recurse-submodules` cannot be combined with `--others`), so every
+---checked-out gitlink is listed again from inside the submodule, with that
+---submodule's own ignore rules. ripgrep searches submodule files too.
 ---@param root string
 ---@param timeout integer
+---@param depth? integer  submodule nesting level, 0 for the root
 ---@return string[]|nil
-local function git_listing(root, timeout)
+local function git_listing(root, timeout, depth)
+  depth = depth or 0
   if vim.fn.isdirectory(root) ~= 1 or vim.fn.executable("git") == 0 then return nil end
   local ok, res = pcall(function()
     return vim
-      .system(
-        { "git", "-C", root, "ls-files", "-z", "--cached", "--others", "--exclude-standard" },
-        { text = true, timeout = timeout }
-      )
+      .system({
+        "git",
+        "-C",
+        root,
+        "ls-files",
+        "-z",
+        "--stage",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+      }, { text = true, timeout = timeout })
       :wait()
   end)
   if not ok or not res or res.code ~= 0 then return nil end
   local base = ftpath.slashify(root):gsub("/+$", "")
-  local out = {}
-  for rel in (res.stdout or ""):gmatch("[^%z]+") do
-    if not pruned(rel) then out[#out + 1] = base .. "/" .. rel end
+  local out, seen = {}, {}
+  for entry in (res.stdout or ""):gmatch("[^%z]+") do
+    -- `--stage` prefixes tracked entries with "<mode> <object> <stage><TAB>";
+    -- untracked ones (`--others`) come bare.
+    local mode, rel = entry:match("^(%d+) %x+ %d\t(.*)$")
+    rel = rel or entry
+    if not seen[rel] and not pruned(rel) then
+      seen[rel] = true
+      local abs = base .. "/" .. rel
+      if mode == "160000" then
+        -- A gitlink. Not checked out (no `.git` inside): nothing to search,
+        -- and `git -C` there would answer for the superproject.
+        if depth < MAX_SUBMODULE_DEPTH and vim.uv.fs_stat(abs .. "/.git") then
+          for _, file in ipairs(git_listing(abs, timeout, depth + 1) or {}) do
+            out[#out + 1] = file
+          end
+        end
+      else
+        out[#out + 1] = abs
+      end
+    end
   end
   return out
 end

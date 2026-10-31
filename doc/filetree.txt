@@ -1015,7 +1015,7 @@ short by `scan.max_files` warns (once per scan) that references may be
 missing. A ripgrep run that only hit errors on the way (an unreadable file)
 keeps its hits. With `scan.respect_gitignore` the walk lists files through
 `git ls-files` inside a git work tree, so gitignored files stay out as they do
-for ripgrep; outside a work tree (or without git) it walks everything but the
+for ripgrep, and descends into checked-out submodules as ripgrep does; outside a work tree (or without git) it walks everything but the
 usual build and dependency folders.
 
 Commands:
